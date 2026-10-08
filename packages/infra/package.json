@@ -17,6 +17,7 @@
     "@memory/config": "workspace:*",
     "alchemy": "2.0.0-beta.80",
     "effect": "4.0.0",
+    "pg": "^8.23.1",
     "typescript": "catalog:",
     "varlock": "catalog:"
   }
