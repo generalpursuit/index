@@ -1,0 +1,4 @@
+// Set real HTTPS endpoints in Local.xcconfig or with xcodebuild build settings.
+INDEX_API_URL =
+INDEX_WEB_URL =
+#include? "Local.xcconfig"
