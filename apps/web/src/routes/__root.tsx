@@ -1,59 +1,43 @@
+import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
-import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { HeadContent, Outlet, createRootRouteWithContext } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/react-router-devtools";
-
-import Header from "@/components/header";
-import { ThemeProvider } from "@/components/theme-provider";
+import { HeadContent, Outlet, createRootRouteWithContext, Link } from "@tanstack/react-router";
 import { orpc } from "@/utils/orpc";
-
 import "../index.css";
-
 export interface RouterAppContext {
   orpc: typeof orpc;
   queryClient: QueryClient;
 }
-
 export const Route = createRootRouteWithContext<RouterAppContext>()({
-  component: RootComponent,
+  component: () => (
+    <>
+      <HeadContent />
+      <Outlet />
+      <Toaster theme="dark" richColors />
+    </>
+  ),
   head: () => ({
     meta: [
-      {
-        title: "index",
-      },
+      { title: "Index — A place for your links" },
       {
         name: "description",
-        content: "index is a web application",
-      },
-    ],
-    links: [
-      {
-        rel: "icon",
-        href: "/favicon.ico",
+        content:
+          "Save what matters. Discover what your friends are reading, watching, and listening to.",
       },
     ],
   }),
+  notFoundComponent: () => (
+    <div className="route-error">
+      <h1>Page not found</h1>
+      <Link to="/">Back home</Link>
+    </div>
+  ),
+  errorComponent: ({ error, reset }) => (
+    <div className="route-error" role="alert">
+      <h1>Couldn’t open this page</h1>
+      <p>{error instanceof Error ? error.message : "Please try again."}</p>
+      <Button onClick={reset}>Try again</Button>
+      <Link to="/">Back home</Link>
+    </div>
+  ),
 });
-
-function RootComponent() {
-  return (
-    <>
-      <HeadContent />
-      <ThemeProvider
-        attribute="class"
-        defaultTheme="dark"
-        disableTransitionOnChange
-        storageKey="vite-ui-theme"
-      >
-        <div className="grid grid-rows-[auto_1fr] h-svh">
-          <Header />
-          <Outlet />
-        </div>
-        <Toaster richColors />
-      </ThemeProvider>
-      <TanStackRouterDevtools position="bottom-left" />
-      <ReactQueryDevtools position="bottom" buttonPosition="bottom-right" />
-    </>
-  );
-}

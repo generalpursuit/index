@@ -12,7 +12,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
     "dev:bare": "vite dev",
-    "env:generate": "varlock codegen"
+    "env:generate": "varlock codegen",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@index/api": "workspace:*",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "@index/config": "workspace:*",
+    "@playwright/test": "^1.64.0",
     "@tanstack/react-query-devtools": "^5.102.8",
     "@tanstack/react-router-devtools": "^1.167.1",
     "@tanstack/router-plugin": "^1.168.35",

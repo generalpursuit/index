@@ -9,6 +9,8 @@ import { orpc, queryClient } from "./utils/orpc";
 const router = createRouter({
   routeTree,
   defaultPreload: "intent",
+  defaultPreloadStaleTime: 0,
+  scrollToTopSelectors: ["#app-scroll"],
   scrollRestoration: true,
   defaultPendingComponent: () => <Loader />,
   context: { orpc, queryClient },
