@@ -1,17 +1,32 @@
-import type { RouterClient } from "@orpc/server";
+import { implement } from "@orpc/server";
 
-import { protectedProcedure, publicProcedure } from "../index";
+import type { Context } from "../context";
+import { appContract } from "../contracts";
+import { linksRouter } from "../features/links/router";
+import { requireAuth } from "../procedures";
 
-export const appRouter = {
-  healthCheck: publicProcedure.handler(() => {
+const api = implement(appContract).$context<Context>();
+
+export const appRouter = api.router({
+  healthCheck: api.healthCheck.handler(() => {
     return "OK";
   }),
-  privateData: protectedProcedure.handler(({ context }) => {
+  privateData: api.privateData.use(requireAuth).handler(({ context }) => {
+    const { user } = context.session;
     return {
       message: "This is private",
-      user: context.session?.user,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        emailVerified: user.emailVerified,
+        image: user.image ?? null,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString(),
+      },
     };
   }),
-};
+  links: linksRouter,
+});
 export type AppRouter = typeof appRouter;
-export type AppRouterClient = RouterClient<typeof appRouter>;
+export type { AppRouterClient } from "../contracts";

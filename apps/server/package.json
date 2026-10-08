@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc -b ../../packages/api && tsdown",
     "check-types": "tsc -b ../../packages/api && tsc --noEmit",
+    "test": "bun test src",
     "compile": "bun build --compile --no-compile-autoload-dotenv --minify --sourcemap --bytecode ./src/index.ts --outfile server",
     "env:generate": "varlock codegen"
   },
@@ -12,6 +13,7 @@
     "@index/api": "workspace:*",
     "@index/auth": "workspace:*",
     "@index/db": "workspace:*",
+    "@orpc/json-schema": "^1.15.0",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
@@ -24,6 +26,7 @@
     "@cloudflare/workers-types": "catalog:",
     "@index/config": "workspace:*",
     "@index/infra": "workspace:*",
+    "@orpc/client": "catalog:",
     "@types/node": "catalog:",
     "tsdown": "^0.23.0",
     "typescript": "catalog:"

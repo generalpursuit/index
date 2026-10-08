@@ -12,21 +12,14 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { linkCategories } from "../categories";
 import { user } from "./auth";
+
+export { linkCategories } from "../categories";
 
 export const groupVisibilities = ["private", "public"] as const;
 export const groupKinds = ["custom", "starred"] as const;
 export const followStatuses = ["pending", "accepted"] as const;
-export const linkCategories = [
-  "uncategorized",
-  "article",
-  "podcast",
-  "music",
-  "video",
-  "book",
-  "tool",
-  "note",
-] as const;
 
 export const groups = pgTable(
   "groups",

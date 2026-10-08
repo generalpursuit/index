@@ -1,7 +1,7 @@
 import type { Session } from "@index/auth";
-import type { Database } from "@index/db";
+import type { QueryDatabase } from "./data-access/database";
 
 export type Context = {
   session: Session | null;
-  db: Database;
+  db: QueryDatabase;
 };

@@ -1,9 +1,3 @@
-import { appRouter } from "@index/api/routers/index";
-import { OpenAPIHandler } from "@orpc/openapi/fetch";
-import { OpenAPIReferencePlugin } from "@orpc/openapi/plugins";
-import { onError } from "@orpc/server";
-import { RPCHandler } from "@orpc/server/fetch";
-import { ZodToJsonSchemaConverter } from "@orpc/zod/zod4";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -11,6 +5,7 @@ import { logger } from "hono/logger";
 import { createContext } from "./context";
 import { desktopOrigins, ENV } from "./env.server";
 import { createAuth } from "./services";
+import { apiHandler, rpcHandler } from "./transport";
 
 const app = new Hono();
 
@@ -27,32 +22,11 @@ app.use(
 
 app.on(["POST", "GET"], "/api/auth/*", async (c) => (await createAuth()).handler(c.req.raw));
 
-export const apiHandler = new OpenAPIHandler(appRouter, {
-  plugins: [
-    new OpenAPIReferencePlugin({
-      schemaConverters: [new ZodToJsonSchemaConverter()],
-    }),
-  ],
-  interceptors: [
-    onError((error) => {
-      console.error(error);
-    }),
-  ],
-});
-
-export const rpcHandler = new RPCHandler(appRouter, {
-  interceptors: [
-    onError((error) => {
-      console.error(error);
-    }),
-  ],
-});
-
 app.use("/*", async (c, next) => {
   const context = await createContext({ context: c });
 
   const rpcResult = await rpcHandler.handle(c.req.raw, {
-    prefix: "/rpc",
+    prefix: c.req.path.startsWith("/rpc/v1/") ? "/rpc/v1" : "/rpc",
     context: context,
   });
 
@@ -61,7 +35,7 @@ app.use("/*", async (c, next) => {
   }
 
   const apiResult = await apiHandler.handle(c.req.raw, {
-    prefix: "/api-reference",
+    prefix: "/api/v1",
     context: context,
   });
 

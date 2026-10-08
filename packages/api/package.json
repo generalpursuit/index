@@ -3,23 +3,28 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./contracts": "./src/contracts.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
     "build": "tsc -b",
-    "check-types": "tsc -b"
+    "check-types": "tsc -b",
+    "test": "bun test src"
   },
   "dependencies": {
     "@index/auth": "workspace:*",
     "@index/db": "workspace:*",
     "@orpc/client": "catalog:",
+    "@orpc/contract": "^1.15.0",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
+    "drizzle-orm": "catalog:",
     "neverthrow": "^8.2.0",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.3.15",
     "@index/config": "workspace:*",
     "typescript": "catalog:"
   }
