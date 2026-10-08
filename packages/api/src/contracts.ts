@@ -8,6 +8,7 @@ import { followsContract } from "./features/follows/contract";
 import { starsContract } from "./features/stars/contract";
 import { commentsContract } from "./features/comments/contract";
 import { feedContract } from "./features/feed/contract";
+import { discoveryContract } from "./features/discovery/contract";
 
 export const appContract = {
   healthCheck: oc
@@ -39,6 +40,7 @@ export const appContract = {
   stars: starsContract,
   comments: commentsContract,
   feed: feedContract,
+  discovery: discoveryContract,
 };
 
 export type AppRouterClient = ContractRouterClient<typeof appContract>;
