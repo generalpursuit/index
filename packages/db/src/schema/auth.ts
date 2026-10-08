@@ -1,18 +1,35 @@
-import { defineRelationsPart } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, index } from "drizzle-orm/pg-core";
+import { defineRelationsPart, inArray, sql } from "drizzle-orm";
+import { pgTable, text, timestamp, boolean, check, index } from "drizzle-orm/pg-core";
 
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => /* @__PURE__ */ new Date())
-    .notNull(),
-});
+export const profileVisibilities = ["public", "private"] as const;
+
+export const user = pgTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    username: text("username").unique(),
+    bio: text("bio"),
+    profileVisibility: text("profile_visibility", { enum: profileVisibilities })
+      .default("public")
+      .notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: boolean("email_verified").default(false).notNull(),
+    image: text("image"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    check("user_profile_visibility_check", inArray(table.profileVisibility, profileVisibilities)),
+    check(
+      "user_username_normalized_check",
+      sql`${table.username} = lower(btrim(${table.username})) AND length(${table.username}) > 0`,
+    ),
+  ],
+);
 
 export const session = pgTable(
   "session",
