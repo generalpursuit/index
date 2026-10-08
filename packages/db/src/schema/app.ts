@@ -5,6 +5,7 @@ import {
   foreignKey,
   index,
   pgTable,
+  boolean,
   primaryKey,
   text,
   timestamp,
@@ -271,6 +272,7 @@ export const messages = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     // Client-generated retry key, scoped to the sender.
     clientId: uuid("client_id").notNull(),
+    hasAttachment: boolean("has_attachment").notNull().default(false),
     body: text("body").notNull().default(""),
     linkId: uuid("link_id").references(() => links.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),

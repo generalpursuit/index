@@ -18,6 +18,8 @@ export const messageSchema = z.object({
   body: z.string(),
   createdAt: z.iso.datetime(),
   attachment: linkSchema.nullable(),
+  hasAttachment: z.boolean(),
+  restrictedAuthor: publicUserSchema.nullable(),
 });
 export const conversationSchema = z.object({
   id: z.uuid(),

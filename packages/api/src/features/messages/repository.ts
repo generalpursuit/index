@@ -1,4 +1,6 @@
 import { conversationMembers, conversations, messages, links } from "@index/db/schema/app";
+import type { z } from "zod";
+import type { publicUserSchema } from "../profiles/schemas";
 import { user } from "@index/db/schema/auth";
 import { and, desc, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
@@ -15,9 +17,7 @@ function isMember(actorId: string, conversationId: SQLWrapper) {
   return sql<boolean>`exists(select 1 from conversation_members member where member.conversation_id=${conversationId} and member.user_id=${actorId})`;
 }
 function canSend(actorId: string, conversationId: SQLWrapper) {
-  return sql<boolean>`${isMember(actorId, conversationId)} and not exists (
- select 1 from conversation_members recipient where recipient.conversation_id=${conversationId} and recipient.user_id<>${actorId}
- and not exists (select 1 from follows f where f.follower_id=${actorId} and f.followed_id=recipient.user_id and f.status='accepted'))`;
+  return isMember(actorId, conversationId);
 }
 export function createConversation(db: QueryDatabase, actorId: string, recipientIds: string[]) {
   const memberKey = JSON.stringify([actorId, ...recipientIds].sort());
@@ -115,6 +115,15 @@ const messageSelection = (actorId: string) => ({
   body: messages.body,
   createdAt: timestamp(messages.createdAt),
   attachment: { ...linkSelection, ...collectionSelection(actorId) },
+  hasAttachment: messages.hasAttachment,
+  // Only public profile identity is exposed, never original-link metadata.
+  restrictedAuthor: sql<z.output<typeof publicUserSchema> | null>`(
+    select jsonb_build_object('id',u.id,'name',u.name,'username',u.username,
+      'bio',u.bio,'image',u.image,'profileVisibility',u.profile_visibility)
+    from links original join groups g on g.id=original.group_id join "user" u on u.id=original.owner_id
+    where original.id=${messages.linkId} and ${links.id} is null
+      and g.visibility='public' and u.profile_visibility='private'
+  )`,
 });
 
 export function listMessages(
@@ -146,17 +155,16 @@ export function listMessages(
   );
 }
 export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessageInput) {
-  // Membership, directed following and access for every recipient are checked in the write.
+  // Only the sender must see an unlocked original. Readers retain their own access.
   const attachmentAllowed = input.linkId
     ? sql`exists (
- select 1 from links where links.id=${input.linkId}::uuid and ${linkVisible(actorId)}
- and links.group_id is not null
- and not exists(select 1 from conversation_members recipient where recipient.conversation_id=${input.conversationId}::uuid
- and not (${linkVisible(sql`recipient.user_id`)})))`
+      select 1 from links where links.id=${input.linkId}::uuid and ${linkVisible(actorId)}
+      and exists(select 1 from groups g where g.id=links.group_id and g.visibility='public')
+    )`
     : sql`true`;
   const inserted = db.$with("sent_message", { id: sql<string>`id`.as("id") }).as(sql`
- insert into messages(conversation_id,sender_id,client_id,body,link_id)
- select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid
+ insert into messages(conversation_id,sender_id,client_id,body,link_id,has_attachment)
+ select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${!!input.linkId}
  where ${canSend(actorId, sql`${input.conversationId}::uuid`)} and ${attachmentAllowed}
  on conflict(sender_id,client_id) do update set client_id=excluded.client_id
  where messages.conversation_id=excluded.conversation_id and messages.body=excluded.body and messages.link_id is not distinct from excluded.link_id

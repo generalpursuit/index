@@ -51,9 +51,6 @@ describe("messaging", () => {
       (await api.client("carol").messages.list({ conversationId: c.id })).items[0]!.id,
       first.id,
     );
-    await assert.rejects(bob.messages.send({ ...input, clientId: crypto.randomUUID() }), {
-      code: "NOT_FOUND",
-    });
     const second = await alice.messages.send({
       ...input,
       clientId: crypto.randomUUID(),
@@ -78,9 +75,12 @@ describe("messaging", () => {
       { code: "NOT_FOUND" },
     );
     await alice.follows.unfollow({ userId: "bob" });
-    assert.equal((await alice.messages.conversation({ conversationId: c.id })).canSend, false);
-    await assert.rejects(alice.messages.send({ ...input, clientId: crypto.randomUUID() }), {
-      code: "NOT_FOUND",
+    assert.equal((await alice.messages.conversation({ conversationId: c.id })).canSend, true);
+    await alice.messages.send({ ...input, clientId: crypto.randomUUID() });
+    await bob.messages.send({
+      ...input,
+      clientId: crypto.randomUUID(),
+      body: "Reply without following",
     });
   });
   it("does not grant access through forwarding and redacts originals after revocation or deletion", async () => {
@@ -186,7 +186,7 @@ describe("messaging", () => {
       );
     }
   });
-  it("checks every group recipient when sharing a follower-only original", async () => {
+  it("returns restricted identity per recipient until follow approval, without exposing post metadata", async () => {
     const alice = api.client("alice"),
       bob = api.client("bob"),
       carol = api.client("carol"),
@@ -206,9 +206,20 @@ describe("messaging", () => {
       title: "Followers",
       groupId: g.id,
     });
-    await assert.rejects(
-      alice.messages.send({ conversationId: c.id, clientId: crypto.randomUUID(), linkId: l.id }),
-      { code: "NOT_FOUND" },
+    await alice.messages.send({
+      conversationId: c.id,
+      clientId: crypto.randomUUID(),
+      linkId: l.id,
+    });
+    const hidden = (await carol.messages.list({ conversationId: c.id })).items[0]!;
+    assert.equal(hidden.attachment, null);
+    assert.equal(hidden.hasAttachment, true);
+    assert.equal(hidden.restrictedAuthor?.id, "dana");
+    assert.equal(JSON.stringify(hidden).includes(l.url), false);
+    assert.equal(JSON.stringify(hidden).includes(l.title), false);
+    assert.equal(
+      (await bob.messages.list({ conversationId: c.id })).items[0]!.attachment?.id,
+      l.id,
     );
     await carol.follows.follow({ userId: "dana" });
     await dana.follows.accept({ userId: "carol" });
@@ -223,5 +234,28 @@ describe("messaging", () => {
       (await carol.messages.list({ conversationId: c.id })).items[0]!.attachment!.id,
       l.id,
     );
+    await dana.groups.update({ id: g.id, visibility: "private" });
+    assert.equal(
+      (await carol.messages.list({ conversationId: c.id })).items[0]!.restrictedAuthor,
+      null,
+    );
+    await assert.rejects(dana.messages.createConversation({ recipientIds: ["alice"] }), {
+      code: "NOT_FOUND",
+    });
+    await dana.follows.follow({ userId: "alice" });
+    const ownChat = await dana.messages.createConversation({ recipientIds: ["alice"] });
+    await assert.rejects(
+      dana.messages.send({
+        conversationId: ownChat.id,
+        clientId: crypto.randomUUID(),
+        linkId: l.id,
+      }),
+      { code: "NOT_FOUND" },
+    );
+    await dana.links.delete({ id: l.id });
+    const removed = (await carol.messages.list({ conversationId: c.id })).items[0]!;
+    assert.equal(removed.hasAttachment, true);
+    assert.equal(removed.attachment, null);
+    assert.equal(removed.restrictedAuthor, null);
   });
 });

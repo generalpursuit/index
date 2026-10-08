@@ -120,19 +120,19 @@ All messaging endpoints require authentication:
 | `messages.markRead`           | POST `/conversations/{conversationId}/read`     | Advance read state through `messageId`                                              |
 | `messages.unread`             | GET `/me/messages/unread`                       | Unread message count across conversations                                           |
 
-Creation accepts `recipientIds`: 1–19 distinct other users. The caller must follow every recipient with an accepted relationship; the recipients do not need to follow the caller back. The same rule applies when sending, including replies. Unfollowing retains readable history but makes `canSend` false until the sender follows all other participants again. Nonmembers cannot inspect, send to or mark a conversation read.
+Creation accepts `recipientIds`: 1–19 distinct other users. The caller must follow every recipient with an accepted relationship; the recipients do not need to follow the caller back. Once a conversation exists, every member may reply, even without following the other members. Unfollowing retains readable history and the ability to reply. Nonmembers cannot inspect, send to or mark a conversation read.
 
 A canonical set of participant IDs identifies a conversation. Selecting multiple people creates one group conversation, and selecting the same set reuses it. There are no group names or membership-edit operations: clients derive the heading from `participants`, excluding the current user.
 
 Sending accepts `{ clientId, body?, linkId? }`. The client supplies a stable UUID per send attempt, including retries. Identical retries return the original message; reusing that ID with different contents or a different conversation is rejected. Empty text without a link is invalid. Sending and updating inbox order happen atomically.
 
-Attachments reference originals. Every participant must be able to access the link at send time; Inbox and locked originals cannot be forwarded. Sending grants no new permissions. Each reader's attachment becomes null if access is revoked or the original is deleted, including in inbox previews. Clients should handle a textless message with a null attachment as an unavailable link.
+Attachments reference originals. The sender must be able to access an original in an unlocked group; Inbox and locked originals cannot be forwarded. Recipients need not have original access. Sending grants no new permissions, and visibility is evaluated separately for each reader, including inbox previews. An authorized reader receives `attachment`. A reader blocked by a private profile receives a null attachment and `restrictedAuthor` containing only the author's public profile identity, so they can request to follow. No original title, URL, description, or comments are exposed. Deleted or later-locked originals have neither attachment nor restricted author. `hasAttachment` survives original deletion so clients can render “Post unavailable.”
 
 Read state is a monotonic message watermark. Marking an older message read cannot roll it back or clear newer arrivals. Own messages do not count as unread. Clients can poll these endpoints and invalidate queries after writes; no realtime transport or push delivery is introduced. Recipient selection and unsent attachments/text remain client-local until sending.
 
 ## Migration and client rollout
 
-Apply `packages/db/src/migrations/20261008175003_prototype_api/migration.sql` with the project's Drizzle migration command before deploying this backend. Deployment should serialize migration execution. It adds messaging, activity and Favorites tables, indexes and constraints, plus the link save date.
+Apply `packages/db/src/migrations/20261008175003_prototype_api/migration.sql` with the project's Drizzle migration command before deploying this backend. Also apply `packages/db/src/migrations/20261008184316_message_attachments/migration.sql` to preserve attachment presence after originals are deleted. Deployment should serialize migration execution. It adds messaging, activity and Favorites tables, indexes and constraints, plus the link save date.
 
 Existing links retain their UTC creation date as `savedOn`. Existing self-stars move to Favorites with their original timestamps and the old Starred group's visibility; other stars remain untouched. Existing pending follow requests are imported into Activity. Older completed activity is not fabricated.
 
