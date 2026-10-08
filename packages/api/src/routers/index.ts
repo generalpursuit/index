@@ -8,6 +8,7 @@ import { profilesRouter } from "../features/profiles/router";
 import { followsRouter } from "../features/follows/router";
 import { starsRouter } from "../features/stars/router";
 import { commentsRouter } from "../features/comments/router";
+import { feedRouter } from "../features/feed/router";
 import { requireAuth } from "../procedures";
 
 const api = implement(appContract).$context<Context>();
@@ -37,6 +38,7 @@ export const appRouter = api.router({
   follows: followsRouter,
   stars: starsRouter,
   comments: commentsRouter,
+  feed: feedRouter,
 });
 export type AppRouter = typeof appRouter;
 export type { AppRouterClient } from "../contracts";
