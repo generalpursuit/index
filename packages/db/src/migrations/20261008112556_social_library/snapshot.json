@@ -2,9 +2,7 @@
   "version": "8",
   "dialect": "postgres",
   "id": "9c12a5f1-45dc-4aee-a88d-748b2679b157",
-  "prevIds": [
-    "fcae0a98-c7af-4c1e-970d-05aba137c46d"
-  ],
+  "prevIds": ["fcae0a98-c7af-4c1e-970d-05aba137c46d"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -1241,14 +1239,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "user_id"
-      ],
+      "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "account_user_id_user_id_fkey",
@@ -1258,14 +1252,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "link_id"
-      ],
+      "columns": ["link_id"],
       "schemaTo": "public",
       "tableTo": "links",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "comments_link_id_links_id_fkey",
@@ -1275,14 +1265,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "author_id"
-      ],
+      "columns": ["author_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "comments_author_id_user_id_fkey",
@@ -1292,14 +1278,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "follower_id"
-      ],
+      "columns": ["follower_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "follows_follower_id_user_id_fkey",
@@ -1309,14 +1291,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "followed_id"
-      ],
+      "columns": ["followed_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "follows_followed_id_user_id_fkey",
@@ -1326,14 +1304,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_id"
-      ],
+      "columns": ["owner_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "groups_owner_id_user_id_fkey",
@@ -1343,14 +1317,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "owner_id"
-      ],
+      "columns": ["owner_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "links_owner_id_user_id_fkey",
@@ -1360,16 +1330,10 @@
     },
     {
       "nameExplicit": true,
-      "columns": [
-        "owner_id",
-        "group_id"
-      ],
+      "columns": ["owner_id", "group_id"],
       "schemaTo": "public",
       "tableTo": "groups",
-      "columnsTo": [
-        "owner_id",
-        "id"
-      ],
+      "columnsTo": ["owner_id", "id"],
       "onUpdate": "NO ACTION",
       "onDelete": "NO ACTION",
       "name": "links_owner_group_fk",
@@ -1379,14 +1343,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "user_id"
-      ],
+      "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "session_user_id_user_id_fkey",
@@ -1396,14 +1356,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "group_id"
-      ],
+      "columns": ["group_id"],
       "schemaTo": "public",
       "tableTo": "groups",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "stars_group_id_groups_id_fkey",
@@ -1413,14 +1369,10 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "link_id"
-      ],
+      "columns": ["link_id"],
       "schemaTo": "public",
       "tableTo": "links",
-      "columnsTo": [
-        "id"
-      ],
+      "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
       "name": "stars_link_id_links_id_fkey",
@@ -1429,10 +1381,7 @@
       "table": "stars"
     },
     {
-      "columns": [
-        "follower_id",
-        "followed_id"
-      ],
+      "columns": ["follower_id", "followed_id"],
       "nameExplicit": false,
       "name": "follows_pkey",
       "entityType": "pks",
@@ -1440,10 +1389,7 @@
       "table": "follows"
     },
     {
-      "columns": [
-        "group_id",
-        "link_id"
-      ],
+      "columns": ["group_id", "link_id"],
       "nameExplicit": false,
       "name": "stars_pkey",
       "entityType": "pks",
@@ -1451,9 +1397,7 @@
       "table": "stars"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "account_pkey",
       "schema": "public",
@@ -1461,9 +1405,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "comments_pkey",
       "schema": "public",
@@ -1471,9 +1413,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "groups_pkey",
       "schema": "public",
@@ -1481,9 +1421,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "links_pkey",
       "schema": "public",
@@ -1491,9 +1429,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "session_pkey",
       "schema": "public",
@@ -1501,9 +1437,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "user_pkey",
       "schema": "public",
@@ -1511,9 +1445,7 @@
       "entityType": "pks"
     },
     {
-      "columns": [
-        "id"
-      ],
+      "columns": ["id"],
       "nameExplicit": false,
       "name": "verification_pkey",
       "schema": "public",
@@ -1522,10 +1454,7 @@
     },
     {
       "nameExplicit": true,
-      "columns": [
-        "owner_id",
-        "id"
-      ],
+      "columns": ["owner_id", "id"],
       "nullsNotDistinct": false,
       "name": "groups_owner_id_id_unique",
       "entityType": "uniques",
@@ -1534,9 +1463,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "token"
-      ],
+      "columns": ["token"],
       "nullsNotDistinct": false,
       "name": "session_token_key",
       "schema": "public",
@@ -1545,9 +1472,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "username"
-      ],
+      "columns": ["username"],
       "nullsNotDistinct": false,
       "name": "user_username_key",
       "schema": "public",
@@ -1556,9 +1481,7 @@
     },
     {
       "nameExplicit": false,
-      "columns": [
-        "email"
-      ],
+      "columns": ["email"],
       "nullsNotDistinct": false,
       "name": "user_email_key",
       "schema": "public",
