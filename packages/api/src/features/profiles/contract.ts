@@ -1,7 +1,8 @@
+import { usernameSchema } from "@index/auth/username";
 import { optionalAuth } from "../../shared/schemas";
 import { z } from "zod";
 import { baseContract, userIdSchema } from "../../shared/schemas";
-import { profileSchema, updateProfileSchema, usernameSchema } from "./schemas";
+import { profileSchema, updateProfileSchema } from "./schemas";
 
 export const profilesContract = {
   me: baseContract

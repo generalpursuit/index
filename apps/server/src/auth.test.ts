@@ -36,7 +36,7 @@ describe("native and browser authentication", () => {
     const authentication = auth();
     const credentials = { email: "native@example.com", password: "secure-test-password-123" };
     const registered = await authentication.handler(
-      post("/sign-up/email", { ...credentials, name: "Native user" }),
+      post("/sign-up/email", { ...credentials, name: "Native user", username: "native_user" }),
     );
     assert.equal(registered.status, 200, await registered.clone().text());
     assert.match(registered.headers.get("set-cookie") ?? "", /HttpOnly/i);
@@ -77,6 +77,7 @@ describe("native and browser authentication", () => {
         email: "expiry@example.com",
         password: "secure-test-password-123",
         name: "Expiry",
+        username: "expiry",
       }),
     );
     assert.equal(response.status, 200);
@@ -100,6 +101,32 @@ describe("native and browser authentication", () => {
     assert.equal(await authentication.api.getSession({ headers }), null);
   });
 
+  it("requires a valid, unique username at sign-up and signs in with it", async () => {
+    const authentication = auth();
+    const signUp = (body: Record<string, string>) =>
+      authentication.handler(
+        post("/sign-up/email", { name: "Reader", password: "secure-test-password-123", ...body }),
+      );
+    assert.equal((await signUp({ email: "missing@example.com" })).status, 400);
+    assert.equal(
+      (await signUp({ email: "invalid@example.com", username: "no spaces" })).status,
+      400,
+    );
+    const registered = await signUp({ email: "reader@example.com", username: " Reader_One " });
+    assert.equal(registered.status, 200, await registered.clone().text());
+    const { user }: { user: { username: string } } = await registered.json();
+    assert.equal(user.username, "reader_one");
+    assert.equal(
+      (await signUp({ email: "taken@example.com", username: "READER_ONE" })).status,
+      400,
+    );
+    const signedIn = await authentication.handler(
+      post("/sign-in/username", { username: "Reader_One", password: "secure-test-password-123" }),
+    );
+    assert.equal(signedIn.status, 200, await signedIn.clone().text());
+    assert.ok(signedIn.headers.get("set-auth-token"));
+  });
+
   it("publishes the authentication OpenAPI contract for native clients", async () => {
     const response = await auth().handler(
       new Request("https://api.example.com/api/auth/open-api/generate-schema"),
@@ -107,6 +134,7 @@ describe("native and browser authentication", () => {
     assert.equal(response.status, 200);
     const document = JSON.stringify(await response.json());
     assert.match(document, /sign-in\/email/);
+    assert.match(document, /sign-in\/username/);
     assert.match(document, /get-session/);
     assert.match(document, /sign-out/);
     assert.match(document, /bearerAuth/);

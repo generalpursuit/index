@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@index/api": "workspace:*",
+    "@index/auth": "workspace:*",
     "@index/ui": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",

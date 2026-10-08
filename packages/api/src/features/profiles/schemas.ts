@@ -1,13 +1,7 @@
+import { usernameSchema } from "@index/auth/username";
 import { z } from "zod";
 import { httpUrlSchema, userIdSchema, visibilitySchema } from "../../shared/schemas";
 
-export const usernameSchema = z
-  .string()
-  .trim()
-  .toLowerCase()
-  .min(3)
-  .max(30)
-  .regex(/^[a-z0-9_]+$/);
 export const publicUserSchema = z.object({
   id: userIdSchema,
   name: z.string(),

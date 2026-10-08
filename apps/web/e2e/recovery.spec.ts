@@ -8,7 +8,7 @@ let data: {
 };
 async function login(page: Page) {
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill("alice@test.example");
+  await page.getByLabel("Email or username", { exact: true }).fill("alice@test.example");
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
@@ -133,12 +133,13 @@ test("registration uses real authentication and preserves the requested destinat
   page,
 }) => {
   await page.goto("/login?next=%2Fdiscover");
-  await page.getByRole("button", { name: "New here? Create an account" }).click();
+  await page.getByRole("button", { name: "Create an account", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("New Reader");
+  await page.getByLabel("Username", { exact: true }).fill("New_Reader");
   await page.getByLabel("Email", { exact: true }).fill("new-reader@test.example");
   await page.getByLabel("Password", { exact: true }).fill("new-reader-password");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expect(page).toHaveURL(/discover$/);
   await page.getByRole("link", { name: "Your profile" }).click();
-  await expect(page.locator(".profile-heading")).toContainText("New Reader");
+  await expect(page.locator(".profile-heading h1")).toHaveText("new_reader");
 });

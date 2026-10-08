@@ -2,8 +2,10 @@ import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import type { relations } from "@index/db/relations";
 import * as schema from "@index/db/schema/auth";
 import { betterAuth } from "better-auth";
-import { bearer, openAPI } from "better-auth/plugins";
+import { APIError, createAuthMiddleware } from "better-auth/api";
+import { bearer, openAPI, username } from "better-auth/plugins";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { usernameSchema } from "./username";
 
 export type AuthConfig = {
   BETTER_AUTH_URL: string;
@@ -32,7 +34,23 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
         httpOnly: true,
       },
     },
-    plugins: [bearer({ requireSignature: true }), openAPI({ disableDefaultReference: true })],
+    hooks: {
+      // The username plugin validates a supplied username; every new account must supply one.
+      before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === "/sign-up/email" && typeof ctx.body?.username !== "string") {
+          throw new APIError("BAD_REQUEST", { message: "Choose a username." });
+        }
+      }),
+    },
+    plugins: [
+      bearer({ requireSignature: true }),
+      openAPI({ disableDefaultReference: true }),
+      username({
+        displayUsername: false,
+        usernameValidator: (value) => usernameSchema.safeParse(value).success,
+        usernameNormalization: (value) => value.trim().toLowerCase(),
+      }),
+    ],
   });
 }
 

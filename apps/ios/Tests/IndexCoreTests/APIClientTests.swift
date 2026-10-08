@@ -67,7 +67,7 @@ struct APIClientTests {
             .utf8)
       )
     }
-    let _ = try await client.signIn(email: "alice@example.com", password: "test-password")
+    let _ = try await client.signIn(identifier: "alice@example.com", password: "test-password")
     #expect(try credentials.read() == "signed-token.signature")
     HTTPStub.handler = { request in
       #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer signed-token.signature")
@@ -100,11 +100,24 @@ struct APIClientTests {
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
     await #expect(throws: CocoaError.self) { try await client.signOut() }
   }
+  @Test func signsInWithUsernameAtItsOwnEndpoint() async throws {
+    let client = try make()
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/sign-in/username")
+      return (
+        200, ["set-auth-token": "signed-token.signature"],
+        Data(
+          #"{"token":"unsigned","user":{"id":"alice","name":"Alice","email":"alice@example.com"}}"#
+            .utf8)
+      )
+    }
+    let _ = try await client.signIn(identifier: "alice", password: "test-password")
+  }
   @Test func invalidPasswordPreservesSignInError() async throws {
     let client = try make()
     HTTPStub.handler = { _ in (401, [:], Data(#"{"message":"Invalid email or password"}"#.utf8)) }
     do {
-      let _ = try await client.signIn(email: "alice@example.com", password: "wrong")
+      let _ = try await client.signIn(identifier: "alice@example.com", password: "wrong")
       Issue.record("Invalid password unexpectedly succeeded")
     } catch APIError.server(let status, let message) {
       #expect(status == 401)
@@ -129,7 +142,7 @@ struct APIClientTests {
       )
     }
     await #expect(throws: APIError.self) {
-      let _ = try await client.signIn(email: "alice@example.com", password: "test-password")
+      let _ = try await client.signIn(identifier: "alice@example.com", password: "test-password")
     }
   }
   @Test func escapesQueryText() async throws {

@@ -34,7 +34,7 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
     });
   });
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill("alice@test.example");
+  await page.getByLabel("Email or username", { exact: true }).fill("alice@test.example");
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");

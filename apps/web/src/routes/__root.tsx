@@ -18,7 +18,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   ),
   head: () => ({
     meta: [
-      { title: "Index — A place for your links" },
+      { title: "Index" },
       {
         name: "description",
         content:

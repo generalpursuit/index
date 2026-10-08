@@ -6,7 +6,7 @@ test.beforeEach(async ({ request }) => {
 });
 async function login(page: import("@playwright/test").Page, person: string) {
   await page.goto("/login");
-  await page.getByLabel("Email", { exact: true }).fill(person + "@test.example");
+  await page.getByLabel("Email or username", { exact: true }).fill(person);
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");

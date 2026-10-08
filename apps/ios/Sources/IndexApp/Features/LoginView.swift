@@ -3,7 +3,9 @@ import SwiftUI
 
 struct LoginView: View {
   @Environment(AppModel.self) private var app
+  @State private var identifier = ""
   @State private var email = ""
+  @State private var username = ""
   @State private var password = ""
   @State private var name = ""
   @State private var signUp = false
@@ -16,28 +18,47 @@ struct LoginView: View {
           signUp
             ? "Your links, and the people you find them through." : "Sign in to your collection."
         ).foregroundStyle(.secondary)
-        if signUp { TextField("Name", text: $name).textContentType(.name).ghostInput() }
-        TextField("Email", text: $email).textContentType(.emailAddress).ghostInput()
-          #if os(iOS)
-            .textInputAutocapitalization(.never).keyboardType(.emailAddress)
-          #endif
+        if signUp {
+          TextField("Name", text: $name).textContentType(.name).ghostInput()
+          TextField("Username", text: $username).textContentType(.username)
+            .autocorrectionDisabled().ghostInput()
+            #if os(iOS)
+              .textInputAutocapitalization(.never)
+            #endif
+          TextField("Email", text: $email).textContentType(.emailAddress).ghostInput()
+            #if os(iOS)
+              .textInputAutocapitalization(.never).keyboardType(.emailAddress)
+            #endif
+        } else {
+          TextField("Email or username", text: $identifier).textContentType(.username)
+            .autocorrectionDisabled().ghostInput()
+            #if os(iOS)
+              .textInputAutocapitalization(.never)
+            #endif
+        }
         SecureField("Password", text: $password).textContentType(signUp ? .newPassword : .password)
           .ghostInput()
         AsyncButton {
-          try await app.signIn(
-            email: email.trimmingCharacters(in: .whitespaces), password: password,
-            name: signUp ? name : nil)
+          if signUp {
+            try await app.signUp(
+              name: name, username: trimmed(username), email: trimmed(email), password: password)
+          } else {
+            try await app.signIn(identifier: trimmed(identifier), password: password)
+          }
           password = ""
         } label: {
           Text(signUp ? "Create account" : "Sign in").frame(maxWidth: .infinity)
         }
         .buttonStyle(PillStyle(selected: true)).disabled(
-          !email.contains("@") || password.count < 8
-            || (signUp && name.trimmingCharacters(in: .whitespaces).isEmpty))
+          password.count < 8
+            || (signUp
+              ? !email.contains("@") || trimmed(username).count < 3 || trimmed(name).isEmpty
+              : trimmed(identifier).isEmpty))
         Button(signUp ? "Already have an account? Sign in" : "New here? Create an account") {
           signUp.toggle()
         }.font(.subheadline).frame(maxWidth: .infinity)
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
     }.scrollDismissesKeyboard(.interactively)
   }
+  private func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespaces) }
 }

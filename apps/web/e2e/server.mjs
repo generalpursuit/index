@@ -19,14 +19,18 @@ async function seed() {
   const people = {};
   for (const name of ["Alice", "Bob", "Lena", "Amir", "Iris", "Mia", "Noah"]) {
     const result = await auth.api.signUpEmail({
-      body: { name, email: name.toLowerCase() + "@test.example", password: "test-password-123" },
+      body: {
+        name,
+        username: name.toLowerCase(),
+        email: name.toLowerCase() + "@test.example",
+        password: "test-password-123",
+      },
     });
     people[name] = result.user.id;
   }
   const api = (name) => createRouterClient(appRouter, { context: database.context(people[name]) });
   for (const name of Object.keys(people))
     await api(name).profiles.update({
-      username: name.toLowerCase(),
       profileVisibility: ["Iris", "Mia"].includes(name) ? "private" : "public",
     });
   for (const name of ["Bob", "Lena", "Amir", "Iris"]) {

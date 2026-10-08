@@ -59,15 +59,26 @@ public actor APIClient {
   ) async throws -> T {
     try await perform("/api/v1" + path, method: method, query: query, body: body)
   }
-  public func signIn(email: String, password: String, name: String? = nil) async throws
+  public func signIn(identifier: String, password: String) async throws -> AuthSession {
+    // Better Auth signs in by email and by username at separate endpoints.
+    let field = identifier.contains("@") ? "email" : "username"
+    return try await authenticate(
+      "/api/auth/sign-in/\(field)",
+      body: [field: .string(identifier), "password": .string(password)])
+  }
+  public func signUp(name: String, username: String, email: String, password: String) async throws
     -> AuthSession
   {
+    try await authenticate(
+      "/api/auth/sign-up/email",
+      body: [
+        "name": .string(name), "username": .string(username), "email": .string(email),
+        "password": .string(password),
+      ])
+  }
+  private func authenticate(_ path: String, body: [String: JSONValue]) async throws -> AuthSession {
     try clearSession()
-    var body: [String: JSONValue] = ["email": .string(email), "password": .string(password)]
-    if let name { body["name"] = .string(name) }
-    let result: AuthSession = try await perform(
-      name == nil ? "/api/auth/sign-in/email" : "/api/auth/sign-up/email", method: "POST",
-      body: body)
+    let result: AuthSession = try await perform(path, method: "POST", body: body)
     guard token != nil else { throw APIError.missingToken }
     return result
   }

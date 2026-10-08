@@ -94,9 +94,15 @@ final class AppModel {
       self.error = error.localizedDescription
     }
   }
-  func signIn(email: String, password: String, name: String?) async throws {
+  func signIn(identifier: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
-    let _ = try await api.signIn(email: email, password: password, name: name)
+    let _ = try await api.signIn(identifier: identifier, password: password)
+    profile = try await api.request("/me/profile")
+    revision += 1
+  }
+  func signUp(name: String, username: String, email: String, password: String) async throws {
+    guard let api else { throw APIError.invalidServer }
+    let _ = try await api.signUp(name: name, username: username, email: email, password: password)
     profile = try await api.request("/me/profile")
     revision += 1
   }

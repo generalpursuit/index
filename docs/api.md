@@ -8,7 +8,7 @@ The API uses feature-local contracts, Zod schemas, routers with inline handlers,
 - REST: `/api/v1`; OpenAPI: `/api/v1/openapi.json`; reference: `/api/v1/docs`.
 - Better Auth: `/api/auth`; its OpenAPI document: `/api/auth/open-api/generate-schema`.
 - Browser clients use Better Auth's secure HttpOnly session cookie and `credentials: "include"`.
-- Native clients sign up at `POST /api/auth/sign-up/email` with `{ name, email, password }`, or sign in at `POST /api/auth/sign-in/email` with `{ email, password }`.
+- Native clients sign up at `POST /api/auth/sign-up/email` with `{ name, username, email, password }`, or sign in at `POST /api/auth/sign-in/email` with `{ email, password }` or `POST /api/auth/sign-in/username` with `{ username, password }`. `POST /api/auth/is-username-available` with `{ username }` checks a username before sign-up.
 - Native clients must retain the **signed `set-auth-token` response header**, then send `Authorization: Bearer <token>` to both APIs. The unsigned token in the JSON response is not accepted as a bearer credential.
 - Restore a native session with `GET /api/auth/get-session`; log out with `POST /api/auth/sign-out`. Replace a stored token if a later response supplies `set-auth-token`. Store it in the platform's secure credential store (Keychain on iOS), share it with an extension only through a deliberately configured shared Keychain group, and erase it on logout or session expiry. The client-side storage and share-extension integration are not implemented by this backend change.
 
@@ -81,7 +81,7 @@ User search and follow lists use ascending user ID pagination with `after`/`next
 
 Group deletion, profile publication, activity-producing writes, conversation creation and message/inbox updates use data-modifying PostgreSQL CTEs to keep dependent writes in a single atomic statement. This works with the existing Neon HTTP driver without pretending it supports interactive transactions. The additive migration described below is required. No dependencies were added.
 
-Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits or underscores. A conflicting username returns 409. Other invalid input returns 400, missing authentication 401, inaccessible resources 404, and unexpected persistence failures a generic 500.
+Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits or underscores. Sign-up requires one; Better Auth's username plugin validates it with the same rule and rejects a taken username with 400. Accounts created before this requirement may have none. In `profiles.update`, a conflicting username returns 409. Other invalid input returns 400, missing authentication 401, inaccessible resources 404, and unexpected persistence failures a generic 500.
 
 ## Weekly views and Favorites
 
