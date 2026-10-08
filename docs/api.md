@@ -138,10 +138,10 @@ Existing links retain their UTC creation date as `savedOn`. Existing self-stars 
 
 Existing routes remain available. New response fields are additive, and Favorites is opt-in in group listings. The intentional policy changes also apply to older clients: follower graphs are owner-only, own links use Favorites instead of stars, and system group names are reserved.
 
-The migration has been tested locally but has not been applied to a live database. The prototype still uses its mock data; wiring frontend screens and generating Swift clients are separate integration work.
+The migration has been tested locally but has not been applied to a live database. The prototype still uses mock data. The production web app is wired to this API; the native SwiftUI client uses the same REST contracts. See `docs/frontend.md` and `apps/ios/README.md` for client verification status.
 
 ## Verification
 
 `bun test packages/api/src apps/server/src` runs real PostgreSQL queries in isolated PGlite databases with the project's migrations. Coverage includes profile/group visibility, original-link revocation, owner-only graphs, Favorites ownership, weekly boundaries, upgrading an existing database, comment/follow activity, unnamed group conversations, send retries, unread watermarks, atomic rollback, pagination/search, HTTP/RPC contracts, browser-safe contract imports and the Better Auth session lifecycle. This does not replace a deployment smoke test against Neon and the Workers runtime.
 
-The API implementation does not include frontend screens, Swift client generation, native secure-storage code, desktop packaging, or a deployment.
+Deployment smoke tests, native packaging, and device verification are separate from these backend tests. See `docs/desktop.md` and `apps/ios/README.md` for the native implementation and remaining verification.
