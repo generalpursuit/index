@@ -16,6 +16,7 @@
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
+    "neverthrow": "^8.2.0",
     "zod": "catalog:"
   },
   "devDependencies": {
