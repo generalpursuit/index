@@ -1,3 +1,4 @@
+import { apiFetch } from "@/lib/desktop";
 import type { AppRouterClient } from "@index/api/contracts";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
@@ -24,7 +25,7 @@ export const queryClient = createQueryClient();
 export const client: AppRouterClient = createORPCClient(
   new RPCLink({
     url: ENV.VITE_SERVER_URL.replace(/\/$/, "") + "/rpc/v1",
-    fetch: (request, init) => fetch(request, { ...init, credentials: "include" }),
+    fetch: apiFetch,
   }),
 );
 export const apiFor = (viewerId: string | null) =>

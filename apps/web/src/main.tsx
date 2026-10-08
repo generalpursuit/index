@@ -2,6 +2,9 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
+import { installDesktopLinks } from "./lib/desktop";
+import { toast } from "sonner";
+
 import Loader from "./components/loader";
 import { routeTree } from "./routeTree.gen";
 import { orpc, queryClient } from "./utils/orpc";
@@ -24,6 +27,12 @@ declare module "@tanstack/react-router" {
     router: typeof router;
   }
 }
+
+installDesktopLinks((message) => toast.error(message));
+window.addEventListener("index:session-expired", () => {
+  queryClient.setQueryData(["session"], null);
+  void router.invalidate();
+});
 
 const rootElement = document.getElementById("app");
 

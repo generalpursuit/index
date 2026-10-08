@@ -1,3 +1,4 @@
+import { publicProfileURL } from "@/lib/desktop";
 import { z } from "zod";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -132,7 +133,7 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
               <Button
                 variant="outline"
                 onClick={() => {
-                  void navigator.clipboard.writeText(new URL("/people/" + encodeURIComponent(profile.id), location.origin).href).then(
+                  void navigator.clipboard.writeText(publicProfileURL(profile.id)).then(
                     () => toast.success("Profile link copied"),
                     () => toast.error("Could not copy link"),
                   );

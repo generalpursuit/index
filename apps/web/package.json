@@ -10,7 +10,8 @@
     "check-types": "tsc -b ../../packages/api && vite build && tsc --noEmit",
     "tauri": "tauri",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build",
+    "desktop:build": "bun scripts/desktop-build.mjs",
+    "desktop:test": "bun scripts/desktop-smoke.mjs",
     "dev:bare": "vite dev",
     "env:generate": "varlock codegen",
     "test:e2e": "playwright test"
