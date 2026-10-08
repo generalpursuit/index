@@ -2,6 +2,7 @@ import { oc, type ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 
 import { linksContract } from "./features/links/contract";
+import { groupsContract } from "./features/groups/contract";
 import { profilesContract } from "./features/profiles/contract";
 import { followsContract } from "./features/follows/contract";
 
@@ -29,6 +30,7 @@ export const appContract = {
       }),
     ),
   links: linksContract,
+  groups: groupsContract,
   profiles: profilesContract,
   follows: followsContract,
 };

@@ -1,4 +1,5 @@
-import { oc } from "@orpc/contract";
+import { optionalAuth } from "../../shared/schemas";
+import { baseContract, idInputSchema, successSchema } from "../../shared/schemas";
 
 import {
   createLinkInputSchema,
@@ -6,27 +7,23 @@ import {
   linkSchema,
   listMyLinksInputSchema,
   listMyLinksOutputSchema,
+  updateLinkInputSchema,
+  listGroupLinksInputSchema,
 } from "./schemas";
 
-const authenticated = oc.errors({
-  UNAUTHORIZED: { message: "Sign in to continue." },
-  BAD_REQUEST: { message: "Invalid input." },
-  INTERNAL_SERVER_ERROR: { message: "Something went wrong." },
-});
-
 export const linksContract = {
-  create: authenticated
+  create: baseContract
     .route({
       method: "POST",
       path: "/links",
       successStatus: 201,
-      summary: "Save a link to your private inbox",
+      summary: "Save a link to your inbox or an owned group",
       tags: ["Links"],
     })
     .input(createLinkInputSchema)
     .output(linkSchema),
 
-  listMine: authenticated
+  listMine: baseContract
     .route({
       method: "GET",
       path: "/links",
@@ -36,14 +33,27 @@ export const linksContract = {
     .input(listMyLinksInputSchema)
     .output(listMyLinksOutputSchema),
 
-  get: authenticated
+  get: baseContract
     .route({
+      spec: optionalAuth,
       method: "GET",
       path: "/links/{id}",
-      summary: "Get one of your saved links",
+      summary: "Get a link visible to you",
       tags: ["Links"],
     })
     .errors({ NOT_FOUND: { message: "Link not found." } })
     .input(getLinkInputSchema)
     .output(linkSchema),
+  update: baseContract
+    .route({ method: "PATCH", path: "/links/{id}", tags: ["Links"] })
+    .input(updateLinkInputSchema)
+    .output(linkSchema),
+  delete: baseContract
+    .route({ method: "DELETE", path: "/links/{id}", tags: ["Links"] })
+    .input(idInputSchema)
+    .output(successSchema),
+  listInGroup: baseContract
+    .route({ spec: optionalAuth, method: "GET", path: "/groups/{groupId}/links", tags: ["Links"] })
+    .input(listGroupLinksInputSchema)
+    .output(listMyLinksOutputSchema),
 };

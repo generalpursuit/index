@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { decodeCursor, encodeCursor } from "./cursor";
+import { decodeCursor, encodeCursor } from "./pagination";
 
-describe("link cursors", () => {
+describe("timestamp cursors", () => {
   it("round-trips PostgreSQL timestamp precision in a URL-safe token", () => {
     const value = {
       id: "00000000-0000-4000-8000-000000000001",

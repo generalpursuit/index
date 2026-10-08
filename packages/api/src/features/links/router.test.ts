@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
 import { createTestDatabase } from "../../testing/database";
-import { encodeCursor } from "./cursor";
+import { encodeCursor } from "../../pagination";
 import { linksRouter } from "./router";
 
 describe("links API with PostgreSQL", () => {
@@ -43,10 +43,10 @@ describe("links API with PostgreSQL", () => {
     assert.equal(defaults.category, "uncategorized");
   });
 
-  it("requires authentication for every endpoint", async () => {
+  it("requires authentication for saving and listing your library", async () => {
     await assert.rejects(client(null).create(input), { code: "UNAUTHORIZED" });
     await assert.rejects(client(null).listMine({}), { code: "UNAUTHORIZED" });
-    await assert.rejects(client(null).get({ id: missingId }), { code: "UNAUTHORIZED" });
+    await assert.rejects(client(null).get({ id: missingId }), { code: "NOT_FOUND" });
     assert.deepEqual(await fixture.db.select().from(links), []);
   });
 
@@ -63,11 +63,10 @@ describe("links API with PostgreSQL", () => {
     assert.deepEqual(await client("bob").listMine({}), { items: [], nextCursor: null });
   });
 
-  it("validates input before writing and prevents ownership or group injection", async () => {
+  it("validates input before writing and prevents ownership injection", async () => {
     for (const invalid of [
       { ...input, title: " " },
       { ...input, ownerId: "bob" },
-      { ...input, groupId: missingId },
     ]) {
       await assert.rejects(client("alice").create(invalid), { code: "BAD_REQUEST" });
     }

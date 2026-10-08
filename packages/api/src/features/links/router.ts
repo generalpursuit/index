@@ -3,18 +3,35 @@ import { implement } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { linksContract } from "./contract";
-import { createLink, getLink, listMyLinks } from "./service";
+import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup } from "./service";
 
-const authenticated = implement(linksContract).$context<Context>().use(requireAuth);
+const api = implement(linksContract).$context<Context>();
 
-export const linksRouter = authenticated.router({
-  create: authenticated.create.handler(async ({ context, input }) =>
-    unwrapResult(await createLink(context.db, context.actorId, input)),
+export const linksRouter = api.router({
+  create: api.create
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await createLink(context.db, context.actorId, input)),
+    ),
+  get: api.get.handler(async ({ context, input }) =>
+    unwrapResult(await getLink(context.db, context.session?.user.id ?? null, input.id)),
   ),
-  get: authenticated.get.handler(async ({ context, input }) =>
-    unwrapResult(await getLink(context.db, context.actorId, input.id)),
-  ),
-  listMine: authenticated.listMine.handler(async ({ context, input }) =>
-    unwrapResult(await listMyLinks(context.db, context.actorId, input)),
+  listMine: api.listMine
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await listMyLinks(context.db, context.actorId, input)),
+    ),
+  update: api.update
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await updateLink(context.db, context.actorId, input)),
+    ),
+  delete: api.delete
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await deleteLink(context.db, context.actorId, input.id)),
+    ),
+  listInGroup: api.listInGroup.handler(async ({ context, input }) =>
+    unwrapResult(await listInGroup(context.db, context.session?.user.id ?? null, input)),
   ),
 });

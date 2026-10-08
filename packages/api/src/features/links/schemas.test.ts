@@ -49,7 +49,7 @@ describe("link input validation", () => {
       { ...valid, description: "a".repeat(10_001) },
       { ...valid, url: `https://example.com/${"a".repeat(8192)}` },
       { ...valid, ownerId: "someone-else" },
-      { ...valid, groupId: "00000000-0000-4000-8000-000000000001" },
+      { ...valid, groupId: "invalid" },
     ])
       assert.equal(createLinkInputSchema.safeParse(input).success, false);
   });

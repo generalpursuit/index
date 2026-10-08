@@ -7,7 +7,7 @@ const cursorSchema = z.strictObject({
   id: z.uuid(),
 });
 
-export type LinkCursor = z.output<typeof cursorSchema>;
+export type Cursor = z.output<typeof cursorSchema>;
 
 const invalidCursor = () => ({ code: "BAD_REQUEST" as const, message: "Invalid cursor." });
 
@@ -23,9 +23,15 @@ export function decodeCursor(cursor: string) {
   });
 }
 
-export function encodeCursor({ createdAt, id }: LinkCursor): string {
+export function encodeCursor({ createdAt, id }: Cursor): string {
   return btoa(JSON.stringify({ createdAt, id }))
     .replaceAll("+", "-")
     .replaceAll("/", "_")
     .replace(/=+$/, "");
+}
+
+export function toPage<T extends Cursor>(rows: T[], limit: number) {
+  const items = rows.slice(0, limit);
+  const last = items.at(-1);
+  return { items, nextCursor: rows.length > limit && last ? encodeCursor(last) : null };
 }
