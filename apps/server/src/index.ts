@@ -16,6 +16,7 @@ app.use(
     origin: [ENV.CORS_ORIGIN, ...desktopOrigins],
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
+    exposeHeaders: ["set-auth-token"],
     credentials: true,
   }),
 );

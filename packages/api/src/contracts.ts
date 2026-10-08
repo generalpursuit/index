@@ -5,7 +5,7 @@ import { linksContract } from "./features/links/contract";
 
 export const appContract = {
   healthCheck: oc
-    .route({ method: "GET", path: "/health", tags: ["System"] })
+    .route({ method: "GET", path: "/health", tags: ["System"], spec: { security: [] } })
     .input(z.strictObject({}).optional())
     .output(z.literal("OK")),
   privateData: oc

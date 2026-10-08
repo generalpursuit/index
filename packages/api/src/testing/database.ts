@@ -1,6 +1,7 @@
 import { PGlite } from "@electric-sql/pglite";
 import type { Session } from "@index/auth";
 import { user } from "@index/db/schema/auth";
+import { relations } from "@index/db/relations";
 import { drizzle } from "drizzle-orm/pglite";
 import { readdir, readFile } from "node:fs/promises";
 import { URL } from "node:url";
@@ -9,7 +10,7 @@ import type { Context } from "../context";
 
 export async function createTestDatabase() {
   const client = new PGlite();
-  const db = drizzle({ client });
+  const db = drizzle({ client, relations });
   const migrations = new URL("../../../db/src/migrations/", import.meta.url);
   const directories = (await readdir(migrations, { withFileTypes: true }))
     .filter((entry) => entry.isDirectory())

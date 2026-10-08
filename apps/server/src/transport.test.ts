@@ -94,6 +94,8 @@ describe("HTTP API transports", () => {
     assert.ok(spec.paths["/links"]?.post?.responses["201"]);
     assert.ok(spec.paths["/links"]?.get);
     assert.ok(spec.paths["/links/{id}"]?.get);
+    assert.deepEqual(spec.security, [{ bearerAuth: [] }, { sessionCookie: [] }]);
+    assert.ok(spec.components?.securitySchemes?.bearerAuth);
     const document = JSON.stringify(spec);
     assert.match(document, /date-time/);
     assert.match(document, /uncategorized/);

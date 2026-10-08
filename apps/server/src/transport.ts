@@ -20,6 +20,21 @@ export const apiHandler = new OpenAPIHandler(appRouter, {
       specGenerateOptions: {
         info: { title: "Index API", version: "1.0.0" },
         servers: [{ url: "/api/v1" }],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: "http",
+              scheme: "bearer",
+              description: "Signed set-auth-token returned by Better Auth sign-in.",
+            },
+            sessionCookie: {
+              type: "apiKey",
+              in: "cookie",
+              name: "__Secure-better-auth.session_token",
+            },
+          },
+        },
+        security: [{ bearerAuth: [] }, { sessionCookie: [] }],
       },
     }),
   ],
