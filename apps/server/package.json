@@ -9,9 +9,9 @@
     "env:generate": "varlock codegen"
   },
   "dependencies": {
-    "@memory/api": "workspace:*",
-    "@memory/auth": "workspace:*",
-    "@memory/db": "workspace:*",
+    "@index/api": "workspace:*",
+    "@index/auth": "workspace:*",
+    "@index/db": "workspace:*",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
@@ -22,8 +22,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
-    "@memory/config": "workspace:*",
-    "@memory/infra": "workspace:*",
+    "@index/config": "workspace:*",
+    "@index/infra": "workspace:*",
     "@types/node": "catalog:",
     "tsdown": "^0.23.0",
     "typescript": "catalog:"

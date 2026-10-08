@@ -1,5 +1,5 @@
 {
-  "name": "@memory/db",
+  "name": "@index/db",
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
@@ -20,7 +20,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@memory/config": "workspace:*",
+    "@index/config": "workspace:*",
     "drizzle-kit": "1.0.0-rc.4",
     "typescript": "catalog:",
     "varlock": "catalog:"

@@ -1,5 +1,5 @@
 {
-  "name": "memory",
+  "name": "index",
   "private": true,
   "workspaces": {
     "packages": [
@@ -35,12 +35,12 @@
     "check-types": "turbo run check-types",
     "dev:web": "turbo run dev:bare -F web --",
     "dev:server": "turbo run dev:bare -F hono --",
-    "db:push": "turbo run db:push -F @memory/db --",
-    "db:studio": "turbo run db:studio -F @memory/db --",
-    "db:generate": "turbo run db:generate -F @memory/db --",
-    "db:migrate": "turbo run db:migrate -F @memory/db --",
-    "deploy": "turbo run deploy -F @memory/infra --",
-    "destroy": "turbo run destroy -F @memory/infra --",
+    "db:push": "turbo run db:push -F @index/db --",
+    "db:studio": "turbo run db:studio -F @index/db --",
+    "db:generate": "turbo run db:generate -F @index/db --",
+    "db:migrate": "turbo run db:migrate -F @index/db --",
+    "deploy": "turbo run deploy -F @index/infra --",
+    "destroy": "turbo run destroy -F @index/infra --",
     "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
     "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
     "check": "oxlint && oxfmt --write"
@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "catalog:",
-    "@memory/config": "workspace:*",
+    "@index/config": "workspace:*",
     "@types/node": "catalog:",
     "oxfmt": "^0.66.0",
     "oxlint": "^1.81.0",

@@ -1,5 +1,5 @@
 {
-  "extends": "@memory/config/tsconfig.base.json",
+  "extends": "@index/config/tsconfig.base.json",
   "references": [{ "path": "../../packages/api" }],
   "compilerOptions": {
     "noEmit": true,

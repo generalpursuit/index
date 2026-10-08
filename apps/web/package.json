@@ -15,8 +15,8 @@
     "env:generate": "varlock codegen"
   },
   "dependencies": {
-    "@memory/api": "workspace:*",
-    "@memory/ui": "workspace:*",
+    "@index/api": "workspace:*",
+    "@index/ui": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/tanstack-query": "^1.15.0",
@@ -34,7 +34,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@memory/config": "workspace:*",
+    "@index/config": "workspace:*",
     "@tanstack/react-query-devtools": "^5.102.8",
     "@tanstack/react-router-devtools": "^1.167.1",
     "@tanstack/router-plugin": "^1.168.35",

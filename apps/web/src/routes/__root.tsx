@@ -1,5 +1,5 @@
-import type { AppRouterClient } from "@memory/api/routers/index";
-import { Toaster } from "@memory/ui/components/sonner";
+import type { AppRouterClient } from "@index/api/routers/index";
+import { Toaster } from "@index/ui/components/sonner";
 import { createORPCClient } from "@orpc/client";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
 import type { QueryClient } from "@tanstack/react-query";
@@ -24,11 +24,11 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   head: () => ({
     meta: [
       {
-        title: "memory",
+        title: "index",
       },
       {
         name: "description",
-        content: "memory is a web application",
+        content: "index is a web application",
       },
     ],
     links: [

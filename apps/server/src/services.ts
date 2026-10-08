@@ -1,5 +1,5 @@
-import { createAuth as createConfiguredAuth } from "@memory/auth";
-import { type Database, createDb } from "@memory/db";
+import { createAuth as createConfiguredAuth } from "@index/auth";
+import { type Database, createDb } from "@index/db";
 
 import { ENV, desktopOrigins } from "./env.server";
 

@@ -48,7 +48,7 @@ export const server = Cloudflare.Worker("server", {
 export type ServerEnv = Cloudflare.InferEnv<typeof server>;
 
 export default Alchemy.Stack(
-  "memory",
+  "index",
   {
     providers: Layer.mergeAll(Cloudflare.providers(), databaseProviders),
     state: Cloudflare.state(),

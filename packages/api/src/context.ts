@@ -1,5 +1,5 @@
-import type { Session } from "@memory/auth";
-import type { Database } from "@memory/db";
+import type { Session } from "@index/auth";
+import type { Database } from "@index/db";
 
 export type Context = {
   session: Session | null;

@@ -3,13 +3,13 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "memory",
+      "name": "index",
       "dependencies": {
         "zod": "catalog:",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "@types/node": "catalog:",
         "oxfmt": "^0.66.0",
         "oxlint": "^1.81.0",
@@ -21,9 +21,9 @@
     "apps/server": {
       "name": "server",
       "dependencies": {
-        "@memory/api": "workspace:*",
-        "@memory/auth": "workspace:*",
-        "@memory/db": "workspace:*",
+        "@index/api": "workspace:*",
+        "@index/auth": "workspace:*",
+        "@index/db": "workspace:*",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
         "@orpc/zod": "catalog:",
@@ -34,8 +34,8 @@
       },
       "devDependencies": {
         "@cloudflare/workers-types": "catalog:",
-        "@memory/config": "workspace:*",
-        "@memory/infra": "workspace:*",
+        "@index/config": "workspace:*",
+        "@index/infra": "workspace:*",
         "@types/node": "catalog:",
         "tsdown": "^0.23.0",
         "typescript": "catalog:",
@@ -45,8 +45,8 @@
       "name": "web",
       "version": "0.0.0",
       "dependencies": {
-        "@memory/api": "workspace:*",
-        "@memory/ui": "workspace:*",
+        "@index/api": "workspace:*",
+        "@index/ui": "workspace:*",
         "@orpc/client": "catalog:",
         "@orpc/server": "catalog:",
         "@orpc/tanstack-query": "^1.15.0",
@@ -64,7 +64,7 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "@tanstack/react-query-devtools": "^5.102.8",
         "@tanstack/react-router-devtools": "^1.167.1",
         "@tanstack/router-plugin": "^1.168.35",
@@ -80,10 +80,10 @@
       },
     },
     "packages/api": {
-      "name": "@memory/api",
+      "name": "@index/api",
       "dependencies": {
-        "@memory/auth": "workspace:*",
-        "@memory/db": "workspace:*",
+        "@index/auth": "workspace:*",
+        "@index/db": "workspace:*",
         "@orpc/client": "catalog:",
         "@orpc/openapi": "catalog:",
         "@orpc/server": "catalog:",
@@ -92,52 +92,52 @@
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "typescript": "catalog:",
       },
     },
     "packages/auth": {
-      "name": "@memory/auth",
+      "name": "@index/auth",
       "dependencies": {
         "@better-auth/core": "1.7.7",
         "@better-auth/drizzle-adapter": "1.7.7",
-        "@memory/db": "workspace:*",
+        "@index/db": "workspace:*",
         "better-auth": "catalog:",
         "drizzle-orm": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "typescript": "catalog:",
       },
     },
     "packages/config": {
-      "name": "@memory/config",
+      "name": "@index/config",
       "version": "0.0.0",
     },
     "packages/db": {
-      "name": "@memory/db",
+      "name": "@index/db",
       "dependencies": {
         "@neondatabase/serverless": "^1.1.0",
         "drizzle-orm": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "drizzle-kit": "1.0.0-rc.4",
         "typescript": "catalog:",
         "varlock": "catalog:",
       },
     },
     "packages/infra": {
-      "name": "@memory/infra",
+      "name": "@index/infra",
       "dependencies": {
         "zod": "catalog:",
       },
       "devDependencies": {
         "@effect/platform-bun": "4.0.0",
         "@effect/platform-node": "4.0.0",
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "alchemy": "2.0.0-beta.80",
         "effect": "4.0.0",
         "pg": "^8.23.1",
@@ -146,7 +146,7 @@
       },
     },
     "packages/ui": {
-      "name": "@memory/ui",
+      "name": "@index/ui",
       "version": "0.0.0",
       "dependencies": {
         "@base-ui/react": "^1.8.0",
@@ -162,7 +162,7 @@
         "tw-animate-css": "^1.4.0",
       },
       "devDependencies": {
-        "@memory/config": "workspace:*",
+        "@index/config": "workspace:*",
         "@tailwindcss/postcss": "^4.3.3",
         "@types/react": "catalog:",
         "@types/react-dom": "catalog:",
@@ -523,17 +523,17 @@
 
     "@libsql/win32-x64-msvc": ["@libsql/win32-x64-msvc@0.5.29", "", { "os": "win32", "cpu": "x64" }, "sha512-4/0CvEdhi6+KjMxMaVbFM2n2Z44escBRoEYpR+gZg64DdetzGnYm8mcNLcoySaDJZNaBd6wz5DNdgRmcI4hXcg=="],
 
-    "@memory/api": ["@memory/api@workspace:packages/api"],
+    "@index/api": ["@index/api@workspace:packages/api"],
 
-    "@memory/auth": ["@memory/auth@workspace:packages/auth"],
+    "@index/auth": ["@index/auth@workspace:packages/auth"],
 
-    "@memory/config": ["@memory/config@workspace:packages/config"],
+    "@index/config": ["@index/config@workspace:packages/config"],
 
-    "@memory/db": ["@memory/db@workspace:packages/db"],
+    "@index/db": ["@index/db@workspace:packages/db"],
 
-    "@memory/infra": ["@memory/infra@workspace:packages/infra"],
+    "@index/infra": ["@index/infra@workspace:packages/infra"],
 
-    "@memory/ui": ["@memory/ui@workspace:packages/ui"],
+    "@index/ui": ["@index/ui@workspace:packages/ui"],
 
     "@modelcontextprotocol/sdk": ["@modelcontextprotocol/sdk@1.32.1", "", { "dependencies": { "@hono/node-server": "^1.19.9 || ^2.0.5", "ajv": "^8.17.1", "ajv-formats": "^3.0.1", "content-type": "^1.0.5", "cors": "^2.8.5", "cross-spawn": "^7.0.5", "eventsource": "^3.0.2", "eventsource-parser": "^3.0.0", "express": "^5.2.1", "express-rate-limit": "^8.2.1", "hono": "^4.11.4", "jose": "^6.1.3", "json-schema-typed": "^8.0.2", "pkce-challenge": "^5.0.0", "raw-body": "^3.0.0", "zod": "^3.25 || ^4.0", "zod-to-json-schema": "^3.25.1" }, "peerDependencies": { "@cfworker/json-schema": "^4.1.1" }, "optionalPeers": ["@cfworker/json-schema"] }, "sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw=="],
 

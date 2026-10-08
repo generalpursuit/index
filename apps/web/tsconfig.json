@@ -12,7 +12,7 @@
     "rootDirs": ["."],
     "paths": {
       "@/*": ["./src/*"],
-      "@memory/ui/*": ["../../packages/ui/src/*"]
+      "@index/ui/*": ["../../packages/ui/src/*"]
     }
   }
 }

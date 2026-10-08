@@ -1,5 +1,5 @@
 {
-  "name": "@memory/infra",
+  "name": "@index/infra",
   "private": true,
   "type": "module",
   "scripts": {
@@ -14,7 +14,7 @@
   "devDependencies": {
     "@effect/platform-bun": "4.0.0",
     "@effect/platform-node": "4.0.0",
-    "@memory/config": "workspace:*",
+    "@index/config": "workspace:*",
     "alchemy": "2.0.0-beta.80",
     "effect": "4.0.0",
     "pg": "^8.23.1",

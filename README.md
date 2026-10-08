@@ -1,4 +1,4 @@
-# memory
+# index
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Router, Hono, ORPC, and more.
 
@@ -60,7 +60,7 @@ npx shadcn@latest add accordion dialog popover sheet table -c packages/ui
 Import shared components like this:
 
 ```tsx
-import { Button } from "@memory/ui/components/button";
+import { Button } from "@index/ui/components/button";
 ```
 
 ### Add app-specific blocks
@@ -108,7 +108,7 @@ cd packages/infra && bunx alchemy deploy --stage production
 ## Project Structure
 
 ```
-memory/
+index/
 ├── apps/
 │   ├── web/         # Frontend application (React + TanStack Router)
 │   └── server/      # Backend API (Hono, ORPC)

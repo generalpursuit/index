@@ -1,4 +1,4 @@
-import type { Context as ApiContext } from "@memory/api/context";
+import type { Context as ApiContext } from "@index/api/context";
 import type { Context as HonoContext } from "hono";
 
 import { getDb } from "./services";

@@ -10,7 +10,7 @@
   "$schema": "https://r2.better-t-stack.dev/schema.json",
   "version": "3.44.3",
   "createdAt": "2026-10-08T09:43:05.102Z",
-  "reproducibleCommand": "bun create better-t-stack@latest memory --frontend tanstack-router --backend hono --runtime workers --database postgres --orm drizzle --api orpc --auth better-auth --payments none --addons oxlint tauri turborepo --examples none --db-setup neon --web-deploy cloudflare --server-deploy cloudflare --git --package-manager bun --install",
+  "reproducibleCommand": "bun create better-t-stack@latest index --frontend tanstack-router --backend hono --runtime workers --database postgres --orm drizzle --api orpc --auth better-auth --payments none --addons oxlint tauri turborepo --examples none --db-setup neon --web-deploy cloudflare --server-deploy cloudflare --git --package-manager bun --install",
   "dbSetupOptions": {
     "mode": "alchemy",
   },

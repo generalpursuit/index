@@ -1,11 +1,11 @@
 {
-  "extends": "@memory/config/tsconfig.base.json",
+  "extends": "@index/config/tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "types": [],
     "paths": {
-      "@memory/ui/*": ["./src/*"]
+      "@index/ui/*": ["./src/*"]
     }
   },
   "include": ["src/**/*.ts", "src/**/*.tsx"],
