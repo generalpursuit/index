@@ -131,5 +131,5 @@ index/
 - `bun run db:migrate`: Run database migrations
 - `bun run db:studio`: Open database studio UI
 - `bun run check`: Run Oxlint and Oxfmt
-- `cd apps/web && bun run desktop:dev`: Start Tauri desktop app in development
+- `cd apps/web && bun run desktop:dev`: Open Tauri against the running root `bun run dev` stack
 - `cd apps/web && bun run desktop:build`: Build Tauri desktop app
