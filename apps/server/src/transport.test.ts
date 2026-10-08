@@ -104,6 +104,7 @@ describe("HTTP API transports", () => {
       "/feed",
       "/discovery/users",
       "/discovery/recommendations",
+      "/categories/suggest",
     ]) {
       assert.ok(spec.paths[path], path);
     }
@@ -114,6 +115,49 @@ describe("HTTP API transports", () => {
     assert.match(document, /date-time/);
     assert.match(document, /uncategorized/);
     assert.match(document, /nextCursor/);
+  });
+
+  it("serves social writes and anonymous reads through the HTTP contract", async () => {
+    const groupResponse = await request("/groups", "alice", save({ name: "Reading" }));
+    assert.equal(groupResponse.status, 201);
+    const group = (await groupResponse.json()) as { id: string };
+    const created = await request("/links", "alice", save({ ...input, groupId: group.id }));
+    const link = linkSchema.parse(await created.json());
+    assert.equal((await request(`/links/${link.id}`, null)).status, 200);
+    const follow = await request("/profiles/alice/follow", "bob", save({}));
+    assert.deepEqual(await follow.json(), { status: "accepted" });
+    const starred = await request(`/links/${link.id}/star`, "bob", { ...save({}), method: "PUT" });
+    assert.equal(starred.status, 200);
+    const comment = await request(
+      `/links/${link.id}/comments`,
+      "bob",
+      save({ body: "Worth reading" }),
+    );
+    assert.equal(comment.status, 201);
+    assert.equal((await request(`/links/${link.id}/comments?limit=1`, null)).status, 200);
+    const updated = await request(`/links/${link.id}`, "alice", {
+      ...save({ title: "Changed" }),
+      method: "PATCH",
+    });
+    assert.equal(linkSchema.parse(await updated.json()).title, "Changed");
+    const hidden = await request(`/groups/${group.id}`, "alice", {
+      ...save({ visibility: "private" }),
+      method: "PATCH",
+    });
+    assert.equal(hidden.status, 200);
+    assert.equal((await request(`/links/${link.id}`, "bob")).status, 404);
+    const deleted = await request(`/groups/${group.id}`, "alice", {
+      ...save({ deleteLinks: true }),
+      method: "DELETE",
+    });
+    assert.equal(deleted.status, 200, await deleted.clone().text());
+    assert.equal((await request(`/links/${link.id}`, "alice")).status, 404);
+    const suggested = await request(
+      "/categories/suggest",
+      "alice",
+      save({ url: "https://youtu.be/example" }),
+    );
+    assert.deepEqual(await suggested.json(), { category: "video", matched: true });
   });
 
   it("uses the same contract through the typed RPC client", async () => {
