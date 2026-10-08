@@ -100,6 +100,7 @@ describe("HTTP API transports", () => {
       "/profiles/{userId}/follow",
       "/me/follow-requests",
       "/links/{linkId}/star",
+      "/links/{linkId}/comments",
     ]) {
       assert.ok(spec.paths[path], path);
     }

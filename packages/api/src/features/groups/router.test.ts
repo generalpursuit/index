@@ -1,4 +1,4 @@
-import { groups, links } from "@index/db/schema/app";
+import { comments, groups, links, stars } from "@index/db/schema/app";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -7,6 +7,22 @@ import { setupApiTests } from "../../testing/api";
 describe("groups and link organization", () => {
   const api = setupApiTests();
   const input = { url: "https://example.com/read", title: "Read" };
+
+  it("only lets the owner edit or delete a link, and cascades a direct deletion", async () => {
+    const alice = api.client("alice");
+    const group = await alice.groups.create({ name: "Public" });
+    const link = await alice.links.create({ ...input, groupId: group.id });
+    await api.client("bob").comments.create({ linkId: link.id, body: "Hi" });
+    await api.client("bob").stars.add({ linkId: link.id });
+    await assert.rejects(api.client("bob").links.delete({ id: link.id }), { code: "NOT_FOUND" });
+    await assert.rejects(alice.links.update({ id: link.id, title: undefined }), {
+      code: "BAD_REQUEST",
+    });
+    await alice.links.delete({ id: link.id });
+    assert.equal((await api.db.select().from(comments)).length, 0);
+    assert.equal((await api.db.select().from(stars)).length, 0);
+    await assert.rejects(alice.links.get({ id: link.id }), { code: "NOT_FOUND" });
+  });
 
   it("creates public groups and moves only owned links into owned custom groups", async () => {
     const alice = api.client("alice");
@@ -67,6 +83,18 @@ describe("groups and link organization", () => {
     await alice.groups.delete({ id: group.id });
     assert.equal((await alice.links.get({ id: link.id })).groupId, null);
     await assert.rejects(api.client(null).links.get({ id: link.id }), { code: "NOT_FOUND" });
+  });
+
+  it("explicit deletion removes links and cascades their comments and stars", async () => {
+    const alice = api.client("alice");
+    const group = await alice.groups.create({ name: "Delete" });
+    const link = await alice.links.create({ ...input, groupId: group.id });
+    await api.client("bob").stars.add({ linkId: link.id });
+    await api.client("bob").comments.create({ linkId: link.id, body: "Hi" });
+    await alice.groups.delete({ id: group.id, deleteLinks: true });
+    assert.equal((await api.db.select().from(links)).length, 0);
+    assert.equal((await api.db.select().from(comments)).length, 0);
+    assert.equal((await api.db.select().from(stars)).length, 0);
   });
 
   it("rolls back link movement when group deletion fails", async () => {
