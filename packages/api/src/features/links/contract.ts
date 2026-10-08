@@ -1,3 +1,4 @@
+import { listOwnerLinksSchema, libraryWeeksInputSchema, libraryWeeksSchema } from "./schemas";
 import { optionalAuth } from "../../shared/schemas";
 import { baseContract, idInputSchema, successSchema } from "../../shared/schemas";
 
@@ -12,6 +13,14 @@ import {
 } from "./schemas";
 
 export const linksContract = {
+  weeks: baseContract
+    .route({ method: "GET", path: "/profiles/{userId}/weeks", tags: ["Links"], spec: optionalAuth })
+    .input(libraryWeeksInputSchema)
+    .output(libraryWeeksSchema),
+  listByOwner: baseContract
+    .route({ method: "GET", path: "/profiles/{userId}/links", spec: optionalAuth, tags: ["Links"] })
+    .input(listOwnerLinksSchema)
+    .output(listMyLinksOutputSchema),
   create: baseContract
     .route({
       method: "POST",

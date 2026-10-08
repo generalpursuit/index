@@ -72,7 +72,7 @@ describe("following and follow requests", () => {
     const alice = api.client("alice");
     for (const id of ["bob", "carol", "dana"])
       await api.client(id).follows.follow({ userId: "alice" });
-    const first = await api.client(null).follows.followers({ userId: "alice", limit: 2 });
+    const first = await alice.follows.followers({ userId: "alice", limit: 2 });
     assert.deepEqual(
       first.items.map((item) => item.id),
       ["bob", "carol"],

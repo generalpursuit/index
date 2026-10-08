@@ -53,7 +53,7 @@ describe("home feed", () => {
       groupId: otherGroup.id,
     });
     await alice.follows.follow({ userId: "carol" });
-    await bob.stars.add({ linkId: two.id });
+    await bob.favorites.add({ linkId: two.id });
     assert.equal((await alice.feed.list({})).items.length, 2);
     await bob.groups.update({ id: group.id, visibility: "private" });
     assert.equal((await alice.feed.list({ cursor: first.nextCursor! })).items.length, 0);

@@ -1,7 +1,11 @@
 import { baseContract, pageInputSchema } from "../../shared/schemas";
-import { feedPageSchema } from "./schemas";
+import { feedPageSchema, weekFeedInputSchema, weekFeedSchema } from "./schemas";
 
 export const feedContract = {
+  week: baseContract
+    .route({ method: "GET", path: "/feed/week", tags: ["Feed"] })
+    .input(weekFeedInputSchema)
+    .output(weekFeedSchema),
   list: baseContract
     .route({
       method: "GET",

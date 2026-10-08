@@ -19,7 +19,14 @@ export const groupsRouter = api.router({
     const ownerId = input.ownerId ?? viewerId;
     if (!ownerId) throw new ORPCError("UNAUTHORIZED");
     return unwrapResult(
-      await service.listGroups(context.db, viewerId, ownerId, input.limit, input.cursor),
+      await service.listGroups(
+        context.db,
+        viewerId,
+        ownerId,
+        input.limit,
+        input.cursor,
+        input.includeFavorites,
+      ),
     );
   }),
   update: api.update

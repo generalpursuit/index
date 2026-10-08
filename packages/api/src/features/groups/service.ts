@@ -30,13 +30,20 @@ export function listGroups(
   ownerId: string,
   limit: number,
   cursor?: string,
+  includeFavorites = false,
 ) {
   const decoded = cursor ? decodeCursor(cursor) : ok(undefined);
   return decoded.asyncAndThen((value) => {
     const ready =
-      viewerId === ownerId ? repository.ensureStarredGroup(db, ownerId) : okAsync(undefined);
+      viewerId === ownerId
+        ? repository
+            .ensureSystemGroup(db, ownerId, "starred")
+            .andThen(() => repository.ensureSystemGroup(db, ownerId, "favorites"))
+        : okAsync(undefined);
     return ready
-      .andThen(() => repository.listGroups(db, viewerId, ownerId, limit + 1, value))
+      .andThen(() =>
+        repository.listGroups(db, viewerId, ownerId, limit + 1, value, includeFavorites),
+      )
       .map((rows) => toPage(rows, limit));
   });
 }

@@ -1,12 +1,12 @@
 import { err, ok } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { notFound } from "../../errors";
-import { ensureStarredGroup } from "../groups/repository";
+import { ensureSystemGroup } from "../groups/repository";
 import { listInGroup } from "../links/service";
 import * as repository from "./repository";
 
 export const getStarredGroup = (db: QueryDatabase, actorId: string) =>
-  ensureStarredGroup(db, actorId)
+  ensureSystemGroup(db, actorId, "starred")
     .andThen(() => repository.findStarredGroup(db, actorId))
     .andThen((group) => (group ? ok(group) : err(notFound("Starred group"))));
 

@@ -102,6 +102,16 @@ describe("HTTP API transports", () => {
       "/links/{linkId}/star",
       "/links/{linkId}/comments",
       "/feed",
+      "/feed/week",
+      "/profiles/{userId}/weeks",
+      "/profiles/{userId}/links",
+      "/links/{linkId}/favorite",
+      "/me/favorites",
+      "/me/activity",
+      "/conversations",
+      "/conversations/{conversationId}/messages",
+      "/conversations/{conversationId}/read",
+      "/me/messages/unread",
       "/discovery/users",
       "/discovery/recommendations",
       "/categories/suggest",
@@ -158,6 +168,33 @@ describe("HTTP API transports", () => {
       save({ url: "https://youtu.be/example" }),
     );
     assert.deepEqual(await suggested.json(), { category: "video", matched: true });
+  });
+
+  it("serves messages, favorites, activity and week reads through REST", async () => {
+    await request("/profiles/bob/follow", "alice", save({}));
+    const created = await request("/conversations", "alice", save({ recipientIds: ["bob"] }));
+    assert.equal(created.status, 200);
+    const c = (await created.json()) as { id: string };
+    const sent = await request(
+      `/conversations/${c.id}/messages`,
+      "alice",
+      save({ clientId: crypto.randomUUID(), body: "Hello" }),
+    );
+    assert.equal(sent.status, 200);
+    assert.equal((await request(`/conversations/${c.id}/messages`, null)).status, 401);
+    assert.equal((await request("/me/activity?limit=1", "bob")).status, 200);
+    assert.equal((await request("/feed/week?weekStart=2026-01-05", "alice")).status, 200);
+    assert.equal((await request("/feed/week?weekStart=2026-01-06", "alice")).status, 400);
+    assert.equal((await request("/profiles/alice/weeks", null)).status, 200);
+    const link = linkSchema.parse(await (await request("/links", "alice", save(input))).json());
+    assert.equal(
+      (await request(`/links/${link.id}/favorite`, "alice", { ...save({}), method: "PUT" })).status,
+      200,
+    );
+    const groups = (await (await request("/groups?includeFavorites=true", "alice")).json()) as {
+      items: { kind: string }[];
+    };
+    assert(groups.items.some((g) => g.kind === "favorites"));
   });
 
   it("uses the same contract through the typed RPC client", async () => {

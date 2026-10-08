@@ -1,5 +1,5 @@
 import { groups, links } from "@index/db/schema/app";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
@@ -29,12 +29,16 @@ export function insertGroup(db: QueryDatabase, ownerId: string, input: CreateGro
   );
 }
 
-export function ensureStarredGroup(db: QueryDatabase, ownerId: string) {
+export function ensureSystemGroup(
+  db: QueryDatabase,
+  ownerId: string,
+  kind: "starred" | "favorites",
+) {
   return ResultAsync.fromPromise(
     db
       .insert(groups)
-      .values({ ownerId, name: "Starred", kind: "starred" })
-      .onConflictDoNothing({ target: groups.ownerId, where: sql`${groups.kind} = 'starred'` })
+      .values({ ownerId, name: kind === "starred" ? "Starred" : "Favorites", kind })
+      .onConflictDoNothing()
       .then(() => undefined),
     databaseError,
   );
@@ -70,6 +74,7 @@ export function listGroups(
   ownerId: string,
   limit: number,
   cursor?: Cursor,
+  includeFavorites = false,
 ) {
   return ResultAsync.fromPromise(
     db
@@ -79,6 +84,7 @@ export function listGroups(
         and(
           eq(groups.ownerId, ownerId),
           groupVisible(viewerId),
+          includeFavorites ? undefined : ne(groups.kind, "favorites"),
           cursor
             ? sql`(${groups.createdAt}, ${groups.id}) < (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`
             : undefined,
@@ -103,7 +109,7 @@ export function updateGroup(
         and(
           eq(groups.id, id),
           eq(groups.ownerId, ownerId),
-          // Starred is a system group; only its visibility is editable.
+          // System groups retain their names; only visibility is editable.
           input.name !== undefined ? eq(groups.kind, "custom") : undefined,
         ),
       )

@@ -1,5 +1,5 @@
 import { groups, links, stars } from "@index/db/schema/app";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { linkVisible } from "../../data-access/visibility";
@@ -31,7 +31,7 @@ export function starLink(db: QueryDatabase, actorId: string, linkId: string) {
           })
           .from(links)
           .innerJoin(groups, and(eq(groups.ownerId, actorId), eq(groups.kind, "starred")))
-          .where(and(eq(links.id, linkId), linkVisible(actorId))),
+          .where(and(eq(links.id, linkId), ne(links.ownerId, actorId), linkVisible(actorId))),
       )
       .onConflictDoUpdate({ target: [stars.groupId, stars.linkId], set: { linkId } })
       .returning({ linkId: stars.linkId })

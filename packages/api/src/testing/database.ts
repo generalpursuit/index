@@ -22,7 +22,7 @@ export async function createTestDatabase() {
   }
 
   async function reset() {
-    await client.exec('TRUNCATE TABLE "user" CASCADE');
+    await client.exec('TRUNCATE TABLE "user", conversations CASCADE');
     await db.insert(user).values([
       { id: "alice", name: "Alice", email: "alice@example.com" },
       { id: "bob", name: "Bob", email: "bob@example.com" },

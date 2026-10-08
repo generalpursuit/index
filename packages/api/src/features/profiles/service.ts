@@ -17,7 +17,12 @@ export function getProfile(
       viewerId,
       "userId" in lookup ? eq(user.id, lookup.userId) : eq(user.username, lookup.username),
     )
-    .andThen((profile) => (profile ? ok(profile) : err(notFound("Profile"))));
+    .andThen((profile) => (profile ? ok(profile) : err(notFound("Profile"))))
+    .andThen((profile) =>
+      repository
+        .followedBy(db, viewerId, profile.id)
+        .map((followedBy) => ({ ...profile, followedBy })),
+    );
 }
 
 export const updateProfile = (db: QueryDatabase, actorId: string, input: UpdateProfileInput) =>

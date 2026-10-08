@@ -19,7 +19,7 @@ const selection = {
 };
 
 export function createComment(db: QueryDatabase, actorId: string, linkId: string, body: string) {
-  return ResultAsync.fromPromise(
+  const inserted = db.$with("new_comment").as(
     db
       .insert(comments)
       .select(
@@ -35,7 +35,24 @@ export function createComment(db: QueryDatabase, actorId: string, linkId: string
           .from(links)
           .where(and(eq(links.id, linkId), linkVisible(actorId))),
       )
-      .returning(selection)
+      .returning(),
+  );
+  const notice = db.$with("comment_notice", {}).as(sql`
+ insert into activities(recipient_id,actor_id,type,link_id,comment_id)
+ select l.owner_id,c.author_id,'comment',c.link_id,c.id from new_comment c join links l on l.id=c.link_id
+ where l.owner_id<>c.author_id returning id`);
+  return ResultAsync.fromPromise(
+    db
+      .with(inserted, notice)
+      .select({
+        id: inserted.id,
+        linkId: inserted.linkId,
+        authorId: inserted.authorId,
+        body: inserted.body,
+        createdAt: timestamp(inserted.createdAt),
+        updatedAt: timestamp(inserted.updatedAt),
+      })
+      .from(inserted)
       .then((rows) => rows[0]),
     databaseError,
   );

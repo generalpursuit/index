@@ -18,6 +18,10 @@ export const publicUserSchema = z.object({
 });
 export const profileSchema = publicUserSchema.extend({
   canViewContent: z.boolean(),
+  followerCount: z.number().int().nonnegative().nullable(),
+  followingCount: z.number().int().nonnegative().nullable(),
+  linkCount: z.number().int().nonnegative().nullable(),
+  followedBy: z.object({ users: z.array(publicUserSchema), total: z.number().int().nonnegative() }),
   followingStatus: z.enum(["pending", "accepted"]).nullable(),
 });
 export const updateProfileSchema = z

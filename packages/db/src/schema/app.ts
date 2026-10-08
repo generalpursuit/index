@@ -1,6 +1,7 @@
 import { defineRelationsPart, inArray, sql } from "drizzle-orm";
 import {
   check,
+  date,
   foreignKey,
   index,
   pgTable,
@@ -18,7 +19,7 @@ import { user } from "./auth";
 export { linkCategories } from "../categories";
 
 export const groupVisibilities = ["private", "public"] as const;
-export const groupKinds = ["custom", "starred"] as const;
+export const groupKinds = ["custom", "starred", "favorites"] as const;
 export const followStatuses = ["pending", "accepted"] as const;
 
 export const groups = pgTable(
@@ -42,6 +43,9 @@ export const groups = pgTable(
     uniqueIndex("groups_one_starred_per_owner")
       .on(table.ownerId)
       .where(sql`${table.kind} = 'starred'`),
+    uniqueIndex("groups_one_favorites_per_owner")
+      .on(table.ownerId)
+      .where(sql`${table.kind} = 'favorites'`),
     check("groups_name_not_empty", sql`length(btrim(${table.name})) > 0`),
     check("groups_kind_check", inArray(table.kind, groupKinds)),
     check("groups_visibility_check", inArray(table.visibility, groupVisibilities)),
@@ -59,6 +63,9 @@ export const links = pgTable(
     url: text("url").notNull(),
     title: text("title").notNull(),
     description: text("description"),
+    savedOn: date("saved_on")
+      .default(sql`(now() at time zone 'UTC')::date`)
+      .notNull(),
     category: text("category", { enum: linkCategories }).default("uncategorized").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
@@ -72,6 +79,8 @@ export const links = pgTable(
       columns: [table.ownerId, table.groupId],
       foreignColumns: [groups.ownerId, groups.id],
     }),
+    unique("links_owner_id_id_unique").on(table.ownerId, table.id),
+    index("links_owner_saved_on_idx").on(table.ownerId, table.savedOn, table.id),
     index("links_owner_created_at_id_idx").on(
       table.ownerId,
       table.createdAt.desc(),
@@ -164,6 +173,121 @@ export const comments = pgTable(
   ],
 );
 
+// Favorites reference originals; the composite keys enforce ownership.
+export const favorites = pgTable(
+  "favorites",
+  {
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    linkId: uuid("link_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.ownerId, t.linkId] }),
+    foreignKey({
+      columns: [t.ownerId, t.linkId],
+      foreignColumns: [links.ownerId, links.id],
+    }).onDelete("cascade"),
+  ],
+);
+
+export const activityTypes = ["comment", "follow", "request", "accepted"] as const;
+export const activities = pgTable(
+  "activities",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    recipientId: text("recipient_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    actorId: text("actor_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    type: text("type", { enum: activityTypes }).notNull(),
+    requestStatus: text("request_status", {
+      enum: ["pending", "accepted", "declined", "canceled"],
+    }),
+    linkId: uuid("link_id").references(() => links.id, { onDelete: "cascade" }),
+    commentId: uuid("comment_id").references(() => comments.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+  },
+  (t) => [
+    index("activities_recipient_created_idx").on(t.recipientId, t.createdAt.desc(), t.id.desc()),
+    index("activities_pending_request_idx")
+      .on(t.recipientId, t.actorId)
+      .where(sql`${t.type} = 'request' and ${t.requestStatus} = 'pending'`),
+    check("activity_type_check", inArray(t.type, activityTypes)),
+    check(
+      "activity_request_status_check",
+      sql`(${t.type} = 'request' and ${t.requestStatus} in ('pending','accepted','declined','canceled')) or (${t.type} <> 'request' and ${t.requestStatus} is null)`,
+    ),
+    check(
+      "activity_comment_check",
+      sql`(${t.type} = 'comment') = (${t.commentId} is not null and ${t.linkId} is not null)`,
+    ),
+  ],
+);
+
+export const conversations = pgTable(
+  "conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    // Canonical sorted member IDs, not a user-provided name.
+    memberKey: text("member_key").notNull().unique(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("conversations_updated_idx").on(t.updatedAt.desc(), t.id.desc())],
+);
+
+export const conversationMembers = pgTable(
+  "conversation_members",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    readMessageId: uuid("read_message_id"),
+  },
+  (t) => [
+    primaryKey({ columns: [t.conversationId, t.userId] }),
+    index("conversation_members_user_idx").on(t.userId, t.conversationId),
+  ],
+);
+
+export const messages = pgTable(
+  "messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    senderId: text("sender_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Client-generated retry key, scoped to the sender.
+    clientId: uuid("client_id").notNull(),
+    body: text("body").notNull().default(""),
+    linkId: uuid("link_id").references(() => links.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    unique("messages_sender_client_unique").on(t.senderId, t.clientId),
+    foreignKey({
+      columns: [t.conversationId, t.senderId],
+      foreignColumns: [conversationMembers.conversationId, conversationMembers.userId],
+    }).onDelete("cascade"),
+    index("messages_conversation_created_idx").on(
+      t.conversationId,
+      t.createdAt.desc(),
+      t.id.desc(),
+    ),
+  ],
+);
 export const appRelations = defineRelationsPart(
   { user, groups, links, follows, stars, comments },
   (r) => ({

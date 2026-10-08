@@ -1,3 +1,6 @@
+import { activityRouter } from "../features/activity/router";
+import { messagesRouter } from "../features/messages/router";
+import { favoritesRouter } from "../features/favorites/router";
 import { implement } from "@orpc/server";
 
 import type { Context } from "../context";
@@ -39,6 +42,9 @@ export const appRouter = api.router({
   profiles: profilesRouter,
   follows: followsRouter,
   stars: starsRouter,
+  activity: activityRouter,
+  messages: messagesRouter,
+  favorites: favoritesRouter,
   comments: commentsRouter,
   feed: feedRouter,
   discovery: discoveryRouter,

@@ -21,6 +21,15 @@ export function findProfile(db: QueryDatabase, viewerId: string | null, filter: 
     db
       .select({
         ...publicUserSelection,
+        followerCount: sql<
+          number | null
+        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f where f.followed_id = "user".id and f.status = 'accepted') else null end`,
+        followingCount: sql<
+          number | null
+        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f where f.follower_id = "user".id and f.status = 'accepted') else null end`,
+        linkCount: sql<
+          number | null
+        >`case when "user".id = ${viewerId} then (select count(*)::int from links l where l.owner_id = "user".id) when "user".profile_visibility = 'public' then (select count(*)::int from links l join groups g on g.id=l.group_id where l.owner_id="user".id and g.visibility='public' and g.kind='custom') else null end`,
         // Keep the outer reference qualified inside the correlated subquery. Drizzle
         // otherwise unqualifies selected columns, which can bind to the inner user.
         canViewContent: profileContentVisible(viewerId, sql`"user"."id"`),
@@ -55,8 +64,13 @@ export function updateProfile(db: QueryDatabase, actorId: string, input: UpdateP
         )
         .returning({ followerId: follows.followerId }),
     );
+    const resolved = db.$with("resolved_requests", {}).as(sql`
+      update activities a set request_status='accepted' from accepted_requests r
+      where a.type='request' and a.request_status='pending' and a.recipient_id=${actorId} and a.actor_id=r.follower_id returning a.id`);
+    const notices = db.$with("acceptance_notices", {}).as(sql`
+      insert into activities(recipient_id,actor_id,type) select follower_id,${actorId},'accepted' from accepted_requests returning id`);
     return ResultAsync.fromPromise(
-      db.with(updated, accepted).select().from(updated),
+      db.with(updated, accepted, resolved, notices).select().from(updated),
       profileWriteError,
     );
   }
@@ -75,4 +89,30 @@ function profileWriteError(cause: unknown): ApplicationError {
     return { code: "CONFLICT", message: "That username is already taken." };
   }
   return databaseError(cause);
+}
+
+export function followedBy(db: QueryDatabase, viewerId: string | null, ownerId: string) {
+  return ResultAsync.fromPromise(
+    db
+      .select({ ...publicUserSelection, total: sql<number>`count(*) over()::int` })
+      .from(user)
+      .innerJoin(
+        follows,
+        and(
+          eq(follows.followerId, user.id),
+          eq(follows.followedId, ownerId),
+          eq(follows.status, "accepted"),
+        ),
+      )
+      .where(
+        sql`exists(select 1 from follows mine where mine.follower_id = ${viewerId} and mine.followed_id = ${user.id} and mine.status='accepted')`,
+      )
+      .orderBy(user.id)
+      .limit(2)
+      .then((rows) => ({
+        users: rows.map(({ total: _total, ...person }) => person),
+        total: rows[0]?.total ?? 0,
+      })),
+    databaseError,
+  );
 }

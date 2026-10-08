@@ -2,7 +2,7 @@ import { groups, links } from "@index/db/schema/app";
 import { sql, type SQLWrapper } from "drizzle-orm";
 
 // Basic profile identity stays discoverable. This predicate protects its content and social graph.
-export function profileContentVisible(viewerId: string | null, ownerId: SQLWrapper) {
+export function profileContentVisible(viewerId: string | SQLWrapper | null, ownerId: SQLWrapper) {
   return sql<boolean>`exists (
     select 1 from "user" as access_owner
     where access_owner.id = ${ownerId} and (
@@ -15,13 +15,13 @@ export function profileContentVisible(viewerId: string | null, ownerId: SQLWrapp
   )`;
 }
 
-export function groupVisible(viewerId: string | null) {
+export function groupVisible(viewerId: string | SQLWrapper | null) {
   return sql<boolean>`(${groups.ownerId} = ${viewerId} or (
     ${groups.visibility} = 'public' and ${profileContentVisible(viewerId, groups.ownerId)}
   ))`;
 }
 
-export function linkVisible(viewerId: string | null) {
+export function linkVisible(viewerId: string | SQLWrapper | null) {
   return sql<boolean>`(${links.ownerId} = ${viewerId} or exists (
     select 1 from groups as access_group
     where access_group.id = ${links.groupId} and access_group.owner_id = ${links.ownerId}

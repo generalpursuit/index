@@ -12,6 +12,7 @@ import {
   updateOwnedLink,
   deleteOwnedLink,
   listGroupLinks,
+  listOwnerLinks,
 } from "./repository";
 import type { CreateLinkInput, ListMyLinksInput, UpdateLinkInput } from "./schemas";
 
@@ -22,6 +23,7 @@ export function createLink(db: QueryDatabase, actorId: string, input: CreateLink
       title: input.title,
       description: input.description ?? null,
       category: input.category,
+      savedOn: input.savedOn,
       ownerId: actorId,
       groupId: input.groupId ?? null,
     });
@@ -60,12 +62,29 @@ export const deleteLink = (db: QueryDatabase, actorId: string, id: string) =>
 export function listInGroup(
   db: QueryDatabase,
   viewerId: string | null,
-  input: { groupId: string; limit: number; cursor?: string },
+  input: { groupId: string; limit: number; cursor?: string; weekStart?: string },
 ) {
   const cursor = input.cursor ? decodeCursor(input.cursor) : ok(undefined);
   return cursor.asyncAndThen((decoded) =>
     getGroup(db, viewerId, input.groupId)
-      .andThen(() => listGroupLinks(db, viewerId, input.groupId, input.limit + 1, decoded))
+      .andThen(() =>
+        listGroupLinks(db, viewerId, input.groupId, input.limit + 1, decoded, input.weekStart),
+      )
       .map((rows) => toPage(rows, input.limit)),
   );
 }
+
+export function listByOwner(
+  db: QueryDatabase,
+  viewerId: string | null,
+  input: { userId: string; limit: number; cursor?: string; weekStart?: string },
+) {
+  const cursor = input.cursor ? decodeCursor(input.cursor) : ok(undefined);
+  return cursor.asyncAndThen((decoded) =>
+    listOwnerLinks(db, viewerId, input.userId, input.limit + 1, decoded, input.weekStart).map(
+      (rows) => toPage(rows, input.limit),
+    ),
+  );
+}
+
+export { libraryWeeks } from "./repository";

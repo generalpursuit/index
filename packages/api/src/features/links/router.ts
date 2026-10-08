@@ -1,3 +1,4 @@
+import { listByOwner, libraryWeeks } from "./service";
 import { implement } from "@orpc/server";
 
 import type { Context } from "../../context";
@@ -8,6 +9,12 @@ import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup }
 const api = implement(linksContract).$context<Context>();
 
 export const linksRouter = api.router({
+  weeks: api.weeks.handler(async ({ context, input }) =>
+    unwrapResult(await libraryWeeks(context.db, context.session?.user.id ?? null, input)),
+  ),
+  listByOwner: api.listByOwner.handler(async ({ context, input }) =>
+    unwrapResult(await listByOwner(context.db, context.session?.user.id ?? null, input)),
+  ),
   create: api.create
     .use(requireAuth)
     .handler(async ({ context, input }) =>
