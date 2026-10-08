@@ -5,6 +5,7 @@ import { linksContract } from "./features/links/contract";
 import { groupsContract } from "./features/groups/contract";
 import { profilesContract } from "./features/profiles/contract";
 import { followsContract } from "./features/follows/contract";
+import { starsContract } from "./features/stars/contract";
 
 export const appContract = {
   healthCheck: oc
@@ -33,6 +34,7 @@ export const appContract = {
   groups: groupsContract,
   profiles: profilesContract,
   follows: followsContract,
+  stars: starsContract,
 };
 
 export type AppRouterClient = ContractRouterClient<typeof appContract>;

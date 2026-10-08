@@ -1,4 +1,4 @@
-import { links } from "@index/db/schema/app";
+import { groups, links } from "@index/db/schema/app";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
@@ -39,6 +39,24 @@ describe("groups and link organization", () => {
     await alice.links.update({ id: link.id, groupId: null });
     await assert.rejects(api.client(null).links.get({ id: link.id }), { code: "NOT_FOUND" });
     assert.equal((await alice.links.listMine({ inbox: true })).items.length, 1);
+  });
+
+  it("keeps Starred unique and protects its name, deletion and original-link membership", async () => {
+    const alice = api.client("alice");
+    const first = await alice.stars.group();
+    assert.equal((await alice.stars.group()).id, first.id);
+    await assert.rejects(alice.groups.update({ id: first.id, name: "Other" }), {
+      code: "NOT_FOUND",
+    });
+    await assert.rejects(alice.groups.delete({ id: first.id }), { code: "NOT_FOUND" });
+    await assert.rejects(alice.links.create({ ...input, groupId: first.id }), {
+      code: "NOT_FOUND",
+    });
+    assert.equal(
+      (await alice.groups.update({ id: first.id, visibility: "private" })).visibility,
+      "private",
+    );
+    assert.equal((await api.db.select().from(groups)).length, 1);
   });
 
   it("deleting a group defaults to preserving links in the private inbox", async () => {
