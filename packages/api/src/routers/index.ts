@@ -3,6 +3,8 @@ import { implement } from "@orpc/server";
 import type { Context } from "../context";
 import { appContract } from "../contracts";
 import { linksRouter } from "../features/links/router";
+import { profilesRouter } from "../features/profiles/router";
+import { followsRouter } from "../features/follows/router";
 import { requireAuth } from "../procedures";
 
 const api = implement(appContract).$context<Context>();
@@ -27,6 +29,8 @@ export const appRouter = api.router({
     };
   }),
   links: linksRouter,
+  profiles: profilesRouter,
+  follows: followsRouter,
 });
 export type AppRouter = typeof appRouter;
 export type { AppRouterClient } from "../contracts";

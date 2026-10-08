@@ -2,6 +2,8 @@ import { oc, type ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
 
 import { linksContract } from "./features/links/contract";
+import { profilesContract } from "./features/profiles/contract";
+import { followsContract } from "./features/follows/contract";
 
 export const appContract = {
   healthCheck: oc
@@ -27,6 +29,8 @@ export const appContract = {
       }),
     ),
   links: linksContract,
+  profiles: profilesContract,
+  follows: followsContract,
 };
 
 export type AppRouterClient = ContractRouterClient<typeof appContract>;

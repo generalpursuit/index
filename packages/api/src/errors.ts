@@ -7,10 +7,15 @@ export type DatabaseError = {
 export type ApplicationError =
   | DatabaseError
   | {
-      code: "NOT_FOUND" | "BAD_REQUEST";
+      code: "NOT_FOUND" | "BAD_REQUEST" | "CONFLICT";
       message: string;
     };
 
 export function databaseError(cause: unknown): DatabaseError {
   return { code: "INTERNAL_SERVER_ERROR", message: "Something went wrong.", cause };
 }
+
+export const notFound = (resource: string) => ({
+  code: "NOT_FOUND" as const,
+  message: `${resource} not found.`,
+});
