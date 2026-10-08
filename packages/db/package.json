@@ -1,0 +1,28 @@
+{
+  "name": "@memory/db",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check-types": "tsc -b",
+    "db:push": "drizzle-kit push",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:deploy": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "db:migrate": "drizzle-kit migrate"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@memory/config": "workspace:*",
+    "drizzle-kit": "1.0.0-rc.4",
+    "typescript": "catalog:",
+    "varlock": "catalog:"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "@memory/auth",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "check-types": "tsc -b"
+  },
+  "dependencies": {
+    "@better-auth/core": "1.7.7",
+    "@better-auth/drizzle-adapter": "1.7.7",
+    "@memory/db": "workspace:*",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@memory/config": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

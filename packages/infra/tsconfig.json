@@ -1,0 +1,4 @@
+{
+  "extends": "@memory/config/tsconfig.base.json",
+  "include": ["alchemy.run.ts"]
+}

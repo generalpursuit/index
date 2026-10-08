@@ -1,0 +1,62 @@
+{
+  "name": "memory",
+  "private": true,
+  "workspaces": {
+    "packages": [
+      "apps/*",
+      "packages/*"
+    ],
+    "catalog": {
+      "zod": "^4.5.4",
+      "typescript": "^6.0.3",
+      "@types/node": "^26.4.1",
+      "varlock": "1.18.0",
+      "@cloudflare/workers-types": "^5.20260906.1",
+      "@orpc/server": "^1.15.0",
+      "@orpc/openapi": "^1.15.0",
+      "@orpc/zod": "^1.15.0",
+      "better-auth": "1.7.7",
+      "lucide-react": "^1.41.0",
+      "next-themes": "^0.4.6",
+      "react": "^19.2.8",
+      "react-dom": "^19.2.8",
+      "sonner": "^2.0.8",
+      "@orpc/client": "^1.15.0",
+      "@types/react": "^19.2.18",
+      "@types/react-dom": "^19.2.7",
+      "tailwindcss": "^4.3.3",
+      "drizzle-orm": "1.0.0-rc.4"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "check-types": "turbo run check-types",
+    "dev:web": "turbo run dev:bare -F web --",
+    "dev:server": "turbo run dev:bare -F hono --",
+    "db:push": "turbo run db:push -F @memory/db --",
+    "db:studio": "turbo run db:studio -F @memory/db --",
+    "db:generate": "turbo run db:generate -F @memory/db --",
+    "db:migrate": "turbo run db:migrate -F @memory/db --",
+    "deploy": "turbo run deploy -F @memory/infra --",
+    "destroy": "turbo run destroy -F @memory/infra --",
+    "env:generate": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "postinstall": "varlock codegen --path ./apps/web/ && varlock codegen --path ./apps/server/ && varlock codegen --path ./packages/db/",
+    "check": "oxlint && oxfmt --write"
+  },
+  "dependencies": {
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "catalog:",
+    "@memory/config": "workspace:*",
+    "@types/node": "catalog:",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "turbo": "^2.10.12",
+    "typescript": "catalog:",
+    "varlock": "catalog:"
+  },
+  "packageManager": "bun@1.4.2"
+}
