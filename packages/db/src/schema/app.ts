@@ -193,7 +193,7 @@ export const favorites = pgTable(
   ],
 );
 
-export const activityTypes = ["comment", "follow", "request", "accepted"] as const;
+export const activityTypes = ["comment", "mention", "follow", "request", "accepted"] as const;
 export const activities = pgTable(
   "activities",
   {
@@ -215,6 +215,9 @@ export const activities = pgTable(
   },
   (t) => [
     index("activities_recipient_created_idx").on(t.recipientId, t.createdAt.desc(), t.id.desc()),
+    uniqueIndex("activities_comment_recipient_idx")
+      .on(t.commentId, t.recipientId)
+      .where(sql`${t.commentId} is not null`),
     index("activities_pending_request_idx")
       .on(t.recipientId, t.actorId)
       .where(sql`${t.type} = 'request' and ${t.requestStatus} = 'pending'`),
@@ -225,7 +228,7 @@ export const activities = pgTable(
     ),
     check(
       "activity_comment_check",
-      sql`(${t.type} = 'comment') = (${t.commentId} is not null and ${t.linkId} is not null)`,
+      sql`(${t.type} in ('comment', 'mention')) = (${t.commentId} is not null and ${t.linkId} is not null)`,
     ),
   ],
 );

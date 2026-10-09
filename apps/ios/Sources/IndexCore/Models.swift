@@ -5,7 +5,6 @@ public struct Person: Codable, Identifiable, Hashable, Sendable {
   public let id: String
   public var name: String
   public var username: String?
-  public var bio: String?
   public var image: String?
   public var profileVisibility: Visibility
   public var label: String { username ?? name }
@@ -21,7 +20,6 @@ public struct Profile: Codable, Sendable {
   public let id: String
   public var name: String
   public var username: String?
-  public var bio: String?
   public var image: String?
   public var profileVisibility: Visibility
   public let canViewContent: Bool
@@ -32,7 +30,7 @@ public struct Profile: Codable, Sendable {
   public let followingStatus: String?
   public var person: Person {
     Person(
-      id: id, name: name, username: username, bio: bio, image: image,
+      id: id, name: name, username: username, image: image,
       profileVisibility: profileVisibility)
   }
 }

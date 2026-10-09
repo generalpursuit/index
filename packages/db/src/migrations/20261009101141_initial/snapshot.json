@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "70fd854a-2dcc-47ad-95a4-f3ce70d357c6",
+  "id": "156c8b40-21bf-4ca3-a158-4665a5ba3da3",
   "prevIds": [
-    "9c12a5f1-45dc-4aee-a88d-748b2679b157"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -767,6 +767,19 @@
       "table": "messages"
     },
     {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "has_attachment",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "messages"
+    },
+    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -1159,19 +1172,6 @@
     {
       "type": "text",
       "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "bio",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "user"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
       "default": "'public'",
@@ -1356,6 +1356,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "activities_recipient_created_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "activities"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "comment_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "recipient_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"comment_id\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "activities_comment_recipient_idx",
       "entityType": "indexes",
       "schema": "public",
       "table": "activities"
@@ -2465,7 +2493,7 @@
       "entityType": "uniques"
     },
     {
-      "value": "\"type\" in ('comment', 'follow', 'request', 'accepted')",
+      "value": "\"type\" in ('comment', 'mention', 'follow', 'request', 'accepted')",
       "name": "activity_type_check",
       "entityType": "checks",
       "schema": "public",
@@ -2479,7 +2507,7 @@
       "table": "activities"
     },
     {
-      "value": "(\"type\" = 'comment') = (\"comment_id\" is not null and \"link_id\" is not null)",
+      "value": "(\"type\" in ('comment', 'mention')) = (\"comment_id\" is not null and \"link_id\" is not null)",
       "name": "activity_comment_check",
       "entityType": "checks",
       "schema": "public",

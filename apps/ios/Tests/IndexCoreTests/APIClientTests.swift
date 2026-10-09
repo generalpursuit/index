@@ -161,7 +161,7 @@ struct APIClientTests {
   }
   @Test func restrictedAttachmentHasOnlyAuthorIdentity() throws {
     let json =
-      #"{"id":"message","conversationId":"conversation","senderId":"alice","clientId":"client","body":"A find","createdAt":"2026-01-01T00:00:00.000Z","attachment":null,"hasAttachment":true,"restrictedAuthor":{"id":"iris","name":"Iris","username":"iris","bio":null,"image":null,"profileVisibility":"private"}}"#
+      #"{"id":"message","conversationId":"conversation","senderId":"alice","clientId":"client","body":"A find","createdAt":"2026-01-01T00:00:00.000Z","attachment":null,"hasAttachment":true,"restrictedAuthor":{"id":"iris","name":"Iris","username":"iris","image":null,"profileVisibility":"private"}}"#
     let message = try JSONDecoder().decode(Message.self, from: Data(json.utf8))
     #expect(message.attachment == nil)
     #expect(message.hasAttachment)

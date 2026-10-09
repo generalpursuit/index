@@ -9,7 +9,6 @@ export const user = pgTable(
     id: text("id").primaryKey(),
     name: text("name").notNull(),
     username: text("username").unique(),
-    bio: text("bio"),
     profileVisibility: text("profile_visibility", { enum: profileVisibilities })
       .default("public")
       .notNull(),

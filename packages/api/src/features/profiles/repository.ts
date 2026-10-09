@@ -11,7 +11,6 @@ export const publicUserSelection = {
   id: user.id,
   name: user.name,
   username: user.username,
-  bio: user.bio,
   image: user.image,
   profileVisibility: user.profileVisibility,
 };
