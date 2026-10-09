@@ -64,6 +64,11 @@ export const listMyLinksOutputSchema = z.object({
   items: z.array(linkSchema),
   nextCursor: z.string().nullable(),
 });
+/** A group's links say whose they are: Starred holds other people's. */
+export const listGroupLinksOutputSchema = z.object({
+  items: z.array(linkSchema.extend({ ownerName: z.string() })),
+  nextCursor: z.string().nullable(),
+});
 
 export type CreateLinkInput = z.output<typeof createLinkInputSchema>;
 export type ListMyLinksInput = z.output<typeof listMyLinksInputSchema>;

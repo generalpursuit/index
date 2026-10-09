@@ -10,6 +10,7 @@ import {
   listMyLinksOutputSchema,
   updateLinkInputSchema,
   listGroupLinksInputSchema,
+  listGroupLinksOutputSchema,
 } from "./schemas";
 
 export const linksContract = {
@@ -64,5 +65,5 @@ export const linksContract = {
   listInGroup: baseContract
     .route({ spec: optionalAuth, method: "GET", path: "/groups/{groupId}/links", tags: ["Links"] })
     .input(listGroupLinksInputSchema)
-    .output(listMyLinksOutputSchema),
+    .output(listGroupLinksOutputSchema),
 };

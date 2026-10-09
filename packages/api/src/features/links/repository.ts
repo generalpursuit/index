@@ -1,4 +1,5 @@
 import { groups, links, stars, favorites } from "@index/db/schema/app";
+import { user } from "@index/db/schema/auth";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 
@@ -143,9 +144,15 @@ export function listGroupLinks(
   // The group and the original link must both remain visible, including for Starred.
   return ResultAsync.fromPromise(
     db
-      .select({ ...linkSelection, ...collectionSelection(viewerId) })
+      .select({
+        ...linkSelection,
+        ...collectionSelection(viewerId),
+        // Starred holds other people's links, so each says whose it is.
+        ownerName: sql<string>`coalesce(${user.username}, ${user.name})`,
+      })
       .from(links)
       .innerJoin(groups, and(eq(groups.id, groupId), collectionContainsLink()))
+      .innerJoin(user, eq(user.id, links.ownerId))
       .where(
         and(
           groupVisible(viewerId),

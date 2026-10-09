@@ -34,7 +34,7 @@ Paths below are relative to `/api/v1`. All mutations require authentication. Pub
 | `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                      |
 | `links.update`              | PATCH `/links/{id}`                        | Edit an owned link or move it; `groupId: null` takes it out of its group                         |
 | `links.delete`              | DELETE `/links/{id}`                       | Delete an owned link and cascade its stars, favorites and comments                               |
-| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group                                        |
+| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group, each with its owner's `ownerName`     |
 | `follows.follow`            | POST `/profiles/{userId}/follow`           | Follow a public profile or request a private profile                                             |
 | `follows.unfollow`          | DELETE `/profiles/{userId}/follow`         | Unfollow or cancel a pending request                                                             |
 | `follows.followers`         | GET `/profiles/{userId}/followers`         | Own accepted followers; other users receive 404                                                  |
