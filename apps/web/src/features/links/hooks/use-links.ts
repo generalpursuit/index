@@ -27,31 +27,33 @@ export function useWeekLinks(
   updatedAt?: number,
 ) {
   const api = useAPI();
-  const input = { userId, weekStart, limit: 30 };
+  const byOwner = api.links.listByOwner.infiniteOptions({
+    input: (cursor: string | undefined) => ({ userId, weekStart, limit: 30, cursor }),
+    initialPageParam: undefined,
+    getNextPageParam: (p) => p.nextCursor ?? undefined,
+  });
+  // Group links also carry `ownerName` (read with `ownerOf`); both lists share one shape here.
   const options = groupId
-    ? api.links.listInGroup.infiniteOptions({
+    ? (api.links.listInGroup.infiniteOptions({
         input: (cursor: string | undefined) => ({ groupId, weekStart, limit: 30, cursor }),
         initialPageParam: undefined,
         getNextPageParam: (p) => p.nextCursor ?? undefined,
-      })
-    : api.links.listByOwner.infiniteOptions({
-        input: (cursor: string | undefined) => ({ ...input, cursor }),
-        initialPageParam: undefined,
-        getNextPageParam: (p) => p.nextCursor ?? undefined,
-      });
+      }) as unknown as typeof byOwner)
+    : byOwner;
   return useInfiniteQuery({
     ...options,
     initialData: seed ? () => ({ pages: [seed], pageParams: [undefined] }) : undefined,
     initialDataUpdatedAt: updatedAt,
   });
 }
-export function useLibraryWeeks(userId: string, groupId?: string) {
+export function useLibraryWeeks(userId: string, groupId?: string, enabled = true) {
   const api = useAPI();
   return useInfiniteQuery(
     api.links.weeks.infiniteOptions({
       input: (before: string | undefined) => ({ userId, groupId, before, limit: 10 }),
       initialPageParam: undefined,
       getNextPageParam: (p) => p.nextBefore ?? undefined,
+      enabled,
     }),
   );
 }
@@ -106,3 +108,7 @@ export function useComments(linkId: string) {
   const remove = useMutation(api.comments.delete.mutationOptions({ onSuccess: refresh }));
   return { list, create, remove };
 }
+
+/** Whose link this is, when the list says so (group lists do; Starred needs it). */
+export const ownerOf = (link: SavedLink) =>
+  "ownerName" in link && typeof link.ownerName === "string" ? link.ownerName : undefined;

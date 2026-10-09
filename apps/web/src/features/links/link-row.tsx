@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Pencil,
   Trash,
+  LockKeyhole,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -39,7 +40,19 @@ export function webURL(value: string) {
     return false;
   }
 }
-export function LinkRow({ link }: { link: SavedLink }) {
+/**
+ * `owner` names whose link it is (in Starred, which holds other people's); `locked` marks
+ * your own link in a locked group, so what is private shows without filtering.
+ */
+export function LinkRow({
+  link,
+  owner,
+  locked = false,
+}: {
+  link: SavedLink;
+  owner?: string;
+  locked?: boolean;
+}) {
   const navigate = useNavigate();
   return (
     <div className="link-row">
@@ -57,11 +70,15 @@ export function LinkRow({ link }: { link: SavedLink }) {
       >
         {link.title}
       </button>
-      {/* Reading is the main thing to do with a link, so the domain opens it directly. */}
-      <a className="link-domain" href={link.url} target="_blank" rel="noreferrer">
-        <span>{domain(link.url)}</span>
-        <ArrowUpRight aria-hidden="true" />
-      </a>
+      <span className="link-end">
+        {locked && <LockKeyhole className="link-locked" aria-label="Locked" />}
+        {owner && <span className="link-owner">{owner}</span>}
+        {/* Reading is the main thing to do with a link, so the domain opens it directly. */}
+        <a className="link-domain" href={link.url} target="_blank" rel="noreferrer">
+          <span>{domain(link.url)}</span>
+          <ArrowUpRight aria-hidden="true" />
+        </a>
+      </span>
     </div>
   );
 }

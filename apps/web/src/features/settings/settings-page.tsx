@@ -12,6 +12,7 @@ import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
+import { GroupSettings } from "./groups";
 
 const imageSchema = z
   .string()
@@ -179,6 +180,7 @@ function SettingsForm({ profile }: { profile: Profile }) {
         </form.Subscribe>
       </form>
       <ProfileVisibility profile={profile} />
+      <GroupSettings userId={profile.id} />
       <div className="settings-session">
         <Button
           variant="outline"

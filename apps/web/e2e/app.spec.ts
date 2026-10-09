@@ -67,12 +67,10 @@ test("single-week layout, scrolling, adding and Favorites", async ({ page }) => 
   await page.keyboard.press("Escape");
   await expect(post).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
-  await page.getByRole("button", { name: "Favorites", exact: true }).click();
+  await page.getByRole("button", { name: "Showing All", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Favorites" }).click();
+  await expect(page.getByRole("button", { name: "Showing Favorites", exact: true })).toBeVisible();
   await expect(page.locator(".profile-links")).toContainText("Calm Software");
-  await expect(page.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
   await page.screenshot({
     path: "test-results/profile-desktop.png",
     fullPage: true,

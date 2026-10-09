@@ -305,6 +305,29 @@
   text-decoration-color: #5a5a5a;
   text-underline-offset: 4px;
 }
+/* The end of a row: an optional lock and owner, then the domain. */
+.link-end {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.link-locked {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  color: #6a6a6a;
+}
+.link-owner {
+  flex: none;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  color: #bdbdbd;
+}
 .link-domain {
   display: inline-flex;
   align-items: center;
@@ -670,61 +693,198 @@
 .social-context a {
   color: #ddd;
 }
-/* One quiet row of lists, with settings for the selected one pinned at the end. */
-.profile-filters {
+/* One person's links as one list of weeks. */
+.profile-links {
+  --row: 48px;
+  position: relative;
+}
+/* No height of its own: the list menu sits over the end of whichever week heading sticks. */
+.profile-list-bar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  height: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+/* Centered on the 52px heading row it overlays. */
+.profile-list-bar > * {
+  margin-top: 10px;
+}
+.profile-week + .profile-week {
+  margin-top: 20px;
+}
+/* The week you are reading keeps its title at the top until the next one takes over. */
+.profile-week-heading {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
-  gap: 24px;
-  border-bottom: 1px solid #222;
+  justify-content: space-between;
+  height: 52px;
+  background: #000;
 }
-.profile-groups {
-  flex: 1;
-  min-width: 0;
+.profile-week h2 button {
   display: flex;
-  align-items: center;
-  gap: 22px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.profile-filters button[aria-pressed] {
-  flex: none;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 44px;
-  border-bottom: 2px solid transparent;
-  font-size: 14px;
-  color: #8a8a8a;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 24px;
   white-space: nowrap;
 }
-.profile-filters button[aria-pressed]:hover {
-  color: #fff;
-}
-.profile-filters button[aria-pressed="true"] {
-  border-bottom-color: #f5f5f5;
-  color: #fff;
-}
-.profile-groups [data-slot="button"] {
-  flex: none;
+/* A week keeps the serif title, with its dates as a quiet label beside it. */
+.profile-week h2 span {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  font-variation-settings: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #8a8a8a;
 }
-.profile-filter-separator {
-  flex: none;
-  width: 1px;
-  height: 16px;
-  background: #333;
+.profile-week-placeholder {
+  height: calc(var(--rows) * var(--row));
 }
-.profile-list-actions {
-  flex: none;
+/* The chevron lines up with the arrows at the end of each row. */
+.list-filter[data-slot="button"] {
+  gap: 6px;
+  margin-right: -8px;
+  padding: 0 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #f5f5f5;
+}
+.list-filter[data-slot="button"] svg {
+  color: #8a8a8a;
+}
+.list-filter[data-slot="button"] svg:last-child {
+  width: 16px;
+  height: 16px;
+}
+/* Ticks in the gutter right of the list, starting just after the rows' arrows (the content
+   is centered right of the 100px navigation rail, 370px either side of its middle). */
+.week-scrubber {
+  position: fixed;
+  top: 50%;
+  left: calc(50% + 50px + 370px + 16px);
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  width: 28px;
+  height: min(60vh, calc(var(--weeks) * 12px));
+  transform: translateY(-50%);
+}
+.week-tick {
+  position: relative;
+  flex: 1;
+  min-height: 2px;
   display: flex;
   align-items: center;
-  gap: 2px;
+  justify-content: flex-start;
 }
-.profile-list-actions [data-slot="button"] {
+.week-tick::after {
+  content: "";
+  width: 10px;
+  height: 2px;
+  border-radius: 1px;
+  background: #3a3a3a;
+  transition:
+    width 120ms ease,
+    background 120ms ease;
+}
+.week-tick:hover::after {
+  width: 16px;
+  background: #8a8a8a;
+}
+.week-tick[data-active]::after {
+  width: 22px;
+  background: #f5f5f5;
+}
+/* One label for the whole scrubber, following the hovered tick out into the gutter. It stays
+   laid out while hidden, so its width is known before it opens. */
+.week-tick-label {
+  position: absolute;
+  left: 36px;
+  display: flex;
+  visibility: hidden;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 12px;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  background: #111;
+  color: #929292;
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.week-tick-label[data-visible] {
+  visibility: visible;
+}
+/* Without room in the gutter, it opens over the end of the rows instead. */
+.week-tick-label[data-inside] {
+  right: 36px;
+  left: auto;
+}
+/* Holds every text the label can show in one cell, so its size never changes. */
+.size-stack {
+  display: grid;
+}
+.size-stack > * {
+  grid-area: 1 / 1;
+}
+.size-stack-ghost {
+  visibility: hidden;
+}
+.week-tick-label strong {
+  font-family: var(--font-serif);
+  font-size: 16px;
+  font-weight: 700;
+  color: #f5f5f5;
+}
+/* Below this width there is no gutter; the week titles open the list of weeks instead. */
+@media (max-width: 1099px) {
+  .week-scrubber {
+    display: none;
+  }
+}
+.week-picker {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.week-picker button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 12px;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+}
+.week-picker strong {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 700;
+}
+.week-picker span {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: #8a8a8a;
 }
-.profile-list-actions [data-slot="button"]:hover {
-  color: #fff;
+.week-picker small {
+  font-size: 12px;
+  color: #929292;
+}
+.week-picker button:hover strong {
+  text-decoration: underline;
+  text-underline-offset: 4px;
 }
 .filter-strip {
   display: flex;
@@ -742,29 +902,6 @@
   font-size: 12px;
   height: 34px;
   padding: 0 14px;
-}
-.profile-week {
-  margin: 28px 0 8px;
-}
-/* A week keeps the serif title, with its dates as a quiet label beside it. */
-.profile-week h2 {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 8px;
-  font-size: 24px;
-}
-.profile-week h2 span {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-  font-variation-settings: normal;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: #8a8a8a;
-}
-.profile-links {
-  min-width: 0;
 }
 .private-profile {
   text-align: center;
@@ -1562,7 +1699,8 @@ span.link-open {
   .friends-carousel {
     gap: 16px;
   }
-  .week-stage {
+  .week-stage,
+  .profile-links {
     --row: 46px;
   }
   .link-row,
@@ -1806,6 +1944,55 @@ span.link-open {
   flex: none;
   width: auto;
   min-width: 110px;
+}
+.settings-groups {
+  border-top: 1px solid #222;
+  margin-top: 32px;
+  padding-top: 28px;
+}
+.settings-groups-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+.settings-groups h2 {
+  font-size: 16px;
+  font-weight: 500;
+}
+.settings-groups-heading p {
+  margin-top: 4px;
+  font-size: 13px;
+}
+.settings-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+}
+.settings-group > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 14px;
+}
+.settings-group-actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.settings-group-actions [data-slot="button"] {
+  color: #8a8a8a;
+}
+.settings-group-slot {
+  width: 32px;
+}
+.settings-group-actions [data-slot="button"]:hover {
+  color: #fff;
 }
 .settings-session {
   display: flex;

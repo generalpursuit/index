@@ -139,7 +139,7 @@ test("settings is private and a fresh settings tab goes back to your profile", a
   await expect(page).toHaveURL(/login.*next=%2Fsettings/);
   await login(page);
   await page.goto("/people/" + fixture.people.Bob);
-  await expect(page.locator(".profile-heading h1")).toHaveText("bob");
+  await expect(page.locator(".profile-heading h1")).toHaveText("Bob");
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
   const fresh = await context.newPage();
   await fresh.goto("/settings");

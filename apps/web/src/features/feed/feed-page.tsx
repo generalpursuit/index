@@ -5,7 +5,7 @@ import { Button } from "@index/ui/components/button";
 import { Heading, IconButton, QueryState, UserAvatar, More } from "@/components/app/primitives";
 import { LinkRow } from "@/features/links/link-row";
 import { QuickAdd } from "@/features/links/quick-add";
-import { useWeekLinks } from "@/features/links/hooks/use-links";
+import { ownerOf, useWeekLinks } from "@/features/links/hooks/use-links";
 import { useFeed } from "./hooks/use-feed";
 import { usePeeking } from "./hooks/use-peeking";
 import { useScrollEdges } from "./hooks/use-scroll-edges";
@@ -21,6 +21,8 @@ export function WeekLinks({
   add = false,
   seed,
   updatedAt,
+  showOwners = false,
+  lockedGroups,
 }: {
   userId: string;
   week: string;
@@ -28,6 +30,10 @@ export function WeekLinks({
   add?: boolean;
   seed?: { items: SavedLink[]; nextCursor: string | null };
   updatedAt?: number;
+  /** Name whose link each row is, for lists of other people's links. */
+  showOwners?: boolean;
+  /** Your locked groups; their links show a lock. */
+  lockedGroups?: ReadonlySet<string>;
 }) {
   const list = useWeekLinks(userId, week, groupId, seed, updatedAt);
   const links = list.data?.pages.flatMap((p) => p.items) ?? [];
@@ -83,7 +89,12 @@ export function WeekLinks({
           <div className="link-list-start" />
           <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
             {links.map((link) => (
-              <LinkRow key={link.id} link={link} />
+              <LinkRow
+                key={link.id}
+                link={link}
+                owner={showOwners ? ownerOf(link) : undefined}
+                locked={!!link.groupId && !!lockedGroups?.has(link.groupId)}
+              />
             ))}
             {list.data?.pages[0]?.items.length === 0 && !add && (
               <p className="empty-state">No links this week.</p>

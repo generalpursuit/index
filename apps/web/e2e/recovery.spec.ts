@@ -46,13 +46,13 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.locator(".profile-heading")).toContainText("Alice Example");
-  await page.getByRole("button", { name: "Create group", exact: true }).click();
+  await page.getByRole("button", { name: "Showing All", exact: true }).click();
+  await page.getByRole("menuitem", { name: "New group" }).click();
   await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill("Research");
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Research", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
+  await expect(page.getByRole("button", { name: "Showing Research", exact: true })).toBeVisible();
+  // Groups are managed in Settings; the profile only shows and filters them.
+  await page.goto("/settings");
   await page.getByRole("button", { name: "Lock Research", exact: true }).click();
   await expect(page.getByRole("button", { name: "Unlock Research", exact: true })).toBeVisible();
   await page.goto("/?edit=" + data.links[0]!.id);
@@ -60,7 +60,8 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(page.getByText("Only you will see this link.")).toBeVisible();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.goto("/people/" + data.people.Alice);
-  await page.getByRole("button", { name: "Research", exact: true }).click();
+  await page.getByRole("button", { name: "Showing All", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Research" }).click();
   await expect(page.locator(".profile-links")).toContainText("Are.na");
   await page.getByRole("button", { name: /followers?$/ }).click();
   const lena = page.getByRole("dialog").locator(".person-row").filter({ hasText: "lena" });
