@@ -1,5 +1,4 @@
 import { currentWeekStart } from "../../shared/weeks";
-import { listByOwner } from "../links/service";
 import { ok, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { decodeCursor, toPage } from "../../pagination";
@@ -35,26 +34,30 @@ export function weekFeed(
       const shown = authors.slice(0, input.limit);
       return ResultAsync.combine([
         repository.neighborWeeks(db, actorId, input.weekStart),
-        listByOwner(db, actorId, {
-          userId: actorId,
-          weekStart: input.weekStart,
-          limit: input.linkLimit,
-        }),
-        ...shown.map((author) =>
-          listByOwner(db, actorId, {
-            userId: author.id,
-            weekStart: input.weekStart,
-            limit: input.linkLimit,
-          }),
+        repository.weekLinks(
+          db,
+          actorId,
+          [actorId, ...shown.map((author) => author.id)],
+          input.weekStart,
+          input.linkLimit,
         ),
-      ]).map(([neighbors, own, ...pages]) => ({
+      ]).map(([neighbors, rows]) => ({
         weekStart: input.weekStart,
         // Navigation skips empty weeks, but the current week is always reachable for adding.
         olderWeek: neighbors.older,
         newerWeek:
           input.weekStart < currentWeekStart() ? (neighbors.newer ?? currentWeekStart()) : null,
-        own: own!,
-        people: shown.map((author, index) => ({ author, links: pages[index]! })),
+        own: toPage(
+          rows.filter((link) => link.ownerId === actorId),
+          input.linkLimit,
+        ),
+        people: shown.map((author) => ({
+          author,
+          links: toPage(
+            rows.filter((link) => link.ownerId === author.id),
+            input.linkLimit,
+          ),
+        })),
         nextAfter: authors.length > input.limit ? shown.at(-1)!.id : null,
       }));
     });

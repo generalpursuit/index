@@ -93,6 +93,7 @@ Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits o
 - Own links include those in locked groups. Friends are accepted outgoing follows; only their accessible links contribute. The people carousel uses `limit` (default 10, max 30) and `after`; each person's links use `linkLimit` (default 20, max 100) and an independent `nextCursor`.
 - `links.listByOwner` — GET `/profiles/{userId}/links` continues a person's links with the same `weekStart`, `cursor` and `limit`. It applies original-link visibility before pagination. Existing `links.listMine` and `links.listInGroup` also accept `weekStart`.
 - `links.weeks` — GET `/profiles/{userId}/weeks` returns nonempty Monday buckets with visible link counts and `nextBefore`. Inputs are `limit` and optional `before` and `groupId`. This supports a profile's weekly archive, including Starred and Favorites.
+- Weekly feed reads use three database round trips regardless of the number of authors in the page: authors, neighboring weeks, and a batch of links ranked per owner. Per-person limits, cursors, collection flags and visibility checks are preserved.
 - Links have a `savedOn` calendar date for weekly grouping. The server sets it to today's UTC date on creation; clients cannot set or change it, so a link always belongs to the week it was shared. Week boundaries use UTC. The existing chronological `feed.list` remains available.
 - Link responses include viewer-specific `isStarred` and `isFavorite` flags.
 - `favorites.add` / `favorites.remove` — PUT / DELETE `/links/{linkId}/favorite`.

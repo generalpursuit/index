@@ -1,3 +1,5 @@
+import { drizzle } from "drizzle-orm/pglite";
+import { weekFeed } from "./service";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { currentWeekStart } from "../../shared/weeks";
@@ -52,6 +54,38 @@ describe("weekly library", () => {
     await bob.groups.update({ id: group.id, visibility: "private" });
     assert.equal((await alice.feed.week({ weekStart: week.weekStart })).people.length, 1);
     await assert.rejects(alice.feed.week({ weekStart: "2026-01-06" }), { code: "BAD_REQUEST" });
+  });
+  it("loads a multi-author week in three database round trips", async () => {
+    const alice = api.client("alice");
+    for (const owner of ["alice", "bob", "carol", "dana"]) {
+      if (owner !== "alice") await alice.follows.follow({ userId: owner });
+      for (const title of ["First", "Second"])
+        await savedOn(
+          await api.client(owner).links.create({ title, url: "https://example.com" }),
+          "2026-01-05",
+        );
+    }
+    let queries = 0;
+    const db = drizzle({
+      client: api.postgres,
+      logger: {
+        logQuery() {
+          queries++;
+        },
+      },
+    });
+    const result = await weekFeed(db, "alice", {
+      weekStart: "2026-01-05",
+      limit: 10,
+      linkLimit: 1,
+    });
+    assert(result.isOk());
+    assert.equal(result.value.people.length, 3);
+    for (const page of [result.value.own, ...result.value.people.map((p) => p.links)]) {
+      assert.equal(page.items.length, 1);
+      assert(page.nextCursor);
+    }
+    assert.equal(queries, 3);
   });
   it("steps over weeks where neither you nor your people shared anything", async () => {
     const alice = api.client("alice"),

@@ -1,6 +1,6 @@
 import { follows, links } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
-import { and, asc, desc, eq, gt, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { linkVisible } from "../../data-access/visibility";
@@ -126,6 +126,40 @@ export function neighborWeeks(db: QueryDatabase, actorId: string, weekStart: str
       .from(links)
       .where(fromHome(actorId))
       .then((rows) => rows[0]!),
+    databaseError,
+  );
+}
+
+/** One bounded page per author, including the viewer, in a single database request. */
+export function weekLinks(
+  db: QueryDatabase,
+  viewerId: string,
+  ownerIds: string[],
+  weekStart: string,
+  limit: number,
+) {
+  const collected = collectionSelection(viewerId);
+  const ranked = db
+    .select({
+      ...linkSelection,
+      createdAt: linkSelection.createdAt.as("created_at"),
+      updatedAt: linkSelection.updatedAt.as("updated_at"),
+      isFavorite: collected.isFavorite.as("is_favorite"),
+      isStarred: collected.isStarred.as("is_starred"),
+      rank: sql<number>`row_number() over (partition by ${links.ownerId} order by ${links.createdAt} desc, ${links.id} desc)`.as(
+        "rank",
+      ),
+    })
+    .from(links)
+    .where(and(inArray(links.ownerId, ownerIds), inWeek(weekStart), linkVisible(viewerId)))
+    .as("ranked_links");
+  return ResultAsync.fromPromise(
+    db
+      .select()
+      .from(ranked)
+      .where(lte(ranked.rank, limit + 1))
+      .orderBy(asc(ranked.ownerId), asc(ranked.rank))
+      .then((rows) => rows.map(({ rank: _rank, ...link }) => link)),
     databaseError,
   );
 }
