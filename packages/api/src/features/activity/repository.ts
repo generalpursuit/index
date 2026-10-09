@@ -11,7 +11,7 @@ import { publicUserSelection } from "../profiles/repository";
 const visible = (actorId: string) =>
   and(
     eq(activities.recipientId, actorId),
-    sql`(${activities.type}<>'comment' or exists(select 1 from links where links.id=${activities.linkId} and ${linkVisible(actorId)}))`,
+    sql`(${activities.type} not in ('comment','mention') or exists(select 1 from links where links.id=${activities.linkId} and ${linkVisible(actorId)}))`,
   );
 export function listActivity(
   db: QueryDatabase,

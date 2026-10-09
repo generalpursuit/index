@@ -5,7 +5,11 @@ import * as repository from "./repository";
 export function listActivity(
   db: QueryDatabase,
   actorId: string,
-  input: { limit: number; cursor?: string; type?: "comment" | "follow" | "request" | "accepted" },
+  input: {
+    limit: number;
+    cursor?: string;
+    type?: "comment" | "mention" | "follow" | "request" | "accepted";
+  },
 ) {
   return (input.cursor ? decodeCursor(input.cursor) : ok(undefined)).asyncAndThen((cursor) =>
     repository

@@ -8,6 +8,7 @@ import { linkVisible } from "../../data-access/visibility";
 import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import { publicUserSelection } from "../profiles/repository";
+import { mentionedUsernames } from "./mentions";
 
 const selection = {
   id: comments.id,
@@ -18,8 +19,36 @@ const selection = {
   updatedAt: timestamp(comments.updatedAt),
 };
 
+// Both creation and editing produce one event per recipient in the same SQL statement.
+// Keep read timestamps on edits; removing a mention also removes its notification.
+function commentNotices(db: QueryDatabase, body: string) {
+  const mentioned = inArray(sql`recipient.username`, mentionedUsernames(body));
+  const recipients = db.$with("comment_recipients", {}).as(sql`
+    select recipient.id as recipient_id, c.author_id as actor_id,
+      case when ${mentioned} then 'mention' else 'comment' end as type,
+      c.link_id, c.id as comment_id
+    from changed_comment c join links on links.id = c.link_id
+    join "user" recipient on (recipient.id = links.owner_id or ${mentioned})
+    where recipient.id <> c.author_id and ${linkVisible(sql`recipient.id`)}
+  `);
+  const removed = db.$with("removed_notices", {}).as(sql`
+    delete from activities a using changed_comment c
+    where a.comment_id = c.id and not exists (
+      select 1 from comment_recipients r where r.recipient_id = a.recipient_id
+    ) returning a.id
+  `);
+  const notice = db.$with("comment_notice", {}).as(sql`
+    insert into activities(recipient_id, actor_id, type, link_id, comment_id)
+    select recipient_id, actor_id, type, link_id, comment_id from comment_recipients
+    on conflict (comment_id, recipient_id) where comment_id is not null
+    do update set type = excluded.type
+    returning id
+  `);
+  return [recipients, removed, notice] as const;
+}
+
 export function createComment(db: QueryDatabase, actorId: string, linkId: string, body: string) {
-  const inserted = db.$with("new_comment").as(
+  const inserted = db.$with("changed_comment").as(
     db
       .insert(comments)
       .select(
@@ -37,13 +66,9 @@ export function createComment(db: QueryDatabase, actorId: string, linkId: string
       )
       .returning(),
   );
-  const notice = db.$with("comment_notice", {}).as(sql`
- insert into activities(recipient_id,actor_id,type,link_id,comment_id)
- select l.owner_id,c.author_id,'comment',c.link_id,c.id from new_comment c join links l on l.id=c.link_id
- where l.owner_id<>c.author_id returning id`);
   return ResultAsync.fromPromise(
     db
-      .with(inserted, notice)
+      .with(inserted, ...commentNotices(db, body))
       .select({
         id: inserted.id,
         linkId: inserted.linkId,
@@ -87,7 +112,7 @@ export function listComments(
 }
 
 export function updateComment(db: QueryDatabase, actorId: string, id: string, body: string) {
-  return ResultAsync.fromPromise(
+  const updated = db.$with("changed_comment").as(
     db
       .update(comments)
       .set({ body })
@@ -101,7 +126,20 @@ export function updateComment(db: QueryDatabase, actorId: string, id: string, bo
           ),
         ),
       )
-      .returning(selection)
+      .returning(),
+  );
+  return ResultAsync.fromPromise(
+    db
+      .with(updated, ...commentNotices(db, body))
+      .select({
+        id: updated.id,
+        linkId: updated.linkId,
+        authorId: updated.authorId,
+        body: updated.body,
+        createdAt: timestamp(updated.createdAt),
+        updatedAt: timestamp(updated.updatedAt),
+      })
+      .from(updated)
       .then((rows) => rows[0]),
     databaseError,
   );

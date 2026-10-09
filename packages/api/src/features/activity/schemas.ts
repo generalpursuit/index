@@ -3,7 +3,7 @@ import { pageInputSchema } from "../../shared/schemas";
 import { publicUserSchema } from "../profiles/schemas";
 export const activitySchema = z.object({
   id: z.uuid(),
-  type: z.enum(["comment", "follow", "request", "accepted"]),
+  type: z.enum(["comment", "mention", "follow", "request", "accepted"]),
   actor: publicUserSchema,
   createdAt: z.iso.datetime(),
   readAt: z.iso.datetime().nullable(),
@@ -13,7 +13,7 @@ export const activitySchema = z.object({
   requestStatus: z.enum(["pending", "accepted", "declined", "canceled"]).nullable(),
 });
 export const activityInputSchema = pageInputSchema.extend({
-  type: z.enum(["comment", "follow", "request", "accepted"]).optional(),
+  type: z.enum(["comment", "mention", "follow", "request", "accepted"]).optional(),
 });
 export const activityPageSchema = z.object({
   items: z.array(activitySchema),
