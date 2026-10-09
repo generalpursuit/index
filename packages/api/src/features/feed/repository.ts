@@ -1,6 +1,6 @@
 import { follows, links } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
-import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, or, sql, type SQL } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { linkVisible } from "../../data-access/visibility";
@@ -67,6 +67,35 @@ export function weekAuthors(
       )
       .orderBy(asc(user.id))
       .limit(limit),
+    databaseError,
+  );
+}
+
+/** The nearest weeks before and after `weekStart` with links from the viewer or people they follow. */
+export function neighborWeeks(db: QueryDatabase, actorId: string, weekStart: string) {
+  const monday = (date: SQL) =>
+    sql<string | null>`to_char(date_trunc('week', (${date})::timestamp), 'YYYY-MM-DD')`;
+  return ResultAsync.fromPromise(
+    db
+      .select({
+        older: monday(
+          sql`max(${links.savedOn}) filter (where ${links.savedOn} < ${weekStart}::date)`,
+        ),
+        newer: monday(
+          sql`min(${links.savedOn}) filter (where ${links.savedOn} >= ${weekStart}::date + 7)`,
+        ),
+      })
+      .from(links)
+      .where(
+        and(
+          or(
+            eq(links.ownerId, actorId),
+            sql`exists (select 1 from ${follows} where ${follows.followerId} = ${actorId} and ${follows.followedId} = ${links.ownerId} and ${follows.status} = 'accepted')`,
+          ),
+          linkVisible(actorId),
+        ),
+      )
+      .then((rows) => rows[0]!),
     databaseError,
   );
 }

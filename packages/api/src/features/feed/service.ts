@@ -1,4 +1,4 @@
-import { currentWeekStart, shiftWeek } from "../../shared/weeks";
+import { currentWeekStart } from "../../shared/weeks";
 import { listByOwner } from "../links/service";
 import { ok, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
@@ -28,6 +28,7 @@ export function weekFeed(
     .andThen((authors) => {
       const shown = authors.slice(0, input.limit);
       return ResultAsync.combine([
+        repository.neighborWeeks(db, actorId, input.weekStart),
         listByOwner(db, actorId, {
           userId: actorId,
           weekStart: input.weekStart,
@@ -40,10 +41,12 @@ export function weekFeed(
             limit: input.linkLimit,
           }),
         ),
-      ]).map(([own, ...pages]) => ({
+      ]).map(([neighbors, own, ...pages]) => ({
         weekStart: input.weekStart,
-        olderWeek: input.weekStart === "0001-01-01" ? null : shiftWeek(input.weekStart, -1),
-        newerWeek: input.weekStart < currentWeekStart() ? shiftWeek(input.weekStart, 1) : null,
+        // Navigation skips empty weeks, but the current week is always reachable for adding.
+        olderWeek: neighbors.older,
+        newerWeek:
+          input.weekStart < currentWeekStart() ? (neighbors.newer ?? currentWeekStart()) : null,
         own: own!,
         people: shown.map((author, index) => ({ author, links: pages[index]! })),
         nextAfter: authors.length > input.limit ? shown.at(-1)!.id : null,
