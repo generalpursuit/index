@@ -134,7 +134,11 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await expect(page.getByRole("heading", { name: "Make profile public?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Profile visibility/ })).toContainText("Private");
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  // On phones Settings is a sheet over the profile; ✕ closes it.
+  await page
+    .getByRole("dialog", { name: "Settings" })
+    .getByRole("button", { name: "Close" })
+    .click();
   await page.getByRole("button", { name: /followers?$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("mia");
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();

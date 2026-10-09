@@ -69,16 +69,28 @@
 .skip-link:focus {
   top: 12px;
 }
+/* The rail runs the full height: its destinations sit in the middle, Settings at the foot. */
 .app-nav {
   position: fixed;
   left: 24px;
-  top: 50%;
-  transform: translateY(-50%);
+  top: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
+  justify-content: center;
   gap: 22px;
   z-index: 20;
   align-items: center;
+}
+.nav-item.nav-settings {
+  position: absolute;
+  bottom: 28px;
+}
+/* Phones reach Settings from the profile instead, as a sheet. */
+@media (min-width: 701px) {
+  .icon-link.profile-settings {
+    display: none;
+  }
 }
 .nav-item,
 .icon-link {
@@ -1103,11 +1115,17 @@
   border-top: 1px solid #262626;
   border-radius: 22px 22px 0 0;
   outline: 0;
-  overflow-y: auto;
-  overscroll-behavior: contain;
+  overflow: hidden;
   transform: translateY(var(--drawer-swipe-movement-y));
   transition: transform 450ms cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
+}
+/* Long content (Settings) scrolls inside the sheet's body, below the handle and title. */
+.app-sheet [data-slot="drawer-body"] {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .app-sheet[data-starting-style],
 .app-sheet[data-ending-style] {
@@ -1644,6 +1662,9 @@ span.link-open {
   }
   .index-app h1 {
     font-size: 40px;
+  }
+  .nav-settings {
+    display: none;
   }
   .app-nav {
     top: auto;

@@ -21,9 +21,18 @@ for (const viewport of [
   { width: 390, height: 844 },
 ]) {
   test(`settings edits and signs out at ${viewport.width}px`, async ({ page }) => {
+    // Larger screens open Settings from the foot of the rail as a page; phones open it from
+    // the profile's gear as a sheet with ✕.
+    const phone = viewport.width <= 700;
     await page.setViewportSize(viewport);
     await login(page);
-    const leave = () => page.getByRole("button", { name: "Back", exact: true }).click();
+    const leave = () =>
+      phone
+        ? page
+            .getByRole("dialog", { name: "Settings" })
+            .getByRole("button", { name: "Close" })
+            .click()
+        : page.getByRole("link", { name: "Your profile", exact: true }).click();
     const font = await page
       .getByRole("heading", { level: 1 })
       .evaluate((h) => getComputedStyle(h).fontFamily);
@@ -33,13 +42,13 @@ for (const viewport of [
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toHaveCount(0);
     await page.getByRole("link", { name: "Settings", exact: true }).click();
-    await expect(page).toHaveURL(/\/settings$/);
+    await expect(page).toHaveURL(phone ? /settings=true/ : /\/settings$/);
     await expect(page.getByRole("heading", { name: "Settings", exact: true })).toHaveCSS(
       "font-family",
       font,
     );
-    await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(0);
-    await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(phone ? 1 : 0);
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
     // Settings shows who you are; name, username and photo are edited in one modal.
     await expect(page.locator(".settings-identity strong")).toHaveText("Alice");
     await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -142,14 +151,14 @@ test("settings is private and opens on its own in a fresh tab", async ({
   await login(page);
   await page.goto("/people/" + fixture.people.Bob);
   await expect(page.locator(".profile-heading h1")).toHaveText("Bob");
-  // Someone else's profile has no Settings of its own.
+  // Someone else's profile has no Settings of its own; the rail's stays yours.
   await expect(
     page.locator(".profile-heading").getByRole("link", { name: "Settings", exact: true }),
   ).toHaveCount(0);
   const fresh = await context.newPage();
   await fresh.goto("/settings");
   await expect(fresh.locator(".settings-identity strong")).toHaveText("Alice");
-  await expect(fresh.getByRole("button", { name: "Back", exact: true })).toHaveCount(1);
+  await expect(fresh.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
   await fresh.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(fresh).toHaveURL(new RegExp("/people/" + fixture.people.Alice));
   await fresh.close();

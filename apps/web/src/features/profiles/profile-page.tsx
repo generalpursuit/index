@@ -12,7 +12,8 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@index/ui/components/dropdown-menu";
-import { UserAvatar, QueryState } from "@/components/app/primitives";
+import { UserAvatar, QueryState, Modal } from "@/components/app/primitives";
+import { SettingsContent } from "@/features/settings/settings-page";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
@@ -66,7 +67,15 @@ export function FollowButton({ person }: { person: Person }) {
   );
 }
 const followLabels = ["Follow", "Request", "Requested", "Following"];
-export function ProfilePage({ userId, group = "all" }: { userId: string; group?: string }) {
+export function ProfilePage({
+  userId,
+  group = "all",
+  settings = false,
+}: {
+  userId: string;
+  group?: string;
+  settings?: boolean;
+}) {
   const profile = useProfile(userId);
   return (
     <QueryState
@@ -74,11 +83,21 @@ export function ProfilePage({ userId, group = "all" }: { userId: string; group?:
       error={profile.error}
       retry={() => void profile.refetch()}
     >
-      {profile.data && <ProfileContent key={userId} profile={profile.data} filter={group} />}
+      {profile.data && (
+        <ProfileContent key={userId} profile={profile.data} filter={group} settings={settings} />
+      )}
     </QueryState>
   );
 }
-function ProfileContent({ profile, filter }: { profile: Profile; filter: string }) {
+function ProfileContent({
+  profile,
+  filter,
+  settings,
+}: {
+  profile: Profile;
+  filter: string;
+  settings: boolean;
+}) {
   const viewer = useViewer(),
     own = viewer?.id === profile.id,
     navigate = useNavigate();
@@ -124,7 +143,14 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
         </div>
         <div className="heading-actions">
           {own ? (
-            <Link to="/settings" className="icon-link" aria-label="Settings" title="Settings">
+            // Phones only: larger screens have Settings at the foot of the navigation rail.
+            <Link
+              to="."
+              search={(old) => ({ ...old, settings: true })}
+              className="icon-link profile-settings"
+              aria-label="Settings"
+              title="Settings"
+            >
               <Settings />
             </Link>
           ) : (
@@ -154,6 +180,24 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
         />
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
+      {own && (
+        <Modal
+          open={settings}
+          title="Settings"
+          className="settings-sheet"
+          onOpenChange={(open) => {
+            if (!open)
+              void navigate({
+                to: ".",
+                search: (old) => ({ ...old, settings: undefined }),
+                replace: true,
+                resetScroll: false,
+              });
+          }}
+        >
+          <SettingsContent userId={profile.id} />
+        </Modal>
+      )}
       {newGroup && (
         <NewGroup
           onClose={() => setNewGroup(false)}

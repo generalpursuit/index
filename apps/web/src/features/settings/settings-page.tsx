@@ -15,7 +15,6 @@ import {
 import { updateProfileSchema } from "@index/api/features/profiles/schemas";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import {
-  Back,
   Confirmation,
   IconButton,
   Modal,
@@ -29,13 +28,12 @@ import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
 
-/** Settings as a page, reached from your profile. */
+/** Settings as a page: reached from the navigation rail on larger screens. */
 export function SettingsPage() {
   const viewer = useViewer();
   return (
     <div className="settings-page">
       <header className="page-heading">
-        <Back fallback={viewer ? "/people/" + viewer.id : "/"} />
         <h1>Settings</h1>
       </header>
       {viewer ? <SettingsContent userId={viewer.id} /> : <QueryState pending />}
@@ -43,7 +41,7 @@ export function SettingsPage() {
   );
 }
 
-/** Shared account settings content. */
+/** Everything in Settings; phones show it in a sheet over the profile. */
 export function SettingsContent({ userId }: { userId: string }) {
   const profile = useProfile(userId);
   return (

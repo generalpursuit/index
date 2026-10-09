@@ -7,7 +7,7 @@ import {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router";
-import { Search, Bell, User, MessageCircle } from "lucide-react";
+import { Search, Bell, User, MessageCircle, Settings } from "lucide-react";
 import { Modal, QueryState } from "./primitives";
 import brandSymbol from "@/assets/brand-symbol.svg";
 import { LinkDetail } from "@/features/links/link-detail";
@@ -86,6 +86,12 @@ export function AppShell() {
           ) : (
             <Link to="/login" className="nav-item" aria-label="Sign in">
               <User />
+            </Link>
+          )}
+          {/* At the foot of the rail on larger screens; phones open Settings from the profile. */}
+          {viewer && (
+            <Link to="/settings" className="nav-item nav-settings" aria-label="Settings">
+              <Settings />
             </Link>
           )}
         </nav>

@@ -8,6 +8,8 @@ export const Route = createFileRoute("/_app/people/$userId")({
       .union([z.uuid(), z.literal("starred")])
       .optional()
       .catch(undefined),
+    // Phones open Settings as a sheet over your profile.
+    settings: z.boolean().optional().catch(undefined),
   }),
   loader: ({ context, params }) =>
     context.queryClient.ensureQueryData(
@@ -15,7 +17,8 @@ export const Route = createFileRoute("/_app/people/$userId")({
         input: { userId: params.userId },
       }),
     ),
-  component: () => (
-    <ProfilePage userId={Route.useParams().userId} group={Route.useSearch().group} />
-  ),
+  component: () => {
+    const { group, settings } = Route.useSearch();
+    return <ProfilePage userId={Route.useParams().userId} group={group} settings={settings} />;
+  },
 });
