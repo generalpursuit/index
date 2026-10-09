@@ -7,11 +7,11 @@ import {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router";
-import { Search, Plus, Bell, User, MessageCircle } from "lucide-react";
+import { Search, Bell, User, MessageCircle } from "lucide-react";
 import { Modal, QueryState } from "./primitives";
 import brandSymbol from "@/assets/brand-symbol.svg";
 import { LinkDetail } from "@/features/links/link-detail";
-import { LinkComposer } from "@/features/links/link-composer";
+import { LinkEditor } from "@/features/links/link-editor";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
 import { useBack, useEdgeBack } from "@/hooks/use-back";
@@ -45,11 +45,11 @@ export function AppShell() {
     if (!viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
   }, [viewer, protectedPage, navigate, router]);
-  // Closing returns to exactly where the composer was opened.
-  const closeComposer = () =>
+  // Closing returns to exactly where the editor was opened.
+  const closeEditor = () =>
     void navigate({
       to: ".",
-      search: (old) => ({ ...old, add: undefined, edit: undefined }),
+      search: (old) => ({ ...old, edit: undefined }),
       replace: true,
       resetScroll: false,
     });
@@ -65,14 +65,6 @@ export function AppShell() {
           </Link>
           <Link to="/discover" className="nav-item" aria-label="Discover">
             <Search />
-          </Link>
-          <Link
-            to="."
-            search={(old) => ({ ...old, add: true })}
-            className="nav-item"
-            aria-label="Add link"
-          >
-            <Plus />
           </Link>
           <Link to="/activity" className="nav-item" aria-label="Activity">
             <Bell />
@@ -125,21 +117,14 @@ export function AppShell() {
           {search.post ? <LinkDetail key={search.post} id={search.post} /> : <QueryState pending />}
         </Modal>
         <Modal
-          open={!!(search.add || search.edit)}
-          title={search.edit ? "Edit link" : "Add link"}
-          className="composer-dialog"
+          open={!!search.edit}
+          title="Edit link"
+          className="editor-dialog"
           onOpenChange={(v) => {
-            if (!v) closeComposer();
+            if (!v) closeEditor();
           }}
         >
-          {(search.add || search.edit) && (
-            <LinkComposer
-              key={search.edit ?? String(search.add)}
-              edit={search.edit}
-              group={typeof search.add === "string" ? search.add : undefined}
-              onDone={closeComposer}
-            />
-          )}
+          {search.edit && <LinkEditor key={search.edit} id={search.edit} onDone={closeEditor} />}
         </Modal>
       </div>
     </DraftProvider>

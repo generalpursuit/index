@@ -24,7 +24,7 @@ async function login(page: Page, name = "Alice") {
 test.beforeEach(async ({ request }) => {
   data = await (await request.post("http://localhost:3002/_test/reset")).json();
 });
-test("single-week layout, scrolling, add page and Favorites", async ({ page }) => {
+test("single-week layout, scrolling, adding and Favorites", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await login(page);
@@ -48,28 +48,27 @@ test("single-week layout, scrolling, add page and Favorites", async ({ page }) =
   );
   await page.getByRole("button", { name: "Newer week" }).click();
   await expect(page).toHaveURL(new RegExp(data.week));
-  await page.getByRole("link", { name: "Add link", exact: true }).click();
-  // Adding opens a modal over the week rather than a separate page.
-  await expect(page.getByRole("dialog", { name: "Add link" })).toBeVisible();
-  await page.getByLabel("URL", { exact: true }).fill("https://example.com/new");
-  await page.getByLabel("Title", { exact: true }).fill("A new find");
-  await page.getByRole("button", { name: "Add link", exact: true }).click();
+  // Links are added from the week's own field; there is no other way in.
+  await expect(page.getByRole("link", { name: "Add link" })).toHaveCount(0);
+  const field = page.getByRole("textbox", { name: /Enter a link to add it/ });
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
   await expect(page.locator('.week-page[data-active="true"] .own-links')).toContainText(
-    "A new find",
+    "Calm Software",
   );
   // Rows only open the post; its actions live in the detail view.
   await page
     .locator('.week-page[data-active="true"] .own-links')
-    .getByRole("button", { name: "A new find", exact: true })
+    .getByRole("button", { name: "Calm Software", exact: true })
     .click();
   const post = page.getByRole("dialog", { name: "Post", exact: true });
-  await post.getByRole("button", { name: "Actions for A new find", exact: true }).click();
+  await post.getByRole("button", { name: "Actions for Calm Software", exact: true }).click();
   await page.getByRole("menuitem", { name: "Add to Favorites" }).click();
   await page.keyboard.press("Escape");
   await expect(post).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await page.getByRole("button", { name: "Favorites", exact: true }).click();
-  await expect(page.locator(".profile-links")).toContainText("A new find");
+  await expect(page.locator(".profile-links")).toContainText("Calm Software");
   await expect(page.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -199,22 +198,36 @@ test("comments respond/delete, locked forwarding, and logout clears private data
   await expect(page.getByText("Working notes", { exact: true })).toHaveCount(0);
 });
 
-test("a pasted link fills its title and category from the page", async ({ page }) => {
+test("editing a saved link changes its details, and a new address its category", async ({
+  page,
+}) => {
   await login(page);
-  await page.getByRole("link", { name: "Add link", exact: true }).click();
-  await page.getByLabel("URL", { exact: true }).fill("https://pages.test/calm-software");
+  const own = page.locator('.week-page[data-active="true"] .own-links');
+  const field = own.getByRole("textbox", { name: /Enter a link to add it/ });
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
   // The fixture page declares a video and its site name, which is trimmed from the title.
-  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Calm Software");
-  await expect(page.locator(".link-preview .category-mark")).toHaveAttribute(
-    "data-category",
-    "video",
-  );
-  await page.getByRole("button", { name: "Add link", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  const row = page
-    .locator('.week-page[data-active="true"] .own-links .link-row')
-    .filter({ hasText: "Calm Software" });
+  const row = own.locator(".link-row").filter({ hasText: "Calm Software" });
   await expect(row.locator(".category-mark")).toHaveAttribute("data-category", "video");
+  await row.getByRole("button", { name: "Calm Software", exact: true }).click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await post.getByRole("button", { name: "Actions for Calm Software", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  const editor = page.getByRole("dialog", { name: "Edit link" });
+  await expect(editor.getByLabel("Link", { exact: true })).toHaveValue(
+    "https://pages.test/calm-software",
+  );
+  await editor.getByLabel("Title", { exact: true }).fill("");
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(editor.getByText("Give the link a title.")).toBeVisible();
+  await editor.getByLabel("Title", { exact: true }).fill("Calm notes");
+  await editor.getByLabel("Note", { exact: true }).fill("For the reading group");
+  await editor.getByLabel("Link", { exact: true }).fill("https://pages.test/calm-notes");
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  const edited = own.locator(".link-row").filter({ hasText: "Calm notes" });
+  // The new address is read again; this one says nothing, so the link is uncategorized.
+  await expect(edited.locator(".category-mark")).toHaveAttribute("data-category", "uncategorized");
 });
 
 test("pasting into the first row saves the link right away", async ({ page }) => {

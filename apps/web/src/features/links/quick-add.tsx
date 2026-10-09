@@ -9,8 +9,9 @@ type Pending = { url: string; existing: Set<string> };
 
 /**
  * A list row that is also a field: pasting a link (or typing one and pressing Enter) saves it
- * right away, and the server reads its title and category from the page. The full composer
- * stays behind the menu's "+". `links` is the list shown below, used to hand over seamlessly.
+ * right away, and the server reads its title and category from the page. It is the only way
+ * to add a link; details are edited afterwards. `links` is the list shown below, used to hand
+ * over seamlessly.
  */
 export function QuickAdd({
   groupId,

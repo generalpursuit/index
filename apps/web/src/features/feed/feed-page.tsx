@@ -213,22 +213,13 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         {ownEmpty && !current ? (
           <p className="week-empty">Nothing saved this week.</p>
         ) : (
-          <>
-            {/* The field is the invitation; phones, which add from the "+", get a row like it. */}
-            {ownEmpty && (
-              <Link className="add-row" to="." search={(old) => ({ ...old, add: true })}>
-                <i className="category-mark" data-empty aria-hidden="true" />
-                Add a link
-              </Link>
-            )}
-            <WeekLinks
-              userId={viewer.id}
-              week={week}
-              add={current}
-              seed={feed.data?.pages[0]?.own}
-              updatedAt={feed.dataUpdatedAt}
-            />
-          </>
+          <WeekLinks
+            userId={viewer.id}
+            week={week}
+            add={current}
+            seed={feed.data?.pages[0]?.own}
+            updatedAt={feed.dataUpdatedAt}
+          />
         )}
       </section>
       <section className="people" aria-labelledby={"people-" + week}>

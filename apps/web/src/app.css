@@ -590,9 +590,6 @@
   text-decoration: underline;
   text-underline-offset: 4px;
 }
-.add-row {
-  display: none;
-}
 .friend-links {
   flex: 1;
   min-height: 0;
@@ -1006,15 +1003,14 @@
 .choice {
   min-width: 115px;
 }
-.composer-dialog {
+.editor-dialog {
   width: 600px;
   max-width: calc(100vw - 32px);
 }
-/* Adding starts with one field; the rest appears once there is a link to describe. */
 .link-form {
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 24px;
   max-width: 560px;
 }
 .link-form input,
@@ -1026,19 +1022,10 @@
   background: #141414;
   font-size: 16px;
 }
-.link-form .link-url {
-  height: 56px;
-  font-size: 18px;
-}
 .link-form textarea {
   field-sizing: content;
   max-height: 240px;
   resize: none;
-}
-.link-form-details {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
 }
 .link-form-label,
 .link-form label.link-form-label {
@@ -1049,13 +1036,8 @@
   text-transform: uppercase;
   color: #8a8a8a;
 }
-.link-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-/* Real rows use a button for the title, which centers itself; plain text (previews, pending
-   rows) must be told. */
+/* Real rows use a button for the title, which centers itself; plain text (pending rows) must
+   be told. */
 span.link-open {
   align-self: center;
 }
@@ -1543,18 +1525,9 @@ span.link-open {
     max-width: 120px;
     font-size: 11px;
   }
-  /* Phones add from the "+" in the bottom bar, leaving the week's space for links. */
-  .week-stage .quick-add {
-    display: none;
-  }
-  .week-stage .add-row {
-    display: grid;
-    grid-template-columns: var(--mark-column, 32px) minmax(0, 1fr);
-    align-items: center;
-    column-gap: 12px;
-    min-height: var(--row);
-    color: #929292;
-    font-size: 13px;
+  /* Phones zoom into fields with smaller text, so the field keeps 16px. */
+  .quick-add input {
+    font-size: 16px;
   }
   .profile-heading .user-avatar.large {
     width: 64px;

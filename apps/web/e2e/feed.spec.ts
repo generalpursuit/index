@@ -17,10 +17,10 @@ test("empty week keeps the fixed zones with an invitation and contextual discove
 }) => {
   await login(page, "bob");
   const current = page.locator('.week-page[data-active="true"]');
-  // The field is the invitation; the phone row standing in for it stays hidden here.
+  // The field is the invitation, and the only way to add a link.
   const field = current.getByRole("textbox", { name: /Enter a link to add it/ });
   await expect(field).toBeVisible();
-  await expect(current.getByRole("link", { name: "Add a link", exact: true })).toBeHidden();
+  await expect(page.getByRole("link", { name: "Add link" })).toHaveCount(0);
   // Nobody followed yet: a person's place holds the invitation to find people.
   const placeholder = current.locator(".friend-card-empty");
   await expect(placeholder).toContainText("Find people whose taste you trust");
@@ -40,14 +40,12 @@ test("empty week keeps the fixed zones with an invitation and contextual discove
   expect(Math.abs(own!.height - people!.height)).toBeLessThan(2);
   await page.screenshot({ path: "test-results/empty-week-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(current.getByRole("link", { name: "Add a link", exact: true })).toBeVisible();
+  // Phones show the same field, at 16px so focusing it does not zoom the page.
+  await expect(field).toBeVisible();
+  expect(await field.evaluate((input) => getComputedStyle(input).fontSize)).toBe("16px");
   const friends = await placeholder.boundingBox();
   expect(friends!.y + friends!.height).toBeLessThan(780);
   await page.screenshot({ path: "test-results/empty-week-mobile.png" });
-  await current.getByRole("link", { name: "Add a link", exact: true }).click();
-  // Adding opens over the current page instead of navigating away.
-  await expect(page).toHaveURL(/add=true/);
-  await expect(page.getByRole("heading", { name: "Add link" })).toBeVisible();
 });
 
 test("scroll moves between weeks before settling, without changing horizontal browsing", async ({
