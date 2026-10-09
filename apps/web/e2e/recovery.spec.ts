@@ -1,3 +1,4 @@
+import { apiURL } from "./urls";
 import { test, expect, type Page } from "@playwright/test";
 let data: {
   people: Record<string, string>;
@@ -14,7 +15,7 @@ async function login(page: Page) {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
 }
 test.beforeEach(async ({ request }) => {
-  data = await (await request.post("http://localhost:3002/_test/reset")).json();
+  data = await (await request.post(apiURL + "/_test/reset")).json();
 });
 test("failed send preserves the draft and retry creates exactly one message", async ({ page }) => {
   await login(page);

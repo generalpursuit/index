@@ -1,3 +1,4 @@
+import { apiURL } from "./urls";
 import { test, expect } from "@playwright/test";
 
 test("desktop bridge uses bearer auth, restores login, opens websites and erases logout", async ({
@@ -5,7 +6,7 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   request,
   context,
 }) => {
-  await request.post("http://localhost:3002/_test/reset");
+  await request.post(apiURL + "/_test/reset");
   let token: string | null = null;
   const opened: string[] = [];
   await page.exposeBinding(
@@ -39,7 +40,7 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
   expect(token).toContain(".");
-  expect(await context.cookies("http://localhost:3002")).toHaveLength(0);
+  expect(await context.cookies(apiURL + "")).toHaveLength(0);
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
   // The domain in a row opens the website directly.

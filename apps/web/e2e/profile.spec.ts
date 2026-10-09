@@ -1,10 +1,11 @@
+import { apiURL } from "./urls";
 import { test, expect } from "@playwright/test";
 
 test("profile styling stays borderless with shared display typography", async ({
   page,
   request,
 }) => {
-  await request.post("http://localhost:3002/_test/reset");
+  await request.post(apiURL + "/_test/reset");
   await page.goto("/login");
   await page.getByLabel("Email or username", { exact: true }).fill("alice");
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");
@@ -31,7 +32,7 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   page,
   request,
 }) => {
-  const fixture = await (await request.post("http://localhost:3002/_test/reset")).json();
+  const fixture = await (await request.post(apiURL + "/_test/reset")).json();
   await page.goto("/login");
   await page.getByLabel("Email or username", { exact: true }).fill("alice");
   await page.getByLabel("Password", { exact: true }).fill("test-password-123");

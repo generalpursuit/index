@@ -1,3 +1,4 @@
+import { apiURL } from "./urls";
 import { test, expect, type Page } from "@playwright/test";
 
 async function login(page: Page, username: string) {
@@ -13,10 +14,10 @@ test("comment mentions appear in Activity and open the original thread", async (
   browser,
   request,
 }) => {
-  const fixture = await (await request.post("http://localhost:3002/_test/reset")).json();
+  const fixture = await (await request.post(apiURL + "/_test/reset")).json();
   await login(page, "alice");
   // The shared fixture starts with Alice private; this thread must be visible to Bob.
-  const publish = await page.request.patch("http://localhost:3002/api/v1/me/profile", {
+  const publish = await page.request.patch(apiURL + "/api/v1/me/profile", {
     data: { profileVisibility: "public" },
   });
   expect(publish.ok()).toBe(true);

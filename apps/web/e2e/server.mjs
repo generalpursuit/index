@@ -1,3 +1,4 @@
+import { apiURL, webURL } from "./urls.ts";
 import { createTestDatabase } from "../../../packages/api/src/testing/database.ts";
 import { createAuth } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
@@ -7,9 +8,9 @@ import { memoryMediaStore } from "../../../packages/api/src/features/profiles/me
 const database = await createTestDatabase();
 const auth = createAuth(
   {
-    BETTER_AUTH_URL: "http://localhost:3002",
+    BETTER_AUTH_URL: apiURL,
     BETTER_AUTH_SECRET: "isolated-playwright-only-secret-32-characters",
-    CORS_ORIGIN: "http://localhost:4173",
+    CORS_ORIGIN: webURL,
   },
   database.db,
   ["tauri://localhost", "http://tauri.localhost"],
@@ -425,10 +426,10 @@ async function seedMore(people, week, reading) {
 }
 await seed();
 // Uploaded photos stay in memory, served at `/media/*` like the bucket on the real server.
-const media = memoryMediaStore("http://localhost:3002");
+const media = memoryMediaStore(apiURL);
 Bun.serve({
   hostname: "127.0.0.1",
-  port: 3002,
+  port: Number(new URL(apiURL).port),
   async fetch(request) {
     const url = new URL(request.url);
     let response;
@@ -464,7 +465,7 @@ Bun.serve({
     }
     const headers = new Headers(response.headers);
     const origin = request.headers.get("origin");
-    if (["http://localhost:4173", "tauri://localhost", "http://tauri.localhost"].includes(origin))
+    if ([webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))
       headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Expose-Headers", "set-auth-token");
     headers.set("Access-Control-Allow-Credentials", "true");
@@ -473,4 +474,4 @@ Bun.serve({
     return new Response(response.body, { status: response.status, headers });
   },
 });
-console.log("Isolated browser-test API ready on http://localhost:3002");
+console.log(`Isolated browser-test API ready on ${apiURL}`);

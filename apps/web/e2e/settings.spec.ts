@@ -1,3 +1,4 @@
+import { apiURL } from "./urls";
 import { test, expect, type Page } from "@playwright/test";
 
 async function login(page: Page) {
@@ -13,7 +14,7 @@ const photo =
   "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAEElEQVR4nGPwSDcGIgYIBQAZGgOJs/X2EQAAAABJRU5ErkJggg==";
 
 test.beforeEach(async ({ request }) => {
-  await request.post("http://localhost:3002/_test/reset");
+  await request.post(apiURL + "/_test/reset");
 });
 
 for (const viewport of [
@@ -71,7 +72,9 @@ for (const viewport of [
     });
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    const stored = /^http:\/\/localhost:3002\/media\/avatars\/.+\.(webp|jpg)$/;
+    const stored = new RegExp(
+      apiURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "/media/avatars/.+\\.(webp|jpg)$",
+    );
     await expect(page.locator(".settings-identity strong")).toHaveText("Alice Updated");
     await expect(page.locator(".settings-profile img")).toHaveAttribute("src", stored);
     await page.reload();
@@ -87,9 +90,7 @@ for (const viewport of [
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toHaveCount(0);
     await expect(page.locator(".settings-profile img")).toHaveCount(0);
-    const profile = await (
-      await page.request.get("http://localhost:3002/api/v1/me/profile")
-    ).json();
+    const profile = await (await page.request.get(apiURL + "/api/v1/me/profile")).json();
     expect(profile.name).toBe("Alice Updated");
     expect(profile.username).toBe("alice_updated");
     expect(profile.image).toBeNull();
@@ -145,7 +146,7 @@ test("settings is private and opens on its own in a fresh tab", async ({
   context,
   request,
 }) => {
-  const fixture = await (await request.get("http://localhost:3002/_test/fixture")).json();
+  const fixture = await (await request.get(apiURL + "/_test/fixture")).json();
   await page.goto("/settings");
   await expect(page).toHaveURL(/login.*next=%2Fsettings/);
   await login(page);

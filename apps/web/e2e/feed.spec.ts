@@ -1,8 +1,9 @@
+import { apiURL } from "./urls";
 import { test, expect } from "@playwright/test";
 
 let fixture: { week: string; older: string; people: Record<string, string> };
 test.beforeEach(async ({ request }) => {
-  fixture = await (await request.post("http://localhost:3002/_test/reset")).json();
+  fixture = await (await request.post(apiURL + "/_test/reset")).json();
 });
 async function login(page: import("@playwright/test").Page, person: string) {
   await page.goto("/login");

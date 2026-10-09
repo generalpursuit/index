@@ -1,3 +1,4 @@
+import { apiURL, webURL, webPort } from "./e2e/urls";
 import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
@@ -7,7 +8,7 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: "list",
   use: {
-    baseURL: "http://localhost:4173",
+    baseURL: webURL,
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },
@@ -20,14 +21,16 @@ export default defineConfig({
   webServer: [
     {
       command: "bun e2e/server.mjs",
-      url: "http://localhost:3002/health",
+      url: apiURL + "/health",
       timeout: 90_000,
       reuseExistingServer: false,
     },
     {
       command:
-        "VITE_SERVER_URL=http://localhost:3002 bun run dev:bare --host localhost --port 4173 --strictPort",
-      url: "http://localhost:4173",
+        process.env.E2E_PRODUCTION === "1"
+          ? `bun run serve --host localhost --port ${webPort} --strictPort`
+          : `VITE_SERVER_URL=${apiURL} bun run dev:bare --host localhost --port ${webPort} --strictPort`,
+      url: webURL,
       timeout: 90_000,
       reuseExistingServer: false,
     },
