@@ -160,21 +160,22 @@ struct LinkMenu: View {
             ? (link.isFavorite ? "Remove from Favorites" : "Add to Favorites")
             : (link.isStarred ? "Unstar" : "Star"), systemImage: own ? "heart" : "star")
       }
-      if link.groupId != nil {
-        Button {
-          Task {
-            do {
-              let group: LinkGroup? = try await app.api?.request("/groups/\(link.groupId!)")
+      Button {
+        Task {
+          do {
+            // Only links in locked groups stay private to their owner.
+            if let groupId = link.groupId {
+              let group: LinkGroup? = try await app.api?.request("/groups/\(groupId)")
               guard group?.visibility == .public else {
                 app.error = "Links in locked groups cannot be forwarded."
                 return
               }
-              app.path.append(.recipients(link))
-            } catch { app.handle(error) }
-          }
-        } label: {
-          Label("Forward", systemImage: "arrowshape.turn.up.right")
+            }
+            app.path.append(.recipients(link))
+          } catch { app.handle(error) }
         }
+      } label: {
+        Label("Forward", systemImage: "arrowshape.turn.up.right")
       }
       Button {
         if let url = URL(string: link.url) { openURL(url) }

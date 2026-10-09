@@ -95,8 +95,8 @@ struct LiveAPITests {
     }
     let _: Success = try await alice.request(
       "/groups/\(group.id)", method: "DELETE", body: ["deleteLinks": .bool(false)])
-    let inboxLink: SavedLink = try await alice.request("/links/\(link.id)")
-    #expect(inboxLink.groupId == nil)
+    let ungrouped: SavedLink = try await alice.request("/links/\(link.id)")
+    #expect(ungrouped.groupId == nil)
     let _: Success = try await alice.request("/links/\(link.id)", method: "DELETE")
     try await alice.signOut()
     #expect(try aliceStore.read() == nil)

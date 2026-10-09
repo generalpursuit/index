@@ -10,9 +10,7 @@ struct AddLinkView: View {
   @State private var url = ""
   @State private var title = ""
   @State private var description = ""
-  @State private var category = Category.uncategorized
   @State private var selectedGroup = ""
-  @State private var savedOn = Date()
   @State private var groups: [LinkGroup] = []
   @State private var initialized = false
   @FocusState private var focused: Bool
@@ -29,22 +27,15 @@ struct AddLinkView: View {
         TextField("Description (optional)", text: $description, axis: .vertical).lineLimit(4...8)
           .ghostInput()
         HStack {
-          Picker("Category", selection: $category) {
-            ForEach(Category.allCases, id: \.self) {
-              Text($0 == .uncategorized ? "Category" : $0.rawValue.capitalized).tag($0)
-            }
-          }.labelsHidden()
           Picker("Group", selection: $selectedGroup) {
-            Text("Inbox").tag("")
+            Text("No group").tag("")
             ForEach(groups.filter { $0.kind == "custom" }) { Text($0.name).tag($0.id) }
           }.labelsHidden()
           Spacer()
         }
-        DatePicker("Saved on", selection: $savedOn, in: ...Date(), displayedComponents: .date)
-          .environment(\.timeZone, TimeZone(secondsFromGMT: 0)!)
         Text(
           selectedGroup.isEmpty
-            ? "Inbox is locked. Only you can see these links."
+            ? "Visible to everyone who can see your profile."
             : "Visibility follows the selected group and your profile."
         ).font(.caption).foregroundStyle(.secondary)
         AsyncButton(action: save) {
@@ -59,11 +50,7 @@ struct AddLinkView: View {
           url = editing?.url ?? ""
           title = editing?.title ?? ""
           description = editing?.description ?? ""
-          category = editing?.category ?? .uncategorized
           selectedGroup = editing?.groupId ?? groupID ?? ""
-          savedOn =
-            editing.map { Week.date($0.savedOn) }
-            ?? (week == Week.monday() ? Date() : Week.date(week))
           initialized = true
           focused = true
         }
@@ -81,9 +68,8 @@ struct AddLinkView: View {
   private func save() async throws {
     let body: [String: JSONValue] = [
       "url": .string(url.trimmingCharacters(in: .whitespacesAndNewlines)), "title": .string(title),
-      "description": .string(description), "category": .string(category.rawValue),
+      "description": .string(description),
       "groupId": selectedGroup.isEmpty ? .null : .string(selectedGroup),
-      "savedOn": .string(Week.dateString(savedOn)),
     ]
     let _: SavedLink? = try await app.api?.request(
       editing.map { "/links/\($0.id)" } ?? "/links", method: editing == nil ? "POST" : "PATCH",
@@ -98,7 +84,7 @@ func allGroups(api: APIClient?, ownerID: String) async throws -> [LinkGroup] {
   var groups: [LinkGroup] = []
   var cursor: String?
   repeat {
-    var query = ["ownerId": ownerID, "includeFavorites": "true", "limit": "100"]
+    var query = ["ownerId": ownerID, "limit": "100"]
     query["cursor"] = cursor
     guard let page: Page<LinkGroup> = try await api?.request("/groups", query: query) else {
       return []

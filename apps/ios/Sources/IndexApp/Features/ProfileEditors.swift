@@ -1,31 +1,29 @@
 import IndexCore
 import SwiftUI
 
-struct EditProfileView: View {
+struct SettingsView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
   @State private var username = ""
-  @State private var bio = ""
   @State private var imageURL = ""
   @State private var initialized = false
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        PageHeading(title: "Edit profile")
+        PageHeading(title: "Settings")
         TextField("Name", text: $name).ghostInput()
         TextField("Username", text: $username).ghostInput()
           #if os(iOS)
             .textInputAutocapitalization(.never).autocorrectionDisabled()
           #endif
-        TextField("Bio", text: $bio, axis: .vertical).lineLimit(3...6).ghostInput()
         TextField("Avatar image URL (optional)", text: $imageURL).ghostInput()
           #if os(iOS)
             .textInputAutocapitalization(.never).keyboardType(.URL)
           #endif
         AsyncButton {
           var body: [String: JSONValue] = [
-            "name": .string(name), "bio": .string(bio),
+            "name": .string(name),
             "image": imageURL.isEmpty ? .null : .string(imageURL),
           ]
           if !username.isEmpty { body["username"] = .string(username.lowercased()) }
@@ -47,7 +45,6 @@ struct EditProfileView: View {
       guard !initialized, let profile = app.profile else { return }
       name = profile.name
       username = profile.username ?? ""
-      bio = profile.bio ?? ""
       imageURL = profile.image ?? ""
       initialized = true
     }
@@ -64,11 +61,16 @@ struct GroupEditorView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 24) {
       PageHeading(title: group == nil ? "New group" : "Edit group")
-      TextField("Group name", text: $name).ghostInput()
-      Toggle(isOn: $locked) { Label("Locked", systemImage: locked ? "lock" : "lock.open") }
-      Text(
-        locked ? "Only you can see links in this group." : "Links follow your profile’s visibility."
-      ).font(.subheadline).foregroundStyle(.secondary)
+      HStack(spacing: 8) {
+        TextField("Group name", text: $name).ghostInput()
+        Button {
+          locked.toggle()
+        } label: {
+          Image(systemName: locked ? "lock" : "lock.open").frame(width: 44, height: 44)
+        }.buttonStyle(.plain)
+          .accessibilityLabel(locked ? "Unlock group" : "Lock group")
+          .accessibilityValue(locked ? "Locked" : "Unlocked")
+      }
       AsyncButton {
         let _: LinkGroup? = try await app.api?.request(
           group.map { "/groups/\($0.id)" } ?? "/groups", method: group == nil ? "POST" : "PATCH",
@@ -91,7 +93,10 @@ struct GroupEditorView: View {
       }
     }
     .confirmationDialog(
-      "Delete group? Its links will move to your locked Inbox.", isPresented: $deleting,
+      group?.visibility == .private
+        ? "Delete group? Its links stay on your profile but will no longer be locked."
+        : "Delete group? Its links stay on your profile without a group.",
+      isPresented: $deleting,
       titleVisibility: .visible
     ) {
       Button("Delete group", role: .destructive) {

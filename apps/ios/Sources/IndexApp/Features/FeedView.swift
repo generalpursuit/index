@@ -77,17 +77,7 @@ private struct FeedWeekView: View {
   var body: some View {
     GeometryReader { geometry in
       VStack(alignment: .leading, spacing: 12) {
-        HStack(spacing: 4) {
-          PageHeading(title: Week.label(week))
-          Button {
-            app.path.append(.messages)
-          } label: {
-            Image(systemName: "bubble.right").font(.title2)
-              .overlay(alignment: .topTrailing) {
-                if app.unreadMessages > 0 { Circle().frame(width: 6, height: 6) }
-              }.frame(width: 40, height: 44)
-          }.accessibilityLabel("Messages")
-        }
+        PageHeading(title: Week.label(week))
         LoadingError(error: error, loading: loading, retry: { await load() })
         if let feed {
           if feed.own.items.isEmpty {
@@ -101,24 +91,29 @@ private struct FeedWeekView: View {
               Text(
                 week == Week.monday()
                   ? "Save something worth coming back to."
-                  : "There’s still room for something worth keeping."
+                  : "Nothing saved this week."
               )
               .font(.subheadline).foregroundStyle(.secondary)
-              Button {
-                app.path.append(.add(week, nil, nil))
-              } label: {
-                Label("Add a link", systemImage: "plus")
-              }.buttonStyle(PillStyle(selected: true)).padding(.top, 12)
+              // Links are always saved today, so only the current week offers adding.
+              if week == Week.monday() {
+                Button {
+                  app.path.append(.add(week, nil, nil))
+                } label: {
+                  Label("Add a link", systemImage: "plus")
+                }.buttonStyle(PillStyle(selected: true)).padding(.top, 12)
+              }
             }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 24)
           } else {
             ScrollView {
               LazyVStack(spacing: 0) {
-                Button {
-                  app.path.append(.add(week, nil, nil))
-                } label: {
-                  Image(systemName: "plus").frame(
-                    maxWidth: .infinity, minHeight: 36, alignment: .leading)
-                }.accessibilityLabel("Add link to \(Week.label(week))")
+                if week == Week.monday() {
+                  Button {
+                    app.path.append(.add(week, nil, nil))
+                  } label: {
+                    Image(systemName: "plus").frame(
+                      maxWidth: .infinity, minHeight: 36, alignment: .leading)
+                  }.accessibilityLabel("Add link to \(Week.label(week))")
+                }
                 ForEach(feed.own.items) { link in
                   LinkRow(link: link, compact: geometry.size.height < 720)
                   Divider()

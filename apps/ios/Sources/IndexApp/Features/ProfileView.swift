@@ -14,6 +14,9 @@ struct ProfileView: View {
   @State private var loading = true
   var own: Bool { userID == app.userID }
   var selected: LinkGroup? { groups.first { $0.id == filter } }
+  // Starred holds other people's links, so it is a section of its own rather than a filter.
+  private var starredGroup: LinkGroup? { groups.first { $0.kind == "starred" } }
+  private var starredSection: Bool { filter == "starred" || selected?.kind == "starred" }
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 22) {
@@ -21,15 +24,20 @@ struct ProfileView: View {
         if let profile {
           HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 6) {
-              Text(profile.username ?? profile.name).font(
-                .system(size: 36, weight: .semibold, design: .serif)
-              ).minimumScaleFactor(0.6)
+              HStack(spacing: 10) {
+                Text(profile.username ?? profile.name).font(
+                  .system(size: 36, weight: .semibold, design: .serif)
+                ).minimumScaleFactor(0.6)
+                Image(systemName: profile.profileVisibility == .private ? "lock" : "globe.europe.africa")
+                  .font(.system(size: 14)).foregroundStyle(.secondary)
+                  .accessibilityLabel(
+                    profile.profileVisibility == .private ? "Private profile" : "Public profile")
+              }
               Text(profile.name).foregroundStyle(.secondary)
             }
             Spacer()
             PersonAvatar(person: profile.person, size: 64)
           }.padding(.top, 18)
-          if let bio = profile.bio, !bio.isEmpty { Text(bio).font(.subheadline) }
           HStack(spacing: 15) {
             if let count = profile.linkCount { Label("\(count) links", systemImage: "link") }
             if own {
@@ -61,10 +69,10 @@ struct ProfileView: View {
                   .font(.caption)
               }.buttonStyle(PillStyle())
               Button {
-                app.path.append(.editProfile)
+                app.path.append(.settings)
               } label: {
-                Image(systemName: "pencil").frame(width: 32, height: 44)
-              }.accessibilityLabel("Edit profile")
+                Image(systemName: "gearshape").frame(width: 32, height: 44)
+              }.accessibilityLabel("Settings")
             }
           } else if profile.canViewContent {
             FollowButton(profile: profile)
@@ -80,27 +88,35 @@ struct ProfileView: View {
             }.frame(maxWidth: .infinity).padding(.vertical, 60)
           } else {
             Divider()
-            ScrollView(.horizontal) {
-              HStack(spacing: 8) {
-                filterButton("All", id: "all")
-                if own { filterButton("Inbox", id: "inbox") }
-                ForEach(groups) { group in
-                  filterButton(
-                    group.name, id: group.id,
-                    symbol: group.kind == "favorites"
-                      ? "heart"
-                      : group.kind == "starred"
-                        ? "star" : group.visibility == .private ? "lock" : nil)
+            Picker(
+              "Section",
+              selection: Binding(
+                get: { starredSection },
+                set: { starred in filter = starred ? (starredGroup?.id ?? "starred") : "all" })
+            ) {
+              Text("Links").tag(false)
+              Text("Starred").tag(true)
+            }.pickerStyle(.segmented)
+            if !starredSection {
+              ScrollView(.horizontal) {
+                HStack(spacing: 8) {
+                  filterButton("All", id: "all")
+                  ForEach(groups.filter { $0.kind != "starred" }) { group in
+                    filterButton(
+                      group.name, id: group.id,
+                      symbol: group.kind == "favorites"
+                        ? "heart" : group.visibility == .private ? "lock" : nil)
+                  }
+                  if own {
+                    Button {
+                      app.path.append(.group(nil))
+                    } label: {
+                      Image(systemName: "plus").frame(width: 38, height: 38)
+                    }.accessibilityLabel("Create group")
+                  }
                 }
-                if own {
-                  Button {
-                    app.path.append(.group(nil))
-                  } label: {
-                    Image(systemName: "plus").frame(width: 38, height: 38)
-                  }.accessibilityLabel("Create group")
-                }
-              }
-            }.scrollIndicators(.hidden)
+              }.scrollIndicators(.hidden)
+            }
             if own, let selected {
               HStack {
                 AsyncButton {
@@ -120,10 +136,6 @@ struct ProfileView: View {
                   Button("Edit group") { app.path.append(.group(selected)) }
                 }
               }.font(.caption).foregroundStyle(.secondary)
-            }
-            if filter == "inbox" {
-              Label("Inbox is locked", systemImage: "lock").font(.caption).foregroundStyle(
-                .secondary)
             }
             ForEach(weekIDs, id: \.self) { week in
               VStack(alignment: .leading, spacing: 10) {
@@ -169,8 +181,8 @@ struct ProfileView: View {
       } message: {
         Text(
           privacy == .private
-            ? "Only approved followers can see posts in unlocked groups. Existing followers keep access. Inbox and locked groups stay only yours."
-            : "Anyone can see posts in unlocked groups. Pending requests will be accepted. Inbox and locked groups stay only yours."
+            ? "Only approved followers can see your links. Existing followers keep access. Locked groups stay only yours."
+            : "Anyone can see your links. Pending requests will be accepted. Locked groups stay only yours."
         )
       }
   }
@@ -201,7 +213,7 @@ struct ProfileView: View {
       if own { app.profile = result }
       if result?.canViewContent == true {
         groups = try await allGroups(api: app.api, ownerID: userID)
-        if filter != "all" && filter != "inbox" && !groups.contains(where: { $0.id == filter }) {
+        if filter != "all" && filter != "starred" && !groups.contains(where: { $0.id == filter }) {
           filter = "all"
         }
         try await loadWeeks()
@@ -216,12 +228,14 @@ struct ProfileView: View {
     loading = false
   }
   private func loadWeeks(more: Bool = false) async throws {
-    var query = ["limit": "10"]
-    if filter == "inbox" {
-      query["inbox"] = "true"
-    } else if filter != "all" {
-      query["groupId"] = filter
+    // Starred without a group yet has nothing to list.
+    if filter == "starred" {
+      weeks = []
+      nextBefore = nil
+      return
     }
+    var query = ["limit": "10"]
+    if filter != "all" { query["groupId"] = filter }
     if more { query["before"] = nextBefore }
     if let page: LibraryWeeks = try await app.api?.request(
       "/profiles/\(userID)/weeks", query: query)
@@ -243,9 +257,9 @@ struct ProfileWeekView: View {
   @State private var error: String?
   var body: some View {
     VStack(spacing: 0) {
-      if canAdd {
+      if canAdd && week == Week.monday() {
         Button {
-          app.path.append(.add(week, filter == "all" || filter == "inbox" ? nil : filter, nil))
+          app.path.append(.add(week, filter == "all" ? nil : filter, nil))
         } label: {
           Image(systemName: "plus").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
         }.accessibilityLabel("Add link to \(Week.label(week))")
@@ -262,10 +276,7 @@ struct ProfileWeekView: View {
     var query = ["weekStart": week, "limit": "30"]
     if more { query["cursor"] = cursor }
     let path: String
-    if filter == "inbox" {
-      path = "/links"
-      query["inbox"] = "true"
-    } else if filter == "all" {
+    if filter == "all" {
       path = "/profiles/\(userID)/links"
     } else {
       path = "/groups/\(filter)/links"

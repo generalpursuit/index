@@ -82,7 +82,7 @@ struct ActivityView: View {
             ForEach(
               [
                 ("all", "All"), ("comment", "Comments"), ("request", "Requests"),
-                ("follow", "Follows"), ("accepted", "Accepted"),
+                ("mention", "Mentions"), ("follow", "Follows"),
               ], id: \.0
             ) { item in
               Button(item.1) { filter = item.0 }.buttonStyle(PillStyle(selected: filter == item.0))
@@ -179,6 +179,7 @@ struct ActivityView: View {
 }
 func activityText(_ activity: Activity) -> String {
   switch activity.type {
+  case "mention": "mentioned you: \(activity.body ?? "")"
   case "comment": activity.body ?? "commented on your link."
   case "follow": "started following you."
   case "accepted": "accepted your follow request."

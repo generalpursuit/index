@@ -20,17 +20,18 @@ enum Destination: Hashable {
   case connections(String)
   case add(String, String?, SavedLink?)
   case recipients(SavedLink?)
-  case editProfile
+  case settings
   case group(LinkGroup?)
 }
 enum AppTab: String, CaseIterable {
-  case feed, discover, add, activity, profile
+  case feed, discover, add, activity, messages, profile
   var symbol: String {
     switch self {
     case .feed: "house"
-    case .discover: "person.2"
+    case .discover: "magnifyingglass"
     case .add: "plus"
     case .activity: "bell"
+    case .messages: "bubble.right"
     case .profile: "person"
     }
   }
@@ -164,6 +165,7 @@ struct RootView: View {
             case .feed, .add: FeedView()
             case .discover: DiscoverView()
             case .activity: ActivityView()
+            case .messages: MessagesView()
             case .profile: ProfileView(userID: app.userID)
             }
           }
@@ -177,7 +179,7 @@ struct RootView: View {
             case .add(let week, let group, let edit):
               AddLinkView(week: week, groupID: group, editing: edit)
             case .recipients(let link): RecipientView(attachment: link)
-            case .editProfile: EditProfileView()
+            case .settings: SettingsView()
             case .group(let group): GroupEditorView(group: group)
             }
           }
@@ -199,7 +201,9 @@ struct RootView: View {
                     .frame(height: 52)
                     .foregroundStyle(app.tab == tab ? .white : .gray)
                     .overlay(alignment: .topTrailing) {
-                      if tab == .activity && app.unreadActivity > 0 {
+                      if (tab == .activity && app.unreadActivity > 0)
+                        || (tab == .messages && app.unreadMessages > 0)
+                      {
                         Circle().fill(.white).frame(width: 5, height: 5).padding(.trailing, 19)
                           .padding(.top, 8)
                       }
