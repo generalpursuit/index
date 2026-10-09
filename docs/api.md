@@ -25,7 +25,7 @@ Paths below are relative to `/api/v1`. All mutations require authentication. Pub
 | `profiles.get`              | GET `/profiles/{userId}`                   | Public identity, viewer access, private counts and social context                                |
 | `profiles.byUsername`       | GET `/profiles/by-username/{username}`     | Look up a normalized username                                                                    |
 | `groups.create`             | POST `/groups`                             | Create an owned custom group; defaults to public                                                 |
-| `groups.list`               | GET `/groups`                              | Visible groups, including Starred and Favorites                                                  |
+| `groups.list`               | GET `/groups`                              | Visible groups, including Starred and Favorites, each with the `linkCount` the viewer may see                                                  |
 | `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                              |
 | `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                       |
 | `groups.delete`             | DELETE `/groups/{id}`                      | Keep its links outside any group; JSON body `{ deleteLinks: true }` deletes them instead         |

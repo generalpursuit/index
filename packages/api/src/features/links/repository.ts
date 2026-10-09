@@ -125,7 +125,8 @@ export function deleteOwnedLink(db: QueryDatabase, actorId: string, id: string) 
   );
 }
 
-function collectionContainsLink() {
+/** Whether `links` belongs to `groups`: its own group, or the owner's Starred or Favorites. */
+export function collectionContainsLink() {
   return sql`(
       (${groups.kind} = 'custom' and ${links.groupId} = ${groups.id}) or
       (${groups.kind} = 'starred' and ${links.ownerId} <> ${groups.ownerId} and exists (select 1 from ${stars} where ${stars.groupId} = ${groups.id} and ${stars.linkId} = ${links.id})) or

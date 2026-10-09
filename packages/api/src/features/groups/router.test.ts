@@ -134,4 +134,24 @@ describe("groups and link organization", () => {
     });
     await assert.rejects(api.client(null).groups.create({ name: "No" }), { code: "UNAUTHORIZED" });
   });
+
+  it("lists each group with how many of its links the viewer may see", async () => {
+    const alice = api.client("alice");
+    const reading = await alice.groups.create({ name: "Reading" });
+    const one = await alice.links.create({ ...input, groupId: reading.id });
+    await alice.links.create({ ...input, url: "https://example.com/two", groupId: reading.id });
+    await alice.links.create({ ...input, url: "https://example.com/loose" });
+    await alice.favorites.add({ linkId: one.id });
+    const counts = async (viewer: string) =>
+      Object.fromEntries(
+        (await api.client(viewer).groups.list({ ownerId: "alice" })).items.map((g) => [
+          g.name,
+          g.linkCount,
+        ]),
+      );
+    assert.equal((await counts("alice")).Reading, 2);
+    assert.equal((await counts("alice")).Favorites, 1);
+    // Others see the same counts for what they may see.
+    assert.equal((await counts("bob")).Reading, 2);
+  });
 });

@@ -37,7 +37,8 @@ export const listGroupsSchema = pageInputSchema.extend({
   ownerId: userIdSchema.optional(),
 });
 export const groupPageSchema = z.object({
-  items: z.array(groupSchema),
+  /** Listed groups say how many of their links the viewer may see. */
+  items: z.array(groupSchema.extend({ linkCount: z.number().int().nonnegative() })),
   nextCursor: z.string().nullable(),
 });
 export type CreateGroupInput = z.output<typeof createGroupSchema>;

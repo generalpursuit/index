@@ -3,7 +3,8 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
-import { groupVisible } from "../../data-access/visibility";
+import { groupVisible, linkVisible } from "../../data-access/visibility";
+import { collectionContainsLink } from "../links/repository";
 import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import type { CreateGroupInput, UpdateGroupInput } from "./schemas";
@@ -77,7 +78,11 @@ export function listGroups(
 ) {
   return ResultAsync.fromPromise(
     db
-      .select(groupSelection)
+      .select({
+        ...groupSelection,
+        // How many of its links the viewer may see.
+        linkCount: sql<number>`(select count(*)::int from ${links} where ${collectionContainsLink()} and ${linkVisible(viewerId)})`,
+      })
       .from(groups)
       .where(
         and(
