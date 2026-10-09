@@ -34,6 +34,8 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
   const people = useConnections(viewer.id, "following", useDebounced(search));
   const conversations = useConversations(useDebounced(search)),
     { start } = useMessageActions();
+  const recipients = people.data?.pages.flatMap((page) => page.items) ?? [];
+  const singleRecipient = recipients.length === 1 && !people.hasNextPage && !selected.length;
   const open = (id: string) => {
     onClose();
     void navigate({
@@ -68,18 +70,42 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           error={people.error}
           retry={() => void people.refetch()}
         >
-          {people.data?.pages
-            .flatMap((p) => p.items)
-            .map((person) => (
-              <label className="person-row recipient" key={person.id}>
+          {recipients.map((person) => {
+            const identity = (
+              <>
                 <UserAvatar person={person} />
                 <span className="person-label">
                   <strong id={"recipient-" + person.id}>{person.name}</strong>
                   <small>@{person.username ?? person.name}</small>
                 </span>
+              </>
+            );
+            if (singleRecipient)
+              return (
+                <Button
+                  variant="ghost"
+                  className="recipient-row"
+                  key={person.id}
+                  disabled={start.isPending}
+                  onClick={() =>
+                    start.mutate(
+                      { recipientIds: [person.id] },
+                      { onSuccess: (chat) => open(chat.id) },
+                    )
+                  }
+                >
+                  {identity}
+                </Button>
+              );
+            return (
+              <label className="recipient-row" key={person.id}>
+                {identity}
                 <Checkbox
+                  className="recipient-select"
                   aria-labelledby={"recipient-" + person.id}
-                  disabled={!selected.includes(person.id) && selected.length >= 19}
+                  disabled={
+                    start.isPending || (!selected.includes(person.id) && selected.length >= 19)
+                  }
                   checked={selected.includes(person.id)}
                   onCheckedChange={(checked) =>
                     setSelected((old) =>
@@ -88,7 +114,8 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                   }
                 />
               </label>
-            ))}
+            );
+          })}
           {people.data?.pages[0]?.items.length === 0 && (
             <p className="empty-state">Follow people to start a conversation.</p>
           )}
@@ -130,16 +157,18 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
         <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
           Cancel
         </Button>
-        <Button
-          disabled={!selected.length || start.isPending || selected.length > 19}
-          onClick={() =>
-            start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.id) })
-          }
-        >
-          {start.isPending
-            ? "Opening…"
-            : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
-        </Button>
+        {!singleRecipient && (
+          <Button
+            disabled={!selected.length || start.isPending || selected.length > 19}
+            onClick={() =>
+              start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.id) })
+            }
+          >
+            {start.isPending
+              ? "Opening…"
+              : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
+          </Button>
+        )}
       </div>
     </Modal>
   );

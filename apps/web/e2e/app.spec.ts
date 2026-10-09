@@ -276,3 +276,28 @@ test("pasting into the first row saves the link right away", async ({ page }) =>
   await field.press("Enter");
   await expect(saved).toHaveCount(1);
 });
+
+for (const width of [1440, 390]) {
+  test(`recipient picker opens a single match directly at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await login(page);
+    await page.getByRole("link", { name: "Messages", exact: true }).click();
+    await page.getByRole("button", { name: "New message", exact: true }).click();
+    const picker = page.getByRole("dialog", { name: "New message", exact: true });
+    const bob = picker.locator(".recipient-row").filter({ hasText: "Bob" });
+    await expect(bob.getByRole("checkbox")).toHaveCount(1);
+    await bob.hover();
+    await expect(bob.getByRole("checkbox")).toHaveCSS("opacity", "1");
+    await expect(bob.getByRole("checkbox")).toHaveCSS("border-radius", "50%");
+    const avatar = (await bob.locator(".user-avatar").boundingBox())!;
+    const name = (await bob.locator(".person-label").boundingBox())!;
+    expect(name.x - (avatar.x + avatar.width)).toBeLessThanOrEqual(16);
+    await picker.getByRole("textbox", { name: "Search recipients" }).fill("Bob");
+    await expect(picker.getByRole("checkbox")).toHaveCount(0);
+    await expect(picker.getByRole("button", { name: "Next", exact: true })).toHaveCount(0);
+    await bob.click();
+    await expect(page).toHaveURL(/\/messages\/[^/?]+/);
+    await expect(page.getByRole("textbox", { name: "Message", exact: true })).toBeVisible();
+    await expect(picker).toHaveCount(0);
+  });
+}

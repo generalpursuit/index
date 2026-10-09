@@ -1232,17 +1232,35 @@ span.link-open {
   max-height: 35dvh;
   overflow: auto;
 }
-.recipient-row {
+.recipient-list .recipient-row {
   display: flex;
+  height: auto;
+  justify-content: flex-start;
+  cursor: pointer;
   width: 100%;
   align-items: center;
   gap: 12px;
-  padding: 12px 0;
+  padding: 12px;
+  border-radius: 12px;
   text-align: left;
 }
 .recipient-row > .person-label {
   flex: 1;
 }
+.recipient-select {
+  border-radius: 50%;
+}
+@media (hover: hover) and (pointer: fine) {
+  .recipient-select {
+    opacity: 0;
+  }
+  .recipient-row:hover .recipient-select,
+  .recipient-row:focus-within .recipient-select,
+  .recipient-select[data-checked] {
+    opacity: 1;
+  }
+}
+
 .selected-recipients {
   display: flex;
   gap: 6px;
