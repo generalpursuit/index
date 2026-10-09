@@ -18,52 +18,52 @@ Better Auth continues to own login, credentials and sessions. Its routes are not
 
 Paths below are relative to `/api/v1`. All mutations require authentication. Public reads accept optional credentials and return only content visible to that viewer. Missing and inaccessible resources both return 404.
 
-| Procedure                   | HTTP                                       | Behavior                                                                                   |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------ |
-| `profiles.me`               | GET `/me/profile`                          | Current user's profile; authenticated                                                      |
-| `profiles.update`           | PATCH `/me/profile`                        | Edit name, username, bio, image URL and profile visibility                                 |
-| `profiles.get`              | GET `/profiles/{userId}`                   | Public identity, viewer access, private counts and social context                          |
-| `profiles.byUsername`       | GET `/profiles/by-username/{username}`     | Look up a normalized username                                                              |
-| `groups.create`             | POST `/groups`                             | Create an owned custom group; defaults to public                                           |
-| `groups.list`               | GET `/groups`                              | Visible groups; `includeFavorites: true` opts into the Favorites kind                      |
-| `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                        |
-| `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                 |
-| `groups.delete`             | DELETE `/groups/{id}`                      | Preserve links in inbox by default; JSON body `{ deleteLinks: true }` deletes them instead |
-| `links.create`              | POST `/links`                              | Save to inbox, or an owned custom `groupId`                                                |
-| `links.listMine`            | GET `/links`                               | Owned links; optional `groupId`, `inbox`, `category` filters; authenticated                |
-| `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                |
-| `links.update`              | PATCH `/links/{id}`                        | Edit an owned link or move it; `groupId: null` returns it to inbox                         |
-| `links.delete`              | DELETE `/links/{id}`                       | Delete an owned link and cascade its stars, favorites and comments                         |
-| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group                                  |
-| `follows.follow`            | POST `/profiles/{userId}/follow`           | Follow a public profile or request a private profile                                       |
-| `follows.unfollow`          | DELETE `/profiles/{userId}/follow`         | Unfollow or cancel a pending request                                                       |
-| `follows.followers`         | GET `/profiles/{userId}/followers`         | Own accepted followers; other users receive 404                                            |
-| `follows.following`         | GET `/profiles/{userId}/following`         | Own accepted followees; optional literal `query` for recipient search                      |
-| `follows.requests`          | GET `/me/follow-requests`                  | Pending incoming requests; authenticated                                                   |
-| `follows.accept`            | POST `/me/follow-requests/{userId}/accept` | Accept an incoming request                                                                 |
-| `follows.reject`            | DELETE `/me/follow-requests/{userId}`      | Remove a pending incoming request                                                          |
-| `follows.removeFollower`    | DELETE `/me/followers/{userId}`            | Remove an incoming relationship                                                            |
-| `stars.add`                 | PUT `/links/{linkId}/star`                 | Star another person's visible original link                                                |
-| `stars.remove`              | DELETE `/links/{linkId}/star`              | Remove own star, even if the original is now inaccessible                                  |
-| `stars.group`               | GET `/me/starred/group`                    | Get/create own Starred group; authenticated                                                |
-| `stars.list`                | GET `/me/starred`                          | Accessible originals in own Starred group; authenticated                                   |
-| `comments.create`           | POST `/links/{linkId}/comments`            | Add a flat text comment to an accessible link                                              |
-| `comments.list`             | GET `/links/{linkId}/comments`             | Visible comments with public author identity                                               |
-| `comments.update`           | PATCH `/comments/{id}`                     | Edit own comment while the link is accessible                                              |
-| `comments.delete`           | DELETE `/comments/{id}`                    | Delete own comment, or moderate a comment on an owned link                                 |
-| `feed.list`                 | GET `/feed`                                | Newest accessible original saves from accepted followees; authenticated                    |
-| `discovery.searchUsers`     | GET `/discovery/users`                     | Search public names/usernames using `query`                                                |
-| `discovery.recommendations` | GET `/discovery/recommendations`           | Second-degree suggestions; authenticated                                                   |
-| `categories.suggest`        | POST `/categories/suggest`                 | Suggest a category for `{ url }`; authenticated                                            |
+| Procedure                   | HTTP                                       | Behavior                                                                                         |
+| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------ |
+| `profiles.me`               | GET `/me/profile`                          | Current user's profile; authenticated                                                            |
+| `profiles.update`           | PATCH `/me/profile`                        | Edit name, username, image URL and profile visibility                                            |
+| `profiles.get`              | GET `/profiles/{userId}`                   | Public identity, viewer access, private counts and social context                                |
+| `profiles.byUsername`       | GET `/profiles/by-username/{username}`     | Look up a normalized username                                                                    |
+| `groups.create`             | POST `/groups`                             | Create an owned custom group; defaults to public                                                 |
+| `groups.list`               | GET `/groups`                              | Visible groups, including Starred and Favorites                                                  |
+| `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                              |
+| `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                       |
+| `groups.delete`             | DELETE `/groups/{id}`                      | Keep its links outside any group; JSON body `{ deleteLinks: true }` deletes them instead         |
+| `links.preview`             | POST `/links/preview`                      | Read the title, site name and category a URL would be saved with; authenticated                  |
+| `links.create`              | POST `/links`                              | Save a link, optionally into an owned custom `groupId`; `title` is read from the page if omitted |
+| `links.listMine`            | GET `/links`                               | Owned links; optional `groupId` and `category` filters; authenticated                            |
+| `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                      |
+| `links.update`              | PATCH `/links/{id}`                        | Edit an owned link or move it; `groupId: null` takes it out of its group                         |
+| `links.delete`              | DELETE `/links/{id}`                       | Delete an owned link and cascade its stars, favorites and comments                               |
+| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group                                        |
+| `follows.follow`            | POST `/profiles/{userId}/follow`           | Follow a public profile or request a private profile                                             |
+| `follows.unfollow`          | DELETE `/profiles/{userId}/follow`         | Unfollow or cancel a pending request                                                             |
+| `follows.followers`         | GET `/profiles/{userId}/followers`         | Own accepted followers; other users receive 404                                                  |
+| `follows.following`         | GET `/profiles/{userId}/following`         | Own accepted followees; optional literal `query` for recipient search                            |
+| `follows.requests`          | GET `/me/follow-requests`                  | Pending incoming requests; authenticated                                                         |
+| `follows.accept`            | POST `/me/follow-requests/{userId}/accept` | Accept an incoming request                                                                       |
+| `follows.reject`            | DELETE `/me/follow-requests/{userId}`      | Remove a pending incoming request                                                                |
+| `follows.removeFollower`    | DELETE `/me/followers/{userId}`            | Remove an incoming relationship                                                                  |
+| `stars.add`                 | PUT `/links/{linkId}/star`                 | Star another person's visible original link                                                      |
+| `stars.remove`              | DELETE `/links/{linkId}/star`              | Remove own star, even if the original is now inaccessible                                        |
+| `stars.group`               | GET `/me/starred/group`                    | Get/create own Starred group; authenticated                                                      |
+| `stars.list`                | GET `/me/starred`                          | Accessible originals in own Starred group; authenticated                                         |
+| `comments.create`           | POST `/links/{linkId}/comments`            | Add a flat text comment to an accessible link                                                    |
+| `comments.list`             | GET `/links/{linkId}/comments`             | Visible comments with public author identity                                                     |
+| `comments.update`           | PATCH `/comments/{id}`                     | Edit own comment while the link is accessible                                                    |
+| `comments.delete`           | DELETE `/comments/{id}`                    | Delete own comment, or moderate a comment on an owned link                                       |
+| `feed.list`                 | GET `/feed`                                | Newest accessible original saves from accepted followees; authenticated                          |
+| `discovery.searchUsers`     | GET `/discovery/users`                     | Search public names/usernames using `query`                                                      |
+| `discovery.recommendations` | GET `/discovery/recommendations`           | Second-degree suggestions; authenticated                                                         |
 
-Existing `/health` and authenticated `/private-data` remain available for compatibility.
+`/health` reports server status.
 
 ## Visibility and interaction rules
 
-- Inbox is represented by `links.groupId = null` and is always owner-only.
+- A link without a group (`links.groupId = null`) follows its owner's profile visibility. Only locked groups hide links further. Deleting a locked group while keeping its links therefore exposes them to anyone who can see the profile; clients must say so before confirming.
 - A private group is always owner-only, including under a private profile with accepted followers. The UI calls this **Locked**; **Unlocked** maps to public. The stored/API values remain `private` and `public`.
 - A public group under a public profile is available anonymously. A public group under a private profile is available to its owner and accepted followers.
-- Basic profile identity (ID, name, username, bio, image and visibility) remains discoverable for private profiles. Email and authentication fields are excluded. Follower and following lists are owner-only for every profile. Their counts are null for other viewers. Other private profiles also return a null link count; public profiles count only accessible originals.
+- Basic profile identity (ID, name, username, image and visibility) remains discoverable for private profiles. Email and authentication fields are excluded. Follower and following lists are owner-only for every profile. Their counts are null for other viewers. Other private profiles also return a null link count; public profiles count only accessible originals.
 - Profiles include `followedBy: { users, total }`: at most two of the viewer's accepted followees who also follow that profile, plus their total. This supports “Followed by…” without exposing the profile's follower count.
 - Switching a profile to public accepts existing pending requests atomically. Switching to private retains accepted followers. The client presents the confirmation and implications before calling `profiles.update`.
 - Starred contains references to other people's links; Favorites contains references to the owner's own links. Each is a lazily created, unique system group, public by default. Their visibility is editable, but their names and existence are protected. Original links cannot be moved into them. Their contents must pass **both** the collection's visibility and the original link's visibility. Revocation hides a reference without deleting it; restoring access can reveal it again.
@@ -71,7 +71,8 @@ Existing `/health` and authenticated `/private-data` remain available for compat
 - Any signed-in viewer who can access a link may comment. Authors can edit their own comments while access remains and delete their own comments even after losing access. Link owners may delete comments on their links. Comments are plain text; clients must render them as text, not HTML. Responding adds another flat comment with an optional @username in its text; there are no threaded replies.
 - Feed ordering uses the original link's save time; starring, commenting and editing do not create feed events. Following someone includes their existing visible saves.
 - Recommendations count distinct accepted followees who themselves follow the candidate. They exclude self and existing outgoing relationships, including pending requests. Only accessible intermediate follow graphs contribute. An empty social graph produces no recommendations.
-- Category suggestions inspect URL/domain rules without fetching pages. Unknown URLs return `{ category: "uncategorized", matched: false }`. Clients call the suggestion endpoint after paste, then send the selected category when saving. Manual selection always wins; saving without a category keeps the existing `uncategorized` default.
+- The server assigns each link's category when it is saved or its URL changes; clients cannot set it. URL/domain rules decide first because they are the most precise. Otherwise the page's JSON-LD schema.org type, its `og:type`, and finally its content type decide. Unknown pages are `uncategorized`.
+- Reading a page (`links.preview`, and `links.create`/`links.update` with a URL) fetches only public http(s) URLs on default ports. Local, private and `.local`/`.internal` hosts are refused, every redirect hop is checked (at most 3), the whole read is limited to 4 seconds and the first 512 KB, and requests identify as `IndexBot`. Titles prefer `og:title`, then `twitter:title`, JSON-LD and `<title>`, drop a trailing site name, and fall back to the URL. Reading never fails a save. On Cloudflare, fetched pages are cached for an hour, so a preview and the following save share one request.
 
 ## Pagination and persistence
 
@@ -85,26 +86,28 @@ Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits o
 
 ## Weekly views and Favorites
 
-- `feed.week` — GET `/feed/week` accepts an ISO Monday date in `weekStart` (not a week number). It returns `own` links, `people` with author identity and link pages, `olderWeek`, `newerWeek` and `nextAfter`. Only this week or a previous week is accepted.
-- Own links include Inbox and locked groups. Friends are accepted outgoing follows; only their accessible links contribute. The people carousel uses `limit` (default 10, max 30) and `after`; each person's links use `linkLimit` (default 20, max 100) and an independent `nextCursor`.
+- `feed.week` — GET `/feed/week` accepts an ISO Monday date in `weekStart` (not a week number). It returns `own` links, `people` with author identity and link pages, `olderWeek`, `newerWeek` and `nextAfter`. `olderWeek` and `newerWeek` are the nearest weeks with links from the viewer or accepted follows, so navigation skips empty weeks; `newerWeek` falls back to the current week and is null only for it. Only this week or a previous week is accepted.
+- Own links include those in locked groups. Friends are accepted outgoing follows; only their accessible links contribute. The people carousel uses `limit` (default 10, max 30) and `after`; each person's links use `linkLimit` (default 20, max 100) and an independent `nextCursor`.
 - `links.listByOwner` — GET `/profiles/{userId}/links` continues a person's links with the same `weekStart`, `cursor` and `limit`. It applies original-link visibility before pagination. Existing `links.listMine` and `links.listInGroup` also accept `weekStart`.
-- `links.weeks` — GET `/profiles/{userId}/weeks` returns nonempty Monday buckets with visible link counts and `nextBefore`. Inputs are `limit`, optional `before` and either `groupId` or `inbox`. This supports a profile's weekly archive, including Starred and Favorites.
-- Links have a separate `savedOn` calendar date for weekly grouping. Create/update accepts past or current dates; omission on creation defaults to today's UTC date. Backdating a link never changes its immutable `createdAt`. Week boundaries use UTC. The existing chronological `feed.list` remains available.
+- `links.weeks` — GET `/profiles/{userId}/weeks` returns nonempty Monday buckets with visible link counts and `nextBefore`. Inputs are `limit` and optional `before` and `groupId`. This supports a profile's weekly archive, including Starred and Favorites.
+- Links have a `savedOn` calendar date for weekly grouping. The server sets it to today's UTC date on creation; clients cannot set or change it, so a link always belongs to the week it was shared. Week boundaries use UTC. The existing chronological `feed.list` remains available.
 - Link responses include viewer-specific `isStarred` and `isFavorite` flags.
 - `favorites.add` / `favorites.remove` — PUT / DELETE `/links/{linkId}/favorite`.
 - `favorites.group` — GET `/me/favorites/group`; `favorites.list` — GET `/me/favorites`.
 - Favoriting is idempotent and restricted to the original owner, including a database ownership constraint. It never moves or duplicates a link.
-- New clients use `groups.list({ includeFavorites: true })`. Omitting the flag excludes Favorites, so older clients with a strict group-kind enum can keep using the endpoint. All, Inbox, Starred and Favorites are reserved names for new or renamed custom groups.
+- All, Starred and Favorites are reserved names for new or renamed custom groups.
 
 ## Activity
 
-`activity.list` — GET `/me/activity` returns a cursor page and the global unread count. Its optional `type` filter is `comment`, `follow`, `request` or `accepted`. There are no star or favorite notifications.
+`activity.list` — GET `/me/activity` returns a cursor page and the global unread count. Its optional `type` filter is `comment`, `mention`, `follow`, `request` or `accepted`. There are no star or favorite notifications.
 
 `activity.markRead` — POST `/me/activity/read` accepts `{ ids: [...] }` (1–100 activity IDs). It affects only the caller's events and preserves the original read timestamp on retries.
 
 Follow requests carry `pending`, `accepted`, `declined` or `canceled` status. The existing follow-request actions resolve that status atomically with the relationship. Publishing a private profile also resolves pending requests and notifies accepted requesters. Repeating an unchanged follow/accept operation does not create duplicate events.
 
-Comment activity references the live comment and original link instead of copying private text. Edits are reflected, deletion cascades, and reads recheck original-link visibility. Relationship/comment writes and their activity events succeed or roll back together.
+Standalone `@username` mentions are case-insensitive and notify existing readers who can access the original post. Self-mentions, duplicate handles, emails and URL paths do not generate extra events. Each comment has one event per recipient; a mentioned owner receives a mention instead of a second comment event. Edits synchronize recipients and preserve read state for retained notifications. Mention removal deletes that notification. The web and native Activity filters are All, Comments, Requests, Mentions and Follows; acceptance events remain in All.
+
+Comment and mention activity references the live comment and original link instead of copying private text. Edits are reflected, deletion cascades, and reads recheck original-link visibility. Relationship/comment writes and their activity events succeed or roll back together.
 
 ## Direct and group messages
 
@@ -126,22 +129,16 @@ A canonical set of participant IDs identifies a conversation. Selecting multiple
 
 Sending accepts `{ clientId, body?, linkId? }`. The client supplies a stable UUID per send attempt, including retries. Identical retries return the original message; reusing that ID with different contents or a different conversation is rejected. Empty text without a link is invalid. Sending and updating inbox order happen atomically.
 
-Attachments reference originals. The sender must be able to access an original in an unlocked group; Inbox and locked originals cannot be forwarded. Recipients need not have original access. Sending grants no new permissions, and visibility is evaluated separately for each reader, including inbox previews. An authorized reader receives `attachment`. A reader blocked by a private profile receives a null attachment and `restrictedAuthor` containing only the author's public profile identity, so they can request to follow. No original title, URL, description, or comments are exposed. Deleted or later-locked originals have neither attachment nor restricted author. `hasAttachment` survives original deletion so clients can render “Post unavailable.”
+Attachments reference originals. The sender must be able to access the original, and originals in locked groups cannot be forwarded. Recipients need not have original access. Sending grants no new permissions, and visibility is evaluated separately for each reader, including inbox previews. An authorized reader receives `attachment`. A reader blocked by a private profile receives a null attachment and `restrictedAuthor` containing only the author's public profile identity, so they can request to follow. No original title, URL, description, or comments are exposed. Deleted or later-locked originals have neither attachment nor restricted author. `hasAttachment` survives original deletion so clients can render “Post unavailable.”
 
 Read state is a monotonic message watermark. Marking an older message read cannot roll it back or clear newer arrivals. Own messages do not count as unread. Clients can poll these endpoints and invalidate queries after writes; no realtime transport or push delivery is introduced. Recipient selection and unsent attachments/text remain client-local until sending.
 
-## Migration and client rollout
+## Database
 
-Apply `packages/db/src/migrations/20261008175003_prototype_api/migration.sql` with the project's Drizzle migration command before deploying this backend. Also apply `packages/db/src/migrations/20261008184316_message_attachments/migration.sql` to preserve attachment presence after originals are deleted. Deployment should serialize migration execution. It adds messaging, activity and Favorites tables, indexes and constraints, plus the link save date.
-
-Existing links retain their UTC creation date as `savedOn`. Existing self-stars move to Favorites with their original timestamps and the old Starred group's visibility; other stars remain untouched. Existing pending follow requests are imported into Activity. Older completed activity is not fabricated.
-
-Existing routes remain available. New response fields are additive, and Favorites is opt-in in group listings. The intentional policy changes also apply to older clients: follower graphs are owner-only, own links use Favorites instead of stars, and system group names are reserved.
-
-The migration has been tested locally but has not been applied to a live database. The prototype still uses mock data. The production web app is wired to this API; the native SwiftUI client uses the same REST contracts. See `docs/frontend.md` and `apps/ios/README.md` for client verification status.
+`packages/db/src/migrations` holds a single initial migration generated from the schema. The app has not shipped, so schema changes may regenerate it instead of adding upgrade steps; reset development databases when that happens.
 
 ## Verification
 
-`bun test packages/api/src apps/server/src` runs real PostgreSQL queries in isolated PGlite databases with the project's migrations. Coverage includes profile/group visibility, original-link revocation, owner-only graphs, Favorites ownership, weekly boundaries, upgrading an existing database, comment/follow activity, unnamed group conversations, send retries, unread watermarks, atomic rollback, pagination/search, HTTP/RPC contracts, browser-safe contract imports and the Better Auth session lifecycle. This does not replace a deployment smoke test against Neon and the Workers runtime.
+`bun test packages/api/src apps/server/src` runs real PostgreSQL queries in isolated PGlite databases with the project's migrations. Coverage includes profile/group visibility, original-link revocation, owner-only graphs, Favorites ownership, weekly boundaries, comment/follow activity, unnamed group conversations, send retries, unread watermarks, atomic rollback, pagination/search, HTTP/RPC contracts, browser-safe contract imports and the Better Auth session lifecycle. This does not replace a deployment smoke test against Neon and the Workers runtime.
 
 Deployment smoke tests, native packaging, and device verification are separate from these backend tests. See `docs/desktop.md` and `apps/ios/README.md` for the native implementation and remaining verification.

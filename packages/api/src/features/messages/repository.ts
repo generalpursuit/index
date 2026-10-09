@@ -6,7 +6,7 @@ import { and, desc, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
-import { linkVisible } from "../../data-access/visibility";
+import { linkLocked, linkVisible } from "../../data-access/visibility";
 import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import { linkSelection, collectionSelection } from "../links/repository";
@@ -119,10 +119,10 @@ const messageSelection = (actorId: string) => ({
   // Only public profile identity is exposed, never original-link metadata.
   restrictedAuthor: sql<z.output<typeof publicUserSchema> | null>`(
     select jsonb_build_object('id',u.id,'name',u.name,'username',u.username,
-      'bio',u.bio,'image',u.image,'profileVisibility',u.profile_visibility)
-    from links original join groups g on g.id=original.group_id join "user" u on u.id=original.owner_id
+      'image',u.image,'profileVisibility',u.profile_visibility)
+    from links original left join groups g on g.id=original.group_id join "user" u on u.id=original.owner_id
     where original.id=${messages.linkId} and ${links.id} is null
-      and g.visibility='public' and u.profile_visibility='private'
+      and (g.id is null or g.visibility='public') and u.profile_visibility='private'
   )`,
 });
 
@@ -159,7 +159,7 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
   const attachmentAllowed = input.linkId
     ? sql`exists (
       select 1 from links where links.id=${input.linkId}::uuid and ${linkVisible(actorId)}
-      and exists(select 1 from groups g where g.id=links.group_id and g.visibility='public')
+      and not ${linkLocked()}
     )`
     : sql`true`;
   const inserted = db.$with("sent_message", { id: sql<string>`id`.as("id") }).as(sql`

@@ -1,4 +1,4 @@
-import { err, ok } from "neverthrow";
+import { err, ok, okAsync, ResultAsync } from "neverthrow";
 
 import type { QueryDatabase } from "../../data-access/database";
 import { notFound } from "../../errors";
@@ -14,19 +14,30 @@ import {
   listGroupLinks,
   listOwnerLinks,
 } from "./repository";
-import type { CreateLinkInput, ListMyLinksInput, UpdateLinkInput } from "./schemas";
+import { readLinkMetadata, type FetchPage } from "./metadata";
+import type { CreateLinkInput, Link, ListMyLinksInput, UpdateLinkInput } from "./schemas";
 
-export function createLink(db: QueryDatabase, actorId: string, input: CreateLinkInput) {
+const readMetadata = (url: string, fetchPage: FetchPage) =>
+  ResultAsync.fromSafePromise(readLinkMetadata(url, fetchPage));
+
+/** The page decides the category; it also supplies the title when none was given. */
+export function createLink(
+  db: QueryDatabase,
+  actorId: string,
+  input: CreateLinkInput,
+  fetchPage: FetchPage,
+) {
   const save = () =>
-    insertLink(db, {
-      url: input.url,
-      title: input.title,
-      description: input.description ?? null,
-      category: input.category,
-      savedOn: input.savedOn,
-      ownerId: actorId,
-      groupId: input.groupId ?? null,
-    });
+    readMetadata(input.url, fetchPage).andThen((metadata) =>
+      insertLink(db, {
+        url: input.url,
+        title: input.title ?? metadata.title,
+        description: input.description ?? null,
+        category: metadata.category,
+        ownerId: actorId,
+        groupId: input.groupId ?? null,
+      }),
+    );
   return input.groupId
     ? findOwnedCustomGroup(db, actorId, input.groupId)
         .andThen((group) => (group ? ok(group) : err(notFound("Group"))))
@@ -49,10 +60,20 @@ export function listMyLinks(db: QueryDatabase, actorId: string, input: ListMyLin
   );
 }
 
-export const updateLink = (db: QueryDatabase, actorId: string, input: UpdateLinkInput) =>
-  updateOwnedLink(db, actorId, input).andThen((link) =>
-    link ? ok(link) : err(notFound("Link or destination group")),
-  );
+/** A new URL may point at a different kind of page, so its category is read again. */
+export function updateLink(
+  db: QueryDatabase,
+  actorId: string,
+  input: UpdateLinkInput,
+  fetchPage: FetchPage,
+) {
+  const category: ResultAsync<Link["category"] | undefined, never> = input.url
+    ? readMetadata(input.url, fetchPage).map((metadata) => metadata.category)
+    : okAsync(undefined);
+  return category
+    .andThen((category) => updateOwnedLink(db, actorId, { ...input, category }))
+    .andThen((link) => (link ? ok(link) : err(notFound("Link or destination group"))));
+}
 
 export const deleteLink = (db: QueryDatabase, actorId: string, id: string) =>
   deleteOwnedLink(db, actorId, id).andThen((link) =>

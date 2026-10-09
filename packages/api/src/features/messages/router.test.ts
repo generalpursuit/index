@@ -113,18 +113,34 @@ describe("messaging", () => {
       alice.messages.send({ conversationId: c.id, clientId: crypto.randomUUID(), linkId: link.id }),
       { code: "NOT_FOUND" },
     );
-    const inbox = await alice.links.create({ url: "https://example.com", title: "Inbox" });
+    const locked = await alice.groups.create({ name: "Locked", visibility: "private" });
+    const hidden = await alice.links.create({
+      url: "https://example.com",
+      title: "Locked",
+      groupId: locked.id,
+    });
     await assert.rejects(
       alice.messages.send({
         conversationId: c.id,
         clientId: crypto.randomUUID(),
-        linkId: inbox.id,
+        linkId: hidden.id,
       }),
       { code: "NOT_FOUND" },
     );
     await alice.links.delete({ id: link.id });
     assert.equal((await bob.messages.list({ conversationId: c.id })).items[0]!.id, message.id);
     assert.equal((await bob.messages.list({ conversationId: c.id })).items[0]!.attachment, null);
+    // Links outside any group are shared with the profile, so they can be forwarded.
+    const ungrouped = await alice.links.create({ url: "https://example.com", title: "Open" });
+    await alice.messages.send({
+      conversationId: c.id,
+      clientId: crypto.randomUUID(),
+      linkId: ungrouped.id,
+    });
+    assert.equal(
+      (await bob.messages.list({ conversationId: c.id })).items[0]!.attachment!.title,
+      "Open",
+    );
   });
   it("does not partially create a conversation if any recipient is ineligible", async () => {
     const alice = api.client("alice");

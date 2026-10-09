@@ -29,8 +29,9 @@ export async function createTestDatabase() {
     ]);
   }
 
+  // Tests never reach the network; links fall back to what their URL says.
   function context(actorId: string | null): Context {
-    return { db, session: actorId ? sessionFor(actorId) : null };
+    return { db, session: actorId ? sessionFor(actorId) : null, fetchPage: offline };
   }
 
   return { db, client, reset, context, close: () => client.close() };
@@ -60,3 +61,5 @@ function sessionFor(userId: string): Session {
     },
   };
 }
+
+const offline: Context["fetchPage"] = () => Promise.reject(new TypeError("Offline in tests."));

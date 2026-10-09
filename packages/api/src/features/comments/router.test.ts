@@ -56,7 +56,12 @@ describe("comments", () => {
 
   it("paginates and validates comments without leaking another link's records", async () => {
     const alice = api.client("alice");
-    const link = await alice.links.create({ title: "Private", url: "https://example.com" });
+    const locked = await alice.groups.create({ name: "Locked", visibility: "private" });
+    const link = await alice.links.create({
+      title: "Private",
+      url: "https://example.com",
+      groupId: locked.id,
+    });
     await alice.comments.create({ linkId: link.id, body: "One" });
     await alice.comments.create({ linkId: link.id, body: "Two" });
     const first = await alice.comments.list({ linkId: link.id, limit: 1 });

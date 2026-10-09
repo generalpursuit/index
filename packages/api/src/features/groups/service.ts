@@ -30,7 +30,6 @@ export function listGroups(
   ownerId: string,
   limit: number,
   cursor?: string,
-  includeFavorites = false,
 ) {
   const decoded = cursor ? decodeCursor(cursor) : ok(undefined);
   return decoded.asyncAndThen((value) => {
@@ -41,9 +40,7 @@ export function listGroups(
             .andThen(() => repository.ensureSystemGroup(db, ownerId, "favorites"))
         : okAsync(undefined);
     return ready
-      .andThen(() =>
-        repository.listGroups(db, viewerId, ownerId, limit + 1, value, includeFavorites),
-      )
+      .andThen(() => repository.listGroups(db, viewerId, ownerId, limit + 1, value))
       .map((rows) => toPage(rows, limit));
   });
 }

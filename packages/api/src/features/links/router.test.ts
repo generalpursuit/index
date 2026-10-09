@@ -1,4 +1,4 @@
-import { links } from "@index/db/schema/app";
+import { groups, links } from "@index/db/schema/app";
 import { createRouterClient, ORPCError } from "@orpc/server";
 import { eq, sql } from "drizzle-orm";
 import assert from "node:assert/strict";
@@ -25,11 +25,11 @@ describe("links API with PostgreSQL", () => {
   const input = { url: "https://example.com/read", title: "Read this" };
   const missingId = "00000000-0000-4000-8000-000000000099";
 
-  it("saves to the authenticated user's inbox and reads the persisted result", async () => {
+  it("saves a link outside any group and reads the persisted result", async () => {
     const saved = await client("alice").create({
       ...input,
+      url: "https://example.com/articles/read",
       description: "My notes",
-      category: "article",
     });
     assert.equal(saved.ownerId, "alice");
     assert.equal(saved.groupId, null);
@@ -43,6 +43,51 @@ describe("links API with PostgreSQL", () => {
     assert.equal(defaults.category, "uncategorized");
   });
 
+  it("derives the category from the URL and keeps it in step with URL edits", async () => {
+    // Categories are derived data, so clients cannot choose them.
+    await assert.rejects(client("alice").create({ ...input, category: "music" } as typeof input), {
+      code: "BAD_REQUEST",
+    });
+    const saved = await client("alice").create({ ...input, url: "https://youtu.be/watch" });
+    assert.equal(saved.category, "video");
+    const retitled = await client("alice").update({ id: saved.id, title: "Renamed" });
+    assert.equal(retitled.category, "video");
+    const moved = await client("alice").update({
+      id: saved.id,
+      url: "https://open.spotify.com/track/1",
+    });
+    assert.equal(moved.category, "music");
+  });
+
+  it("reads titles and categories from the page itself", async () => {
+    const requested: string[] = [];
+    const fetchPage = async (url: string) => {
+      requested.push(url);
+      return new Response(
+        `<html><head><meta property="og:title" content="A Song"><meta property="og:type" content="music.song"></head></html>`,
+        { headers: { "content-type": "text/html" } },
+      );
+    };
+    const alice = createRouterClient(linksRouter, {
+      context: { ...fixture.context("alice"), fetchPage },
+    });
+    const url = "https://songs.example/a-song";
+    assert.deepEqual(await alice.preview({ url }), {
+      title: "A Song",
+      siteName: null,
+      category: "music",
+    });
+    // A pasted link needs nothing but its URL.
+    const pasted = await alice.create({ url });
+    assert.equal(pasted.title, "A Song");
+    assert.equal(pasted.category, "music");
+    const titled = await alice.create({ url, title: "My own title" });
+    assert.equal(titled.title, "My own title");
+    assert.equal(titled.category, "music");
+    await assert.rejects(client(null).preview({ url }), { code: "UNAUTHORIZED" });
+    assert.deepEqual(requested, [url, url, url]);
+  });
+
   it("requires authentication for saving and listing your library", async () => {
     await assert.rejects(client(null).create(input), { code: "UNAUTHORIZED" });
     await assert.rejects(client(null).listMine({}), { code: "UNAUTHORIZED" });
@@ -50,8 +95,12 @@ describe("links API with PostgreSQL", () => {
     assert.deepEqual(await fixture.db.select().from(links), []);
   });
 
-  it("makes another user's private link indistinguishable from a missing link", async () => {
-    const saved = await client("alice").create(input);
+  it("makes another user's locked link indistinguishable from a missing link", async () => {
+    const [locked] = await fixture.db
+      .insert(groups)
+      .values({ ownerId: "alice", name: "Locked", visibility: "private" })
+      .returning();
+    const saved = await client("alice").create({ ...input, groupId: locked!.id });
     await assert.rejects(client("bob").get({ id: saved.id }), {
       code: "NOT_FOUND",
       message: "Link not found.",

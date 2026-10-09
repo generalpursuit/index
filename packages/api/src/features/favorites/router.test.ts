@@ -19,18 +19,12 @@ describe("Favorites and profile privacy", () => {
     await alice.favorites.add({ linkId: link.id });
     await alice.favorites.add({ linkId: link.id });
     assert.equal((await alice.favorites.list({})).items.length, 1);
-    assert.equal(
-      (await alice.groups.list({})).items.some((g) => g.kind === "favorites"),
-      false,
-    );
     assert.equal((await alice.links.get({ id: link.id })).groupId, group.id);
     assert.equal((await alice.links.get({ id: link.id })).isFavorite, true);
     assert.equal((await alice.links.update({ id: link.id, title: "Updated" })).isFavorite, true);
     const favorites = await alice.favorites.group();
     assert.equal(
-      (await alice.groups.list({ includeFavorites: true })).items.filter(
-        (g) => g.kind === "favorites",
-      ).length,
+      (await alice.groups.list({})).items.filter((g) => g.kind === "favorites").length,
       1,
     );
     await assert.rejects(alice.groups.delete({ id: favorites.id }), { code: "NOT_FOUND" });

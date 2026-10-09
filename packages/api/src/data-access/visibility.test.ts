@@ -15,9 +15,9 @@ describe("visibility across profiles, groups and links", () => {
           title: "Read",
           groupId: group.id,
         });
-        const inbox = await owner.links.create({
-          url: "https://example.com/inbox",
-          title: "Private",
+        const ungrouped = await owner.links.create({
+          url: "https://example.com/ungrouped",
+          title: "Ungrouped",
         });
         await api.client("bob").follows.follow({ userId: "alice" });
         await owner.follows.accept({ userId: "bob" });
@@ -29,10 +29,9 @@ describe("visibility across profiles, groups and links", () => {
             viewer === "alice" ||
             (visibility === "public" && (profileVisibility === "public" || viewer === "bob"));
           const profile = await client.profiles.get({ userId: "alice" });
-          assert.equal(
-            profile.canViewContent,
-            viewer === "alice" || profileVisibility === "public" || viewer === "bob",
-          );
+          const canViewProfile =
+            viewer === "alice" || profileVisibility === "public" || viewer === "bob";
+          assert.equal(profile.canViewContent, canViewProfile);
           assert.equal("email" in profile, false);
           if (allowed) {
             assert.equal((await client.groups.get({ id: group.id })).id, group.id);
@@ -54,8 +53,10 @@ describe("visibility across profiles, groups and links", () => {
             ),
             allowed,
           );
-          if (viewer !== "alice")
-            await assert.rejects(client.links.get({ id: inbox.id }), { code: "NOT_FOUND" });
+          // Links outside any group follow the profile; only locked groups hide links further.
+          if (canViewProfile)
+            assert.equal((await client.links.get({ id: ungrouped.id })).id, ungrouped.id);
+          else await assert.rejects(client.links.get({ id: ungrouped.id }), { code: "NOT_FOUND" });
         }
       });
     }

@@ -63,7 +63,12 @@ describe("HTTP API transports", () => {
     assert.equal((await request("/links?limit=101", "alice")).status, 400);
     assert.equal((await request("/links?cursor=garbage", "alice")).status, 400);
     assert.equal((await request("/links", null, save(input))).status, 401);
-    const link = linkSchema.parse(await (await request("/links", "alice", save(input))).json());
+    const locked = (await (
+      await request("/groups", "alice", save({ name: "Locked", visibility: "private" }))
+    ).json()) as { id: string };
+    const link = linkSchema.parse(
+      await (await request("/links", "alice", save({ ...input, groupId: locked.id }))).json(),
+    );
     assert.equal((await request(`/links/${link.id}`, "bob")).status, 404);
   });
 
@@ -114,7 +119,6 @@ describe("HTTP API transports", () => {
       "/me/messages/unread",
       "/discovery/users",
       "/discovery/recommendations",
-      "/categories/suggest",
     ]) {
       assert.ok(spec.paths[path], path);
     }
@@ -162,12 +166,6 @@ describe("HTTP API transports", () => {
     });
     assert.equal(deleted.status, 200, await deleted.clone().text());
     assert.equal((await request(`/links/${link.id}`, "alice")).status, 404);
-    const suggested = await request(
-      "/categories/suggest",
-      "alice",
-      save({ url: "https://youtu.be/example" }),
-    );
-    assert.deepEqual(await suggested.json(), { category: "video", matched: true });
   });
 
   it("serves messages, favorites, activity and week reads through REST", async () => {
@@ -191,7 +189,7 @@ describe("HTTP API transports", () => {
       (await request(`/links/${link.id}/favorite`, "alice", { ...save({}), method: "PUT" })).status,
       200,
     );
-    const groups = (await (await request("/groups?includeFavorites=true", "alice")).json()) as {
+    const groups = (await (await request("/groups", "alice")).json()) as {
       items: { kind: string }[];
     };
     assert(groups.items.some((g) => g.kind === "favorites"));

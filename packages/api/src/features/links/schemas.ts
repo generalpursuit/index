@@ -4,24 +4,15 @@ import { z } from "zod";
 
 export const linkCategorySchema = z.enum(linkCategories);
 
-const savedOnSchema = z.iso
-  .date()
-  .refine(
-    (date) => !date.startsWith("0000-") && date <= new Date().toISOString().slice(0, 10),
-    "Save date cannot be in the future.",
-  )
-  .optional();
-
 export const createLinkInputSchema = z.strictObject({
   url: z
     .url({ protocol: /^https?$/ })
     .trim()
     .max(8192),
-  title: z.string().trim().min(1).max(500),
+  // Omitted titles are read from the page.
+  title: z.string().trim().min(1).max(500).optional(),
   description: z.string().trim().max(10_000).nullable().optional(),
-  category: linkCategorySchema.default("uncategorized"),
   groupId: z.uuid().nullable().optional(),
-  savedOn: savedOnSchema,
 });
 
 export const getLinkInputSchema = z.strictObject({ id: z.uuid() });
@@ -31,7 +22,6 @@ export const listMyLinksInputSchema = z.strictObject({
   cursor: z.string().min(1).max(512).optional(),
   weekStart: weekStartSchema.optional(),
   groupId: z.uuid().optional(),
-  inbox: z.boolean().optional(),
   category: linkCategorySchema.optional(),
 });
 
@@ -41,9 +31,7 @@ export const updateLinkInputSchema = z
     url: createLinkInputSchema.shape.url.optional(),
     title: createLinkInputSchema.shape.title.optional(),
     description: createLinkInputSchema.shape.description,
-    category: linkCategorySchema.optional(),
     groupId: z.uuid().nullable().optional(),
-    savedOn: savedOnSchema,
   })
   .refine(
     (input) => Object.entries(input).some(([key, value]) => key !== "id" && value !== undefined),
@@ -83,19 +71,23 @@ export type Link = z.output<typeof linkSchema>;
 export type UpdateLinkInput = z.output<typeof updateLinkInputSchema>;
 
 export const listOwnerLinksSchema = listMyLinksInputSchema
-  .omit({ inbox: true, groupId: true, category: true })
+  .omit({ groupId: true, category: true })
   .extend({ userId: z.string().min(1).max(128) });
 
-export const libraryWeeksInputSchema = z
-  .strictObject({
-    userId: z.string().min(1).max(128),
-    groupId: z.uuid().optional(),
-    inbox: z.boolean().optional(),
-    before: weekStartSchema.optional(),
-    limit: z.number().int().min(1).max(100).default(20),
-  })
-  .refine((input) => !(input.groupId && input.inbox), "Choose a group or Inbox.");
+export const libraryWeeksInputSchema = z.strictObject({
+  userId: z.string().min(1).max(128),
+  groupId: z.uuid().optional(),
+  before: weekStartSchema.optional(),
+  limit: z.number().int().min(1).max(100).default(20),
+});
 export const libraryWeeksSchema = z.object({
   items: z.array(z.object({ weekStart: weekStartSchema, count: z.number().int().positive() })),
   nextBefore: weekStartSchema.nullable(),
+});
+
+export const previewLinkInputSchema = z.strictObject({ url: createLinkInputSchema.shape.url });
+export const linkPreviewSchema = z.object({
+  title: z.string(),
+  siteName: z.string().nullable(),
+  category: linkCategorySchema,
 });

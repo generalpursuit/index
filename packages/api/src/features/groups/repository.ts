@@ -1,5 +1,5 @@
 import { groups, links } from "@index/db/schema/app";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
@@ -74,7 +74,6 @@ export function listGroups(
   ownerId: string,
   limit: number,
   cursor?: Cursor,
-  includeFavorites = false,
 ) {
   return ResultAsync.fromPromise(
     db
@@ -84,7 +83,6 @@ export function listGroups(
         and(
           eq(groups.ownerId, ownerId),
           groupVisible(viewerId),
-          includeFavorites ? undefined : ne(groups.kind, "favorites"),
           cursor
             ? sql`(${groups.createdAt}, ${groups.id}) < (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`
             : undefined,

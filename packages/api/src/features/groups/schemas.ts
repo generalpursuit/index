@@ -3,7 +3,7 @@ import { pageInputSchema, userIdSchema, visibilitySchema } from "../../shared/sc
 
 const nameSchema = z.string().trim().min(1).max(100);
 const customNameSchema = nameSchema.refine(
-  (name) => !["all", "inbox", "starred", "favorites"].includes(name.toLowerCase()),
+  (name) => !["all", "starred", "favorites"].includes(name.toLowerCase()),
   "This group name is reserved.",
 );
 export const groupSchema = z.object({
@@ -35,7 +35,6 @@ export const deleteGroupSchema = z.strictObject({
 });
 export const listGroupsSchema = pageInputSchema.extend({
   ownerId: userIdSchema.optional(),
-  includeFavorites: z.boolean().default(false),
 });
 export const groupPageSchema = z.object({
   items: z.array(groupSchema),

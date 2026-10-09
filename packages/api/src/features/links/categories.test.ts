@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { suggestCategoryInputSchema } from "./schemas";
-import { suggestCategory } from "./service";
+import { categorize } from "./categories";
 
-describe("category suggestions", () => {
+describe("link categories", () => {
   it("uses domain boundaries and URL paths, with an honest unknown fallback", () => {
     for (const [url, expected] of [
       ["https://open.spotify.com/episode/123", "podcast"],
@@ -17,16 +16,8 @@ describe("category suggestions", () => {
       ["https://author.substack.com/p/read", "article"],
       ["https://youtube.com.attacker.example/watch", "uncategorized"],
       ["https://example.com", "uncategorized"],
-    ]) {
-      assert.ok(url);
-      assert.deepEqual(suggestCategory(url), {
-        category: expected,
-        matched: expected !== "uncategorized",
-      });
+    ] as const) {
+      assert.equal(categorize(url), expected, url);
     }
-    assert.equal(
-      suggestCategoryInputSchema.safeParse({ url: "file:///tmp/private" }).success,
-      false,
-    );
   });
 });

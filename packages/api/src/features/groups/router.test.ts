@@ -44,17 +44,16 @@ describe("groups and link organization", () => {
       id: link.id,
       groupId: group.id,
       title: "Changed",
-      category: "book",
+      url: "https://goodreads.com/book/show/1",
     });
     assert.equal((await api.client(null).links.get({ id: link.id })).title, "Changed");
     assert.equal(
       (await alice.links.listMine({ groupId: group.id, category: "book" })).items.length,
       1,
     );
-    assert.equal((await alice.links.listMine({ inbox: true })).items.length, 0);
     await alice.links.update({ id: link.id, groupId: null });
-    await assert.rejects(api.client(null).links.get({ id: link.id }), { code: "NOT_FOUND" });
-    assert.equal((await alice.links.listMine({ inbox: true })).items.length, 1);
+    assert.equal((await alice.links.get({ id: link.id })).groupId, null);
+    assert.equal((await api.client(null).links.get({ id: link.id })).id, link.id);
   });
 
   it("keeps Starred unique and protects its name, deletion and original-link membership", async () => {
@@ -75,14 +74,16 @@ describe("groups and link organization", () => {
     assert.equal((await api.db.select().from(groups)).length, 1);
   });
 
-  it("deleting a group defaults to preserving links in the private inbox", async () => {
+  it("deleting a group keeps its links, now outside any group", async () => {
     const alice = api.client("alice");
-    const group = await alice.groups.create({ name: "Delete" });
+    const group = await alice.groups.create({ name: "Delete", visibility: "private" });
     const link = await alice.links.create({ ...input, groupId: group.id });
     await assert.rejects(api.client("bob").groups.delete({ id: group.id }), { code: "NOT_FOUND" });
+    await assert.rejects(api.client(null).links.get({ id: link.id }), { code: "NOT_FOUND" });
     await alice.groups.delete({ id: group.id });
     assert.equal((await alice.links.get({ id: link.id })).groupId, null);
-    await assert.rejects(api.client(null).links.get({ id: link.id }), { code: "NOT_FOUND" });
+    // Without a lock the link follows the profile, so clients must warn before this.
+    assert.equal((await api.client(null).links.get({ id: link.id })).id, link.id);
   });
 
   it("explicit deletion removes links and cascades their comments and stars", async () => {

@@ -21,11 +21,16 @@ export function groupVisible(viewerId: string | SQLWrapper | null) {
   ))`;
 }
 
+// A link follows its owner's profile unless it sits in a locked group.
 export function linkVisible(viewerId: string | SQLWrapper | null) {
-  return sql<boolean>`(${links.ownerId} = ${viewerId} or exists (
-    select 1 from groups as access_group
-    where access_group.id = ${links.groupId} and access_group.owner_id = ${links.ownerId}
-      and access_group.kind = 'custom' and access_group.visibility = 'public'
-      and ${profileContentVisible(viewerId, links.ownerId)}
+  return sql<boolean>`(${links.ownerId} = ${viewerId} or (
+    ${profileContentVisible(viewerId, links.ownerId)} and not ${linkLocked()}
   ))`;
+}
+
+export function linkLocked() {
+  return sql<boolean>`exists (
+    select 1 from groups as lock_group
+    where lock_group.id = ${links.groupId} and lock_group.visibility = 'private'
+  )`;
 }

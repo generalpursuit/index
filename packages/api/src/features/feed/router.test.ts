@@ -29,7 +29,6 @@ describe("home feed", () => {
       .update(links)
       .set({ createdAt: sql`'2026-01-01T00:00:00.000999Z'::timestamptz` })
       .where(eq(links.id, two.id));
-    await bob.links.create({ title: "Inbox", url: "https://example.com/private" });
     const hidden = await bob.groups.create({ name: "Private", visibility: "private" });
     await bob.links.create({
       title: "Hidden",

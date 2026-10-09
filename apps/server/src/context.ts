@@ -18,7 +18,12 @@ export async function createContext({ context }: CreateContextOptions): Promise<
   return {
     db,
     session,
+    fetchPage,
   };
 }
+
+// Cloudflare keeps fetched pages for an hour, so the preview and the save share one request.
+const fetchPage: ApiContext["fetchPage"] = (url, init) =>
+  fetch(url, { ...init, cf: { cacheEverything: true, cacheTtl: 3600 } });
 
 export type Context = Awaited<ReturnType<typeof createContext>>;

@@ -53,7 +53,10 @@ describe("native and browser authentication", () => {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({ url: "https://example.com", title: "From iOS" }),
       }),
-      { prefix: "/api/v1", context: { db: fixture.db, session: restored } },
+      {
+        prefix: "/api/v1",
+        context: { ...fixture.context(null), session: restored },
+      },
     );
     assert.ok(result.matched);
     assert.equal(result.response.status, 201);

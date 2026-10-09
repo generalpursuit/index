@@ -13,7 +13,6 @@ import { starsRouter } from "../features/stars/router";
 import { commentsRouter } from "../features/comments/router";
 import { feedRouter } from "../features/feed/router";
 import { discoveryRouter } from "../features/discovery/router";
-import { categoriesRouter } from "../features/categories/router";
 import { requireAuth } from "../procedures";
 
 const api = implement(appContract).$context<Context>();
@@ -48,7 +47,6 @@ export const appRouter = api.router({
   comments: commentsRouter,
   feed: feedRouter,
   discovery: discoveryRouter,
-  categories: categoriesRouter,
 });
 export type AppRouter = typeof appRouter;
 export type { AppRouterClient } from "../contracts";

@@ -6,7 +6,7 @@ import type { QueryDatabase } from "../../data-access/database";
 import { groupVisible, linkVisible } from "../../data-access/visibility";
 import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
-import type { ListMyLinksInput, UpdateLinkInput } from "./schemas";
+import type { Link, ListMyLinksInput, UpdateLinkInput } from "./schemas";
 
 export const linkSelection = {
   id: links.id,
@@ -25,7 +25,7 @@ export const linkSelection = {
 
 type NewLink = Pick<
   typeof links.$inferInsert,
-  "ownerId" | "groupId" | "url" | "title" | "description" | "category" | "savedOn"
+  "ownerId" | "groupId" | "url" | "title" | "description" | "category"
 >;
 
 export function insertLink(db: QueryDatabase, link: NewLink) {
@@ -66,7 +66,7 @@ export function listOwnedLinks(
   ownerId: string,
   limit: number,
   cursor?: Cursor,
-  filters?: Pick<ListMyLinksInput, "groupId" | "inbox" | "category" | "weekStart">,
+  filters?: Pick<ListMyLinksInput, "groupId" | "category" | "weekStart">,
 ) {
   return ResultAsync.fromPromise(
     db
@@ -77,7 +77,6 @@ export function listOwnedLinks(
           eq(links.ownerId, ownerId),
           filters?.weekStart ? inWeek(filters.weekStart) : undefined,
           filters?.groupId ? eq(links.groupId, filters.groupId) : undefined,
-          filters?.inbox ? sql`${links.groupId} is null` : undefined,
           filters?.category ? eq(links.category, filters.category) : undefined,
           cursor
             ? sql`(${links.createdAt}, ${links.id}) < (${cursor.createdAt}::timestamptz, ${cursor.id}::uuid)`
@@ -93,7 +92,7 @@ export function listOwnedLinks(
 export function updateOwnedLink(
   db: QueryDatabase,
   actorId: string,
-  { id, ...changes }: UpdateLinkInput,
+  { id, ...changes }: UpdateLinkInput & Partial<Pick<Link, "category">>,
 ) {
   return ResultAsync.fromPromise(
     db
@@ -197,7 +196,7 @@ export function listOwnerLinks(
 export function libraryWeeks(
   db: QueryDatabase,
   viewerId: string | null,
-  input: { userId: string; groupId?: string; inbox?: boolean; before?: string; limit: number },
+  input: { userId: string; groupId?: string; before?: string; limit: number },
 ) {
   const week = sql<string>`to_char(date_trunc('week',${links.savedOn}::timestamp),'YYYY-MM-DD')`;
   const groupMatches = input.groupId
@@ -213,7 +212,6 @@ export function libraryWeeks(
         and(
           groupMatches,
           linkVisible(viewerId),
-          input.inbox ? sql`links.group_id is null` : undefined,
           input.before ? sql`${links.savedOn}<${input.before}::date` : undefined,
         ),
       )

@@ -10,6 +10,8 @@ import {
   listMyLinksOutputSchema,
   updateLinkInputSchema,
   listGroupLinksInputSchema,
+  previewLinkInputSchema,
+  linkPreviewSchema,
 } from "./schemas";
 
 export const linksContract = {
@@ -21,12 +23,21 @@ export const linksContract = {
     .route({ method: "GET", path: "/profiles/{userId}/links", spec: optionalAuth, tags: ["Links"] })
     .input(listOwnerLinksSchema)
     .output(listMyLinksOutputSchema),
+  preview: baseContract
+    .route({
+      method: "POST",
+      path: "/links/preview",
+      summary: "Read the title and category a link would be saved with",
+      tags: ["Links"],
+    })
+    .input(previewLinkInputSchema)
+    .output(linkPreviewSchema),
   create: baseContract
     .route({
       method: "POST",
       path: "/links",
       successStatus: 201,
-      summary: "Save a link to your inbox or an owned group",
+      summary: "Save a link, optionally into one of your groups",
       tags: ["Links"],
     })
     .input(createLinkInputSchema)

@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { createLinkInputSchema, listMyLinksInputSchema } from "./schemas";
 
 describe("link input validation", () => {
-  it("trims pasted input and defaults the category", () => {
+  it("trims pasted input", () => {
     assert.deepEqual(
       createLinkInputSchema.parse({
         url: " https://example.com/read ",
@@ -15,20 +15,15 @@ describe("link input validation", () => {
         url: "https://example.com/read",
         title: "Read this",
         description: "Notes",
-        category: "uncategorized",
       },
     );
   });
 
-  it("accepts a manual category and an omitted or null description", () => {
+  it("accepts an omitted or null description", () => {
     assert.equal(
-      createLinkInputSchema.parse({
-        url: "http://example.com",
-        title: "Music",
-        category: "music",
-        description: null,
-      }).category,
-      "music",
+      createLinkInputSchema.parse({ url: "http://example.com", title: "Music", description: null })
+        .description,
+      null,
     );
     assert.equal(
       createLinkInputSchema.parse({ url: "https://example.com", title: "Example" }).description,
@@ -36,7 +31,7 @@ describe("link input validation", () => {
     );
   });
 
-  it("rejects unsafe URL schemes, blank titles, unknown categories, and oversized input", () => {
+  it("rejects unsafe URL schemes, blank titles, client categories, and oversized input", () => {
     const valid = { url: "https://example.com", title: "Example" };
     for (const input of [
       { ...valid, url: "javascript:alert(1)" },
@@ -44,7 +39,7 @@ describe("link input validation", () => {
       { ...valid, url: "ftp://example.com" },
       { ...valid, url: "not a URL" },
       { ...valid, title: "  " },
-      { ...valid, category: "unknown" },
+      { ...valid, category: "music" },
       { ...valid, title: "a".repeat(501) },
       { ...valid, description: "a".repeat(10_001) },
       { ...valid, url: `https://example.com/${"a".repeat(8192)}` },
