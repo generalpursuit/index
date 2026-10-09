@@ -2,6 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/source-serif-4/opsz.css";
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
@@ -74,6 +76,12 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Not inline, so app styles can use these variables directly. */
+@theme {
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+  --font-serif: "Source Serif 4 Variable", Georgia, serif;
 }
 
 @theme inline {
