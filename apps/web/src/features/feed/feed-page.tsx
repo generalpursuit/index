@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@index/ui/components/button";
-import { Heading, IconButton, QueryState, UserAvatar, More } from "@/components/app/primitives";
+import { Heading, QueryState, UserAvatar, More } from "@/components/app/primitives";
 import { LinkRow } from "@/features/links/link-row";
 import { QuickAdd } from "@/features/links/quick-add";
 import { ownerOf, useWeekLinks } from "@/features/links/hooks/use-links";
@@ -188,8 +187,21 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
   const ownEmpty = feed.data?.pages[0]?.own.items.length === 0;
   const people = feed.data?.pages.flatMap((page) => page.people) ?? [];
   const friendsEmpty = !!feed.data && people.length === 0;
-  const edges = useScrollEdges(carousel, people.length);
   usePeeking(carousel, people.length);
+  // More people load as the end of the carousel comes near; a failed load offers a retry.
+  const end = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = feed;
+  useEffect(() => {
+    const root = carousel.current,
+      target = end.current;
+    if (!root || !target || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry?.isIntersecting && void fetchNextPage(),
+      { root, rootMargin: "0px 100% 0px 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [people.length, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   const current = week === monday();
   // One step moves the carousel by a whole column, whatever the layout's column width.
   const scrollPeople = (direction: 1 | -1) => {
@@ -222,31 +234,21 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         <h2 id={"people-" + week} className="sr-only">
           Your people
         </h2>
-        <div className="carousel-controls">
-          {edges.before && (
-            <IconButton
-              className="carousel-previous"
-              label="Previous person"
-              onClick={() => scrollPeople(-1)}
-            >
-              <ChevronLeft />
-            </IconButton>
-          )}
-          {edges.after && (
-            <IconButton
-              className="carousel-next"
-              label="Next person"
-              onClick={() => scrollPeople(1)}
-            >
-              <ChevronRight />
-            </IconButton>
-          )}
-        </div>
         <div
           ref={carousel}
           className="friends-carousel"
           aria-label="Friends’ links"
           tabIndex={friendsEmpty ? undefined : 0}
+          // A box peeking in at either edge is the way there: clicking it brings it into view
+          // (instead of opening what is half hidden inside it).
+          onClickCapture={(e) => {
+            const box = (e.target as HTMLElement).closest<HTMLElement>(".friend-card");
+            if (!box?.hasAttribute("data-peeking")) return;
+            e.preventDefault();
+            e.stopPropagation();
+            const edge = e.currentTarget.getBoundingClientRect();
+            scrollPeople(box.getBoundingClientRect().left < edge.left ? -1 : 1);
+          }}
           onKeyDown={(e) => {
             if (e.target === e.currentTarget && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
               e.preventDefault();
@@ -265,13 +267,15 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
               />
             ))}
             {friendsEmpty && <NoPeople discover={followingCount === 0} current={current} />}
-            {feed.hasNextPage && (
+            <div ref={end} className="carousel-end" aria-hidden="true" />
+            {isFetchNextPageError && (
               <Button
                 variant="outline"
-                onClick={() => void feed.fetchNextPage()}
-                disabled={feed.isFetchingNextPage}
+                className="carousel-retry"
+                onClick={() => void fetchNextPage()}
+                disabled={isFetchingNextPage}
               >
-                More people
+                Try again
               </Button>
             )}
           </QueryState>

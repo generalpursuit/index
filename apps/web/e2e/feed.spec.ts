@@ -97,8 +97,16 @@ test("weeks change only through the scrubber or the week list, never by scrollin
     .first()
     .click();
   await expect(current.locator(".own-links")).toContainText("Are.na");
-  await current.getByRole("button", { name: "Next person" }).click();
-  await expect(current.getByRole("button", { name: "Previous person" })).toBeVisible();
+  // Clicking the peeking box brings it into view instead of opening what is half hidden in it
+  // (here the person's avatar, which would otherwise open their profile).
+  const before = page.url();
+  await boxes.nth(2).click({ position: { x: 30, y: 30 } });
+  await expect(page).toHaveURL(before);
+  await expect(boxes.nth(2)).not.toHaveAttribute("data-peeking");
+  await expect(boxes.first()).toHaveAttribute("data-peeking");
+  // The box now peeking on the left leads back.
+  await boxes.first().click({ position: { x: 300, y: 60 } });
+  await expect(boxes.first()).not.toHaveAttribute("data-peeking");
   await page.setViewportSize({ width: 390, height: 844 });
   const carousel = current.locator(".friends-carousel");
   await carousel.hover();

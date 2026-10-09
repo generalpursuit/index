@@ -546,8 +546,28 @@
 .friend-card {
   transition: opacity 150ms ease;
 }
+/* Marks the carousel's end, so the next people load before it comes into view. */
+.carousel-end {
+  flex: none;
+  width: 0;
+  /* Takes back the carousel's gap, so the last person still ends flush. */
+  margin-left: -16px;
+  align-self: stretch;
+}
+.carousel-retry {
+  flex: none;
+  align-self: center;
+}
+/* A box peeking in is how you get there: clicking it brings it into view. */
 .friend-card[data-peeking] {
   opacity: 0.3;
+  cursor: pointer;
+}
+.friend-card[data-peeking] * {
+  cursor: pointer;
+}
+.friend-card[data-peeking]:hover {
+  opacity: 0.55;
 }
 /* With more than two people, a sliver of the next box shows that there is more. */
 .friends-carousel:has(> .friend-card:nth-child(3)) > .friend-card {
@@ -1669,9 +1689,6 @@ span.link-open {
   .friends-carousel > .friend-card,
   .friends-carousel:has(> .friend-card:nth-child(3)) > .friend-card {
     flex-basis: calc(100vw - 74px);
-  }
-  .carousel-controls {
-    display: none;
   }
   .friends-carousel {
     gap: 16px;
