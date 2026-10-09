@@ -28,10 +28,12 @@ struct ProfileView: View {
                 Text(profile.username ?? profile.name).font(
                   .system(size: 36, weight: .semibold, design: .serif)
                 ).minimumScaleFactor(0.6)
-                Image(systemName: profile.profileVisibility == .private ? "lock" : "globe.europe.africa")
-                  .font(.system(size: 14)).foregroundStyle(.secondary)
-                  .accessibilityLabel(
-                    profile.profileVisibility == .private ? "Private profile" : "Public profile")
+                Image(
+                  systemName: profile.profileVisibility == .private ? "lock" : "globe.europe.africa"
+                )
+                .font(.system(size: 14)).foregroundStyle(.secondary)
+                .accessibilityLabel(
+                  profile.profileVisibility == .private ? "Private profile" : "Public profile")
               }
               Text(profile.name).foregroundStyle(.secondary)
             }
@@ -204,6 +206,13 @@ struct ProfileView: View {
     }.buttonStyle(PillStyle(selected: filter == id))
   }
   private func load() async {
+    if profile == nil { profile = await app.api?.cached("/profiles/\(userID)") }
+    if groups.isEmpty,
+      let cached: Page<LinkGroup> = await app.api?.cached(
+        "/groups", query: ["ownerId": userID, "limit": "100"])
+    {
+      groups = cached.items
+    }
     loading = profile == nil
     error = nil
     do {
@@ -212,11 +221,12 @@ struct ProfileView: View {
       profile = result
       if own { app.profile = result }
       if result?.canViewContent == true {
-        groups = try await allGroups(api: app.api, ownerID: userID)
+        async let availableGroups = allGroups(api: app.api, ownerID: userID)
+        try await loadWeeks()
+        groups = try await availableGroups
         if filter != "all" && filter != "starred" && !groups.contains(where: { $0.id == filter }) {
           filter = "all"
         }
-        try await loadWeeks()
       } else {
         groups = []
         weeks = []
@@ -237,6 +247,12 @@ struct ProfileView: View {
     var query = ["limit": "10"]
     if filter != "all" { query["groupId"] = filter }
     if more { query["before"] = nextBefore }
+    if !more, weeks.isEmpty,
+      let cached: LibraryWeeks = await app.api?.cached("/profiles/\(userID)/weeks", query: query)
+    {
+      weeks = cached.items
+      nextBefore = cached.nextBefore
+    }
     if let page: LibraryWeeks = try await app.api?.request(
       "/profiles/\(userID)/weeks", query: query)
     {
@@ -280,6 +296,11 @@ struct ProfileWeekView: View {
       path = "/profiles/\(userID)/links"
     } else {
       path = "/groups/\(filter)/links"
+    }
+    if !more, links.isEmpty, let cached: Page<SavedLink> = await app.api?.cached(path, query: query)
+    {
+      links = cached.items
+      cursor = cached.nextCursor
     }
     do {
       if let page: Page<SavedLink> = try await app.api?.request(path, query: query) {

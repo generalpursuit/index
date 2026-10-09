@@ -121,7 +121,7 @@ struct LinkRow: View {
   var body: some View {
     HStack(spacing: 8) {
       Button {
-        app.path.append(.link(link.id))
+        app.openLink(link)
       } label: {
         HStack(spacing: 12) {
           Image(systemName: link.category.symbol).frame(width: 20).foregroundStyle(.secondary)

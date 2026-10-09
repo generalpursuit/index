@@ -25,6 +25,7 @@ struct MessagesView: View {
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(conversations) { conversation in
           Button {
+            app.openingConversation = conversation
             app.path.append(.conversation(conversation.id))
           } label: {
             HStack(spacing: 14) {
@@ -48,7 +49,7 @@ struct MessagesView: View {
     }.indexPage().refreshable { await load() }
       .task(id: "\(query)-\(scenePhase)") {
         guard scenePhase == .active else { return }
-        do { try await Task.sleep(for: .milliseconds(200)) } catch { return }
+        if !query.isEmpty { do { try await Task.sleep(for: .milliseconds(200)) } catch { return } }
         await load()
         while !Task.isCancelled {
           do { try await Task.sleep(for: .seconds(10)) } catch { return }
@@ -75,6 +76,13 @@ struct MessagesView: View {
     var params = ["limit": "30"]
     if !query.isEmpty { params["query"] = query }
     if more { params["cursor"] = cursor }
+    if !more, conversations.isEmpty,
+      let cached: Page<Conversation> = await app.api?.cached("/conversations", query: params)
+    {
+      conversations = cached.items
+      cursor = cached.nextCursor
+      loading = false
+    }
     do {
       if let page: Page<Conversation> = try await app.api?.request("/conversations", query: params)
       {
@@ -173,6 +181,7 @@ struct RecipientView: View {
             app.drafts[conversation.id] = draft
           }
           app.path.removeLast()
+          app.openingConversation = conversation
           app.path.append(.conversation(conversation.id))
         } label: {
           Text("Continue\(selected.isEmpty ? "" : " · \(selected.count)")").frame(
@@ -356,10 +365,25 @@ struct ConversationView: View {
     }
   }
   private func refresh() async {
+    if conversation == nil {
+      if app.openingConversation?.id == conversationID {
+        conversation = app.openingConversation
+        app.openingConversation = nil
+      } else {
+        conversation = await app.api?.cached("/conversations/\(conversationID)")
+      }
+    }
+    if messages.isEmpty,
+      let cached: Page<Message> = await app.api?.cached(
+        "/conversations/\(conversationID)/messages", query: ["limit": "30"])
+    {
+      messages = cached.items
+      cursor = cached.nextCursor
+    }
     loading = conversation == nil
     error = nil
     do {
-      conversation = try await app.api?.request("/conversations/\(conversationID)")
+      async let detail: Conversation? = app.api?.request("/conversations/\(conversationID)")
       var all: [Message] = []
       var next: String?
       for _ in 0..<pageCount {
@@ -376,6 +400,7 @@ struct ConversationView: View {
       try Task.checkCancellation()
       messages = all
       cursor = next
+      conversation = try await detail
       if let newest = all.first, scenePhase == .active {
         let _: Success? = try await app.api?.request(
           "/conversations/\(conversationID)/read", method: "POST",

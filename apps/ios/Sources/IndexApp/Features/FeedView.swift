@@ -189,6 +189,9 @@ private struct FeedWeekView: View {
     }.task(id: "\(week)-\(app.revision)") { await load() }
   }
   private func load() async {
+    if feed == nil {
+      feed = await app.api?.cached("/feed/week", query: ["weekStart": week, "linkLimit": "20"])
+    }
     loading = feed == nil
     error = nil
     do {

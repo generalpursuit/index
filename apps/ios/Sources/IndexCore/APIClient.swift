@@ -38,6 +38,7 @@ public actor APIClient {
   private let session: URLSession
   private var token: String?
   private var generation = 0
+  private let responses = ResponseCache()
   public init(baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil) throws {
     guard baseURL.host != nil, baseURL.user == nil, baseURL.password == nil,
       baseURL.scheme == "https"
@@ -57,7 +58,48 @@ public actor APIClient {
     _ path: String, method: String = "GET", query: [String: String] = [:],
     body: [String: JSONValue]? = nil
   ) async throws -> T {
-    try await perform("/api/v1" + path, method: method, query: query, body: body)
+    if method == "GET" {
+      let key = responseKey(path, query: query)
+      let version = generation
+      var data: Data
+      while true {
+        try Task.checkCancellation()
+        guard version == generation else { throw CancellationError() }
+        do {
+          data = try await responses.load(key) {
+            try await self.performData("/api/v1" + path, method: method, query: query, body: body)
+          }
+          break
+        } catch is ResponseCache.Invalidated {
+          // A write raced this read. Retry against the new state; account changes and
+          // a dismissed view are checked above and must never retry in another account.
+          continue
+        } catch {
+          if case APIError.server(let status, _) = error, [403, 404].contains(status) {
+            await responses.remove(key)
+          }
+          throw error
+        }
+      }
+      try Task.checkCancellation()
+      guard version == generation else { throw CancellationError() }
+      do { return try JSONDecoder().decode(T.self, from: data) } catch {
+        await responses.remove(key)
+        throw APIError.invalidResponse
+      }
+    }
+    // Read receipts do not change post, profile or message content. Other writes may
+    // change access, so discard snapshots both before and after an uncertain outcome.
+    let receipt = path.hasSuffix("/read")
+    if !receipt { await responses.clear() }
+    do {
+      let value: T = try await perform("/api/v1" + path, method: method, query: query, body: body)
+      if !receipt { await responses.clear() }
+      return value
+    } catch {
+      if !receipt { await responses.clear() }
+      throw error
+    }
   }
   public func signIn(identifier: String, password: String) async throws -> AuthSession {
     // Better Auth signs in by email and by username at separate endpoints.
@@ -77,7 +119,7 @@ public actor APIClient {
       ])
   }
   private func authenticate(_ path: String, body: [String: JSONValue]) async throws -> AuthSession {
-    try clearSession()
+    try await clearSession()
     let result: AuthSession = try await perform(path, method: "POST", body: body)
     guard token != nil else { throw APIError.missingToken }
     return result
@@ -85,7 +127,7 @@ public actor APIClient {
   public func restore() async throws -> AuthSession? {
     guard token != nil else { return nil }
     let result: AuthSession? = try await perform("/api/auth/get-session")
-    if result == nil { try clearSession() }
+    if result == nil { try await clearSession() }
     return result
   }
   public func signOut() async throws {
@@ -94,18 +136,46 @@ public actor APIClient {
     do {
       let _: Success = try await perform("/api/auth/sign-out", method: "POST", body: [:])
     } catch { requestError = error }
-    try clearSession()
+    try await clearSession()
     if let requestError { throw requestError }
   }
-  public func clearSession() throws {
+  public func clearSession() async throws {
     generation += 1
     token = nil
+    await responses.clear()
     try credentials.write(nil)
+  }
+  /// A bounded in-memory snapshot only; refresh still checks server permissions.
+  public func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) async
+    -> T?
+  {
+    let version = generation
+    guard let data = await responses.snapshot(responseKey(path, query: query)),
+      version == generation
+    else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
+  }
+  private func responseKey(_ path: String, query: [String: String]) -> String {
+    var components = URLComponents()
+    components.path = path
+    components.queryItems = query.sorted(by: { $0.key < $1.key }).map {
+      URLQueryItem(name: $0.key, value: $0.value)
+    }
+    return components.string!
   }
   private func perform<T: Decodable & Sendable>(
     _ path: String, method: String = "GET", query: [String: String] = [:],
     body: [String: JSONValue]? = nil
   ) async throws -> T {
+    let data = try await performData(path, method: method, query: query, body: body)
+    do { return try JSONDecoder().decode(T.self, from: data) } catch {
+      throw APIError.invalidResponse
+    }
+  }
+  private func performData(
+    _ path: String, method: String = "GET", query: [String: String] = [:],
+    body: [String: JSONValue]? = nil
+  ) async throws -> Data {
     let startGeneration = generation
     var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
     components.path =
@@ -130,7 +200,7 @@ public actor APIClient {
     guard let response = response as? HTTPURLResponse else { throw APIError.invalidResponse }
     guard (200..<300).contains(response.statusCode) else {
       if response.statusCode == 401, token != nil {
-        try clearSession()
+        try await clearSession()
         throw APIError.unauthenticated
       }
       let message =
@@ -142,9 +212,7 @@ public actor APIClient {
       try credentials.write(signed)
       token = signed
     }
-    do { return try JSONDecoder().decode(T.self, from: data) } catch {
-      throw APIError.invalidResponse
-    }
+    return data
   }
 }
 

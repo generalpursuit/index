@@ -220,16 +220,45 @@ struct LinkDetailView: View {
       .task(id: app.revision) { await load() }
   }
   private func load() async {
+    if link == nil {
+      if app.openingLink?.id == linkID {
+        link = app.openingLink
+        app.openingLink = nil
+      } else {
+        link = await app.api?.cached("/links/\(linkID)")
+      }
+    }
+    if let link, author == nil { author = await app.api?.cached("/profiles/\(link.ownerId)") }
+    if comments.isEmpty,
+      let cached: Page<Comment> = await app.api?.cached(
+        "/links/\(linkID)/comments", query: ["limit": "30"])
+    {
+      comments = cached.items
+      cursor = cached.nextCursor
+    }
     loading = link == nil
     error = nil
     do {
+      async let firstComments: Page<Comment>? = app.api?.request(
+        "/links/\(linkID)/comments", query: ["limit": "30"])
       let result: SavedLink? = try await app.api?.request("/links/\(linkID)")
       try Task.checkCancellation()
       link = result
-      if let result { author = try await app.api?.request("/profiles/\(result.ownerId)") }
-      try await loadComments()
+      loading = false
+      if let result {
+        async let profile: Profile? = app.api?.request("/profiles/\(result.ownerId)")
+        if let page = try await firstComments {
+          comments = page.items
+          cursor = page.nextCursor
+        }
+        author = try await profile
+      }
     } catch is CancellationError { return } catch {
-      link = nil
+      if case APIError.server(let status, _) = error, [403, 404].contains(status) {
+        link = nil
+        author = nil
+        comments = []
+      }
       self.error = error.localizedDescription
       if case APIError.unauthenticated = error { app.handle(error) }
     }

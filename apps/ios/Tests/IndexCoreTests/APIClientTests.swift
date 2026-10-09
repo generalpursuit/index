@@ -38,6 +38,30 @@ struct APIClientTests {
       baseURL: URL(string: "https://api.example.com")!, credentials: credentials,
       session: URLSession(configuration: config))
   }
+  @Test func snapshotsAreAccountScopedAndWritesInvalidateThem() async throws {
+    let client = try make(MemoryCredentials("alice.signed"))
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/private", query: ["a": "1", "b": "2"])
+    let cached: Success? = await client.cached("/private", query: ["b": "2", "a": "1"])
+    #expect(cached?.success == true)
+    let _: Success = try await client.request("/links/test", method: "PATCH", body: [:])
+    let afterWrite: Success? = await client.cached("/private", query: ["a": "1", "b": "2"])
+    #expect(afterWrite == nil)
+    let _: Success = try await client.request("/private")
+    HTTPStub.handler = { _ in throw URLError(.notConnectedToInternet) }
+    await #expect(throws: URLError.self) { try await client.signOut() }
+    let afterLogout: Success? = await client.cached("/private")
+    #expect(afterLogout == nil)
+  }
+  @Test func revokedReadsEvictSnapshots() async throws {
+    let client = try make(MemoryCredentials("alice.signed"))
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/private")
+    HTTPStub.handler = { _ in (404, [:], Data(#"{"message":"Not found"}"#.utf8)) }
+    await #expect(throws: APIError.self) { let _: Success = try await client.request("/private") }
+    let cached: Success? = await client.cached("/private")
+    #expect(cached == nil)
+  }
   @Test func systemKeychainRoundTrip() throws {
     let store = KeychainCredentials(
       server: URL(string: "https://native-test-\(UUID().uuidString.lowercased()).invalid")!)

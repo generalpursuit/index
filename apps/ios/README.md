@@ -28,6 +28,12 @@ Navigation uses `NavigationStack`, including native back gestures. The feed uses
 
 Messages refresh while the conversation is active, conversations and activity poll while foregrounded. There are no push notifications or offline database in the current backend contract. Drafts remain in memory until sent or signed out. Unknown send outcomes retain the original UUID and payload for an idempotent retry. Restricted forwards show only author identity; locked/deleted originals show an unavailable state.
 
+## Loading and cache
+
+The API client retains up to 128 response snapshots in memory for five minutes and shares concurrent GET requests for the same path and query. Views restore these snapshots before refreshing, keeping feed, profiles, post details, conversations, and activity visible during network work. Opening a known post or conversation passes its existing content into the detail screen. Independent requests run concurrently. Polling and pull-to-refresh still reach the API.
+
+Mutations discard snapshots and restart overlapping reads against the new state; read receipts preserve content caches. Sign-out, session expiry, and authentication changes clear snapshots and reject late responses. Forbidden and missing resources evict their snapshots. Recoverable failures can leave already loaded content visible with retry feedback. This cache does not persist across process launches and is not an offline synchronization system.
+
 ## Authentication
 
 Only Better Auth's signed `set-auth-token` header is retained. Native requests do not use cookies, and tokens are never stored in UserDefaults. Keychain entries are scoped to the API URL and use `WhenUnlockedThisDeviceOnly`. Session expiry/sign-out erase credentials and account state. The transport rejects remote HTTP and redirects; it accepts HTTP only for loopback development. The backend remains responsible for all content permissions.
@@ -38,6 +44,7 @@ Only Better Auth's signed `set-auth-token` header is retained. Native requests d
 swift test
 # With the disposable API running on localhost:3002:
 INDEX_NATIVE_INTEGRATION=1 swift test
+# For a separately running disposable test API, also set INDEX_NATIVE_TEST_PORT=3202.
 ```
 
 The integration test resets **only the disposable fixture API** and checks real signed login/restoration, weekly pagination, Favorites, comments, private forwarding, send retries, replies, follow requests, group locking, and logout. It does not use production credentials or databases. Do not run it concurrently with browser tests that use that fixture server.

@@ -8,7 +8,8 @@ import Testing
   .serialized, .enabled(if: ProcessInfo.processInfo.environment["INDEX_NATIVE_INTEGRATION"] == "1"))
 struct LiveAPITests {
   @Test func nativeAccountLibraryAndPrivateForwardRoundTrip() async throws {
-    let base = URL(string: "http://localhost:3002")!
+    let port = Int(ProcessInfo.processInfo.environment["INDEX_NATIVE_TEST_PORT"] ?? "3002") ?? 3002
+    let base = URL(string: "http://localhost:\(port)")!
     var reset = URLRequest(url: base.appendingPathComponent("_test/reset"))
     reset.httpMethod = "POST"
     let (_, response) = try await URLSession.shared.data(for: reset)
@@ -37,7 +38,7 @@ struct LiveAPITests {
       "/links", method: "POST",
       body: [
         "url": .string("https://example.com/native"), "title": .string("Native link"),
-        "groupId": .string(group.id), "category": .string("article"),
+        "groupId": .string(group.id),
       ])
     let _: Success = try await alice.request("/links/\(link.id)/favorite", method: "PUT", body: [:])
     let favorited: SavedLink = try await alice.request("/links/\(link.id)")

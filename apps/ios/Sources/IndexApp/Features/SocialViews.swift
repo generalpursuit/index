@@ -37,7 +37,7 @@ struct DiscoverView: View {
     }.indexPage().scrollDismissesKeyboard(.interactively)
       .task(id: query) {
         do {
-          try await Task.sleep(for: .milliseconds(250))
+          if !query.isEmpty { try await Task.sleep(for: .milliseconds(250)) }
           await load()
         } catch {}
       }
@@ -47,6 +47,12 @@ struct DiscoverView: View {
     error = nil
     do {
       if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if people.isEmpty,
+          let cached: Recommendations = await app.api?.cached("/discovery/recommendations")
+        {
+          people = cached.items
+          loading = false
+        }
         let page: Recommendations? = try await app.api?.request("/discovery/recommendations")
         people = page?.items ?? []
         after = nil
@@ -158,6 +164,13 @@ struct ActivityView: View {
     var query = ["limit": "30"]
     if filter != "all" { query["type"] = filter }
     if more { query["cursor"] = cursor }
+    if !more, items.isEmpty,
+      let cached: ActivityPage = await app.api?.cached("/me/activity", query: query)
+    {
+      items = cached.items
+      cursor = cached.nextCursor
+      loading = false
+    }
     do {
       if let page: ActivityPage = try await app.api?.request("/me/activity", query: query) {
         items = more ? items + page.items : page.items

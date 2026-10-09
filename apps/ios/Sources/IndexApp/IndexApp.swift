@@ -58,6 +58,12 @@ final class AppModel {
   var unreadMessages = 0
   var unreadActivity = 0
   var drafts: [String: MessageDraft] = [:]
+  var openingLink: SavedLink?
+  var openingConversation: Conversation?
+  func openLink(_ link: SavedLink) {
+    openingLink = link
+    path.append(.link(link.id))
+  }
   var webURL: URL?
   var showsTabs: Bool {
     guard let destination = path.last else { return true }
@@ -115,6 +121,8 @@ final class AppModel {
   func clearAccount() {
     profile = nil
     drafts = [:]
+    openingLink = nil
+    openingConversation = nil
     path = []
     tab = .feed
     unreadMessages = 0
@@ -137,10 +145,10 @@ final class AppModel {
   func pollUnread() async {
     guard let api, profile != nil else { return }
     do {
-      let messages: UnreadCount = try await api.request("/me/messages/unread")
-      let activity: ActivityPage = try await api.request("/me/activity", query: ["limit": "1"])
-      unreadMessages = messages.unreadCount
-      unreadActivity = activity.unreadCount
+      async let messages: UnreadCount = api.request("/me/messages/unread")
+      async let activity: ActivityPage = api.request("/me/activity", query: ["limit": "1"])
+      unreadMessages = try await messages.unreadCount
+      unreadActivity = try await activity.unreadCount
     } catch { if case APIError.unauthenticated = error { handle(error) } }
   }
 }
