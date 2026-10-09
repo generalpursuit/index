@@ -1,14 +1,22 @@
 import { useEffect, useState, type RefObject } from "react";
 
-/** Whether a horizontal scroller hides content before or after its visible area. */
-export function useScrollEdges(scroller: RefObject<HTMLElement | null>, itemCount: number) {
+/** Whether a scroller hides content before or after its visible area along one axis. */
+export function useScrollEdges(
+  scroller: RefObject<HTMLElement | null>,
+  itemCount: number,
+  axis: "x" | "y" = "x",
+) {
   const [edges, setEdges] = useState({ before: false, after: false });
   useEffect(() => {
     const element = scroller.current;
     if (!element) return;
     const measure = () => {
-      const before = element.scrollLeft > 1;
-      const after = element.scrollLeft + element.clientWidth < element.scrollWidth - 1;
+      const [position, visible, total] =
+        axis === "x"
+          ? [element.scrollLeft, element.clientWidth, element.scrollWidth]
+          : [element.scrollTop, element.clientHeight, element.scrollHeight];
+      const before = position > 1;
+      const after = position + visible < total - 1;
       setEdges((old) => (old.before === before && old.after === after ? old : { before, after }));
     };
     measure();
@@ -19,6 +27,6 @@ export function useScrollEdges(scroller: RefObject<HTMLElement | null>, itemCoun
       resize.disconnect();
       element.removeEventListener("scroll", measure);
     };
-  }, [scroller, itemCount]);
+  }, [scroller, itemCount, axis]);
   return edges;
 }

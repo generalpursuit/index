@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { Button } from "@index/ui/components/button";
@@ -7,6 +7,7 @@ import { LinkRow } from "@/features/links/link-row";
 import { QuickAdd } from "@/features/links/quick-add";
 import { useWeekLinks } from "@/features/links/hooks/use-links";
 import { useFeed } from "./hooks/use-feed";
+import { usePeeking } from "./hooks/use-peeking";
 import { useScrollEdges } from "./hooks/use-scroll-edges";
 import { useWeekPager } from "./hooks/use-week-pager";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
@@ -31,24 +32,12 @@ export function WeekLinks({
   const list = useWeekLinks(userId, week, groupId, seed, updatedAt);
   const links = list.data?.pages.flatMap((p) => p.items) ?? [];
   const panel = useRef<HTMLDivElement>(null);
-  const [scrollable, setScrollable] = useState(false);
-  useEffect(() => {
-    const element = panel.current;
-    if (!element) return;
-    const measure = () => setScrollable(element.scrollHeight > element.clientHeight + 1);
-    measure();
-    const resize = new ResizeObserver(measure);
-    resize.observe(element);
-    return () => resize.disconnect();
-  }, [list.data]);
+  const edges = useScrollEdges(panel, links.length, "y");
+  return () => observer.disconnect();
+  }, [links.length, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   return (
-    <div
-      ref={panel}
-      className="link-list"
-      data-scroll-panel
-      tabIndex={scrollable ? 0 : undefined}
-      aria-label={"Links in " + weekLabel(week)}
-    >
+    <>
+      {/* Outside the scrolling list, so adding stays in reach however long the week gets. */}
       {add && (
         <QuickAdd
           groupId={groupId}
@@ -56,20 +45,33 @@ export function WeekLinks({
           label={"Enter a link to add it to " + weekLabel(week)}
         />
       )}
-      <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
-        {links.map((link) => (
-          <LinkRow key={link.id} link={link} />
-        ))}
-        {list.data?.pages[0]?.items.length === 0 && !add && (
-          <p className="empty-state">No links this week.</p>
-        )}
-        <More
-          hasNext={list.hasNextPage}
-          isFetching={list.isFetchingNextPage}
-          fetch={list.fetchNextPage}
-        />
-      </QueryState>
-    </div>
+      {/* Takes the space left under the field; the list inside shows whole rows of it. */}
+      <div className="link-area">
+        <div
+          ref={panel}
+          className="link-list"
+          data-scroll-panel
+          data-fade-start={edges.before || undefined}
+          data-fade-end={edges.after || undefined}
+          tabIndex={edges.before || edges.after ? 0 : undefined}
+          aria-label={"Links in " + weekLabel(week)}
+        >
+          <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+            {links.map((link) => (
+              <LinkRow key={link.id} link={link} />
+            ))}
+            {list.data?.pages[0]?.items.length === 0 && !add && (
+              <p className="empty-state">No links this week.</p>
+            )}
+            <More
+              hasNext={list.hasNextPage}
+              isFetching={list.isFetchingNextPage}
+              fetch={list.fetchNextPage}
+            />
+          </QueryState>
+        </div>
+      </div>
+    </>
   );
 }
 function FriendCard({
@@ -93,6 +95,25 @@ function FriendCard({
         <WeekLinks userId={person.id} week={week} seed={seed} updatedAt={updatedAt} />
       </div>
     </article>
+  );
+}
+/** Holds a person's place, so the zone keeps its shape when nobody has shared anything. */
+function NoPeople({ discover, current }: { discover: boolean; current: boolean }) {
+  return (
+    <div className="friend-card friend-card-empty">
+      <p>
+        {discover
+          ? "Find people whose taste you trust"
+          : current
+            ? "Nothing shared this week yet"
+            : "Nothing shared this week"}
+      </p>
+      {discover && (
+        <Link to="/discover" aria-label="Discover people">
+          Discover
+        </Link>
+      )}
+    </div>
   );
 }
 export function FeedPage({ week }: { week: string }) {
@@ -147,6 +168,7 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
   const people = feed.data?.pages.flatMap((page) => page.people) ?? [];
   const friendsEmpty = !!feed.data && people.length === 0;
   const edges = useScrollEdges(carousel, people.length);
+  usePeeking(carousel, people.length);
   const current = week === monday();
   // One step moves the carousel by a whole column, whatever the layout's column width.
   const scrollPeople = (direction: 1 | -1) => {
@@ -163,27 +185,25 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         <h2 id={"yours-" + week} className="sr-only">
           Yours
         </h2>
-        {ownEmpty ? (
-          <p className="week-empty">
-            {current ? (
-              <>
-                What caught your eye this week?{" "}
-                <Link to="." search={(old) => ({ ...old, add: true })}>
-                  Add a link
-                </Link>
-              </>
-            ) : (
-              "Nothing saved this week."
-            )}
-          </p>
+        {ownEmpty && !current ? (
+          <p className="week-empty">Nothing saved this week.</p>
         ) : (
-          <WeekLinks
-            userId={viewer.id}
-            week={week}
-            add={current}
-            seed={feed.data?.pages[0]?.own}
-            updatedAt={feed.dataUpdatedAt}
-          />
+          <>
+            {/* The field is the invitation; phones, which add from the "+", get a row like it. */}
+            {ownEmpty && (
+              <Link className="add-row" to="." search={(old) => ({ ...old, add: true })}>
+                <i className="category-mark" data-empty aria-hidden="true" />
+                Add a link
+              </Link>
+            )}
+            <WeekLinks
+              userId={viewer.id}
+              week={week}
+              add={current}
+              seed={feed.data?.pages[0]?.own}
+              updatedAt={feed.dataUpdatedAt}
+            />
+          </>
         )}
       </section>
       <section className="people" aria-labelledby={"people-" + week}>
@@ -192,12 +212,20 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         </h2>
         <div className="carousel-controls">
           {edges.before && (
-            <IconButton label="Previous person" onClick={() => scrollPeople(-1)}>
+            <IconButton
+              className="carousel-previous"
+              label="Previous person"
+              onClick={() => scrollPeople(-1)}
+            >
               <ChevronLeft />
             </IconButton>
           )}
           {edges.after && (
-            <IconButton label="Next person" onClick={() => scrollPeople(1)}>
+            <IconButton
+              className="carousel-next"
+              label="Next person"
+              onClick={() => scrollPeople(1)}
+            >
               <ChevronRight />
             </IconButton>
           )}
@@ -224,14 +252,7 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
                 updatedAt={feed.dataUpdatedAt}
               />
             ))}
-            {friendsEmpty && (
-              <p className="week-empty">
-                {followingCount === 0
-                  ? "Find people whose taste you trust."
-                  : "Nothing shared this week yet."}{" "}
-                {followingCount === 0 && <Link to="/discover">Discover people</Link>}
-              </p>
-            )}
+            {friendsEmpty && <NoPeople discover={followingCount === 0} current={current} />}
             {feed.hasNextPage && (
               <Button
                 variant="outline"

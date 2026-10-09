@@ -247,6 +247,32 @@
 .link-list {
   min-height: 0;
 }
+/* Scrolling content fades out on a side with more behind it; that replaces the scrollbar.
+   Lists fade at their edges; the carousel fades the boxes that peek in (see .friend-card). */
+.link-list,
+.friends-carousel {
+  scrollbar-width: none;
+}
+.link-list::-webkit-scrollbar,
+.friends-carousel::-webkit-scrollbar {
+  display: none;
+}
+.link-list:is([data-fade-start], [data-fade-end]) {
+  mask-image: linear-gradient(
+    to bottom,
+    transparent,
+    #000 var(--fade-start, 0px),
+    #000 calc(100% - var(--fade-end, 0px)),
+    transparent
+  );
+}
+/* A whole row fades, so the dimmed row at the edge reads as "more this way". */
+.link-list[data-fade-start] {
+  --fade-start: var(--row, 48px);
+}
+.link-list[data-fade-end] {
+  --fade-end: var(--row, 48px);
+}
 /* A row is a category marker, the title (opens details) and the domain (opens the site). */
 /* The marker column is as wide as an avatar, so markers center under people and titles
    start where their names do. */
@@ -437,77 +463,128 @@
 .week-stage {
   height: 100%;
   display: grid;
-  grid-template-rows: fit-content(45%) minmax(120px, 1fr);
+  /* Fixed zones: your links and your people sit in the same place every week. */
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   min-height: 0;
   gap: 28px;
+  --row: 48px;
 }
+.week-stage :is(.link-row, .quick-add) {
+  min-height: var(--row);
+}
+/* The field stays on top; only the saved links scroll beneath it. */
 .own-links {
   min-height: 0;
   max-width: 100%;
-  display: grid;
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+}
+/* Lists show whole rows and stop on them, so the gap under the field matches the gaps between
+   rows, and the row at a faded edge is always a real one. */
+.link-area {
+  flex: 1;
+  min-height: 0;
+}
+.link-area > .link-list {
+  max-height: 100%;
+  max-height: round(down, 100%, var(--row));
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+}
+.link-area > .link-list > * {
+  scroll-snap-align: start;
 }
 .people {
+  --person-top: 12px;
+  --person-heading-height: 36px;
   position: relative;
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
-.own-links > .link-list {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
-}
-/* The arrows share the line of the people's names. */
+/* Center the edge arrows on the avatar and username row. */
 .carousel-controls {
   position: absolute;
-  top: 0;
-  right: 0;
+  inset: var(--person-top) 0 auto;
+  height: var(--person-heading-height);
   z-index: 1;
-  height: 36px;
   display: flex;
   align-items: center;
+  pointer-events: none;
+}
+.carousel-controls > * {
+  pointer-events: auto;
+}
+.carousel-next {
+  margin-left: auto;
 }
 .friends-carousel {
   display: flex;
   align-items: flex-start;
   overflow-x: auto;
   overflow-y: hidden;
-  gap: 32px;
-  scroll-snap-type: x proximity;
-  scrollbar-width: thin;
-  scrollbar-color: #333 transparent;
+  gap: 16px;
+  /* Always comes to rest on a whole box, so a slightly diagonal scroll does not leave it ajar. */
+  scroll-snap-type: x mandatory;
   min-height: 0;
-  padding: 0 0 8px;
   overscroll-behavior-x: contain;
 }
-/* Two columns of people, each ending after its last link. */
+/* Two columns of people. */
+/* Each person’s name and links fill the zone’s height. */
 .friend-card {
-  flex: 0 0 calc((100% - 32px) / 2);
+  flex: 0 0 calc((100% - 16px) / 2);
   min-width: 0;
-  max-height: 100%;
+  height: 100%;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
+  padding: var(--person-top) 14px 6px;
   scroll-snap-align: start;
+}
+.friend-card {
+  transition: opacity 150ms ease;
+}
+.friend-card[data-peeking] {
+  opacity: 0.3;
+}
+/* With more than two people, a sliver of the next box shows that there is more. */
+.friends-carousel:has(> .friend-card:nth-child(3)) > .friend-card {
+  flex-basis: calc((100% - 32px) / 2.2);
 }
 .friend-card > .person-inline {
   flex: none;
-  height: 36px;
+  height: var(--person-heading-height);
 }
 .friend-card .user-avatar {
   width: 32px;
   height: 32px;
 }
+/* An empty place: a person's box with a centered message. */
+.week-stage .friend-card.friend-card-empty {
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 24px;
+  border: 1px solid #262626;
+  border-radius: 18px;
+  color: #929292;
+  text-align: center;
+}
+.friend-card-empty a {
+  color: #f5f5f5;
+}
+.friend-card-empty a:hover {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+.add-row {
+  display: none;
+}
 .friend-links {
+  flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-}
-.friend-links .link-list {
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: #444 transparent;
 }
 /* A person first: avatar, username and one quiet line of facts. */
 .profile-heading {
@@ -1421,20 +1498,24 @@ span.link-open {
   }
   .week-stage {
     gap: 20px;
-    grid-template-rows: fit-content(40%) minmax(100px, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
   .heading-actions {
     gap: 2px;
   }
-  .friend-card {
+  .friends-carousel > .friend-card,
+  .friends-carousel:has(> .friend-card:nth-child(3)) > .friend-card {
     flex-basis: calc(100vw - 74px);
   }
-  /* Touch screens swipe the carousel; arrows would cover the next person peeking in. */
+  /* Touch screens swipe the carousel; the fades alone show there is more. */
   .carousel-controls {
     display: none;
   }
   .friends-carousel {
     gap: 16px;
+  }
+  .week-stage {
+    --row: 46px;
   }
   .link-row,
   .quick-add {
@@ -1452,6 +1533,15 @@ span.link-open {
   /* Phones add from the "+" in the bottom bar, leaving the week's space for links. */
   .week-stage .quick-add {
     display: none;
+  }
+  .week-stage .add-row {
+    display: grid;
+    grid-template-columns: var(--mark-column, 32px) minmax(0, 1fr);
+    align-items: center;
+    column-gap: 12px;
+    min-height: var(--row);
+    color: #929292;
+    font-size: 13px;
   }
   .profile-heading .user-avatar.large {
     width: 64px;
@@ -1539,27 +1629,28 @@ span.link-open {
     padding-bottom: 36px;
   }
   .week-stage {
+    grid-template-rows: minmax(0, 0.85fr) minmax(0, 1.15fr);
     gap: 14px;
+  }
+  .week-stage .people {
+    --person-top: 8px;
+    --person-heading-height: 28px;
+  }
+  .week-stage .friend-card {
+    padding: var(--person-top) 12px 2px;
   }
   .week-stage .link-row {
     --mark-column: 28px;
   }
-  .week-stage .carousel-controls {
-    height: 28px;
-  }
   .week-stage .friend-card {
     gap: 4px;
-  }
-  .week-stage .friend-card > .person-inline {
-    height: 28px;
   }
   .week-stage .friend-card .user-avatar {
     width: 28px;
     height: 28px;
   }
-  .week-stage .link-row,
-  .week-stage .quick-add {
-    min-height: 36px;
+  .week-stage {
+    --row: 36px;
   }
   .week-stage .link-open,
   .week-stage .quick-add {

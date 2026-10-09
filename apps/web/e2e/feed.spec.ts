@@ -12,10 +12,18 @@ async function login(page: import("@playwright/test").Page, person: string) {
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
 }
 
-test("empty week has a compact invitation and contextual discovery", async ({ page }) => {
+test("empty week keeps the fixed zones with an invitation and contextual discovery", async ({
+  page,
+}) => {
   await login(page, "bob");
   const current = page.locator('.week-page[data-active="true"]');
-  await expect(current.getByText("What caught your eye this week?")).toBeVisible();
+  // The field is the invitation; the phone row standing in for it stays hidden here.
+  const field = current.getByRole("textbox", { name: /Enter a link to add it/ });
+  await expect(field).toBeVisible();
+  await expect(current.getByRole("link", { name: "Add a link", exact: true })).toBeHidden();
+  // Nobody followed yet: a person's place holds the invitation to find people.
+  const placeholder = current.locator(".friend-card-empty");
+  await expect(placeholder).toContainText("Find people whose taste you trust");
   // Section names are for assistive technology only.
   await expect(current.getByRole("heading", { name: "Yours", exact: true })).toHaveCount(1);
   await expect(current.getByRole("heading", { name: "Your people", exact: true })).toHaveCount(1);
@@ -24,12 +32,16 @@ test("empty week has a compact invitation and contextual discovery", async ({ pa
   await expect(current.getByRole("button", { name: "Next person" })).toHaveCount(0);
   // Bob has no earlier weeks with links, so there is nowhere older to go.
   await expect(page.getByRole("button", { name: "Older week" })).toHaveCount(0);
+  // Zones are fixed: an empty week leaves room above the people, whose zone starts halfway.
   const own = await current.locator(".own-links").boundingBox();
-  expect(own!.height).toBeLessThan(300);
+  const invitation = await field.boundingBox();
+  const people = await current.locator(".people").boundingBox();
+  expect(invitation!.y - own!.y).toBeLessThan(40);
+  expect(Math.abs(own!.height - people!.height)).toBeLessThan(2);
   await page.screenshot({ path: "test-results/empty-week-desktop.png" });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(current.getByRole("link", { name: "Add a link", exact: true })).toBeVisible();
-  const friends = await current.locator(".friends-carousel .week-empty").boundingBox();
+  const friends = await placeholder.boundingBox();
   expect(friends!.y + friends!.height).toBeLessThan(780);
   await page.screenshot({ path: "test-results/empty-week-mobile.png" });
   await current.getByRole("link", { name: "Add a link", exact: true }).click();
@@ -62,7 +74,7 @@ test("scroll moves between weeks before settling, without changing horizontal br
   const positions: number[] = await page.evaluate(() => (window as any).weekScrollPositions);
   expect(positions.some((top) => top > 5 && top < height - 5)).toBe(true);
   await expect(current.locator(".own-links")).toContainText("Earlier notes");
-  await expect(current.getByText("Nothing shared this week yet.")).toBeVisible();
+  await expect(current.getByText("Nothing shared this week", { exact: true })).toBeVisible();
   await expect(current.getByRole("link", { name: "Discover people" })).toHaveCount(0);
   await expect
     .poll(() => pager.evaluate((el) => Math.abs(el.scrollTop % el.clientHeight)))
@@ -82,6 +94,48 @@ test("scroll moves between weeks before settling, without changing horizontal br
   await expect
     .poll(() => pager.evaluate((el) => Math.abs(el.scrollTop % el.clientHeight)))
     .toBeLessThan(2);
+});
+
+test("your links scroll under the field, with fades instead of scrollbars", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 620 });
+  await login(page, "alice");
+  const current = page.locator('.week-page[data-active="true"]');
+  const field = current.getByRole("textbox", { name: /Enter a link to add it/ });
+  const list = current.locator(".own-links .link-list");
+  await expect(list).toContainText("Are.na");
+  await expect(list).toHaveAttribute("tabindex", "0");
+  await expect(list).not.toHaveAttribute("data-fade-start");
+  await expect(list).toHaveAttribute("data-fade-end", "true");
+  expect(await list.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("none");
+  // Whole rows only: the first visible row sits right under the field at either end.
+  const firstRowGap = () =>
+    list.evaluate((el) => {
+      const top = el.getBoundingClientRect().top;
+      const rows = [...el.querySelectorAll(".link-row")].map((r) => r.getBoundingClientRect());
+      return {
+        wholeRows: el.clientHeight % rows[0]!.height,
+        offset: Math.round(rows.find((r) => r.bottom > top + 1)!.top - top),
+      };
+    });
+  expect(await firstRowGap()).toEqual({ wholeRows: 0, offset: 0 });
+  const top = (await field.boundingBox())!.y;
+  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(list).toHaveAttribute("data-fade-start", "true");
+  await expect(list).not.toHaveAttribute("data-fade-end");
+  expect((await field.boundingBox())!.y).toBe(top);
+  expect(await firstRowGap()).toEqual({ wholeRows: 0, offset: 0 });
+  // Only the box peeking in fades; the boxes in view never do. The arrows sit on the edges,
+  // level with the people's names.
+  const carousel = current.locator(".friends-carousel");
+  const boxes = carousel.locator(".friend-card");
+  await expect(boxes.nth(2)).toHaveAttribute("data-peeking");
+  await expect(boxes.nth(0)).not.toHaveAttribute("data-peeking");
+  await expect(boxes.nth(1)).not.toHaveAttribute("data-peeking");
+  const next = (await current.getByRole("button", { name: "Next person" }).boundingBox())!;
+  const area = (await carousel.boundingBox())!;
+  const name = (await carousel.locator(".person-inline").first().boundingBox())!;
+  expect(Math.round(next.x + next.width)).toBe(Math.round(area.x + area.width));
+  expect(Math.abs(next.y + next.height / 2 - (name.y + name.height / 2))).toBeLessThan(2);
 });
 
 test("reduced motion keeps explicit week navigation usable", async ({ page }) => {
