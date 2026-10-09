@@ -494,6 +494,19 @@
 .link-area > .link-list > * {
   scroll-snap-align: start;
 }
+/* A row's height, so whole rows still line up while the next page loads. */
+.link-list-loading {
+  display: flex;
+  align-items: center;
+  min-height: var(--row, 48px);
+  padding-left: calc(var(--mark-column, 32px) + 12px);
+  color: #8a8a8a;
+  font-size: 13px;
+  animation: loading-pulse 1.5s ease-in-out infinite;
+}
+.link-list > .load-more {
+  margin-block: calc((var(--row, 48px) - 32px) / 2);
+}
 .people {
   --person-top: 12px;
   --person-heading-height: 36px;

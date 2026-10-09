@@ -138,6 +138,48 @@ test("your links scroll under the field, with fades instead of scrollbars", asyn
   expect(Math.abs(next.y + next.height / 2 - (name.y + name.height / 2))).toBeLessThan(2);
 });
 
+test("a long week loads as you reach its end and shows links you add", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 620 });
+  await login(page, "alice");
+  const current = page.locator('.week-page[data-active="true"]');
+  const field = current.getByRole("textbox", { name: /Enter a link to add it/ });
+  const list = current.locator(".own-links .link-list");
+  const rows = list.locator(".link-row");
+  await expect(rows).toHaveCount(5);
+  for (let i = 1; i <= 15; i++) {
+    await field.fill(`https://pages.test/extra-link-${i}`);
+    await field.press("Enter");
+    await expect(rows).toHaveCount(5 + i);
+  }
+  // Saving while scrolled to the end goes back to the top at once, before the page is read.
+  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await field.fill("https://pages.test/slow-read");
+  await field.press("Enter");
+  const pending = current.locator(".own-links").getByText("Fetching title…");
+  await expect(pending).toBeVisible();
+  await expect.poll(() => list.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(pending).toBeVisible();
+  await expect(rows.first()).toContainText("Slow read");
+  // Already at the top, a new link takes the first row without the list moving at all.
+  await list.evaluate((el) => {
+    (window as any).listPositions = [];
+    el.addEventListener("scroll", () => (window as any).listPositions.push(el.scrollTop));
+  });
+  await field.fill("https://pages.test/extra-link-17");
+  await field.press("Enter");
+  await expect(rows).toHaveCount(22);
+  await page.evaluate(
+    () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))),
+  );
+  expect(await page.evaluate(() => (window as any).listPositions)).toEqual([]);
+  // The feed brings the first 20; the rest arrive when the end comes near, without a button.
+  await page.reload();
+  await expect(rows).toHaveCount(20);
+  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(rows).toHaveCount(22);
+  await expect(list.getByRole("button", { name: "Load more" })).toHaveCount(0);
+});
+
 test("reduced motion keeps explicit week navigation usable", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await login(page, "alice");

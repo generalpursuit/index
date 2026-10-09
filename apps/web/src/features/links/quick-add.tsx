@@ -16,10 +16,13 @@ export function QuickAdd({
   groupId,
   links,
   label,
+  onSave,
 }: {
   groupId?: string;
   links: SavedLink[];
   label: string;
+  /** Called as a save starts, before the server has read the page. */
+  onSave?: () => void;
 }) {
   const { create, remove } = useLibraryActions();
   const hintId = useId();
@@ -32,6 +35,7 @@ export function QuickAdd({
     setText("");
     setHint(false);
     setPending((old) => [entry, ...old]);
+    onSave?.();
     try {
       const link = await create.mutateAsync({ url, groupId: groupId ?? null });
       setAnnouncement("Added " + link.title);

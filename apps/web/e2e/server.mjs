@@ -21,8 +21,12 @@ const fixturePages = {
     <meta property="og:title" content="Calm Software — Pages">
     <meta property="og:site_name" content="Pages">
     <meta property="og:type" content="video.other"></head></html>`,
+  "https://pages.test/slow-read": `<html><head><title>Slow read</title></head></html>`,
 };
+// Takes a moment like a real site, so tests can check what happens while a page is read.
+const slowPages = new Set(["https://pages.test/slow-read"]);
 async function fetchPage(url, init) {
+  if (slowPages.has(url)) await new Promise((resolve) => setTimeout(resolve, 1500));
   const html = fixturePages[url];
   if (html) return new Response(html, { headers: { "content-type": "text/html" } });
   if (process.env.E2E_LIVE_PAGES === "1") return fetch(url, init);

@@ -33,7 +33,28 @@ export function WeekLinks({
   const links = list.data?.pages.flatMap((p) => p.items) ?? [];
   const panel = useRef<HTMLDivElement>(null);
   const edges = useScrollEdges(panel, links.length, "y");
-  return () => observer.disconnect();
+  const scrollToTop = () => panel.current?.scrollTo({ top: 0, behavior: "smooth" });
+  // New links show up first, so bring the top into view: right away when saving from the field
+  // (its pending row sits just above the list), and on arrival for links added elsewhere.
+  const seen = useRef<Set<string>>(null);
+  useEffect(() => {
+    const first = links[0]?.id;
+    if (seen.current && first && !seen.current.has(first)) scrollToTop();
+    seen.current = new Set(links.map((link) => link.id));
+  }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The next page loads as the end of the list comes near; a failed load offers a retry instead.
+  const end = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = list;
+  useEffect(() => {
+    const root = panel.current,
+      target = end.current;
+    if (!root || !target || !hasNextPage || isFetchingNextPage || isFetchNextPageError) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => entry?.isIntersecting && void fetchNextPage(),
+      { root, rootMargin: "0px 0px 100% 0px" },
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
   }, [links.length, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage]);
   return (
     <>
@@ -43,6 +64,7 @@ export function WeekLinks({
           groupId={groupId}
           links={links}
           label={"Enter a link to add it to " + weekLabel(week)}
+          onSave={scrollToTop}
         />
       )}
       {/* Takes the space left under the field; the list inside shows whole rows of it. */}
@@ -56,6 +78,9 @@ export function WeekLinks({
           tabIndex={edges.before || edges.after ? 0 : undefined}
           aria-label={"Links in " + weekLabel(week)}
         >
+          {/* A fixed snap point at the top. Otherwise the list snaps to its first row and holds on
+              to it, so a new link added above would push the list down a row and back. */}
+          <div className="link-list-start" />
           <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
             {links.map((link) => (
               <LinkRow key={link.id} link={link} />
@@ -63,11 +88,11 @@ export function WeekLinks({
             {list.data?.pages[0]?.items.length === 0 && !add && (
               <p className="empty-state">No links this week.</p>
             )}
-            <More
-              hasNext={list.hasNextPage}
-              isFetching={list.isFetchingNextPage}
-              fetch={list.fetchNextPage}
-            />
+            <div ref={end} className="link-list-end" />
+            {isFetchingNextPage && <p className="link-list-loading">Loading…</p>}
+            {isFetchNextPageError && (
+              <More hasNext isFetching={isFetchingNextPage} fetch={fetchNextPage} />
+            )}
           </QueryState>
         </div>
       </div>
