@@ -723,11 +723,14 @@
   text-transform: uppercase;
   color: #8a8a8a;
 }
+.profile-menu-only {
+  justify-content: flex-end;
+}
 .profile-week-placeholder {
   height: calc(var(--rows) * var(--row));
 }
 /* The chevron lines up with the arrows at the end of each row. */
-.list-filter[data-slot="button"] {
+.list-filter {
   gap: 6px;
   margin-right: -8px;
   padding: 0 8px;
@@ -735,10 +738,10 @@
   font-weight: 500;
   color: #f5f5f5;
 }
-.list-filter[data-slot="button"] svg {
+.list-filter svg {
   color: #8a8a8a;
 }
-.list-filter[data-slot="button"] svg:last-child {
+.list-filter svg:last-child {
   width: 16px;
   height: 16px;
 }
@@ -1999,4 +2002,111 @@ span.link-open {
 }
 .settings-session > button {
   min-height: 40px;
+}
+
+/* Menus share the app's quiet surface: a rounded near-black panel, soft grey rows that
+   brighten when pointed at, an icon slot so every label starts on one line, and a small
+   white square (the shape of the markers) for the chosen row. */
+[data-slot="dropdown-menu-content"] {
+  min-width: 176px;
+  max-width: min(320px, var(--available-width));
+  padding: 6px;
+  border: 1px solid #262626;
+  border-radius: 12px;
+  background: #111;
+  color: #bdbdbd;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+:is(
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-checkbox-item"]
+) {
+  min-height: 36px;
+  padding: 0 12px 0 34px;
+  border-radius: 8px;
+  font-size: 14px;
+  white-space: nowrap;
+  transition:
+    background 100ms ease,
+    color 100ms ease;
+}
+:is([data-slot="dropdown-menu-radio-item"], [data-slot="dropdown-menu-checkbox-item"]) {
+  padding-right: 28px;
+}
+:is(
+    [data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-checkbox-item"]
+  )
+  > svg {
+  position: absolute;
+  left: 10px;
+  width: 15px;
+  height: 15px;
+  color: #8a8a8a;
+}
+:is(
+  [data-slot="dropdown-menu-item"],
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-checkbox-item"]
+)[data-highlighted] {
+  background: #1c1c1c;
+  color: #f5f5f5;
+}
+:is(
+    [data-slot="dropdown-menu-item"],
+    [data-slot="dropdown-menu-radio-item"],
+    [data-slot="dropdown-menu-checkbox-item"]
+  )[data-highlighted]
+  > svg {
+  color: #f5f5f5;
+}
+:is(
+  [data-slot="dropdown-menu-radio-item"],
+  [data-slot="dropdown-menu-checkbox-item"]
+)[data-checked] {
+  color: #f5f5f5;
+}
+:is(
+  [data-slot="dropdown-menu-radio-item-indicator"],
+  [data-slot="dropdown-menu-checkbox-item-indicator"]
+) {
+  right: 12px;
+}
+[data-slot="dropdown-menu-mark"] {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-radius: 1.5px;
+  background: #f5f5f5;
+}
+/* Destructive actions read like the others until pointed at. */
+[data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] {
+  background: #241515;
+  color: #ff8a8a;
+}
+[data-slot="dropdown-menu-item"][data-variant="destructive"][data-highlighted] > svg {
+  color: #ff8a8a;
+}
+[data-slot="dropdown-menu-separator"] {
+  height: 1px;
+  margin: 6px 10px;
+  background: #222;
+}
+/* Menu triggers stay quiet: no box behind them, they brighten while pointed at or open. */
+[aria-haspopup="menu"],
+[aria-haspopup="menu"]:hover,
+[aria-haspopup="menu"][aria-expanded="true"] {
+  background: transparent;
+}
+[aria-haspopup="menu"]:hover,
+[aria-haspopup="menu"][aria-expanded="true"] {
+  color: #f5f5f5;
+}
+.list-filter svg:last-child {
+  transition: transform 150ms ease;
+}
+.list-filter[aria-expanded="true"] svg:last-child {
+  transform: rotate(180deg);
 }

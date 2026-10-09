@@ -267,7 +267,8 @@ function ProfileLinks({
           </>
         ) : (
           <>
-            <div className="profile-week-heading">{filterMenu}</div>
+            {/* Without weeks the menu keeps its place at the end of the row. */}
+            <div className="profile-week-heading profile-menu-only">{filterMenu}</div>
             <div className="empty-box">
               <p>
                 {filter === "all"
@@ -426,7 +427,10 @@ function ListFilter({
   onSelect: (value: string) => void;
   onNewGroup: () => void;
 }) {
-  const lists = groups.filter((g) => g.kind !== "starred"),
+  // Favorites first, then the person's groups, like Settings.
+  const lists = groups
+      .filter((g) => g.kind !== "starred")
+      .sort((a, b) => Number(b.kind === "favorites") - Number(a.kind === "favorites")),
     chosen = lists.find((g) => g.id === filter);
   const name =
     filter === "all" ? "All" : filter === "starred" ? "Starred" : (chosen?.name ?? "All");
