@@ -51,6 +51,7 @@ Paths below are relative to `/api/v1`. All mutations require authentication. Pub
 | `comments.list`             | GET `/links/{linkId}/comments`             | Visible comments with public author identity                                                     |
 | `comments.update`           | PATCH `/comments/{id}`                     | Edit own comment while the link is accessible                                                    |
 | `comments.delete`           | DELETE `/comments/{id}`                    | Delete own comment, or moderate a comment on an owned link                                       |
+| `feed.weeks`                | GET `/feed/weeks`                          | Weeks with links from you or accepted follows, newest first, with counts; authenticated          |
 | `feed.list`                 | GET `/feed`                                | Newest accessible original saves from accepted followees; authenticated                          |
 | `discovery.searchUsers`     | GET `/discovery/users`                     | Search public names/usernames using `query`                                                      |
 | `discovery.recommendations` | GET `/discovery/recommendations`           | Second-degree suggestions; authenticated                                                         |
@@ -85,6 +86,7 @@ Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits o
 
 ## Weekly views and Favorites
 
+- `feed.weeks` — GET `/feed/weeks` lists the weeks with links from the viewer or accepted follows, newest first, with counts; paginated with `before`/`nextBefore` (`limit` up to 100). The home scrubber and week list use it.
 - `feed.week` — GET `/feed/week` accepts an ISO Monday date in `weekStart` (not a week number). It returns `own` links, `people` with author identity and link pages, `olderWeek`, `newerWeek` and `nextAfter`. `olderWeek` and `newerWeek` are the nearest weeks with links from the viewer or accepted follows, so navigation skips empty weeks; `newerWeek` falls back to the current week and is null only for it. Only this week or a previous week is accepted.
 - Own links include those in locked groups. Friends are accepted outgoing follows; only their accessible links contribute. The people carousel uses `limit` (default 10, max 30) and `after`; each person's links use `linkLimit` (default 20, max 100) and an independent `nextCursor`.
 - `links.listByOwner` — GET `/profiles/{userId}/links` continues a person's links with the same `weekStart`, `cursor` and `limit`. It applies original-link visibility before pagination. Existing `links.listMine` and `links.listInGroup` also accept `weekStart`.

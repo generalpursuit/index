@@ -71,6 +71,44 @@ export function weekAuthors(
   );
 }
 
+/** Links from the viewer or people they follow (accepted), as far as the viewer may see them. */
+const fromHome = (actorId: string) =>
+  and(
+    or(
+      eq(links.ownerId, actorId),
+      sql`exists (select 1 from ${follows} where ${follows.followerId} = ${actorId} and ${follows.followedId} = ${links.ownerId} and ${follows.status} = 'accepted')`,
+    ),
+    linkVisible(actorId),
+  );
+
+/** Weeks with such links and how many, newest first. */
+export function homeWeeks(
+  db: QueryDatabase,
+  actorId: string,
+  input: { before?: string; limit: number },
+) {
+  const week = sql<string>`to_char(date_trunc('week',${links.savedOn}::timestamp),'YYYY-MM-DD')`;
+  return ResultAsync.fromPromise(
+    db
+      .select({ weekStart: week, count: sql<number>`count(*)::int` })
+      .from(links)
+      .where(
+        and(
+          fromHome(actorId),
+          input.before ? sql`${links.savedOn} < ${input.before}::date` : undefined,
+        ),
+      )
+      .groupBy(week)
+      .orderBy(desc(week))
+      .limit(input.limit + 1)
+      .then((rows) => ({
+        items: rows.slice(0, input.limit),
+        nextBefore: rows.length > input.limit ? rows[input.limit - 1]!.weekStart : null,
+      })),
+    databaseError,
+  );
+}
+
 /** The nearest weeks before and after `weekStart` with links from the viewer or people they follow. */
 export function neighborWeeks(db: QueryDatabase, actorId: string, weekStart: string) {
   const monday = (date: SQL) =>
@@ -86,15 +124,7 @@ export function neighborWeeks(db: QueryDatabase, actorId: string, weekStart: str
         ),
       })
       .from(links)
-      .where(
-        and(
-          or(
-            eq(links.ownerId, actorId),
-            sql`exists (select 1 from ${follows} where ${follows.followerId} = ${actorId} and ${follows.followedId} = ${links.ownerId} and ${follows.status} = 'accepted')`,
-          ),
-          linkVisible(actorId),
-        ),
-      )
+      .where(fromHome(actorId))
       .then((rows) => rows[0]!),
     databaseError,
   );

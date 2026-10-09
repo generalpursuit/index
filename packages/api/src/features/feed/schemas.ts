@@ -19,6 +19,11 @@ export const weekFeedInputSchema = z.strictObject({
   limit: z.number().int().min(1).max(30).default(10),
   linkLimit: z.number().int().min(1).max(100).default(20),
 });
+/** Weeks with links from you or people you follow, newest first, for jumping between weeks. */
+export const feedWeeksInputSchema = z.strictObject({
+  before: weekStartSchema.optional(),
+  limit: z.number().int().min(1).max(100).default(52),
+});
 export const weekFeedSchema = z.object({
   weekStart: weekStartSchema,
   olderWeek: weekStartSchema.nullable(),

@@ -18,6 +18,12 @@ export function listFeed(
   );
 }
 
+export const feedWeeks = (
+  db: QueryDatabase,
+  actorId: string,
+  input: { before?: string; limit: number },
+) => repository.homeWeeks(db, actorId, input);
+
 export function weekFeed(
   db: QueryDatabase,
   actorId: string,

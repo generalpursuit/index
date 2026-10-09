@@ -58,4 +58,35 @@ describe("home feed", () => {
     assert.equal((await alice.feed.list({ cursor: first.nextCursor! })).items.length, 0);
     await assert.rejects(api.client(null).feed.list({}), { code: "UNAUTHORIZED" });
   });
+
+  it("lists the weeks with links from you or people you follow, newest first", async () => {
+    const alice = api.client("alice"),
+      bob = api.client("bob");
+    const mine = await alice.links.create({ title: "Mine", url: "https://example.com/mine" });
+    const theirs = await bob.links.create({ title: "Theirs", url: "https://example.com/theirs" });
+    const stranger = await api.client("carol").links.create({
+      title: "Stranger",
+      url: "https://example.com/stranger",
+    });
+    await api.db.update(links).set({ savedOn: "2026-03-04" }).where(eq(links.id, mine.id));
+    await api.db.update(links).set({ savedOn: "2026-02-11" }).where(eq(links.id, theirs.id));
+    await api.db.update(links).set({ savedOn: "2026-01-14" }).where(eq(links.id, stranger.id));
+    // Nobody followed yet: only your own week.
+    assert.deepEqual((await alice.feed.weeks({})).items, [{ weekStart: "2026-03-02", count: 1 }]);
+    await alice.follows.follow({ userId: "bob" });
+    const all = await alice.feed.weeks({});
+    assert.deepEqual(all.items, [
+      { weekStart: "2026-03-02", count: 1 },
+      { weekStart: "2026-02-09", count: 1 },
+    ]);
+    const first = await alice.feed.weeks({ limit: 1 });
+    assert.equal(first.nextBefore, "2026-03-02");
+    assert.deepEqual(
+      (await alice.feed.weeks({ limit: 1, before: first.nextBefore! })).items.map(
+        (w) => w.weekStart,
+      ),
+      ["2026-02-09"],
+    );
+    await assert.rejects(api.client(null).feed.weeks({}), { code: "UNAUTHORIZED" });
+  });
 });
