@@ -49,10 +49,10 @@ export function MessagesPage() {
         Messages
       </Heading>
       <label className="search-field">
-        <Search size={19} />
+        <Search size={18} />
         <Input
           aria-label="Search conversations"
-          placeholder="Search"
+          placeholder="Search conversations"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -87,7 +87,9 @@ export function MessagesPage() {
             ))}
         </div>
         {list.data?.pages[0]?.items.length === 0 && (
-          <p className="empty-state">No conversations yet.</p>
+          <div className="empty-box">
+            <p>No conversations yet</p>
+          </div>
         )}
         <More
           hasNext={list.hasNextPage}

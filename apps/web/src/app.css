@@ -224,13 +224,18 @@
 .person-label strong {
   font-weight: 500;
 }
+/* Name and username read as one unit about as tall as the avatar beside them. */
 .person-label {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  gap: 2px;
+  gap: 1px;
+}
+.person-label strong {
+  line-height: 18px;
 }
 .person-label small {
+  line-height: 16px;
   font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -572,21 +577,30 @@
   width: 32px;
   height: 32px;
 }
-/* An empty place: a person's box with a centered message. */
-.week-stage .friend-card.friend-card-empty {
+/* An empty place: a centered, muted line, the same wherever it appears. */
+.empty-box {
+  display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  gap: 12px;
+  min-height: 160px;
+  padding: 24px;
+  color: #929292;
+  text-align: center;
+}
+/* On the home page it holds a person's place: their column, full height, and a box. */
+.week-stage .friend-card.empty-box {
+  justify-content: center;
   gap: 12px;
   padding: 24px;
   border: 1px solid #262626;
   border-radius: 18px;
-  color: #929292;
-  text-align: center;
 }
-.friend-card-empty a {
+.empty-box a {
   color: #f5f5f5;
 }
-.friend-card-empty a:hover {
+.empty-box a:hover {
   text-decoration: underline;
   text-underline-offset: 4px;
 }
@@ -771,25 +785,43 @@
   margin-top: 8px;
   min-width: 160px;
 }
+/* A quiet outline at the content's edge; Discover and Messages share it exactly. */
 .search-field {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
-  gap: 10px;
-  background: #202020;
-  border-radius: 12px;
+  column-gap: 15px;
+  height: 44px;
   padding: 0 14px;
-  margin: 0 0 28px;
+  margin: 0 0 20px;
+  border: 1px solid #262626;
+  border-radius: 10px;
   color: #929292;
+  transition: border-color 150ms ease;
+}
+.search-field:focus-within {
+  border-color: #3a3a3a;
+}
+.search-field svg {
+  transition: color 150ms ease;
+}
+.search-field:hover svg,
+.search-field:focus-within svg {
+  color: #f5f5f5;
 }
 .search-field input {
   border: 0;
   background: transparent !important;
-  box-shadow: none;
+  box-shadow: none !important;
   border-radius: 0;
-  padding-left: 0;
-  height: 46px;
+  padding: 0;
+  height: 42px;
+  color: #f5f5f5;
   font-size: 14px;
   min-width: 0;
+}
+.search-field input::placeholder {
+  color: #929292;
 }
 .person-row {
   display: flex;
@@ -1559,8 +1591,9 @@ span.link-open {
   .request-actions {
     gap: 5px;
   }
-  .search-field {
-    margin-bottom: 22px;
+  /* Phones zoom into fields with smaller text. */
+  .search-field input {
+    font-size: 16px;
   }
   .person-row {
     gap: 10px;

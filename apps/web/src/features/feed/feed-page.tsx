@@ -125,7 +125,7 @@ function FriendCard({
 /** Holds a person's place, so the zone keeps its shape when nobody has shared anything. */
 function NoPeople({ discover, current }: { discover: boolean; current: boolean }) {
   return (
-    <div className="friend-card friend-card-empty">
+    <div className="friend-card empty-box">
       <p>
         {discover
           ? "Find people whose taste you trust"

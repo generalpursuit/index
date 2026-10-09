@@ -22,7 +22,7 @@ test("empty week keeps the fixed zones with an invitation and contextual discove
   await expect(field).toBeVisible();
   await expect(page.getByRole("link", { name: "Add link" })).toHaveCount(0);
   // Nobody followed yet: a person's place holds the invitation to find people.
-  const placeholder = current.locator(".friend-card-empty");
+  const placeholder = current.locator(".empty-box");
   await expect(placeholder).toContainText("Find people whose taste you trust");
   // Section names are for assistive technology only.
   await expect(current.getByRole("heading", { name: "Yours", exact: true })).toHaveCount(1);

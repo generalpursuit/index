@@ -18,10 +18,10 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
     <div className="discover-page">
       <Heading>Discover</Heading>
       <label className="search-field">
-        <Search size={19} />
+        <Search size={18} />
         <Input
           aria-label="Search people"
-          placeholder="Search"
+          placeholder="Search people"
           value={query}
           onChange={(e) => {
             void navigate({
@@ -65,9 +65,9 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
             ))}
         </div>
         {people?.length === 0 && (
-          <p className="empty-state">
-            {search ? "No people found." : "Search for someone to follow."}
-          </p>
+          <div className="empty-box">
+            <p>{search ? "No one by that name" : "Search for someone you know"}</p>
+          </div>
         )}
         {search && (
           <More
