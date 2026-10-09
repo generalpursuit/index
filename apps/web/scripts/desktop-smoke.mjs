@@ -10,7 +10,6 @@ if (!fixture.people?.Alice)
 const env = {
   ...process.env,
   VITE_SERVER_URL: "http://localhost:3002",
-  VITE_WEB_URL: "http://localhost:4173",
 };
 const logs = mkdtempSync(join(tmpdir(), "index-native-smoke-"));
 const bundle = resolve("src-tauri/target/release/bundle/macos/Index.app");

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const local = process.argv.includes("--local");
-for (const key of ["VITE_SERVER_URL", "VITE_WEB_URL"]) {
+for (const key of ["VITE_SERVER_URL"]) {
   const raw = process.env[key];
   let url;
   try {

@@ -25,11 +25,6 @@ export const apiFetch: typeof fetch = isDesktop
     )
   : (input, init) => fetch(input, { ...init, credentials: "include" });
 
-export function publicProfileURL(id: string) {
-  const base = isDesktop ? import.meta.env.VITE_WEB_URL : location.origin;
-  if (!base) throw new Error("This desktop build has no public web URL configured.");
-  return new URL("/people/" + encodeURIComponent(id), base).href;
-}
 export function installDesktopLinks(reportError: (message: string) => void) {
   if (!isDesktop) return () => {};
   document.documentElement.dataset.desktop = "true";

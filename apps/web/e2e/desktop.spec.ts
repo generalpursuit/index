@@ -42,11 +42,13 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   expect(await context.cookies("http://localhost:3002")).toHaveLength(0);
   await page.reload();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
-  await page.getByRole("button", { name: "Actions for Are.na", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Open website", exact: true }).click();
+  // The domain in a row opens the website directly.
+  await page.getByRole("link", { name: "are.na", exact: true }).click();
   await expect.poll(() => opened.length).toBe(1);
   expect(opened[0]).toBe("https://are.na/");
   await expect(page).toHaveURL(/\/$/);
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/login/);
   expect(token).toBeNull();

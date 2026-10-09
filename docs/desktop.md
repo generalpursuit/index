@@ -14,7 +14,7 @@ Start the normal web/API stack first. The native shell's development URL is `htt
 
 ```sh
 cd apps/web
-VITE_SERVER_URL=http://localhost:8080 VITE_WEB_URL=http://localhost:3000 bun run desktop:dev
+VITE_SERVER_URL=http://localhost:8080 bun run desktop:dev
 ```
 
 The backend already permits `tauri://localhost` and `http://tauri.localhost` origins and exposes Better Auth's `set-auth-token` header. Desktop uses that signed header as a bearer token; it does not depend on cross-site WebView cookies. The credential store is scoped by API URL. Token reads/writes run off the UI thread. Logout clears the local credential even if the network request fails. No token is written to browser storage or logged.
@@ -23,14 +23,14 @@ The backend already permits `tauri://localhost` and `http://tauri.localhost` ori
 
 ```sh
 cd apps/web
-VITE_SERVER_URL=https://api.example.com VITE_WEB_URL=https://index.example.com \
+VITE_SERVER_URL=https://api.example.com \
   bun run desktop:build
 ```
 
-Replace example origins with the deployed application origins. The wrapper script validates them and restricts the packaged CSP's network access to the configured API plus Tauri IPC. The public web URL is used for profile sharing, so copied URLs never contain a `tauri:` origin. For a local integration build against the disposable API:
+Replace the example origin with the deployed API origin. The wrapper script validates it and restricts the packaged CSP's network access to the configured API plus Tauri IPC. For a local integration build against the disposable API:
 
 ```sh
-VITE_SERVER_URL=http://localhost:3002 VITE_WEB_URL=http://localhost:4173 \
+VITE_SERVER_URL=http://localhost:3002 \
   bun run desktop:build --local --bundles app
 ```
 

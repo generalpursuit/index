@@ -21,7 +21,8 @@
         (node.textContent.trim() === label || node.getAttribute("aria-label") === label),
     );
   const activePage = () => document.querySelector('.week-page[data-active="true"]');
-  const week = () => activePage()?.querySelector("h1")?.textContent.includes("Week");
+  const week = () =>
+    document.querySelector(".week-feed > .page-heading h1")?.textContent.includes("Week");
   const input = (type, value) => {
     const node = document.querySelector(`input[type="${type}"]`);
     assert(node, `Missing ${type} field`);
@@ -99,6 +100,18 @@
     } else if (window.__SMOKE_PHASE__ === "restore") {
       await waitFor(week, "Keychain session restoration");
       await waitFor(() => button("Actions for Are.na"), "restored API-backed feed");
+      (
+        await waitFor(
+          () => document.querySelector('a[aria-label="Your profile"]'),
+          "profile navigation",
+        )
+      ).click();
+      (
+        await waitFor(
+          () => document.querySelector('a[aria-label="Settings"]'),
+          "settings navigation",
+        )
+      ).click();
       (await waitFor(() => button("Sign out"), "sign-out action")).click();
       await waitFor(() => button("Sign in"), "logout screen");
       await waitFor(
