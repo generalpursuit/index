@@ -48,20 +48,25 @@ test("single-week layout, scrolling, add page and Favorites", async ({ page }) =
   );
   await page.getByRole("button", { name: "Newer week" }).click();
   await expect(page).toHaveURL(new RegExp(data.week));
-  await page
-    .locator('.week-page[data-active="true"] .own-links')
-    .getByRole("link", { name: /Add link to/ })
-    .click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Add link" })).toBeVisible();
+  await page.getByRole("link", { name: "Add link", exact: true }).click();
+  // Adding opens a modal over the week rather than a separate page.
+  await expect(page.getByRole("dialog", { name: "Add link" })).toBeVisible();
   await page.getByLabel("URL", { exact: true }).fill("https://example.com/new");
   await page.getByLabel("Title", { exact: true }).fill("A new find");
-  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByRole("button", { name: "Add link", exact: true }).click();
   await expect(page.locator('.week-page[data-active="true"] .own-links')).toContainText(
     "A new find",
   );
-  await page.getByRole("button", { name: "Actions for A new find", exact: true }).click();
+  // Rows only open the post; its actions live in the detail view.
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "A new find", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await post.getByRole("button", { name: "Actions for A new find", exact: true }).click();
   await page.getByRole("menuitem", { name: "Add to Favorites" }).click();
+  await page.keyboard.press("Escape");
+  await expect(post).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await page.getByRole("button", { name: "Favorites", exact: true }).click();
   await expect(page.locator(".profile-links")).toContainText("A new find");
@@ -107,7 +112,9 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page).toHaveURL(/discover/);
   await page.getByRole("link", { name: "Activity", exact: true }).click();
-  await expect(page.getByRole("link", { name: "Messages", exact: true })).toBeHidden();
+  await expect(
+    page.getByRole("navigation").getByRole("link", { name: "Messages", exact: true }),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Stars", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Requests", exact: true }).click();
   const row = page.locator(".activity-row").filter({ hasText: "mia" });
@@ -118,12 +125,16 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await row.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(row).toContainText("Follow request accepted.");
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
+  // Visibility lives in Settings, behind a confirmation.
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("combobox", { name: "Profile visibility" }).click();
   await page.getByRole("option", { name: "Public", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Make profile public?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("combobox", { name: "Profile visibility" })).toContainText("Private");
-  await page.getByRole("button", { name: /followers$/ }).click();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: /followers?$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("mia");
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
 });
@@ -180,8 +191,75 @@ test("comments respond/delete, locked forwarding, and logout clears private data
   await page.getByRole("button", { name: "Actions for Working notes", exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Forward", exact: true })).toBeDisabled();
   await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await expect(page).toHaveURL(/login/);
   await page.goBack();
   await expect(page.getByText("Working notes", { exact: true })).toHaveCount(0);
+});
+
+test("a pasted link fills its title and category from the page", async ({ page }) => {
+  await login(page);
+  await page.getByRole("link", { name: "Add link", exact: true }).click();
+  await page.getByLabel("URL", { exact: true }).fill("https://pages.test/calm-software");
+  // The fixture page declares a video and its site name, which is trimmed from the title.
+  await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Calm Software");
+  await expect(page.locator(".link-preview .category-mark")).toHaveAttribute(
+    "data-category",
+    "video",
+  );
+  await page.getByRole("button", { name: "Add link", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const row = page
+    .locator('.week-page[data-active="true"] .own-links .link-row')
+    .filter({ hasText: "Calm Software" });
+  await expect(row.locator(".category-mark")).toHaveAttribute("data-category", "video");
+});
+
+test("pasting into the first row saves the link right away", async ({ page }) => {
+  await login(page);
+  const own = page.locator('.week-page[data-active="true"] .own-links');
+  const field = own.getByRole("textbox", { name: /Enter a link to add it/ });
+  // Real paste events carry clipboard data, which Playwright's fill() does not.
+  const paste = (text: string) =>
+    field.evaluate((input, value) => {
+      const data = new DataTransfer();
+      data.setData("text/plain", value);
+      input.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true }));
+    }, text);
+  // Record the rows on every change: the pending row must turn into the saved one in place,
+  // never showing both, which made the rows below jump.
+  await own.evaluate((list) => {
+    const snapshots: string[][] = [];
+    (window as unknown as { rowSnapshots: string[][] }).rowSnapshots = snapshots;
+    new MutationObserver(() =>
+      snapshots.push([...list.querySelectorAll(".link-row")].map((row) => row.textContent ?? "")),
+    ).observe(list, { subtree: true, childList: true, characterData: true });
+  });
+  await field.focus();
+  await paste("https://pages.test/calm-software");
+  await expect(field).toHaveValue("");
+  const saved = own.locator(".link-row").filter({ hasText: "Calm Software" });
+  await expect(saved).toHaveCount(1);
+  const snapshots = await page.evaluate(
+    () => (window as unknown as { rowSnapshots: string[][] }).rowSnapshots,
+  );
+  expect(
+    snapshots.filter(
+      (rows) =>
+        rows.some((row) => row.includes("Fetching title")) &&
+        rows.some((row) => row.includes("Calm Software")),
+    ),
+  ).toEqual([]);
+  await expect(saved.locator(".category-mark")).toHaveAttribute("data-category", "video");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(saved).toHaveCount(0);
+  // Text that is not a link is never saved; typed links save with Enter.
+  await field.fill("not a link");
+  await field.press("Enter");
+  await expect(own.getByText("Enter a web link (https://…)")).toBeVisible();
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
+  await expect(saved).toHaveCount(1);
 });

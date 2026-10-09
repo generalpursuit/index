@@ -126,16 +126,21 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           fetch={conversations.fetchNextPage}
         />
       </div>
-      <Button
-        disabled={!selected.length || start.isPending || selected.length > 19}
-        onClick={() =>
-          start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.id) })
-        }
-      >
-        {start.isPending
-          ? "Opening…"
-          : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
-      </Button>
+      <div className="modal-actions">
+        <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
+          Cancel
+        </Button>
+        <Button
+          disabled={!selected.length || start.isPending || selected.length > 19}
+          onClick={() =>
+            start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.id) })
+          }
+        >
+          {start.isPending
+            ? "Opening…"
+            : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
+        </Button>
+      </div>
     </Modal>
   );
 }

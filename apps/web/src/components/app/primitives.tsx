@@ -9,6 +9,7 @@ import {
 import { Button } from "@index/ui/components/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@index/ui/components/avatar";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@index/ui/components/dialog";
+import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@index/ui/components/drawer";
 import {
   Select,
   SelectTrigger,
@@ -16,9 +17,9 @@ import {
   SelectContent,
   SelectItem,
 } from "@index/ui/components/select";
-import { ChevronLeft, MessageCircle } from "lucide-react";
-import { Link } from "@tanstack/react-router";
+import { ChevronLeft } from "lucide-react";
 import { useBack } from "@/hooks/use-back";
+import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Person } from "@/lib/types";
 import type { ReactNode, ComponentProps } from "react";
 
@@ -83,14 +84,6 @@ export function Heading({
     </header>
   );
 }
-export function MessagesLink({ unread = 0 }: { unread?: number }) {
-  return (
-    <Link to="/messages" className="icon-link" aria-label="Messages">
-      <MessageCircle />
-      {unread > 0 && <i className="unread-dot" />}
-    </Link>
-  );
-}
 export function Modal({
   open,
   onOpenChange,
@@ -106,6 +99,20 @@ export function Modal({
   children: ReactNode;
   className?: string;
 }) {
+  // Phones get a bottom sheet that can be swiped away; larger screens a centered dialog.
+  const phone = useMediaQuery("(max-width: 700px)");
+  if (phone)
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent className={"app-dialog app-sheet " + className}>
+          <DrawerTitle className="dialog-title">{title}</DrawerTitle>
+          <DrawerDescription className={description ? "muted" : "sr-only"}>
+            {description ?? title}
+          </DrawerDescription>
+          {children}
+        </DrawerContent>
+      </Drawer>
+    );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={"app-dialog " + className}>

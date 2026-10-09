@@ -38,11 +38,10 @@ export function MessagesPage() {
     list = useConversations(useDebounced(query)),
     viewer = useViewer()!;
   return (
-    <div>
+    <div className="messages-page">
       <Heading
-        back
         actions={
-          <IconButton label="New message" onClick={() => setPicker(true)}>
+          <IconButton className="icon-link" label="New message" onClick={() => setPicker(true)}>
             <SquarePen />
           </IconButton>
         }

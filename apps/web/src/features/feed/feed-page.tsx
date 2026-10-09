@@ -1,29 +1,22 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Plus } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
 import { Button } from "@index/ui/components/button";
-import {
-  Heading,
-  IconButton,
-  MessagesLink,
-  QueryState,
-  UserAvatar,
-  More,
-} from "@/components/app/primitives";
+import { Heading, IconButton, QueryState, UserAvatar, More } from "@/components/app/primitives";
 import { LinkRow } from "@/features/links/link-row";
+import { QuickAdd } from "@/features/links/quick-add";
 import { useWeekLinks } from "@/features/links/hooks/use-links";
 import { useFeed } from "./hooks/use-feed";
+import { useScrollEdges } from "./hooks/use-scroll-edges";
 import { useWeekPager } from "./hooks/use-week-pager";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
 import { useViewer } from "@/hooks/use-api";
-import { useUnread } from "@/features/activity/hooks/use-activity";
 import { monday, weekLabel } from "@/lib/weeks";
 import type { Person, SavedLink } from "@/lib/types";
 export function WeekLinks({
   userId,
   week,
   groupId,
-  inbox = false,
   add = false,
   seed,
   updatedAt,
@@ -31,12 +24,12 @@ export function WeekLinks({
   userId: string;
   week: string;
   groupId?: string;
-  inbox?: boolean;
   add?: boolean;
   seed?: { items: SavedLink[]; nextCursor: string | null };
   updatedAt?: number;
 }) {
-  const list = useWeekLinks(userId, week, groupId, inbox, seed, updatedAt);
+  const list = useWeekLinks(userId, week, groupId, seed, updatedAt);
+  const links = list.data?.pages.flatMap((p) => p.items) ?? [];
   const panel = useRef<HTMLDivElement>(null);
   const [scrollable, setScrollable] = useState(false);
   useEffect(() => {
@@ -57,22 +50,16 @@ export function WeekLinks({
       aria-label={"Links in " + weekLabel(week)}
     >
       {add && (
-        <Link
-          to="/add"
-          search={{ week, group: groupId }}
-          className="add-row"
-          aria-label={"Add link to " + weekLabel(week)}
-        >
-          <Plus size={20} />
-          <span className="sr-only">Add link</span>
-        </Link>
+        <QuickAdd
+          groupId={groupId}
+          links={links}
+          label={"Enter a link to add it to " + weekLabel(week)}
+        />
       )}
       <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
-        {list.data?.pages
-          .flatMap((p) => p.items)
-          .map((link) => (
-            <LinkRow key={link.id} link={link} />
-          ))}
+        {links.map((link) => (
+          <LinkRow key={link.id} link={link} />
+        ))}
         {list.data?.pages[0]?.items.length === 0 && !add && (
           <p className="empty-state">No links this week.</p>
         )}
@@ -111,17 +98,20 @@ function FriendCard({
 export function FeedPage({ week }: { week: string }) {
   const viewer = useViewer()!;
   const profile = useProfile(viewer.id);
-  const { viewport, weeks, move } = useWeekPager(week);
+  const neighbors = useFeed(week).data?.pages[0];
+  const { viewport, weeks, move } = useWeekPager(week, neighbors);
   return (
-    <>
-      <IconButton
-        className="week-navigation week-navigation-newer"
-        label="Newer week"
-        disabled={week >= monday()}
-        onClick={() => move(1)}
-      >
-        <ChevronUp />
-      </IconButton>
+    <div className="week-feed">
+      <Heading>{weekLabel(week)}</Heading>
+      {neighbors?.newerWeek && (
+        <IconButton
+          className="week-navigation week-navigation-newer"
+          label="Newer week"
+          onClick={() => move(1)}
+        >
+          <ChevronUp />
+        </IconButton>
+      )}
       <div ref={viewport} className="week-pager" role="region" aria-label="Weekly feed">
         {weeks.map((date) => (
           <section
@@ -136,96 +126,96 @@ export function FeedPage({ week }: { week: string }) {
           </section>
         ))}
       </div>
-      <IconButton
-        className="week-navigation week-navigation-older"
-        label="Older week"
-        onClick={() => move(-1)}
-      >
-        <ChevronDown />
-      </IconButton>
-    </>
+      {neighbors?.olderWeek && (
+        <IconButton
+          className="week-navigation week-navigation-older"
+          label="Older week"
+          onClick={() => move(-1)}
+        >
+          <ChevronDown />
+        </IconButton>
+      )}
+    </div>
   );
 }
 
 function WeekContent({ week, followingCount }: { week: string; followingCount?: number | null }) {
   const viewer = useViewer()!,
-    feed = useFeed(week),
-    unread = useUnread();
+    feed = useFeed(week);
   const carousel = useRef<HTMLDivElement>(null);
   const ownEmpty = feed.data?.pages[0]?.own.items.length === 0;
   const people = feed.data?.pages.flatMap((page) => page.people) ?? [];
   const friendsEmpty = !!feed.data && people.length === 0;
+  const edges = useScrollEdges(carousel, people.length);
+  const current = week === monday();
+  // One step moves the carousel by a whole column, whatever the layout's column width.
+  const scrollPeople = (direction: 1 | -1) => {
+    const element = carousel.current,
+      card = element?.querySelector<HTMLElement>(".friend-card");
+    if (!element || !card) return;
+    const gap = parseFloat(getComputedStyle(element).columnGap) || 0;
+    element.scrollBy({ left: direction * (card.offsetWidth + gap), behavior: "smooth" });
+  };
   return (
-    <div className="week-stage" data-own-empty={ownEmpty} data-friends-empty={friendsEmpty}>
-      <Heading actions={<MessagesLink unread={unread.messages} />}>{weekLabel(week)}</Heading>
-      <div className="own-links">
+    <div className="week-stage">
+      {/* The layout makes both sections clear; their names remain for assistive technology. */}
+      <section className="own-links" aria-labelledby={"yours-" + week}>
+        <h2 id={"yours-" + week} className="sr-only">
+          Yours
+        </h2>
         {ownEmpty ? (
-          <div className="week-empty-own">
-            <h2>
-              {week === monday() ? "What caught your eye this week?" : "No links saved this week."}
-            </h2>
-            <p>
-              {week === monday()
-                ? "Save something worth coming back to."
-                : "There’s still room for something worth keeping."}
-            </p>
-            <Button
-              nativeButton={false}
-              role="link"
-              render={<Link to="/add" search={{ week }} />}
-              className="week-empty-add"
-            >
-              <Plus size={17} /> Add a link
-            </Button>
-          </div>
+          <p className="week-empty">
+            {current ? (
+              <>
+                What caught your eye this week?{" "}
+                <Link to="." search={(old) => ({ ...old, add: true })}>
+                  Add a link
+                </Link>
+              </>
+            ) : (
+              "Nothing saved this week."
+            )}
+          </p>
         ) : (
           <WeekLinks
             userId={viewer.id}
             week={week}
-            add
+            add={current}
             seed={feed.data?.pages[0]?.own}
             updatedAt={feed.dataUpdatedAt}
           />
         )}
-      </div>
-      <div className="carousel-controls">
-        {!friendsEmpty && (
-          <>
-            <span className="sr-only">People you follow</span>
-            <IconButton
-              label="Previous person"
-              onClick={() => carousel.current?.scrollBy({ left: -350, behavior: "smooth" })}
-            >
+      </section>
+      <section className="people" aria-labelledby={"people-" + week}>
+        <h2 id={"people-" + week} className="sr-only">
+          Your people
+        </h2>
+        <div className="carousel-controls">
+          {edges.before && (
+            <IconButton label="Previous person" onClick={() => scrollPeople(-1)}>
               <ChevronLeft />
             </IconButton>
-            <IconButton
-              label="Next person"
-              onClick={() => carousel.current?.scrollBy({ left: 350, behavior: "smooth" })}
-            >
+          )}
+          {edges.after && (
+            <IconButton label="Next person" onClick={() => scrollPeople(1)}>
               <ChevronRight />
             </IconButton>
-          </>
-        )}
-      </div>
-      <div
-        ref={carousel}
-        className="friends-carousel"
-        aria-label="Friends’ links"
-        tabIndex={friendsEmpty ? undefined : 0}
-        onKeyDown={(e) => {
-          if (e.target === e.currentTarget && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
-            e.preventDefault();
-            carousel.current?.scrollBy({
-              left: e.key === "ArrowRight" ? 350 : -350,
-              behavior: "smooth",
-            });
-          }
-        }}
-      >
-        <QueryState pending={feed.isPending} error={feed.error} retry={() => void feed.refetch()}>
-          {feed.data?.pages
-            .flatMap((p) => p.people)
-            .map((p) => (
+          )}
+        </div>
+        <div
+          ref={carousel}
+          className="friends-carousel"
+          aria-label="Friends’ links"
+          tabIndex={friendsEmpty ? undefined : 0}
+          onKeyDown={(e) => {
+            if (e.target === e.currentTarget && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+              e.preventDefault();
+              scrollPeople(e.key === "ArrowRight" ? 1 : -1);
+            }
+          }}
+        >
+          <QueryState pending={feed.isPending} error={feed.error} retry={() => void feed.refetch()}>
+            {people.map((p) => (
               <FriendCard
                 key={week + p.author.id}
                 person={p.author}
@@ -234,33 +224,26 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
                 updatedAt={feed.dataUpdatedAt}
               />
             ))}
-          {friendsEmpty && (
-            <div className="week-empty-friends">
-              <span className="week-section-label">Your people</span>
-              <h2>
+            {friendsEmpty && (
+              <p className="week-empty">
                 {followingCount === 0
                   ? "Find people whose taste you trust."
-                  : "Nothing shared this week yet."}
-              </h2>
-              <p>Links from people you follow will appear here.</p>
-              {followingCount === 0 && (
-                <Link to="/discover">
-                  Discover people <ChevronRight size={15} />
-                </Link>
-              )}
-            </div>
-          )}
-          {feed.hasNextPage && (
-            <Button
-              variant="outline"
-              onClick={() => void feed.fetchNextPage()}
-              disabled={feed.isFetchingNextPage}
-            >
-              More people
-            </Button>
-          )}
-        </QueryState>
-      </div>
+                  : "Nothing shared this week yet."}{" "}
+                {followingCount === 0 && <Link to="/discover">Discover people</Link>}
+              </p>
+            )}
+            {feed.hasNextPage && (
+              <Button
+                variant="outline"
+                onClick={() => void feed.fetchNextPage()}
+                disabled={feed.isFetchingNextPage}
+              >
+                More people
+              </Button>
+            )}
+          </QueryState>
+        </div>
+      </section>
     </div>
   );
 }

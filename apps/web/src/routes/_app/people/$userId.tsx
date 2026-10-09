@@ -5,7 +5,7 @@ import { apiFor } from "@/utils/orpc";
 export const Route = createFileRoute("/_app/people/$userId")({
   validateSearch: z.object({
     group: z
-      .union([z.uuid(), z.literal("inbox")])
+      .union([z.uuid(), z.literal("starred")])
       .optional()
       .catch(undefined),
   }),

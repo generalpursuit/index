@@ -25,7 +25,7 @@ export function Connections({
       title="Connections"
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="followers">Followers</TabsTrigger>
           <TabsTrigger value="following">Following</TabsTrigger>
         </TabsList>

@@ -5,7 +5,7 @@ import { requireSession } from "@/lib/session";
 export const Route = createFileRoute("/_app/activity")({
   beforeLoad: requireSession,
   validateSearch: z.object({
-    filter: z.enum(["all", "comment", "request", "follow", "accepted"]).optional().catch(undefined),
+    filter: z.enum(["all", "comment", "request", "mention", "follow"]).optional().catch(undefined),
   }),
   component: () => <ActivityPage filter={Route.useSearch().filter} />,
 });

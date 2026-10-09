@@ -14,6 +14,20 @@ const auth = createAuth(
   ["tauri://localhost", "http://tauri.localhost"],
 );
 let fixture;
+// Pages on the reserved .test domain are served from fixtures so tests never need the internet.
+// Set E2E_LIVE_PAGES=1 to read real pages while clicking through the app by hand.
+const fixturePages = {
+  "https://pages.test/calm-software": `<html><head><title>Ignored</title>
+    <meta property="og:title" content="Calm Software — Pages">
+    <meta property="og:site_name" content="Pages">
+    <meta property="og:type" content="video.other"></head></html>`,
+};
+async function fetchPage(url, init) {
+  const html = fixturePages[url];
+  if (html) return new Response(html, { headers: { "content-type": "text/html" } });
+  if (process.env.E2E_LIVE_PAGES === "1") return fetch(url, init);
+  throw new TypeError("Offline: only fixture pages are available.");
+}
 async function seed() {
   await database.client.exec('TRUNCATE TABLE "user", conversations CASCADE');
   const people = {};
@@ -66,17 +80,16 @@ async function seed() {
           "https://designengineering.io",
           "https://shapeofdesignbook.com",
         ][i],
-        category: ["tool", "music", "article", "book"][i],
         groupId: reading.id,
-        savedOn: week,
       }),
     );
-  await api("Alice").links.create({
+  const earlier = await api("Alice").links.create({
     title: "Earlier notes",
     url: "https://example.com/earlier",
     groupId: reading.id,
-    savedOn: older,
   });
+  // Links are always saved today, so the fixture moves this one into last week directly.
+  await database.client.query("update links set saved_on = $1 where id = $2", [older, earlier.id]);
   const locked = await api("Alice").links.create({
     title: "Working notes",
     url: "https://example.com/locked",
@@ -94,10 +107,15 @@ async function seed() {
     ].entries()) {
       const link = await api(name).links.create({
         title: name + " · " + title,
-        url: "https://example.com/" + name.toLowerCase() + "/" + i,
+        url:
+          [
+            "https://goodreads.com/book/show/",
+            "https://open.spotify.com/episode/",
+            "https://openlibrary.org/works/",
+            "https://medium.com/@",
+            "https://open.spotify.com/track/",
+          ][i] + name.toLowerCase(),
         groupId: g.id,
-        category: ["book", "podcast", "book", "article", "music"][i],
-        savedOn: week,
       });
       if (name === "Iris" && i === 0) privateLink = link;
     }
@@ -151,13 +169,13 @@ Bun.serve({
       const session = await auth.api.getSession({ headers: request.headers });
       const result = await rpcHandler.handle(request, {
         prefix: "/rpc/v1",
-        context: { db: database.db, session },
+        context: { db: database.db, session, fetchPage },
       });
       const rest = result.matched
         ? result
         : await apiHandler.handle(request, {
             prefix: "/api/v1",
-            context: { db: database.db, session },
+            context: { db: database.db, session, fetchPage },
           });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }

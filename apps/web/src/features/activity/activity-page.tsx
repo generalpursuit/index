@@ -6,7 +6,7 @@ import { Heading, QueryState, UserAvatar, More, IconButton } from "@/components/
 import { useActivity } from "./hooks/use-activity";
 import { useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { timeAgo } from "@/lib/weeks";
-type Filter = "all" | "comment" | "request" | "follow" | "accepted";
+type Filter = "all" | "comment" | "request" | "mention" | "follow";
 export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
   const navigate = useNavigate(),
     { list, read } = useActivity(filter === "all" ? undefined : filter),
@@ -31,7 +31,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
     };
   }, [unread, markRead]);
   return (
-    <div>
+    <div className="activity-page">
       <Heading>Activity</Heading>
       <div className="filter-strip">
         {(
@@ -39,8 +39,8 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
             ["all", "All"],
             ["comment", "Comments"],
             ["request", "Requests"],
+            ["mention", "Mentions"],
             ["follow", "Follows"],
-            ["accepted", "Accepted"],
           ] as const
         ).map(([value, label]) => (
           <Button
@@ -70,19 +70,21 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
                   <small>{timeAgo(a.createdAt)}</small>
                 </header>
                 <p>
-                  {a.type === "comment"
-                    ? a.body
-                    : a.type === "follow"
-                      ? "started following you."
-                      : a.type === "accepted"
-                        ? "accepted your follow request."
-                        : a.requestStatus === "pending"
-                          ? "requested to follow you."
-                          : a.requestStatus === "accepted"
-                            ? "Follow request accepted."
-                            : a.requestStatus === "declined"
-                              ? "Follow request declined."
-                              : "Follow request canceled."}
+                  {a.type === "mention"
+                    ? `mentioned you: ${a.body ?? ""}`
+                    : a.type === "comment"
+                      ? a.body
+                      : a.type === "follow"
+                        ? "started following you."
+                        : a.type === "accepted"
+                          ? "accepted your follow request."
+                          : a.requestStatus === "pending"
+                            ? "requested to follow you."
+                            : a.requestStatus === "accepted"
+                              ? "Follow request accepted."
+                              : a.requestStatus === "declined"
+                                ? "Follow request declined."
+                                : "Follow request canceled."}
                 </p>
               </div>
               {a.type === "request" && a.requestStatus === "pending" ? (

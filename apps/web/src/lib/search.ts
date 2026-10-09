@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { monday } from "./weeks";
-export const postSearch = z.object({ post: z.uuid().optional().catch(undefined) });
+// Modals that open over any page: a post, the link composer (`add` is `true` or a group
+// to preselect) and editing a link.
+export const appSearch = z.object({
+  post: z.uuid().optional().catch(undefined),
+  add: z
+    .union([z.literal(true), z.uuid()])
+    .optional()
+    .catch(undefined),
+  edit: z.uuid().optional().catch(undefined),
+});
 export const weekSearch = z.iso
   .date()
   .refine((v) => !v.startsWith("0000-") && v <= monday())

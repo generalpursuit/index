@@ -1,5 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
+import { sessionOptions } from "@/lib/session";
 export function useProfile(userId: string) {
   const api = useAPI();
   return useQuery(api.profiles.get.queryOptions({ input: { userId } }));
@@ -22,7 +23,16 @@ export function useProfileActions() {
     );
   };
   return {
-    update: useMutation(api.profiles.update.mutationOptions({ onSuccess: refresh })),
+    update: useMutation(
+      api.profiles.update.mutationOptions({
+        onSuccess: async () => {
+          await Promise.all([
+            refresh(),
+            cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
+          ]);
+        },
+      }),
+    ),
     follow: useMutation(api.follows.follow.mutationOptions({ onSuccess: refresh })),
     unfollow: useMutation(api.follows.unfollow.mutationOptions({ onSuccess: refresh })),
     removeFollower: useMutation(api.follows.removeFollower.mutationOptions({ onSuccess: refresh })),

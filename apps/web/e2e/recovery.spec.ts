@@ -40,27 +40,29 @@ test("edit profile, create and lock a group, move a link, then remove a follower
 }) => {
   await login(page);
   await page.getByRole("link", { name: "Your profile" }).click();
-  await page.getByRole("button", { name: "Edit profile" }).click();
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByLabel("Name", { exact: true }).fill("Alice Example");
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
   await expect(page.locator(".profile-heading")).toContainText("Alice Example");
   await page.getByRole("button", { name: "Create group", exact: true }).click();
-  await page.getByLabel("Group name").fill("Research");
+  await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill("Research");
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.getByRole("button", { name: "Research", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
   );
-  await page.getByRole("button", { name: "Unlocked", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Locked", exact: true })).toBeVisible();
-  await page.goto("/add?edit=" + data.links[0]!.id);
-  await page.getByRole("combobox", { name: "Group", exact: true }).click();
-  await page.getByRole("option", { name: "Research", exact: true }).click();
-  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByRole("button", { name: "Lock Research", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Unlock Research", exact: true })).toBeVisible();
+  await page.goto("/?edit=" + data.links[0]!.id);
+  await page.getByRole("radio", { name: "Research", exact: true }).click();
+  await expect(page.getByText("Only you will see this link.")).toBeVisible();
+  await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.goto("/people/" + data.people.Alice);
   await page.getByRole("button", { name: "Research", exact: true }).click();
   await expect(page.locator(".profile-links")).toContainText("Are.na");
-  await page.getByRole("button", { name: /followers$/ }).click();
+  await page.getByRole("button", { name: /followers?$/ }).click();
   const lena = page.getByRole("dialog").locator(".person-row").filter({ hasText: "lena" });
   await lena.getByRole("button", { name: "Remove", exact: true }).click();
   await expect(lena).toHaveCount(0);
@@ -118,12 +120,16 @@ test("320px layout, edge swipe, full-page add, and keyboard-accessible post dial
   });
   await expect(page).toHaveURL(/discover/);
   await page.getByRole("link", { name: "Add link", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Add link", exact: true })).toBeVisible();
+  // The composer opens over the current page and closing it returns there.
+  await expect(page.getByRole("dialog", { name: "Add link" })).toBeVisible();
+  await expect(page).toHaveURL(/discover/);
+  await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/discover\?q=Mia$/);
   await page.getByRole("link", { name: "Home", exact: true }).click();
   await page
     .locator('.week-page[data-active="true"] .own-links')
-    .getByRole("button", { name: /Are.na are.na/ })
+    .getByRole("button", { name: "Are.na", exact: true })
     .click();
   await expect(page.getByRole("dialog", { name: "Post", exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
@@ -142,4 +148,5 @@ test("registration uses real authentication and preserves the requested destinat
   await expect(page).toHaveURL(/discover$/);
   await page.getByRole("link", { name: "Your profile" }).click();
   await expect(page.locator(".profile-heading h1")).toHaveText("new_reader");
+  await expect(page.locator(".profile-meta")).toContainText("New Reader");
 });

@@ -1,6 +1,6 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
-export function useActivity(type?: "comment" | "request" | "follow" | "accepted") {
+export function useActivity(type?: "comment" | "request" | "mention" | "follow") {
   const api = useAPI(),
     cache = useQueryClient();
   const list = useInfiniteQuery(

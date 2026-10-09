@@ -7,7 +7,6 @@ export function useGroups(ownerId: string) {
     api.groups.list.infiniteOptions({
       input: (cursor: string | undefined) => ({
         ownerId,
-        includeFavorites: true,
         limit: 100,
         cursor,
       }),
@@ -24,7 +23,6 @@ export function useWeekLinks(
   userId: string,
   weekStart: string,
   groupId?: string,
-  inbox = false,
   seed?: { items: SavedLink[]; nextCursor: string | null },
   updatedAt?: number,
 ) {
@@ -36,28 +34,22 @@ export function useWeekLinks(
         initialPageParam: undefined,
         getNextPageParam: (p) => p.nextCursor ?? undefined,
       })
-    : inbox
-      ? api.links.listMine.infiniteOptions({
-          input: (cursor: string | undefined) => ({ inbox: true, weekStart, limit: 30, cursor }),
-          initialPageParam: undefined,
-          getNextPageParam: (p) => p.nextCursor ?? undefined,
-        })
-      : api.links.listByOwner.infiniteOptions({
-          input: (cursor: string | undefined) => ({ ...input, cursor }),
-          initialPageParam: undefined,
-          getNextPageParam: (p) => p.nextCursor ?? undefined,
-        });
+    : api.links.listByOwner.infiniteOptions({
+        input: (cursor: string | undefined) => ({ ...input, cursor }),
+        initialPageParam: undefined,
+        getNextPageParam: (p) => p.nextCursor ?? undefined,
+      });
   return useInfiniteQuery({
     ...options,
     initialData: seed ? () => ({ pages: [seed], pageParams: [undefined] }) : undefined,
     initialDataUpdatedAt: updatedAt,
   });
 }
-export function useLibraryWeeks(userId: string, groupId?: string, inbox = false) {
+export function useLibraryWeeks(userId: string, groupId?: string) {
   const api = useAPI();
   return useInfiniteQuery(
     api.links.weeks.infiniteOptions({
-      input: (before: string | undefined) => ({ userId, groupId, inbox, before, limit: 10 }),
+      input: (before: string | undefined) => ({ userId, groupId, before, limit: 10 }),
       initialPageParam: undefined,
       getNextPageParam: (p) => p.nextBefore ?? undefined,
     }),

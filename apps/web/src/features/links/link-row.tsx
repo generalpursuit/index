@@ -2,14 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useSearch, useRouterState, Link } from "@tanstack/react-router";
 import {
-  BookOpen,
-  FileText,
-  Headphones,
-  Music,
-  Video,
-  Wrench,
-  StickyNote,
-  Link2,
+  ArrowUpRight,
   MoreHorizontal,
   Heart,
   Star,
@@ -38,33 +31,37 @@ export function domain(url: string) {
     return "";
   }
 }
-const icons = {
-  article: FileText,
-  podcast: Headphones,
-  music: Music,
-  video: Video,
-  book: BookOpen,
-  tool: Wrench,
-  note: StickyNote,
-  uncategorized: Link2,
-};
+/** Only web links can be saved. */
+export function webURL(value: string) {
+  try {
+    return ["http:", "https:"].includes(new URL(value.trim()).protocol);
+  } catch {
+    return false;
+  }
+}
 export function LinkRow({ link }: { link: SavedLink }) {
-  const navigate = useNavigate(),
-    Icon = icons[link.category];
+  const navigate = useNavigate();
   return (
     <div className="link-row">
-      <Button
-        variant="ghost"
+      {/* The color carries the category; its name shows on hover. */}
+      <i
+        className="category-mark"
+        data-category={link.category}
+        title={link.category[0]!.toUpperCase() + link.category.slice(1)}
+        aria-hidden="true"
+      />
+      <button
+        type="button"
         className="link-open"
         onClick={() => void navigate({ to: ".", search: (old) => ({ ...old, post: link.id }) })}
       >
-        <Icon aria-hidden="true" />
-        <span>
-          <strong>{link.title}</strong>
-          <small>{domain(link.url)}</small>
-        </span>
-      </Button>
-      <LinkActions link={link} />
+        {link.title}
+      </button>
+      {/* Reading is the main thing to do with a link, so the domain opens it directly. */}
+      <a className="link-domain" href={link.url} target="_blank" rel="noreferrer">
+        <span>{domain(link.url)}</span>
+        <ArrowUpRight aria-hidden="true" />
+      </a>
     </div>
   );
 }
@@ -110,7 +107,8 @@ export function LinkActions({ link }: { link: SavedLink }) {
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setForward(true)}
-                disabled={group.data?.visibility !== "public"}
+                // Only links in locked groups stay private to their owner.
+                disabled={!!link.groupId && group.data?.visibility !== "public"}
               >
                 <Forward />
                 Forward
@@ -128,7 +126,12 @@ export function LinkActions({ link }: { link: SavedLink }) {
           {own && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem render={<Link to="/add" search={{ edit: link.id }} />}>
+              <DropdownMenuItem
+                render={
+                  // Editing replaces the open post rather than stacking a second modal.
+                  <Link to="." search={(old) => ({ ...old, post: undefined, edit: link.id })} />
+                }
+              >
                 <Pencil />
                 Edit
               </DropdownMenuItem>

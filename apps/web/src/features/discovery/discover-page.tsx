@@ -1,23 +1,21 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Input } from "@index/ui/components/input";
 import { LockKeyhole, Search } from "lucide-react";
-import { Heading, MessagesLink, QueryState, UserAvatar, More } from "@/components/app/primitives";
+import { Heading, QueryState, UserAvatar, More } from "@/components/app/primitives";
 import { useDiscovery } from "./hooks/use-discovery";
 import { useDebounced } from "@/hooks/use-debounced";
-import { useUnread } from "@/features/activity/hooks/use-activity";
 import { useViewer } from "@/hooks/use-api";
 import { FollowButton } from "@/features/profiles/profile-page";
 export function DiscoverPage({ query = "" }: { query?: string }) {
   const navigate = useNavigate(),
     search = useDebounced(query.trim()),
     { suggested, search: found } = useDiscovery(search),
-    unread = useUnread(),
     viewer = useViewer();
   const active = search ? found : suggested,
     people = search ? found.data?.pages.flatMap((p) => p.items) : suggested.data?.items;
   return (
-    <div>
-      <Heading actions={<MessagesLink unread={unread.messages} />}>Discover</Heading>
+    <div className="discover-page">
+      <Heading>Discover</Heading>
       <label className="search-field">
         <Search size={19} />
         <Input

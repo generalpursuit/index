@@ -7,16 +7,15 @@ import {
   useRouterState,
   useSearch,
 } from "@tanstack/react-router";
-import { Home, Users, Plus, Bell, User, MessageCircle, LogOut } from "lucide-react";
-import { Button } from "@index/ui/components/button";
+import { Search, Plus, Bell, User, MessageCircle } from "lucide-react";
 import { Modal, QueryState } from "./primitives";
+import brandSymbol from "@/assets/brand-symbol.svg";
 import { LinkDetail } from "@/features/links/link-detail";
+import { LinkComposer } from "@/features/links/link-composer";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
 import { useBack, useEdgeBack } from "@/hooks/use-back";
 import { DraftProvider } from "@/hooks/use-draft";
-import { authClient } from "@/lib/auth-client";
-import { resetSession } from "@/lib/session";
 import { queryClient } from "@/utils/orpc";
 export function AppShell() {
   const viewer = useViewer(),
@@ -46,12 +45,14 @@ export function AppShell() {
     if (!viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
   }, [viewer, protectedPage, navigate, router]);
-  async function signOut() {
-    await authClient.signOut();
-    await resetSession();
-    await router.invalidate();
-    await navigate({ to: "/login" });
-  }
+  // Closing returns to exactly where the composer was opened.
+  const closeComposer = () =>
+    void navigate({
+      to: ".",
+      search: (old) => ({ ...old, add: undefined, edit: undefined }),
+      replace: true,
+      resetScroll: false,
+    });
   return (
     <DraftProvider key={viewer?.id ?? "guest"}>
       <div className="index-app">
@@ -60,19 +61,24 @@ export function AppShell() {
         </a>
         <nav className="app-nav" aria-label="Main navigation">
           <Link to="/" className="nav-item" aria-label="Home" activeOptions={{ exact: true }}>
-            <Home />
+            <img className="nav-brand" src={brandSymbol} alt="" aria-hidden="true" />
           </Link>
           <Link to="/discover" className="nav-item" aria-label="Discover">
-            <Users />
+            <Search />
           </Link>
-          <Link to="/add" className="nav-item" aria-label="Add link">
+          <Link
+            to="."
+            search={(old) => ({ ...old, add: true })}
+            className="nav-item"
+            aria-label="Add link"
+          >
             <Plus />
           </Link>
           <Link to="/activity" className="nav-item" aria-label="Activity">
             <Bell />
             {unread.activity > 0 && <i className="unread-dot" />}
           </Link>
-          <Link to="/messages" className="nav-item desktop-nav" aria-label="Messages">
+          <Link to="/messages" className="nav-item" aria-label="Messages">
             <MessageCircle />
             {unread.messages > 0 && <i className="unread-dot" />}
           </Link>
@@ -90,17 +96,6 @@ export function AppShell() {
               <User />
             </Link>
           )}
-          {viewer && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="desktop-nav sign-out"
-              aria-label="Sign out"
-              onClick={() => void signOut()}
-            >
-              <LogOut />
-            </Button>
-          )}
         </nav>
         <main
           id="app-content"
@@ -111,11 +106,6 @@ export function AppShell() {
             <div className="app-content">
               {!viewer && protectedPage ? <QueryState pending /> : <Outlet />}
             </div>
-            {viewer && path === "/people/" + viewer.id && (
-              <Button className="mobile-sign-out" variant="ghost" onClick={() => void signOut()}>
-                Sign out
-              </Button>
-            )}
           </div>
         </main>
         <Modal
@@ -133,6 +123,23 @@ export function AppShell() {
           }}
         >
           {search.post ? <LinkDetail key={search.post} id={search.post} /> : <QueryState pending />}
+        </Modal>
+        <Modal
+          open={!!(search.add || search.edit)}
+          title={search.edit ? "Edit link" : "Add link"}
+          className="composer-dialog"
+          onOpenChange={(v) => {
+            if (!v) closeComposer();
+          }}
+        >
+          {(search.add || search.edit) && (
+            <LinkComposer
+              key={search.edit ?? String(search.add)}
+              edit={search.edit}
+              group={typeof search.add === "string" ? search.add : undefined}
+              onDone={closeComposer}
+            />
+          )}
         </Modal>
       </div>
     </DraftProvider>

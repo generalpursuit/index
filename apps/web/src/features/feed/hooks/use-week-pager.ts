@@ -1,18 +1,21 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { monday, shiftWeek } from "@/lib/weeks";
-
-/** Keep one settled week in the URL while the browser handles scrolling and snap physics. */
-export function useWeekPager(week: string) {
+/**
+ * Keep one settled week in the URL while the browser handles scrolling and snap physics.
+ * Neighbors come from the feed, which skips weeks where nobody shared anything.
+ */
+export function useWeekPager(
+  week: string,
+  neighbors?: { newerWeek: string | null; olderWeek: string | null },
+) {
   const viewport = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const committing = useRef<string | null>(null);
+  const newer = neighbors?.newerWeek,
+    older = neighbors?.olderWeek;
   const weeks = useMemo(
-    () =>
-      [shiftWeek(week, 1), week, shiftWeek(week, -1)].filter(
-        (date) => date <= monday() && date >= "0001-01-01",
-      ),
-    [week],
+    () => [newer, week, older].filter((date): date is string => !!date),
+    [newer, week, older],
   );
 
   useLayoutEffect(() => {
@@ -65,8 +68,9 @@ export function useWeekPager(week: string) {
   const move = useCallback(
     (direction: number) => {
       const element = viewport.current;
-      const index = weeks.indexOf(shiftWeek(week, direction));
-      if (!element || index < 0) return;
+      // Newer weeks sit above the current one, so moving forward means a lower index.
+      const index = weeks.indexOf(week) - direction;
+      if (!element || index < 0 || index >= weeks.length) return;
       element.scrollTo({
         top: index * element.clientHeight,
         behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",

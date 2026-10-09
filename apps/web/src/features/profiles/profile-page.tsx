@@ -1,20 +1,30 @@
-import { publicProfileURL } from "@/lib/desktop";
-import { z } from "zod";
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { Textarea } from "@index/ui/components/textarea";
-import { useForm } from "@tanstack/react-form";
-import { LockKeyhole, LockKeyholeOpen, Plus, Heart, Star, Link2, Copy, Pencil } from "lucide-react";
-import { toast } from "sonner";
+import {
+  LockKeyhole,
+  LockKeyholeOpen,
+  Earth,
+  Pencil,
+  Plus,
+  Star,
+  Settings,
+  EllipsisVertical,
+  Trash,
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from "@index/ui/components/dropdown-menu";
 import {
   Back,
+  Confirmation,
   UserAvatar,
   QueryState,
-  Choice,
   Modal,
-  Confirmation,
   More,
   IconButton,
 } from "@/components/app/primitives";
@@ -22,10 +32,10 @@ import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks, useLibraryActions } from "@/features/links/hooks/use-links";
 import { WeekLinks } from "@/features/feed/feed-page";
-import { monday, weekLabel } from "@/lib/weeks";
+import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
 import type { Profile, Person, Group } from "@/lib/types";
-import { updateProfileSchema } from "@index/api/features/profiles/schemas";
+const count = (n: number, noun: string) => n + " " + noun + (n === 1 ? "" : "s");
 export function FollowButton({ person }: { person: Person }) {
   const viewer = useViewer(),
     profile = useProfile(person.id),
@@ -73,45 +83,65 @@ export function ProfilePage({ userId, group = "all" }: { userId: string; group?:
 function ProfileContent({ profile, filter }: { profile: Profile; filter: string }) {
   const viewer = useViewer(),
     own = viewer?.id === profile.id,
-    navigate = useNavigate(),
-    actions = useProfileActions();
+    navigate = useNavigate();
   const [connections, setConnections] = useState<"followers" | "following" | null>(null),
-    [edit, setEdit] = useState(false),
-    [privacy, setPrivacy] = useState<"public" | "private" | null>(null),
     [newGroup, setNewGroup] = useState(false);
   const groups = useGroups(profile.id),
     allGroups = groups.data?.pages.flatMap((p) => p.items) ?? [],
-    selected = allGroups.find((g) => g.id === filter);
+    selected = allGroups.find((g) => g.id === filter),
+    starredGroup = allGroups.find((g) => g.kind === "starred"),
+    // Starred holds other people's links, so it sits apart from the filters for your own.
+    starredTab = filter === "starred" || selected?.kind === "starred",
+    select = (group?: string) => void navigate({ to: ".", search: (old) => ({ ...old, group }) });
   const hidden = !profile.canViewContent;
   return (
     <div className="profile-page">
       {!own && <Back fallback="/discover" />}
       <header className="profile-heading">
-        <div>
-          <h1>{profile.username ?? profile.name}</h1>
-          <p className="muted">{profile.name}</p>
-          {profile.bio && <p className="profile-bio">{profile.bio}</p>}
-        </div>
         <UserAvatar person={profile} large />
+        <div className="profile-identity">
+          <div className="profile-name">
+            <h1>{profile.username ?? profile.name}</h1>
+            <span
+              className="profile-visibility"
+              role="img"
+              aria-label={
+                profile.profileVisibility === "private" ? "Private profile" : "Public profile"
+              }
+              title={profile.profileVisibility === "private" ? "Private profile" : "Public profile"}
+            >
+              {profile.profileVisibility === "private" ? (
+                <LockKeyhole size={16} aria-hidden="true" />
+              ) : (
+                <Earth size={16} aria-hidden="true" />
+              )}
+            </span>
+          </div>
+          <p className="profile-meta">
+            <span>{profile.name}</span>
+            {profile.linkCount !== null && <span>{count(profile.linkCount, "link")}</span>}
+            {own && (
+              <>
+                <button type="button" onClick={() => setConnections("followers")}>
+                  {count(profile.followerCount ?? 0, "follower")}
+                </button>
+                <button type="button" onClick={() => setConnections("following")}>
+                  {profile.followingCount ?? 0} following
+                </button>
+              </>
+            )}
+          </p>
+        </div>
+        <div className="heading-actions">
+          {own ? (
+            <Link to="/settings" className="icon-link" aria-label="Settings" title="Settings">
+              <Settings />
+            </Link>
+          ) : (
+            !hidden && <FollowButton person={profile} />
+          )}
+        </div>
       </header>
-      <div className="profile-stats">
-        {profile.linkCount !== null && (
-          <span>
-            <Link2 size={16} />
-            {profile.linkCount} links
-          </span>
-        )}
-        {own && (
-          <>
-            <Button variant="ghost" onClick={() => setConnections("followers")}>
-              {profile.followerCount ?? 0} followers
-            </Button>
-            <Button variant="ghost" onClick={() => setConnections("following")}>
-              {profile.followingCount ?? 0} following
-            </Button>
-          </>
-        )}
-      </div>
       {!own && profile.followedBy.total > 0 && (
         <p className="muted social-context">
           Followed by{" "}
@@ -126,42 +156,6 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
           {profile.followedBy.total > 2 ? " and " + (profile.followedBy.total - 1) + " others" : ""}
         </p>
       )}
-      {!hidden && (
-        <div className="profile-actions">
-          {own ? (
-            <>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void navigator.clipboard.writeText(publicProfileURL(profile.id)).then(
-                    () => toast.success("Profile link copied"),
-                    () => toast.error("Could not copy link"),
-                  );
-                }}
-              >
-                <Copy size={16} />
-                Share
-              </Button>
-              <Choice
-                label="Profile visibility"
-                value={profile.profileVisibility}
-                onChange={(v) => {
-                  if (v !== profile.profileVisibility) setPrivacy(v as "public" | "private");
-                }}
-                options={[
-                  { value: "public", label: "Public" },
-                  { value: "private", label: "Private" },
-                ]}
-              />
-              <IconButton label="Edit profile" onClick={() => setEdit(true)}>
-                <Pencil />
-              </IconButton>
-            </>
-          ) : (
-            <FollowButton person={profile} />
-          )}
-        </div>
-      )}
       {hidden ? (
         <div className="private-profile">
           <LockKeyhole size={32} />
@@ -171,85 +165,64 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
         </div>
       ) : (
         <>
-          <div className="filter-strip">
-            <Button
-              aria-pressed={filter === "all"}
-              variant={filter === "all" ? "default" : "outline"}
-              onClick={() =>
-                void navigate({ to: ".", search: (old) => ({ ...old, group: undefined }) })
-              }
-            >
-              All
-            </Button>
-            {own && (
-              <Button
-                aria-pressed={filter === "inbox"}
-                variant={filter === "inbox" ? "default" : "outline"}
-                onClick={() =>
-                  void navigate({ to: ".", search: (old) => ({ ...old, group: "inbox" }) })
-                }
+          <nav className="profile-filters" aria-label="Links">
+            <div className="profile-groups">
+              <button
+                type="button"
+                aria-pressed={filter === "all"}
+                onClick={() => select(undefined)}
               >
-                Inbox
-              </Button>
-            )}
-            {allGroups.map((g) => (
-              <Button
-                key={g.id}
-                aria-pressed={filter === g.id}
-                variant={filter === g.id ? "default" : "outline"}
-                onClick={() =>
-                  void navigate({ to: ".", search: (old) => ({ ...old, group: g.id }) })
-                }
+                All
+              </button>
+              {allGroups
+                .filter((g) => g.kind !== "starred")
+                .map((g) => (
+                  <button
+                    type="button"
+                    key={g.id}
+                    aria-pressed={filter === g.id}
+                    onClick={() => select(g.id)}
+                  >
+                    {g.visibility === "private" && <LockKeyhole size={12} aria-hidden="true" />}
+                    {g.name}
+                  </button>
+                ))}
+              <More
+                hasNext={groups.hasNextPage}
+                isFetching={groups.isFetchingNextPage}
+                fetch={groups.fetchNextPage}
+              />
+              {own && (
+                <IconButton label="Create group" onClick={() => setNewGroup(true)}>
+                  <Plus />
+                </IconButton>
+              )}
+              {/* Starred holds other people's links, so a separator sets it apart from yours. */}
+              <span className="profile-filter-separator" aria-hidden="true" />
+              <button
+                type="button"
+                aria-pressed={starredTab}
+                onClick={() => select(starredGroup?.id ?? "starred")}
               >
-                {g.kind === "favorites" ? (
-                  <Heart size={14} />
-                ) : g.kind === "starred" ? (
-                  <Star size={14} />
-                ) : g.visibility === "private" ? (
-                  <LockKeyhole size={14} />
-                ) : null}
-                {g.name}
-              </Button>
-            ))}
-            <More
-              hasNext={groups.hasNextPage}
-              isFetching={groups.isFetchingNextPage}
-              fetch={groups.fetchNextPage}
-            />
-            {own && (
-              <IconButton label="Create group" onClick={() => setNewGroup(true)}>
-                <Plus />
-              </IconButton>
+                <Star size={14} aria-hidden="true" />
+                Starred
+              </button>
+            </div>
+            {/* A fixed home for list settings, so showing them never shifts the filters. */}
+            {own && selected && (
+              <ListActions group={selected} onDeleted={() => select(undefined)} />
             )}
-          </div>
+          </nav>
           {groups.error && <QueryState error={groups.error} retry={() => void groups.refetch()} />}
-          {own && selected && (
-            <GroupControl
-              group={selected}
-              onDeleted={() =>
-                void navigate({ to: ".", search: (old) => ({ ...old, group: undefined }) })
-              }
-            />
+          {filter === "starred" && !starredGroup && (
+            <p className="empty-state">No starred links yet.</p>
           )}
-          {filter === "inbox" && (
-            <p className="group-lock">
-              <LockKeyhole size={14} />
-              Inbox is locked
-            </p>
-          )}
-          {(filter === "all" || filter === "inbox" || selected) && (
-            <ProfileLibrary
-              key={filter}
-              userId={profile.id}
-              group={selected}
-              inbox={filter === "inbox"}
-              own={own}
-            />
+          {(filter === "all" || selected) && (
+            <ProfileLibrary key={filter} userId={profile.id} group={selected} own={own} />
           )}
         </>
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
-      {edit && <EditProfile profile={profile} onClose={() => setEdit(false)} />}
       {newGroup && (
         <NewGroup
           onClose={() => setNewGroup(false)}
@@ -259,41 +232,11 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
           }}
         />
       )}
-      <Confirmation
-        open={privacy !== null}
-        onOpenChange={(v) => {
-          if (!v) setPrivacy(null);
-        }}
-        title={privacy === "private" ? "Make profile private?" : "Make profile public?"}
-        description={
-          privacy === "private"
-            ? "Only approved followers will see posts in unlocked groups. Existing followers keep access. Inbox and locked groups remain only yours."
-            : "Anyone can see posts in unlocked groups. Pending follow requests will be accepted. Inbox and locked groups remain only yours."
-        }
-        pending={actions.update.isPending}
-        onConfirm={() =>
-          privacy &&
-          actions.update.mutate(
-            { profileVisibility: privacy },
-            { onSuccess: () => setPrivacy(null) },
-          )
-        }
-      />
     </div>
   );
 }
-function ProfileLibrary({
-  userId,
-  group,
-  inbox,
-  own,
-}: {
-  userId: string;
-  group?: Group;
-  inbox: boolean;
-  own: boolean;
-}) {
-  const list = useLibraryWeeks(userId, group?.id, inbox),
+function ProfileLibrary({ userId, group, own }: { userId: string; group?: Group; own: boolean }) {
+  const list = useLibraryWeeks(userId, group?.id),
     canAdd = own && (!group || group.kind === "custom"),
     weeks = [
       ...new Set([
@@ -309,10 +252,15 @@ function ProfileLibrary({
         <section className="profile-week" key={week}>
           <h2>
             {weekLabel(week)}
-            {week.slice(0, 4) !== monday().slice(0, 4) && " · " + week.slice(0, 4)}
+            <span>{weekRange(week)}</span>
           </h2>
           <div className="profile-links">
-            <WeekLinks userId={userId} week={week} groupId={group?.id} inbox={inbox} add={canAdd} />
+            <WeekLinks
+              userId={userId}
+              week={week}
+              groupId={group?.id}
+              add={canAdd && week === monday()}
+            />
           </div>
         </section>
       ))}
@@ -325,75 +273,99 @@ function ProfileLibrary({
     </QueryState>
   );
 }
-function GroupControl({ group, onDeleted }: { group: Group; onDeleted: () => void }) {
+// Lock applies to every list of yours; only your own groups can be renamed or deleted.
+function ListActions({ group, onDeleted }: { group: Group; onDeleted: () => void }) {
   const actions = useLibraryActions(),
     [edit, setEdit] = useState(false),
     [name, setName] = useState(group.name),
-    [remove, setRemove] = useState(false);
+    [remove, setRemove] = useState(false),
+    locked = group.visibility === "private";
   return (
-    <div className="group-lock">
-      <Button
-        variant="ghost"
+    <div className="profile-list-actions">
+      <IconButton
+        label={locked ? "Unlock " + group.name : "Lock " + group.name}
         disabled={actions.updateGroup.isPending}
         onClick={() =>
-          actions.updateGroup.mutate({
-            id: group.id,
-            visibility: group.visibility === "private" ? "public" : "private",
-          })
+          actions.updateGroup.mutate({ id: group.id, visibility: locked ? "public" : "private" })
         }
       >
-        {group.visibility === "private" ? <LockKeyhole size={16} /> : <LockKeyholeOpen size={16} />}
-        {group.visibility === "private" ? "Locked" : "Unlocked"}
-      </Button>
+        {locked ? <LockKeyhole /> : <LockKeyholeOpen />}
+      </IconButton>
       {group.kind === "custom" && (
-        <Button variant="ghost" onClick={() => setEdit(true)}>
-          Edit group
-        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={<Button variant="ghost" size="icon" aria-label={"Actions for " + group.name} />}
+          >
+            <EllipsisVertical />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => {
+                setName(group.name);
+                setEdit(true);
+              }}
+            >
+              <Pencil />
+              Rename
+            </DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onClick={() => setRemove(true)}>
+              <Trash />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
-      <Modal open={edit} onOpenChange={setEdit} title="Edit group">
-        <Input aria-label="Group name" value={name} onChange={(e) => setName(e.target.value)} />
-        <Button
-          disabled={!name.trim() || actions.updateGroup.isPending}
-          onClick={() =>
-            actions.updateGroup.mutate({ id: group.id, name }, { onSuccess: () => setEdit(false) })
-          }
-        >
-          Save
-        </Button>
-        <Button
-          variant="destructive"
-          onClick={() => {
-            setEdit(false);
-            setRemove(true);
+      <Modal open={edit} onOpenChange={setEdit} title="Rename group">
+        <form
+          className="form-stack"
+          onSubmit={(e) => {
+            e.preventDefault();
+            actions.updateGroup.mutate({ id: group.id, name }, { onSuccess: () => setEdit(false) });
           }}
         >
-          Delete group
-        </Button>
+          <label className="modal-field">
+            <span className="link-form-label">Name</span>
+            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
+          </label>
+          <div className="modal-actions">
+            <Button
+              type="button"
+              variant="ghost"
+              className="modal-cancel"
+              onClick={() => setEdit(false)}
+            >
+              Cancel
+            </Button>
+            <Button type="submit" disabled={!name.trim() || actions.updateGroup.isPending}>
+              Save
+            </Button>
+          </div>
+        </form>
       </Modal>
-      <Modal
+      <Confirmation
         open={remove}
         onOpenChange={setRemove}
         title="Delete group?"
-        description="The group will be deleted. Its links will move to your locked Inbox."
-      >
-        <Button
-          variant="destructive"
-          disabled={actions.deleteGroup.isPending}
-          onClick={() =>
-            actions.deleteGroup.mutate(
-              { id: group.id, deleteLinks: false },
-              {
-                onSuccess: () => {
-                  setRemove(false);
-                  onDeleted();
-                },
+        description={
+          group.visibility === "private"
+            ? "Its links stay on your profile without a group. They will no longer be locked, so anyone who can see your profile will see them."
+            : "Its links stay on your profile without a group."
+        }
+        destructive
+        label="Delete group"
+        pending={actions.deleteGroup.isPending}
+        onConfirm={() =>
+          actions.deleteGroup.mutate(
+            { id: group.id, deleteLinks: false },
+            {
+              onSuccess: () => {
+                setRemove(false);
+                onDeleted();
               },
-            )
-          }
-        >
-          Delete group
-        </Button>
-      </Modal>
+            },
+          )
+        }
+      />
     </div>
   );
 }
@@ -425,89 +397,59 @@ function NewGroup({
           );
         }}
       >
-        <Input
-          autoFocus
-          aria-label="Group name"
-          placeholder="Group name"
-          maxLength={100}
-          required
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <Button type="button" variant="outline" onClick={() => setLocked(!locked)}>
-          {locked ? <LockKeyhole /> : <LockKeyholeOpen />}
-          {locked ? "Locked · Only you" : "Unlocked · Follows profile privacy"}
-        </Button>
-        <Button type="submit" disabled={!name.trim() || actions.createGroup.isPending}>
-          Create
-        </Button>
-      </form>
-    </Modal>
-  );
-}
-function EditProfile({ profile, onClose }: { profile: Profile; onClose: () => void }) {
-  const actions = useProfileActions();
-  const form = useForm({
-    defaultValues: { name: profile.name, username: profile.username ?? "", bio: profile.bio ?? "" },
-    validators: {
-      onSubmit: z.object({
-        name: updateProfileSchema.shape.name.unwrap(),
-        username: z.union([updateProfileSchema.shape.username.unwrap(), z.literal("")]),
-        bio: updateProfileSchema.shape.bio.unwrap().unwrap(),
-      }),
-    },
-    onSubmit: async ({ value }) => {
-      try {
-        await actions.update.mutateAsync({ ...value, username: value.username || undefined });
-        onClose();
-      } catch {
-        /* Keep the form available for correction. */
-      }
-    },
-  });
-  return (
-    <Modal
-      open
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-      title="Edit profile"
-    >
-      <form
-        className="form-stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void form.handleSubmit();
-        }}
-      >
-        {(["name", "username", "bio"] as const).map((name) => (
-          <form.Field key={name} name={name}>
-            {(field) => (
-              <label className="field-label">
-                {name === "name" ? "Name" : name === "username" ? "Username" : "Bio"}
-                {name === "bio" ? (
-                  <Textarea
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                ) : (
-                  <Input
-                    value={field.state.value}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                  />
-                )}
-                <span className="field-error">
-                  {field.state.meta.errors.map((e) => e?.message).join(", ")}
-                </span>
-              </label>
-            )}
-          </form.Field>
-        ))}
-        <Button type="submit" disabled={actions.update.isPending}>
-          Save
-        </Button>
+        <label className="modal-field">
+          <span className="link-form-label">Name</span>
+          <Input
+            autoFocus
+            placeholder="Reading, Wishlist, …"
+            maxLength={100}
+            required
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </label>
+        <div className="link-form-group">
+          <span className="link-form-label" id="new-group-visibility">
+            Visibility
+          </span>
+          <div
+            className="link-group-choices"
+            role="radiogroup"
+            aria-labelledby="new-group-visibility"
+          >
+            <button
+              type="button"
+              role="radio"
+              aria-checked={!locked}
+              onClick={() => setLocked(false)}
+            >
+              <LockKeyholeOpen size={12} aria-hidden="true" />
+              Unlocked
+            </button>
+            <button
+              type="button"
+              role="radio"
+              aria-checked={locked}
+              onClick={() => setLocked(true)}
+            >
+              <LockKeyhole size={12} aria-hidden="true" />
+              Locked
+            </button>
+          </div>
+          <p className="muted">
+            {locked
+              ? "Only you will see links in this group."
+              : "Visible to everyone who can see your profile."}
+          </p>
+        </div>
+        <div className="modal-actions">
+          <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={!name.trim() || actions.createGroup.isPending}>
+            Create
+          </Button>
+        </div>
       </form>
     </Modal>
   );
