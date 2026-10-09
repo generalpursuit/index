@@ -109,7 +109,8 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await expect(page.getByRole("button", { name: "Request", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Request", exact: true }).click();
   await expect(page.getByRole("button", { name: "Requested", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  // Profiles have no back button; the browser's back (or an edge swipe) returns.
+  await page.goBack();
   await expect(page).toHaveURL(/discover/);
   await page.getByRole("link", { name: "Activity", exact: true }).click();
   await expect(

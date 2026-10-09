@@ -12,7 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@index/ui/components/dropdown-menu";
-import { Back, UserAvatar, QueryState } from "@/components/app/primitives";
+import { UserAvatar, QueryState } from "@/components/app/primitives";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
@@ -87,7 +87,6 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
   const hidden = !profile.canViewContent;
   return (
     <div className="profile-page">
-      {!own && <Back fallback="/discover" />}
       <header className="profile-heading">
         <UserAvatar person={profile} large />
         <div className="profile-identity">
