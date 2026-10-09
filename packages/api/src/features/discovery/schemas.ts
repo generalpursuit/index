@@ -9,7 +9,10 @@ export const recommendationsInputSchema = z.strictObject({
   limit: z.number().int().min(1).max(50).default(20),
 });
 /** A person as Discover shows them, with who you follow that follows them too. */
-export const discoveredUserSchema = publicUserSchema.extend({ followedBy: followedBySchema });
+export const discoveredUserSchema = publicUserSchema.extend({
+  followedBy: followedBySchema,
+  followingStatus: z.enum(["pending", "accepted"]).nullable(),
+});
 export const discoveredUserPageSchema = z.object({
   items: z.array(discoveredUserSchema),
   nextAfter: userIdSchema.nullable(),

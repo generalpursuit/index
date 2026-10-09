@@ -5,6 +5,29 @@ import { setupApiTests } from "../../testing/api";
 
 describe("discovery", () => {
   const api = setupApiTests();
+  it("includes the viewer's follow state without exposing another viewer's relationship", async () => {
+    const alice = api.client("alice"),
+      bob = api.client("bob");
+    await bob.profiles.update({ profileVisibility: "private" });
+    await alice.follows.follow({ userId: "bob" });
+    assert.equal(
+      (await alice.discovery.searchUsers({ query: "bob" })).items[0]?.followingStatus,
+      "pending",
+    );
+    assert.equal(
+      (await api.client(null).discovery.searchUsers({ query: "bob" })).items[0]?.followingStatus,
+      null,
+    );
+    await bob.follows.accept({ userId: "alice" });
+    assert.equal(
+      (await alice.discovery.searchUsers({ query: "bob" })).items[0]?.followingStatus,
+      "accepted",
+    );
+    assert.equal(
+      (await api.client("carol").discovery.searchUsers({ query: "bob" })).items[0]?.followingStatus,
+      null,
+    );
+  });
   it("names who you follow that follows a suggestion, and excludes self", async () => {
     await api.db.insert(user).values([
       { id: "erin", name: "Erin", email: "erin@example.com" },
