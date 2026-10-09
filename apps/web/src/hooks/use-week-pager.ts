@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useNavigate } from "@tanstack/react-router";
+
+export type WeekNeighbors = { newerWeek: string | null; olderWeek: string | null };
 /**
  * Keep one settled week in the URL while the browser handles scrolling and snap physics.
- * Neighbors come from the feed, which skips weeks where nobody shared anything.
+ * Neighbors come from the page (they skip empty weeks); `go` puts a settled week in the URL.
  */
 export function useWeekPager(
   week: string,
-  neighbors?: { newerWeek: string | null; olderWeek: string | null },
+  neighbors: WeekNeighbors | undefined,
+  go: (week: string) => void,
 ) {
   const viewport = useRef<HTMLDivElement>(null);
-  const navigate = useNavigate();
   const committing = useRef<string | null>(null);
+  const goTo = useRef(go);
+  goTo.current = go;
   const newer = neighbors?.newerWeek,
     older = neighbors?.olderWeek;
   const weeks = useMemo(
@@ -46,7 +49,7 @@ export function useWeekPager(
       )
         return;
       committing.current = next;
-      void navigate({ to: "/", search: { week: next }, replace: true, resetScroll: false });
+      goTo.current(next);
     };
     const finished = (event: Event) => {
       if (event.target === element) settle();
@@ -63,7 +66,7 @@ export function useWeekPager(
       element.removeEventListener("scrollend", finished);
       element.removeEventListener("scroll", fallback);
     };
-  }, [week, weeks, navigate]);
+  }, [week, weeks]);
 
   const move = useCallback(
     (direction: number) => {

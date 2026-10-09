@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Link } from "@tanstack/react-router";
-import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp } from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@index/ui/components/button";
 import { Heading, IconButton, QueryState, UserAvatar, More } from "@/components/app/primitives";
 import { LinkRow } from "@/features/links/link-row";
@@ -9,7 +9,7 @@ import { useWeekLinks } from "@/features/links/hooks/use-links";
 import { useFeed } from "./hooks/use-feed";
 import { usePeeking } from "./hooks/use-peeking";
 import { useScrollEdges } from "./hooks/use-scroll-edges";
-import { useWeekPager } from "./hooks/use-week-pager";
+import { WeekPager } from "@/components/app/week-pager";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
 import { useViewer } from "@/hooks/use-api";
 import { monday, weekLabel } from "@/lib/weeks";
@@ -144,47 +144,24 @@ function NoPeople({ discover, current }: { discover: boolean; current: boolean }
 export function FeedPage({ week }: { week: string }) {
   const viewer = useViewer()!;
   const profile = useProfile(viewer.id);
+  const navigate = useNavigate();
   const neighbors = useFeed(week).data?.pages[0];
-  const { viewport, weeks, move } = useWeekPager(week, neighbors);
   return (
     <div className="week-feed">
       <Heading>{weekLabel(week)}</Heading>
-      {neighbors?.newerWeek && (
-        <IconButton
-          className="week-navigation week-navigation-newer"
-          label="Newer week"
-          onClick={() => move(1)}
-        >
-          <ChevronUp />
-        </IconButton>
-      )}
-      <div ref={viewport} className="week-pager" role="region" aria-label="Weekly feed">
-        {weeks.map((date) => (
-          <section
-            key={date}
-            className="week-page"
-            data-week={date}
-            data-active={date === week}
-            inert={date !== week}
-            aria-hidden={date !== week}
-          >
-            <WeekContent week={date} followingCount={profile.data?.followingCount} />
-          </section>
-        ))}
-      </div>
-      {neighbors?.olderWeek && (
-        <IconButton
-          className="week-navigation week-navigation-older"
-          label="Older week"
-          onClick={() => move(-1)}
-        >
-          <ChevronDown />
-        </IconButton>
-      )}
+      <WeekPager
+        week={week}
+        neighbors={neighbors}
+        label="Weekly feed"
+        go={(next) =>
+          void navigate({ to: "/", search: { week: next }, replace: true, resetScroll: false })
+        }
+      >
+        {(date) => <WeekContent week={date} followingCount={profile.data?.followingCount} />}
+      </WeekPager>
     </div>
   );
 }
-
 function WeekContent({ week, followingCount }: { week: string; followingCount?: number | null }) {
   const viewer = useViewer()!,
     feed = useFeed(week);
