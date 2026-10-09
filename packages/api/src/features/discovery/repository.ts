@@ -32,7 +32,7 @@ export function recommendations(db: QueryDatabase, actorId: string, limit: numbe
   const mutualCount = sql<number>`count(distinct ${mine.followedId})::integer`;
   return ResultAsync.fromPromise(
     db
-      .select({ ...publicUserSelection, mutualCount })
+      .select(publicUserSelection)
       .from(mine)
       .innerJoin(theirs, eq(theirs.followerId, mine.followedId))
       .innerJoin(user, eq(user.id, theirs.followedId))

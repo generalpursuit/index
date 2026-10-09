@@ -9,12 +9,18 @@ export const publicUserSchema = z.object({
   image: z.string().nullable(),
   profileVisibility: visibilitySchema,
 });
+/** Up to two people the viewer follows who follow this person too, and how many in all. */
+export const followedBySchema = z.object({
+  users: z.array(publicUserSchema),
+  total: z.number().int().nonnegative(),
+});
+export type FollowedBy = z.infer<typeof followedBySchema>;
 export const profileSchema = publicUserSchema.extend({
   canViewContent: z.boolean(),
   followerCount: z.number().int().nonnegative().nullable(),
   followingCount: z.number().int().nonnegative().nullable(),
   linkCount: z.number().int().nonnegative().nullable(),
-  followedBy: z.object({ users: z.array(publicUserSchema), total: z.number().int().nonnegative() }),
+  followedBy: followedBySchema,
   followingStatus: z.enum(["pending", "accepted"]).nullable(),
 });
 export const updateProfileSchema = z

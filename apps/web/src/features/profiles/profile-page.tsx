@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
+import { FollowedBy } from "./followed-by";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import {
@@ -144,16 +145,7 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
       </header>
       {!own && profile.followedBy.total > 0 && (
         <p className="muted social-context">
-          Followed by{" "}
-          {profile.followedBy.users.slice(0, profile.followedBy.total > 2 ? 1 : 2).map((p, i) => (
-            <span key={p.id}>
-              {i > 0 ? " and " : ""}
-              <Link to="/people/$userId" params={{ userId: p.id }}>
-                {p.username ?? p.name}
-              </Link>
-            </span>
-          ))}
-          {profile.followedBy.total > 2 ? " and " + (profile.followedBy.total - 1) + " others" : ""}
+          <FollowedBy context={profile.followedBy} linked />
         </p>
       )}
       {hidden ? (

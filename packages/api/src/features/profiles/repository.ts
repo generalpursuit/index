@@ -1,11 +1,11 @@
 import { follows } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
-import { and, eq, sql, type SQL } from "drizzle-orm";
-import { ResultAsync } from "neverthrow";
+import { and, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
+import { okAsync, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { profileContentVisible } from "../../data-access/visibility";
 import { databaseError, type ApplicationError } from "../../errors";
-import type { UpdateProfileInput } from "./schemas";
+import type { FollowedBy, UpdateProfileInput } from "./schemas";
 
 export const publicUserSelection = {
   id: user.id,
@@ -90,28 +90,68 @@ function profileWriteError(cause: unknown): ApplicationError {
   return databaseError(cause);
 }
 
-export function followedBy(db: QueryDatabase, viewerId: string | null, ownerId: string) {
+const nobody: FollowedBy = { users: [], total: 0 };
+
+/**
+ * For each owner: up to two people the viewer follows who follow them too, and how many there
+ * are in all. One query for a whole page of people.
+ */
+export function followedByMany(db: QueryDatabase, viewerId: string | null, ownerIds: string[]) {
+  if (!viewerId || ownerIds.length === 0) return okAsync(new Map<string, FollowedBy>());
+  const ranked = db
+    .select({
+      ...publicUserSelection,
+      ownerId: sql<string>`${follows.followedId}`.as("owner_id"),
+      total: sql<number>`count(*) over (partition by ${follows.followedId})::int`.as("total"),
+      rank: sql<number>`row_number() over (partition by ${follows.followedId} order by ${user.id})`.as(
+        "rank",
+      ),
+    })
+    .from(user)
+    .innerJoin(
+      follows,
+      and(
+        eq(follows.followerId, user.id),
+        inArray(follows.followedId, ownerIds),
+        eq(follows.status, "accepted"),
+      ),
+    )
+    .where(
+      sql`exists(select 1 from follows mine where mine.follower_id = ${viewerId} and mine.followed_id = ${user.id} and mine.status='accepted')`,
+    )
+    .as("ranked");
   return ResultAsync.fromPromise(
     db
-      .select({ ...publicUserSelection, total: sql<number>`count(*) over()::int` })
-      .from(user)
-      .innerJoin(
-        follows,
-        and(
-          eq(follows.followerId, user.id),
-          eq(follows.followedId, ownerId),
-          eq(follows.status, "accepted"),
-        ),
-      )
-      .where(
-        sql`exists(select 1 from follows mine where mine.follower_id = ${viewerId} and mine.followed_id = ${user.id} and mine.status='accepted')`,
-      )
-      .orderBy(user.id)
-      .limit(2)
-      .then((rows) => ({
-        users: rows.map(({ total: _total, ...person }) => person),
-        total: rows[0]?.total ?? 0,
-      })),
+      .select()
+      .from(ranked)
+      .where(lte(ranked.rank, 2))
+      .orderBy(ranked.ownerId, ranked.rank)
+      .then((rows) => {
+        const byOwner = new Map<string, FollowedBy>();
+        for (const { ownerId, total, rank: _rank, ...person } of rows) {
+          const context = byOwner.get(ownerId) ?? { users: [], total };
+          context.users.push(person);
+          byOwner.set(ownerId, context);
+        }
+        return byOwner;
+      }),
     databaseError,
   );
 }
+
+export const followedBy = (db: QueryDatabase, viewerId: string | null, ownerId: string) =>
+  followedByMany(db, viewerId, [ownerId]).map((byOwner) => byOwner.get(ownerId) ?? nobody);
+
+/** Adds `followedBy` to each person, as seen by the viewer. */
+export const withFollowedBy = <T extends { id: string }>(
+  db: QueryDatabase,
+  viewerId: string | null,
+  people: T[],
+) =>
+  followedByMany(
+    db,
+    viewerId,
+    people.map((person) => person.id),
+  ).map((byOwner) =>
+    people.map((person) => ({ ...person, followedBy: byOwner.get(person.id) ?? nobody })),
+  );

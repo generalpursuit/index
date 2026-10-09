@@ -1,22 +1,38 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { user } from "@index/db/schema/auth";
 import { setupApiTests } from "../../testing/api";
 
 describe("discovery", () => {
   const api = setupApiTests();
-  it("counts distinct mutual followees and excludes self from suggestions", async () => {
+  it("names who you follow that follows a suggestion, and excludes self", async () => {
+    await api.db.insert(user).values([
+      { id: "erin", name: "Erin", email: "erin@example.com" },
+      { id: "frank", name: "Frank", email: "frank@example.com" },
+    ]);
     const alice = api.client("alice");
-    for (const id of ["bob", "carol"]) {
+    for (const id of ["bob", "carol", "erin"]) {
       await alice.follows.follow({ userId: id });
       await api.client(id).follows.follow({ userId: "dana" });
       await api.client(id).follows.follow({ userId: "alice" });
     }
+    await api.client("bob").follows.follow({ userId: "frank" });
+    const followedBy = (item: {
+      id: string;
+      followedBy: { users: { id: string }[]; total: number };
+    }) => [item.id, item.followedBy.users.map((person) => person.id), item.followedBy.total];
+    // Most shared first; two names at most, with the total beside them.
+    assert.deepEqual((await alice.discovery.recommendations({})).items.map(followedBy), [
+      ["dana", ["bob", "carol"], 3],
+      ["frank", ["bob"], 1],
+    ]);
+    // Search says the same for signed-in readers, and nothing for guests.
+    assert.deepEqual((await alice.discovery.searchUsers({ query: "dana" })).items.map(followedBy), [
+      ["dana", ["bob", "carol"], 3],
+    ]);
     assert.deepEqual(
-      (await alice.discovery.recommendations({ limit: 1 })).items.map((item) => [
-        item.id,
-        item.mutualCount,
-      ]),
-      [["dana", 2]],
+      (await api.client(null).discovery.searchUsers({ query: "dana" })).items.map(followedBy),
+      [["dana", [], 0]],
     );
   });
   it("searches public identity, including private profiles, with literal search and pagination", async () => {
@@ -54,7 +70,10 @@ describe("discovery", () => {
     assert.equal((await alice.discovery.recommendations({})).items.length, 0);
     await bob.follows.accept({ userId: "alice" });
     assert.deepEqual(
-      (await alice.discovery.recommendations({})).items.map((item) => [item.id, item.mutualCount]),
+      (await alice.discovery.recommendations({})).items.map((item) => [
+        item.id,
+        item.followedBy.total,
+      ]),
       [["carol", 1]],
     );
     await carol.profiles.update({ profileVisibility: "private" });

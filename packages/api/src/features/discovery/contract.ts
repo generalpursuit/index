@@ -1,13 +1,17 @@
 import { optionalAuth } from "../../shared/schemas";
 import { baseContract } from "../../shared/schemas";
-import { userPageSchema } from "../follows/schemas";
-import { recommendationsInputSchema, recommendationsSchema, searchUsersSchema } from "./schemas";
+import {
+  discoveredUserPageSchema,
+  recommendationsInputSchema,
+  recommendationsSchema,
+  searchUsersSchema,
+} from "./schemas";
 
 export const discoveryContract = {
   searchUsers: baseContract
     .route({ spec: optionalAuth, method: "GET", path: "/discovery/users", tags: ["Discovery"] })
     .input(searchUsersSchema)
-    .output(userPageSchema),
+    .output(discoveredUserPageSchema),
   recommendations: baseContract
     .route({ method: "GET", path: "/discovery/recommendations", tags: ["Discovery"] })
     .input(recommendationsInputSchema)

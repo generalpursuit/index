@@ -7,7 +7,7 @@ import * as service from "./service";
 const api = implement(discoveryContract).$context<Context>();
 export const discoveryRouter = api.router({
   searchUsers: api.searchUsers.handler(async ({ context, input }) =>
-    unwrapResult(await service.searchUsers(context.db, input)),
+    unwrapResult(await service.searchUsers(context.db, context.session?.user.id ?? null, input)),
   ),
   recommendations: api.recommendations
     .use(requireAuth)

@@ -6,6 +6,7 @@ import { useDiscovery } from "./hooks/use-discovery";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useViewer } from "@/hooks/use-api";
 import { FollowButton } from "@/features/profiles/profile-page";
+import { FollowedBy } from "@/features/profiles/followed-by";
 export function DiscoverPage({ query = "" }: { query?: string }) {
   const navigate = useNavigate(),
     search = useDebounced(query.trim()),
@@ -50,9 +51,12 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
                     </strong>
                     <small>
                       @{p.username ?? p.name}
-                      {"mutualCount" in p && typeof p.mutualCount === "number"
-                        ? " · Followed by " + p.mutualCount + " people you follow"
-                        : ""}
+                      {p.followedBy.total > 0 && (
+                        <>
+                          {" · "}
+                          <FollowedBy context={p.followedBy} />
+                        </>
+                      )}
                     </small>
                   </span>
                 </Link>
