@@ -39,6 +39,9 @@ test("single-week layout, scrolling, adding and Favorites", async ({ page }) => 
   expect(rect!.y + rect!.height).toBeLessThanOrEqual(960);
   await stage.hover({ position: { x: 20, y: 20 } });
   await page.mouse.wheel(0, 650);
+  // Scrolling never changes the week; the scrubber does.
+  await expect(page).not.toHaveURL(/week=/);
+  await page.locator(".week-tick").nth(1).click();
   await expect(page).toHaveURL(new RegExp(data.older));
   await expect(page.locator('.week-page[data-active="true"] .own-links')).toContainText(
     "Earlier notes",
@@ -46,7 +49,7 @@ test("single-week layout, scrolling, adding and Favorites", async ({ page }) => 
   await expect(page.locator('.week-page[data-active="true"] .own-links')).not.toContainText(
     "Are.na",
   );
-  await page.getByRole("button", { name: "Newer week" }).click();
+  await page.locator(".week-tick").first().click();
   await expect(page).toHaveURL(new RegExp(data.week));
   // Links are added from the week's own field; there is no other way in.
   await expect(page.getByRole("link", { name: "Add link" })).toHaveCount(0);

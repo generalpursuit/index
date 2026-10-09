@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
 import { Button } from "@index/ui/components/button";
@@ -12,12 +12,13 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@index/ui/components/dropdown-menu";
-import { Back, UserAvatar, QueryState, Modal } from "@/components/app/primitives";
+import { Back, UserAvatar, QueryState } from "@/components/app/primitives";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
 import { WeekLinks } from "@/features/feed/feed-page";
 import { NewGroup } from "@/features/settings/groups";
+import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrubber";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
 import type { Profile, Person, Group } from "@/lib/types";
@@ -44,16 +45,27 @@ export function FollowButton({ person }: { person: Person }) {
           : actions.follow.mutate({ userId: person.id })
       }
     >
-      {status === "accepted"
-        ? "Following"
-        : status === "pending"
-          ? "Requested"
-          : person.profileVisibility === "private"
-            ? "Request"
-            : "Follow"}
+      {/* Every label sits in the same cell, so the button keeps one width in every state. */}
+      <span className="size-stack follow-label">
+        <span>
+          {status === "accepted"
+            ? "Following"
+            : status === "pending"
+              ? "Requested"
+              : person.profileVisibility === "private"
+                ? "Request"
+                : "Follow"}
+        </span>
+        {followLabels.map((label) => (
+          <span key={label} className="size-stack-ghost">
+            {label}
+          </span>
+        ))}
+      </span>
     </Button>
   );
 }
+const followLabels = ["Follow", "Request", "Requested", "Following"];
 export function ProfilePage({ userId, group = "all" }: { userId: string; group?: string }) {
   const profile = useProfile(userId);
   return (
@@ -155,7 +167,6 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
     </div>
   );
 }
-type Week = { weekStart: string; count: number };
 /**
  * One person's links as one continuous list of weeks. Each week's heading sticks while you
  * read it, the list filter rides at the end of that sticky row, and the scrubber (or the week
@@ -200,6 +211,7 @@ function ProfileLinks({
   const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const endSpace = useEndSpace(listRef, weeks.length);
+  const reading = useReadingWeek(weeks);
   const navigate = useNavigate();
   const select = (group?: string) =>
     void navigate({
@@ -246,7 +258,13 @@ function ProfileLinks({
             ))}
             {/* Room for the last week's heading to reach the top, so every week can be jumped to. */}
             <div className="profile-end-space" style={{ height: endSpace }} aria-hidden="true" />
-            <WeekScrubber weeks={weeks} onJump={jump} />
+            <WeekScrubber
+              weeks={weeks}
+              active={reading}
+              onJump={jump}
+              anchor={listRef}
+              offset={52}
+            />
           </>
         ) : (
           <>
@@ -265,26 +283,7 @@ function ProfileLinks({
           </>
         )}
       </QueryState>
-      <Modal open={picking} onOpenChange={setPicking} title="Weeks">
-        <ul className="week-picker">
-          {weeks.map((w) => (
-            <li key={w.weekStart}>
-              <button
-                type="button"
-                onClick={() => {
-                  setPicking(false);
-                  // After the sheet lets go of the page.
-                  requestAnimationFrame(() => jump(w.weekStart));
-                }}
-              >
-                <strong>{weekLabel(w.weekStart)}</strong>
-                <span>{weekRange(w.weekStart)}</span>
-                <small>{w.count === 1 ? "1 link" : w.count + " links"}</small>
-              </button>
-            </li>
-          ))}
-        </ul>
-      </Modal>
+      <WeekPicker open={picking} onOpenChange={setPicking} weeks={weeks} onPick={jump} />
     </div>
   );
 }
@@ -383,19 +382,9 @@ function useEndSpace(list: RefObject<HTMLElement | null>, weekCount: number) {
   }, [list, weekCount]);
   return space;
 }
-/**
- * Pointer shortcut along the right of the list: one tick per week, the week you are reading
- * drawn longer. Hovering names a week; clicking jumps there. The week titles open the same
- * choice as a list, for keyboards, screen readers and phones.
- */
-function WeekScrubber({ weeks, onJump }: { weeks: Week[]; onJump: (week: string) => void }) {
-  const [active, setActive] = useState(weeks[0]?.weekStart);
-  const [hovered, setHovered] = useState<{ week: string; top: number; inside: boolean } | null>(
-    null,
-  );
-  const label = useRef<HTMLDivElement>(null);
-  // Every range this list can show, stacked unseen under the label, so it keeps one size.
-  const ranges = useMemo(() => [...new Set(weeks.map((w) => weekRange(w.weekStart)))], [weeks]);
+/** The week whose section reaches the top of the page, as you scroll. */
+function useReadingWeek(weeks: Week[]) {
+  const [reading, setReading] = useState(weeks[0]?.weekStart);
   useEffect(() => {
     const scroller = document.getElementById("app-scroll");
     if (!scroller) return;
@@ -409,7 +398,7 @@ function WeekScrubber({ weeks, onJump }: { weeks: Week[]; onJump: (week: string)
           if (section.getBoundingClientRect().top > top) break;
           current = section.dataset.week;
         }
-        setActive(current ?? weeks[0]?.weekStart);
+        setReading(current ?? weeks[0]?.weekStart);
       });
     };
     track();
@@ -419,55 +408,7 @@ function WeekScrubber({ weeks, onJump }: { weeks: Week[]; onJump: (week: string)
       scroller.removeEventListener("scroll", track);
     };
   }, [weeks]);
-  if (weeks.length < 2) return null;
-  return (
-    <div
-      className="week-scrubber"
-      aria-hidden="true"
-      style={{ "--weeks": weeks.length } as CSSProperties}
-      onPointerLeave={() => setHovered(null)}
-    >
-      {weeks.map((w) => (
-        <button
-          key={w.weekStart}
-          type="button"
-          tabIndex={-1}
-          className="week-tick"
-          data-active={w.weekStart === active || undefined}
-          onPointerEnter={(e) => {
-            // The label opens into the gutter when it fits, otherwise over the end of the rows.
-            const room = innerWidth - e.currentTarget.getBoundingClientRect().right - 16;
-            setHovered({
-              week: w.weekStart,
-              top: e.currentTarget.offsetTop + e.currentTarget.offsetHeight / 2,
-              inside: (label.current?.offsetWidth ?? 0) + 8 > room,
-            });
-          }}
-          onClick={() => onJump(w.weekStart)}
-        />
-      ))}
-      <div
-        ref={label}
-        className="week-tick-label"
-        data-visible={hovered ? true : undefined}
-        data-inside={hovered?.inside || undefined}
-        style={{ top: hovered?.top ?? 0 }}
-      >
-        <strong className="size-stack">
-          <span>{hovered && weekLabel(hovered.week)}</span>
-          <span className="size-stack-ghost">Week 53</span>
-        </strong>
-        <span className="size-stack">
-          <span>{hovered && weekRange(hovered.week)}</span>
-          {ranges.map((range) => (
-            <span key={range} className="size-stack-ghost">
-              {range}
-            </span>
-          ))}
-        </span>
-      </div>
-    </div>
-  );
+  return reading;
 }
 /**
  * Picks which of the person's lists to show. Starred (other people's links you kept) sits

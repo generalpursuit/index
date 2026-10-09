@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@index/ui/components/button";
@@ -6,10 +6,11 @@ import { Heading, IconButton, QueryState, UserAvatar, More } from "@/components/
 import { LinkRow } from "@/features/links/link-row";
 import { QuickAdd } from "@/features/links/quick-add";
 import { ownerOf, useWeekLinks } from "@/features/links/hooks/use-links";
-import { useFeed } from "./hooks/use-feed";
+import { useFeed, useFeedWeeks } from "./hooks/use-feed";
 import { usePeeking } from "./hooks/use-peeking";
 import { useScrollEdges } from "./hooks/use-scroll-edges";
 import { WeekPager } from "@/components/app/week-pager";
+import { WeekPicker } from "@/components/app/week-scrubber";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
 import { useViewer } from "@/hooks/use-api";
 import { monday, weekLabel } from "@/lib/weeks";
@@ -157,19 +158,26 @@ export function FeedPage({ week }: { week: string }) {
   const profile = useProfile(viewer.id);
   const navigate = useNavigate();
   const neighbors = useFeed(week).data?.pages[0];
+  const weeks = useFeedWeeks();
+  const [picking, setPicking] = useState(false);
+  const go = (next: string) =>
+    void navigate({ to: "/", search: { week: next }, replace: true, resetScroll: false });
   return (
     <div className="week-feed">
-      <Heading>{weekLabel(week)}</Heading>
-      <WeekPager
-        week={week}
-        neighbors={neighbors}
-        label="Weekly feed"
-        go={(next) =>
-          void navigate({ to: "/", search: { week: next }, replace: true, resetScroll: false })
-        }
-      >
+      <Heading>
+        <button
+          type="button"
+          className="week-title"
+          aria-label={weekLabel(week) + ", jump to a week"}
+          onClick={() => setPicking(true)}
+        >
+          {weekLabel(week)}
+        </button>
+      </Heading>
+      <WeekPager week={week} weeks={weeks} neighbors={neighbors} label="Weekly feed" go={go}>
         {(date) => <WeekContent week={date} followingCount={profile.data?.followingCount} />}
       </WeekPager>
+      <WeekPicker open={picking} onOpenChange={setPicking} weeks={weeks} onPick={go} />
     </div>
   );
 }

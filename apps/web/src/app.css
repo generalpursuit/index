@@ -427,37 +427,6 @@
 .feed-main .app-scroll {
   overflow: hidden;
 }
-.week-navigation[data-slot="button"] {
-  position: fixed;
-  /* Centered over the content, which sits right of the 100px navigation rail. */
-  left: calc(50% + 50px);
-  transform: translateX(-50%);
-  z-index: 10;
-  width: 44px;
-  height: 32px;
-  color: #929292;
-}
-.week-navigation[data-slot="button"]:hover:not(:disabled) {
-  color: #fff;
-}
-.week-navigation[data-slot="button"] svg {
-  width: 20px;
-  height: 20px;
-}
-.week-navigation-newer {
-  top: 4px;
-}
-.week-navigation-older {
-  bottom: 4px;
-}
-@media (max-width: 700px) {
-  .week-navigation[data-slot="button"] {
-    left: 50%;
-  }
-  .week-navigation-older {
-    bottom: calc(70px + env(safe-area-inset-bottom));
-  }
-}
 .week-feed {
   height: 100%;
   min-height: 0;
@@ -469,10 +438,18 @@
 .week-feed > .page-heading {
   margin: 0;
 }
+/* The week title opens the list of weeks, and still reads as the heading. */
+.week-title {
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  text-align: left;
+}
+/* Weeks change only on purpose (scrubber or week list), never by scrolling past a list. */
 .week-pager {
   position: relative;
   height: 100%;
-  overflow-y: auto;
+  overflow-y: hidden;
   overscroll-behavior-y: contain;
   scroll-snap-type: y mandatory;
   overflow-anchor: none;
@@ -542,22 +519,6 @@
   min-height: 0;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-}
-/* Center the edge arrows on the avatar and username row. */
-.carousel-controls {
-  position: absolute;
-  inset: var(--person-top) 0 auto;
-  height: var(--person-heading-height);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  pointer-events: none;
-}
-.carousel-controls > * {
-  pointer-events: auto;
-}
-.carousel-next {
-  margin-left: auto;
 }
 .friends-carousel {
   display: flex;
@@ -764,15 +725,24 @@
 /* Ticks in the gutter right of the list, starting just after the rows' arrows (the content
    is centered right of the 100px navigation rail, 370px either side of its middle). */
 .week-scrubber {
+  --scrubber-bottom: 24px;
   position: fixed;
-  top: 50%;
-  left: calc(50% + 50px + 370px + 16px);
+  top: var(--scrubber-top);
+  /* Narrower windows have no gutter: the strip keeps to the window's right edge instead. */
+  left: min(calc(50% + 50px + 370px + 16px), calc(100% - 36px));
   z-index: 5;
   display: flex;
   flex-direction: column;
   width: 28px;
-  height: min(60vh, calc(var(--weeks) * 12px));
-  transform: translateY(-50%);
+  /* Starts level with the list and stays clear of the window's bottom edge. */
+  height: min(
+    calc(100dvh - var(--scrubber-top) - var(--scrubber-bottom)),
+    calc(var(--weeks) * 12px)
+  );
+  cursor: pointer;
+  /* A press-and-drag on touch screens moves through weeks instead of scrolling the page. */
+  touch-action: none;
+  user-select: none;
 }
 .week-tick {
   position: relative;
@@ -792,7 +762,7 @@
     width 120ms ease,
     background 120ms ease;
 }
-.week-tick:hover::after {
+.week-tick[data-hovered]::after {
   width: 16px;
   background: #8a8a8a;
 }
@@ -839,16 +809,24 @@
 .size-stack-ghost {
   visibility: hidden;
 }
+.follow-label {
+  justify-items: center;
+}
 .week-tick-label strong {
   font-family: var(--font-serif);
   font-size: 16px;
   font-weight: 700;
   color: #f5f5f5;
 }
-/* Below this width there is no gutter; the week titles open the list of weeks instead. */
-@media (max-width: 1099px) {
+/* Phones: the strip runs along the screen's right edge, in its own lane beside the rows. */
+@media (max-width: 700px) {
   .week-scrubber {
-    display: none;
+    --scrubber-bottom: calc(86px + env(safe-area-inset-bottom));
+    right: 4px;
+    left: auto;
+  }
+  .app-main .app-content:has(.week-scrubber) {
+    padding-right: 36px;
   }
 }
 .week-picker {
@@ -1692,7 +1670,6 @@ span.link-open {
   .friends-carousel:has(> .friend-card:nth-child(3)) > .friend-card {
     flex-basis: calc(100vw - 74px);
   }
-  /* Touch screens swipe the carousel; the fades alone show there is more. */
   .carousel-controls {
     display: none;
   }

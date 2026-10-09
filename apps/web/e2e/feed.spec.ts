@@ -29,9 +29,9 @@ test("empty week keeps the fixed zones with an invitation and contextual discove
   await expect(current.getByRole("heading", { name: "Your people", exact: true })).toHaveCount(1);
   await expect(current.getByRole("link", { name: "Discover people" })).toBeVisible();
   await expect(current.locator(".link-list[tabindex]")).toHaveCount(0);
-  await expect(current.getByRole("button", { name: "Next person" })).toHaveCount(0);
-  // Bob has no earlier weeks with links, so there is nowhere older to go.
-  await expect(page.getByRole("button", { name: "Older week" })).toHaveCount(0);
+  await expect(current.locator(".friend-card[data-peeking]")).toHaveCount(0);
+  // Bob has no earlier weeks with links, so there is no other week to jump to.
+  await expect(page.locator(".week-scrubber")).toHaveCount(0);
   // Zones are fixed: an empty week leaves room above the people, whose zone starts halfway.
   const own = await current.locator(".own-links").boundingBox();
   const invitation = await field.boundingBox();
@@ -48,17 +48,20 @@ test("empty week keeps the fixed zones with an invitation and contextual discove
   await page.screenshot({ path: "test-results/empty-week-mobile.png" });
 });
 
-test("scroll moves between weeks before settling, without changing horizontal browsing", async ({
+test("weeks change only through the scrubber or the week list, never by scrolling", async ({
   page,
 }) => {
   await login(page, "alice");
   const pager = page.locator(".week-pager");
   const current = page.locator('.week-page[data-active="true"]');
+  const ticks = page.locator(".week-tick");
   await expect(current.locator(".own-links")).toContainText("Are.na");
-  // Controls only appear when there is somewhere to go.
-  await expect(page.getByRole("button", { name: "Newer week" })).toHaveCount(0);
-  await expect(current.getByRole("button", { name: "Previous person" })).toHaveCount(0);
-  await expect(current.getByRole("button", { name: "Next person" })).toBeVisible();
+  await expect(ticks).toHaveCount(2);
+  await expect(ticks.first()).toHaveAttribute("data-active", "true");
+  // The box peeking in at the edge shows there are more people.
+  const boxes = current.locator(".friends-carousel > .friend-card");
+  await expect(boxes.nth(2)).toHaveAttribute("data-peeking");
+  await expect(boxes.first()).not.toHaveAttribute("data-peeking");
   await pager.evaluate((element) => {
     (window as any).weekScrollPositions = [];
     element.addEventListener("scroll", () =>
@@ -66,9 +69,18 @@ test("scroll moves between weeks before settling, without changing horizontal br
     );
   });
   const height = await pager.evaluate((element) => element.clientHeight);
-  await current.locator(".people").hover();
-  await page.mouse.wheel(0, height * 0.75);
+  // Scrolling past the end of a list, or over the page, leaves the week alone.
+  for (const zone of [current.locator(".own-links .link-list"), current.locator(".people")]) {
+    await zone.hover();
+    await page.mouse.wheel(0, height);
+  }
+  await page.waitForTimeout(400);
+  await expect(page).not.toHaveURL(/week=/);
+  await expect(current.locator(".own-links")).toContainText("Are.na");
+  // The next week's tick slides it into place.
+  await ticks.nth(1).click();
   await expect(page).toHaveURL(new RegExp(fixture.older));
+  await expect(ticks.nth(1)).toHaveAttribute("data-active", "true");
   const positions: number[] = await page.evaluate(() => (window as any).weekScrollPositions);
   expect(positions.some((top) => top > 5 && top < height - 5)).toBe(true);
   await expect(current.locator(".own-links")).toContainText("Earlier notes");
@@ -77,7 +89,13 @@ test("scroll moves between weeks before settling, without changing horizontal br
   await expect
     .poll(() => pager.evaluate((el) => Math.abs(el.scrollTop % el.clientHeight)))
     .toBeLessThan(2);
-  await page.getByRole("button", { name: "Newer week" }).click();
+  // The week title opens every week as a list, for keyboards and screen readers.
+  await page.getByRole("button", { name: /jump to a week/ }).click();
+  await page
+    .getByRole("dialog", { name: "Weeks" })
+    .getByRole("button", { name: /Week/ })
+    .first()
+    .click();
   await expect(current.locator(".own-links")).toContainText("Are.na");
   await current.getByRole("button", { name: "Next person" }).click();
   await expect(current.getByRole("button", { name: "Previous person" })).toBeVisible();
@@ -122,18 +140,11 @@ test("your links scroll under the field, with fades instead of scrollbars", asyn
   await expect(list).not.toHaveAttribute("data-fade-end");
   expect((await field.boundingBox())!.y).toBe(top);
   expect(await firstRowGap()).toEqual({ wholeRows: 0, offset: 0 });
-  // Only the box peeking in fades; the boxes in view never do. The arrows sit on the edges,
-  // level with the people's names.
-  const carousel = current.locator(".friends-carousel");
-  const boxes = carousel.locator(".friend-card");
+  // Only the box peeking in fades; the boxes in view never do.
+  const boxes = current.locator(".friends-carousel > .friend-card");
   await expect(boxes.nth(2)).toHaveAttribute("data-peeking");
   await expect(boxes.nth(0)).not.toHaveAttribute("data-peeking");
   await expect(boxes.nth(1)).not.toHaveAttribute("data-peeking");
-  const next = (await current.getByRole("button", { name: "Next person" }).boundingBox())!;
-  const area = (await carousel.boundingBox())!;
-  const name = (await carousel.locator(".person-inline").first().boundingBox())!;
-  expect(Math.round(next.x + next.width)).toBe(Math.round(area.x + area.width));
-  expect(Math.abs(next.y + next.height / 2 - (name.y + name.height / 2))).toBeLessThan(2);
 });
 
 test("a long week loads as you reach its end and shows links you add", async ({ page }) => {
@@ -181,7 +192,7 @@ test("a long week loads as you reach its end and shows links you add", async ({ 
 test("reduced motion keeps explicit week navigation usable", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await login(page, "alice");
-  await page.getByRole("button", { name: "Older week" }).click();
+  await page.locator(".week-tick").nth(1).click();
   await expect(page).toHaveURL(new RegExp(fixture.older));
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });
@@ -203,7 +214,7 @@ for (const viewport of [
         (window as any).headingPositions.push(heading.getBoundingClientRect().top);
       });
     });
-    await page.getByRole("button", { name: "Older week" }).click();
+    await page.locator(".week-tick").nth(1).click();
     await expect(page).toHaveURL(new RegExp(fixture.older));
     const positions: number[] = await page.evaluate(() => (window as any).headingPositions);
     expect(positions.length).toBeGreaterThan(2);

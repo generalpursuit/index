@@ -1,39 +1,39 @@
 import type { ReactNode } from "react";
-import { ChevronDown, ChevronUp } from "lucide-react";
 import { useWeekPager, type WeekNeighbors } from "@/hooks/use-week-pager";
-import { IconButton } from "./primitives";
+import { WeekScrubber, type Week } from "./week-scrubber";
 
 /**
- * Weeks as pages: scroll (or use the arrows) to move to the next week with content, which
- * snaps into place before `go` puts it in the URL. Only the settled week is interactive.
+ * Weeks as pages that change only on purpose: the scrubber (or the week list behind the
+ * title) picks a week, so reaching the end of a list never moves you to another week. A
+ * neighboring week slides into place before `go` puts it in the URL; farther weeks open
+ * directly. Only the settled week is interactive.
  */
 export function WeekPager({
   week,
+  weeks,
   neighbors,
   go,
   label,
   children,
 }: {
   week: string;
+  weeks: Week[];
   neighbors?: WeekNeighbors;
   go: (week: string) => void;
   label: string;
   children: (week: string) => ReactNode;
 }) {
-  const { viewport, weeks, move } = useWeekPager(week, neighbors, go);
+  const { viewport, weeks: pages, move } = useWeekPager(week, neighbors, go);
+  const jump = (target: string) => {
+    if (target === week) return;
+    if (target === neighbors?.newerWeek) move(1);
+    else if (target === neighbors?.olderWeek) move(-1);
+    else go(target);
+  };
   return (
     <>
-      {neighbors?.newerWeek && (
-        <IconButton
-          className="week-navigation week-navigation-newer"
-          label="Newer week"
-          onClick={() => move(1)}
-        >
-          <ChevronUp />
-        </IconButton>
-      )}
       <div ref={viewport} className="week-pager" role="region" aria-label={label}>
-        {weeks.map((date) => (
+        {pages.map((date) => (
           <section
             key={date}
             className="week-page"
@@ -46,15 +46,7 @@ export function WeekPager({
           </section>
         ))}
       </div>
-      {neighbors?.olderWeek && (
-        <IconButton
-          className="week-navigation week-navigation-older"
-          label="Older week"
-          onClick={() => move(-1)}
-        >
-          <ChevronDown />
-        </IconButton>
-      )}
+      <WeekScrubber weeks={weeks} active={week} onJump={jump} anchor={viewport} />
     </>
   );
 }
