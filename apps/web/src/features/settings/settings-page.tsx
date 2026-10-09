@@ -47,6 +47,7 @@ export function SettingsContent({ userId }: { userId: string }) {
   return (
     <QueryState
       pending={profile.isPending}
+      hasData={!!profile.data}
       error={profile.error}
       retry={() => void profile.refetch()}
     >

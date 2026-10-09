@@ -67,6 +67,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
       <div className="recipient-list">
         <QueryState
           pending={people.isPending}
+          hasData={!!people.data}
           error={people.error}
           retry={() => void people.refetch()}
         >

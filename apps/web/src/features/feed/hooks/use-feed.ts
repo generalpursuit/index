@@ -27,8 +27,8 @@ export function useFeedWeeks() {
   );
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (hasNextPage && !isFetchingNextPage && !list.isFetchNextPageError) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, list.isFetchNextPageError, fetchNextPage]);
   const loaded = list.data?.pages.flatMap((p) => p.items) ?? [];
   return loaded[0]?.weekStart === monday()
     ? loaded

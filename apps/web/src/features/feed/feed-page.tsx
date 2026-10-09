@@ -87,7 +87,12 @@ export function WeekLinks({
           {/* A fixed snap point at the top. Otherwise the list snaps to its first row and holds on
               to it, so a new link added above would push the list down a row and back. */}
           <div className="link-list-start" />
-          <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+          <QueryState
+            pending={list.isPending}
+            hasData={!!list.data}
+            error={list.error}
+            retry={() => void list.refetch()}
+          >
             {links.map((link) => (
               <LinkRow
                 key={link.id}
@@ -256,7 +261,12 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
             }
           }}
         >
-          <QueryState pending={feed.isPending} error={feed.error} retry={() => void feed.refetch()}>
+          <QueryState
+            pending={feed.isPending}
+            hasData={!!feed.data}
+            error={feed.error}
+            retry={() => void feed.refetch()}
+          >
             {people.map((p) => (
               <FriendCard
                 key={week + p.author.id}

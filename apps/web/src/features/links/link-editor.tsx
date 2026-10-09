@@ -29,6 +29,7 @@ export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
   return (
     <QueryState
       pending={existing.isPending}
+      hasData={!!existing.data}
       error={existing.error}
       retry={() => void existing.refetch()}
     >

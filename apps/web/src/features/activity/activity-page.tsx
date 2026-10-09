@@ -55,7 +55,12 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
           </Button>
         ))}
       </div>
-      <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+      <QueryState
+        pending={list.isPending}
+        hasData={!!list.data}
+        error={list.error}
+        retry={() => void list.refetch()}
+      >
         <div className="activity-list">
           {items.map((a) => (
             <article className="activity-row" key={a.id}>

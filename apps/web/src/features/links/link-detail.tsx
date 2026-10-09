@@ -17,17 +17,31 @@ import { QueryState, UserAvatar, More, Back } from "@/components/app/primitives"
 import { timeAgo } from "@/lib/weeks";
 export function LinkDetail({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const link = useLink(id);
+  const comments = useComments(id);
   return (
-    <QueryState pending={link.isPending} error={link.error} retry={() => void link.refetch()}>
-      {link.data && <Post id={id} standalone={standalone} />}
+    <QueryState
+      pending={link.isPending}
+      hasData={!!link.data}
+      error={link.error}
+      retry={() => void link.refetch()}
+    >
+      {link.data && <Post id={id} standalone={standalone} comments={comments} />}
     </QueryState>
   );
 }
-function Post({ id, standalone }: { id: string; standalone: boolean }) {
+function Post({
+  id,
+  standalone,
+  comments,
+}: {
+  id: string;
+  standalone: boolean;
+  comments: ReturnType<typeof useComments>;
+}) {
   const link = useLink(id).data!,
     author = useProfile(link.ownerId),
     viewer = useViewer();
-  const { list, create, remove } = useComments(id),
+  const { list, create, remove } = comments,
     [text, setText] = useState(""),
     input = useRef<HTMLInputElement>(null);
   return (
@@ -52,7 +66,12 @@ function Post({ id, standalone }: { id: string; standalone: boolean }) {
       {link.description && <p className="post-description">{link.description}</p>}
       <div className="comments">
         <h2>Comments</h2>
-        <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+        <QueryState
+          pending={list.isPending}
+          hasData={!!list.data}
+          error={list.error}
+          retry={() => void list.refetch()}
+        >
           {list.data?.pages
             .flatMap((p) => p.items)
             .map((c) => (

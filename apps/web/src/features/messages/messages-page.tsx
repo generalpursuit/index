@@ -57,7 +57,12 @@ export function MessagesPage() {
           onChange={(e) => setQuery(e.target.value)}
         />
       </label>
-      <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+      <QueryState
+        pending={list.isPending}
+        hasData={!!list.data}
+        error={list.error}
+        retry={() => void list.refetch()}
+      >
         <div className="conversation-list">
           {list.data?.pages
             .flatMap((p) => p.items)
@@ -182,7 +187,12 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
     }
   }
   return (
-    <QueryState pending={detail.isPending} error={detail.error} retry={() => void detail.refetch()}>
+    <QueryState
+      pending={detail.isPending}
+      hasData={!!detail.data}
+      error={detail.error}
+      retry={() => void detail.refetch()}
+    >
       {detail.data && (
         <div className="chat-page">
           <header className="chat-heading">
@@ -248,6 +258,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             />
             <QueryState
               pending={list.isPending}
+              hasData={!!list.data}
               error={list.error}
               retry={() => void list.refetch()}
             >

@@ -45,6 +45,7 @@ export function GroupSettings({ userId }: { userId: string }) {
       </div>
       <QueryState
         pending={groups.isPending}
+        hasData={!!groups.data}
         error={groups.error}
         retry={() => void groups.refetch()}
       >

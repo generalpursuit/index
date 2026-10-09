@@ -35,6 +35,7 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
       </label>
       <QueryState
         pending={active.isPending}
+        hasData={!!active.data}
         error={active.error}
         retry={() => void active.refetch()}
       >
@@ -60,7 +61,7 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
                     </small>
                   </span>
                 </Link>
-                <FollowButton person={p} />
+                <FollowButton person={p} followingStatus={p.followingStatus} />
               </div>
             ))}
         </div>

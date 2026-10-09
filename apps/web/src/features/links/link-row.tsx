@@ -1,3 +1,5 @@
+import { preparePost } from "./queries";
+import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { useNavigate, useSearch, useRouterState, Link } from "@tanstack/react-router";
@@ -53,7 +55,10 @@ export function LinkRow({
   owner?: string;
   locked?: boolean;
 }) {
-  const navigate = useNavigate();
+  const navigate = useNavigate(),
+    cache = useQueryClient(),
+    api = useAPI();
+  const prepare = () => preparePost(cache, api, link);
   return (
     <div className="link-row">
       {/* The color carries the category; its name shows on hover. */}
@@ -66,7 +71,13 @@ export function LinkRow({
       <button
         type="button"
         className="link-open"
-        onClick={() => void navigate({ to: ".", search: (old) => ({ ...old, post: link.id }) })}
+        onPointerEnter={prepare}
+        onFocus={prepare}
+        onTouchStart={prepare}
+        onClick={() => {
+          prepare();
+          void navigate({ to: ".", search: (old) => ({ ...old, post: link.id }) });
+        }}
       >
         {link.title}
       </button>

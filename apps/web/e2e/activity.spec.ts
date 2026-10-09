@@ -48,6 +48,12 @@ test("comment mentions appear in Activity and open the original thread", async (
     ]);
     await bob.getByRole("button", { name: "Follows", exact: true }).click();
     await expect(bob).toHaveURL(/filter=follow/);
+    // The previous screen stays visible while the route's new data loads.
+    await expect(bob.getByRole("button", { name: "Follows", exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await expect(bob.locator(".activity-row")).toHaveCount(1);
     await expect(bob.locator(".activity-row")).toContainText("started following you.");
     await bob.getByRole("button", { name: "Mentions", exact: true }).click();
     await expect(bob).toHaveURL(/filter=mention/);

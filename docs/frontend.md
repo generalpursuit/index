@@ -25,6 +25,16 @@ Messaging uses exact participant sets for unnamed groups. Selecting recipients q
 
 Messages poll every 5 seconds, conversation lists every 10 seconds, and activity every 30 seconds while the app is foregrounded. There is no push or websocket dependency.
 
+## Loading and refresh
+
+Feature query options are shared by route loaders and hooks. Navigation intent preloads the first screen of activity, conversations, profiles, and settings; discovery preloads suggestions while typed searches remain debounced. Conversation headers and messages load together. Cached data stays available for 30 minutes of inactivity, remains fresh for 30 seconds, and refreshes in the background. Session revalidation does not block navigation when a session is already known. Account-specific keys and sign-out clearing still isolate readers.
+
+Opening a visible post seeds its detail from the row and immediately revalidates access; author and comments are prefetched on pointer/focus/touch intent. Profile weeks render as each index page arrives, with failed pagination offering retry. Recoverable background failures keep known content visible with a retry notice; authorization and not-found errors hide it. Successful link edits and message sends update the relevant detail cache directly, and Favorites/Stars update optimistically with rollback. Discovery supplies follow status instead of fetching a full profile for every row.
+
+These changes also apply to the bundled Tauri frontend. The app remains a client-rendered application using the shared API, without an additional rendering server or persistent browser data cache.
+
+The browser performance tests hold requests open to verify that known content renders before a refresh finishes, and count prefetch/profile requests. To run a second isolated test stack alongside development, set `E2E_API_PORT=3102 E2E_WEB_PORT=4273` when invoking Playwright; the defaults remain 3002 and 4173. For production-bundle verification, first build with the matching `VITE_SERVER_URL` and then run Playwright with `E2E_PRODUCTION=1`.
+
 ## Run and check
 
 Use the root development workflow for the actual application/backend and apply the checked-in database migrations through the existing deployment workflow.

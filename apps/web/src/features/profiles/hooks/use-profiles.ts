@@ -1,9 +1,9 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { sessionOptions } from "@/lib/session";
-export function useProfile(userId: string) {
+export function useProfile(userId: string, enabled = true) {
   const api = useAPI();
-  return useQuery(api.profiles.get.queryOptions({ input: { userId } }));
+  return useQuery(api.profiles.get.queryOptions({ input: { userId }, enabled }));
 }
 export function useProfileActions() {
   const api = useAPI(),

@@ -120,22 +120,38 @@ export function Modal({
 }
 export function QueryState({
   pending,
+  hasData = false,
   error,
   retry,
   children,
 }: {
   pending?: boolean;
+  hasData?: boolean;
   error?: Error | null;
   retry?: () => void;
   children?: ReactNode;
 }) {
-  if (pending)
+  if (pending && !hasData)
     return (
       <div className="loading-state" role="status" aria-label="Loading">
         <div />
         <div />
         <div />
       </div>
+    );
+  if (error && hasData && !("status" in error && [401, 403, 404].includes(Number(error.status))))
+    return (
+      <>
+        {children}
+        <p className="muted" role="status">
+          Couldn’t refresh. Showing saved content.{" "}
+          {retry && (
+            <button type="button" onClick={retry}>
+              Try again
+            </button>
+          )}
+        </p>
+      </>
     );
   if (error)
     return (

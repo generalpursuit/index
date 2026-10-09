@@ -1,16 +1,10 @@
+import { activityOptions } from "../queries";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
 export function useActivity(type?: "comment" | "request" | "mention" | "follow") {
   const api = useAPI(),
     cache = useQueryClient();
-  const list = useInfiniteQuery(
-    api.activity.list.infiniteOptions({
-      input: (cursor: string | undefined) => ({ type, cursor, limit: 30 }),
-      initialPageParam: undefined,
-      getNextPageParam: (p) => p.nextCursor ?? undefined,
-      refetchInterval: 30_000,
-    }),
-  );
+  const list = useInfiniteQuery(activityOptions(api, type));
   const read = useMutation(
     api.activity.markRead.mutationOptions({
       onSuccess: () => cache.invalidateQueries({ queryKey: api.activity.key() }),

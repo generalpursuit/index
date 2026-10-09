@@ -31,7 +31,12 @@ export function Connections({
         </TabsList>
       </Tabs>
       <div className="recipient-list">
-        <QueryState pending={list.isPending} error={list.error} retry={() => void list.refetch()}>
+        <QueryState
+          pending={list.isPending}
+          hasData={!!list.data}
+          error={list.error}
+          retry={() => void list.refetch()}
+        >
           {list.data?.pages
             .flatMap((p) => p.items)
             .map((p) => (

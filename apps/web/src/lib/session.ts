@@ -15,7 +15,9 @@ export const sessionOptions = queryOptions({
   retry: 1,
 });
 export async function requireSession({ location }: { location: { href: string } }) {
-  const session = await queryClient.fetchQuery(sessionOptions);
+  const session = queryClient.getQueryData(sessionOptions.queryKey)
+    ? await queryClient.ensureQueryData({ ...sessionOptions, revalidateIfStale: true })
+    : await queryClient.fetchQuery(sessionOptions);
   if (!session) throw redirect({ to: "/login", search: { next: location.href } });
   return { session };
 }

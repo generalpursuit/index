@@ -1,17 +1,13 @@
-import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
+import { useQuery, useInfiniteQuery, keepPreviousData } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
+import { recommendationsOptions, searchPeopleOptions } from "../queries";
 export function useDiscovery(query: string) {
   const api = useAPI();
-  const suggested = useQuery(
-    api.discovery.recommendations.queryOptions({ input: { limit: 30 }, enabled: !query }),
-  );
-  const search = useInfiniteQuery(
-    api.discovery.searchUsers.infiniteOptions({
-      input: (after: string | undefined) => ({ query, after, limit: 30 }),
-      initialPageParam: undefined,
-      getNextPageParam: (p) => p.nextAfter ?? undefined,
-      enabled: !!query,
-    }),
-  );
+  const suggested = useQuery({ ...recommendationsOptions(api), enabled: !query });
+  const search = useInfiniteQuery({
+    ...searchPeopleOptions(api, query),
+    enabled: !!query,
+    placeholderData: keepPreviousData,
+  });
   return { suggested, search };
 }

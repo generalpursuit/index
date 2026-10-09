@@ -12,7 +12,7 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@index/ui/components/dropdown-menu";
-import { UserAvatar, QueryState, Modal } from "@/components/app/primitives";
+import { UserAvatar, QueryState, Modal, More } from "@/components/app/primitives";
 import { SettingsContent } from "@/features/settings/settings-page";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
@@ -24,9 +24,18 @@ import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
 import type { Profile, Person, Group } from "@/lib/types";
 const count = (n: number, noun: string) => n + " " + noun + (n === 1 ? "" : "s");
-export function FollowButton({ person }: { person: Person }) {
+export function FollowButton({
+  person,
+  followingStatus,
+}: {
+  person: Person;
+  followingStatus?: Profile["followingStatus"];
+}) {
   const viewer = useViewer(),
-    profile = useProfile(person.id),
+    profile = useProfile(
+      person.id,
+      followingStatus === undefined && !!viewer && viewer.id !== person.id,
+    ),
     actions = useProfileActions();
   if (viewer?.id === person.id) return null;
   if (!viewer)
@@ -35,11 +44,15 @@ export function FollowButton({ person }: { person: Person }) {
         Sign in to follow
       </Link>
     );
-  const status = profile.data?.followingStatus;
+  const status = followingStatus !== undefined ? followingStatus : profile.data?.followingStatus;
   return (
     <Button
       variant="outline"
-      disabled={profile.isPending || actions.follow.isPending || actions.unfollow.isPending}
+      disabled={
+        (followingStatus === undefined && profile.isPending) ||
+        actions.follow.isPending ||
+        actions.unfollow.isPending
+      }
       onClick={() =>
         status
           ? actions.unfollow.mutate({ userId: person.id })
@@ -80,6 +93,7 @@ export function ProfilePage({
   return (
     <QueryState
       pending={profile.isPending}
+      hasData={!!profile.data}
       error={profile.error}
       retry={() => void profile.refetch()}
     >
@@ -239,8 +253,8 @@ function ProfileLinks({
   // The scrubber shows every week, and the list is small (one entry per week): load it all.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+    if (hasNextPage && !isFetchingNextPage && !list.isFetchNextPageError) void fetchNextPage();
+  }, [hasNextPage, isFetchingNextPage, list.isFetchNextPageError, fetchNextPage]);
   const loaded = list.data?.pages.flatMap((p) => p.items) ?? [];
   const weeks: Week[] = missing
     ? []
@@ -279,7 +293,8 @@ function ProfileLinks({
     <div ref={listRef} className="profile-links">
       {groups.error && <QueryState error={groups.error} retry={() => void groups.refetch()} />}
       <QueryState
-        pending={!ready || (!missing && (list.isPending || hasNextPage))}
+        pending={!ready || (!missing && list.isPending)}
+        hasData={ready && !!list.data}
         error={list.error}
         retry={() => void list.refetch()}
       >
@@ -327,6 +342,9 @@ function ProfileLinks({
           </>
         )}
       </QueryState>
+      {list.isFetchNextPageError && (
+        <More hasNext isFetching={isFetchingNextPage} fetch={fetchNextPage} />
+      )}
       <WeekPicker open={picking} onOpenChange={setPicking} weeks={weeks} onPick={jump} />
     </div>
   );
