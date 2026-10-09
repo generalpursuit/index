@@ -5,7 +5,6 @@ import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { linksContract } from "./contract";
 import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup } from "./service";
-import { readLinkMetadata } from "./metadata";
 
 const api = implement(linksContract).$context<Context>();
 
@@ -16,9 +15,6 @@ export const linksRouter = api.router({
   listByOwner: api.listByOwner.handler(async ({ context, input }) =>
     unwrapResult(await listByOwner(context.db, context.session?.user.id ?? null, input)),
   ),
-  preview: api.preview
-    .use(requireAuth)
-    .handler(({ context, input }) => readLinkMetadata(input.url, context.fetchPage)),
   create: api.create
     .use(requireAuth)
     .handler(async ({ context, input }) =>

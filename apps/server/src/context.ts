@@ -22,7 +22,7 @@ export async function createContext({ context }: CreateContextOptions): Promise<
   };
 }
 
-// Cloudflare keeps fetched pages for an hour, so the preview and the save share one request.
+// Cloudflare keeps fetched pages for an hour, so a link saved again soon is read only once.
 const fetchPage: ApiContext["fetchPage"] = (url, init) =>
   fetch(url, { ...init, cf: { cacheEverything: true, cacheTtl: 3600 } });
 

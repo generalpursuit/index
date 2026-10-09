@@ -33,7 +33,6 @@ describe("link metadata", () => {
     });
     assert.deepEqual(await readLinkMetadata("https://news.example/story", fetchPage), {
       title: "Rivers & Roads",
-      siteName: "The Paper",
       category: "article",
     });
   });
@@ -78,7 +77,6 @@ describe("link metadata", () => {
     });
     assert.deepEqual(await readLinkMetadata("https://pod.example/4", fetchPage), {
       title: "Episode 4",
-      siteName: null,
       category: "podcast",
     });
     assert.equal(
@@ -105,7 +103,7 @@ describe("link metadata", () => {
     });
     assert.deepEqual(
       await readLinkMetadata("https://files.example/audio/morning-mix.mp3", fetchPage),
-      { title: "Morning mix", siteName: null, category: "music" },
+      { title: "Morning mix", category: "music" },
     );
   });
 
@@ -115,7 +113,6 @@ describe("link metadata", () => {
     });
     assert.deepEqual(await readLinkMetadata("https://example.org/", fetchPage), {
       title: "example.org",
-      siteName: null,
       category: "uncategorized",
     });
     assert.equal(

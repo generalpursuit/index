@@ -72,11 +72,6 @@ describe("links API with PostgreSQL", () => {
       context: { ...fixture.context("alice"), fetchPage },
     });
     const url = "https://songs.example/a-song";
-    assert.deepEqual(await alice.preview({ url }), {
-      title: "A Song",
-      siteName: null,
-      category: "music",
-    });
     // A pasted link needs nothing but its URL.
     const pasted = await alice.create({ url });
     assert.equal(pasted.title, "A Song");
@@ -84,8 +79,7 @@ describe("links API with PostgreSQL", () => {
     const titled = await alice.create({ url, title: "My own title" });
     assert.equal(titled.title, "My own title");
     assert.equal(titled.category, "music");
-    await assert.rejects(client(null).preview({ url }), { code: "UNAUTHORIZED" });
-    assert.deepEqual(requested, [url, url, url]);
+    assert.deepEqual(requested, [url, url]);
   });
 
   it("requires authentication for saving and listing your library", async () => {

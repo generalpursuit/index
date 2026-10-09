@@ -84,10 +84,3 @@ export const libraryWeeksSchema = z.object({
   items: z.array(z.object({ weekStart: weekStartSchema, count: z.number().int().positive() })),
   nextBefore: weekStartSchema.nullable(),
 });
-
-export const previewLinkInputSchema = z.strictObject({ url: createLinkInputSchema.shape.url });
-export const linkPreviewSchema = z.object({
-  title: z.string(),
-  siteName: z.string().nullable(),
-  category: linkCategorySchema,
-});

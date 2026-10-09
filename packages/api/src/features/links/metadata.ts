@@ -6,7 +6,6 @@ export type FetchPage = (url: string, init: RequestInit) => Promise<Response>;
 
 export type LinkMetadata = {
   title: string;
-  siteName: string | null;
   category: Link["category"];
 };
 
@@ -26,7 +25,6 @@ const requestHeaders = {
 export async function readLinkMetadata(url: string, fetchPage: FetchPage): Promise<LinkMetadata> {
   const fallback: LinkMetadata = {
     title: titleFromUrl(url),
-    siteName: null,
     category: categorize(url),
   };
   try {
@@ -43,7 +41,6 @@ export async function readLinkMetadata(url: string, fetchPage: FetchPage): Promi
     const head = await parsePage(await readStart(response));
     return {
       title: cleanTitle(head.title, [head.siteName, siteLabel(url)]) ?? fallback.title,
-      siteName: head.siteName,
       category: categorizePage(url, { ...head, contentType }),
     };
   } catch {
