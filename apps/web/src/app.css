@@ -1447,6 +1447,9 @@ span.link-open {
 .chat-composer-area {
   flex: none;
 }
+.chat-composer-area .composer input {
+  height: 40px;
+}
 .auth-page {
   min-height: 100dvh;
   display: grid;
