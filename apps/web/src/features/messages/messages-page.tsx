@@ -133,6 +133,10 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       void navigate({ to: ".", search: (old) => ({ ...old, attach: undefined }), replace: true });
     }
   }, [attached.data, attach, navigate]);
+  const recipient =
+    detail.data?.participants.length === 2
+      ? detail.data.participants.find((person) => person.id !== viewer.id)
+      : undefined;
   const markRead = actions.read.mutate;
   const newest = list.data?.pages[0]?.items[0],
     lastId = newest?.id;
@@ -183,9 +187,27 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
         <div className="chat-page">
           <header className="chat-heading">
             <Back fallback="/messages" />
-            <ChatAvatars chat={detail.data} viewerId={viewer.id} />
+            {recipient ? (
+              <Link
+                to="/people/$userId"
+                params={{ userId: recipient.id }}
+                aria-label={"View " + recipient.name + "’s profile"}
+              >
+                <ChatAvatars chat={detail.data} viewerId={viewer.id} />
+              </Link>
+            ) : (
+              <ChatAvatars chat={detail.data} viewerId={viewer.id} />
+            )}
             <div className="person-label">
-              <strong>{conversationName(detail.data, viewer.id)}</strong>
+              <strong>
+                {recipient ? (
+                  <Link to="/people/$userId" params={{ userId: recipient.id }}>
+                    {recipient.name}
+                  </Link>
+                ) : (
+                  conversationName(detail.data, viewer.id)
+                )}
+              </strong>
               <small>
                 {detail.data.participants
                   .filter((p) => p.id !== viewer.id)
