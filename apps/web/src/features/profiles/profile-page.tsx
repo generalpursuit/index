@@ -102,7 +102,7 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
         <UserAvatar person={profile} large />
         <div className="profile-identity">
           <div className="profile-name">
-            <h1>{profile.username ?? profile.name}</h1>
+            <h1>{profile.name}</h1>
             <span
               className="profile-visibility"
               role="img"
@@ -119,7 +119,7 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
             </span>
           </div>
           <p className="profile-meta">
-            <span>{profile.name}</span>
+            {profile.username && <span>{profile.username}</span>}
             {profile.linkCount !== null && <span>{count(profile.linkCount, "link")}</span>}
             {own && (
               <>

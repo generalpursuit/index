@@ -133,6 +133,6 @@ test("registration uses real authentication and preserves the requested destinat
   await page.getByRole("button", { name: "Create account", exact: true }).click();
   await expect(page).toHaveURL(/discover$/);
   await page.getByRole("link", { name: "Your profile" }).click();
-  await expect(page.locator(".profile-heading h1")).toHaveText("new_reader");
-  await expect(page.locator(".profile-meta")).toContainText("New Reader");
+  await expect(page.locator(".profile-heading h1")).toHaveText("New Reader");
+  await expect(page.locator(".profile-meta")).toContainText("new_reader");
 });

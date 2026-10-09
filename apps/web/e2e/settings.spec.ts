@@ -62,8 +62,8 @@ for (const viewport of [
     await expect(page.getByLabel("Username", { exact: true })).toHaveValue("alice_updated");
     await expect(page.getByLabel("Image URL", { exact: true })).toHaveValue(image);
     await page.getByRole("button", { name: "Back", exact: true }).click();
-    await expect(page.locator(".profile-heading h1")).toHaveText("alice_updated");
-    await expect(page.locator(".profile-meta")).toContainText("Alice Updated");
+    await expect(page.locator(".profile-heading h1")).toHaveText("Alice Updated");
+    await expect(page.locator(".profile-meta")).toContainText("alice_updated");
     await expect(page.locator(".profile-heading img")).toHaveAttribute("src", image);
     await page.getByRole("link", { name: "Settings", exact: true }).click();
     await page.getByRole("button", { name: "Remove photo", exact: true }).click();
