@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { memoryMediaStore } from "../features/profiles/media";
 import type { Session } from "@index/auth";
 import { user } from "@index/db/schema/auth";
 import { relations } from "@index/db/relations";
@@ -31,7 +32,7 @@ export async function createTestDatabase() {
 
   // Tests never reach the network; links fall back to what their URL says.
   function context(actorId: string | null): Context {
-    return { db, session: actorId ? sessionFor(actorId) : null, fetchPage: offline };
+    return { db, session: actorId ? sessionFor(actorId) : null, fetchPage: offline, media };
   }
 
   return { db, client, reset, context, close: () => client.close() };
@@ -63,3 +64,5 @@ function sessionFor(userId: string): Session {
 }
 
 const offline: Context["fetchPage"] = () => Promise.reject(new TypeError("Offline in tests."));
+/** Photos uploaded in tests stay in memory. */
+export const media = memoryMediaStore("https://api.example.test");

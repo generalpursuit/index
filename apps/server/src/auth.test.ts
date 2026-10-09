@@ -128,6 +128,22 @@ describe("native and browser authentication", () => {
     );
     assert.equal(signedIn.status, 200, await signedIn.clone().text());
     assert.ok(signedIn.headers.get("set-auth-token"));
+    // Photos are only uploaded through the API; auth never takes an image address.
+    assert.equal(
+      (
+        await signUp({
+          email: "photo@example.com",
+          username: "photo",
+          image: "https://x.test/a.png",
+        })
+      ).status,
+      400,
+    );
+    const token = signedIn.headers.get("set-auth-token")!;
+    const changed = await authentication.handler(
+      post("/update-user", { image: "https://x.test/a.png" }, { Authorization: `Bearer ${token}` }),
+    );
+    assert.equal(changed.status, 400);
   });
 
   it("publishes the authentication OpenAPI contract for native clients", async () => {

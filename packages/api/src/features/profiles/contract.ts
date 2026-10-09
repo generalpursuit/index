@@ -2,7 +2,7 @@ import { usernameSchema } from "@index/auth/username";
 import { optionalAuth } from "../../shared/schemas";
 import { z } from "zod";
 import { baseContract, userIdSchema } from "../../shared/schemas";
-import { profileSchema, updateProfileSchema } from "./schemas";
+import { profileSchema, updateProfileSchema, uploadImageSchema } from "./schemas";
 
 export const profilesContract = {
   me: baseContract
@@ -25,5 +25,14 @@ export const profilesContract = {
   update: baseContract
     .route({ method: "PATCH", path: "/me/profile", tags: ["Profiles"] })
     .input(updateProfileSchema)
+    .output(profileSchema),
+  uploadImage: baseContract
+    .route({
+      method: "POST",
+      path: "/me/image",
+      summary: "Upload a profile photo (JPEG, PNG or WebP, at most 5 MB); replaces the current one",
+      tags: ["Profiles"],
+    })
+    .input(uploadImageSchema)
     .output(profileSchema),
 };

@@ -33,16 +33,15 @@ export function GroupSettings({ userId }: { userId: string }) {
     );
   const [creating, setCreating] = useState(false);
   return (
-    <section className="settings-groups">
+    <section className="settings-box settings-groups" aria-labelledby="settings-groups">
       <div className="settings-groups-heading">
         <div>
-          <h2>Groups</h2>
+          <h2 id="settings-groups">Groups</h2>
           <p className="muted">Locked lists are only yours, whoever can see your profile.</p>
         </div>
-        <Button variant="outline" onClick={() => setCreating(true)}>
-          <Plus size={16} />
-          New group
-        </Button>
+        <IconButton label="New group" onClick={() => setCreating(true)}>
+          <Plus />
+        </IconButton>
       </div>
       <QueryState
         pending={groups.isPending}
@@ -52,9 +51,12 @@ export function GroupSettings({ userId }: { userId: string }) {
         <ul className="settings-group-list">
           {all.map((g) => (
             <li key={g.id} className="settings-group">
-              <span>
+              <span className="settings-group-name">
                 {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
                 {g.name}
+              </span>
+              <span className="settings-group-count">
+                {g.linkCount === 1 ? "1 link" : g.linkCount + " links"}
               </span>
               <GroupActions group={g} />
             </li>

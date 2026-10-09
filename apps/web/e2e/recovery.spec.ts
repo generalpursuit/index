@@ -41,10 +41,12 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await login(page);
   await page.getByRole("link", { name: "Your profile" }).click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByLabel("Name", { exact: true }).fill("Alice Example");
-  await page.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Save changes", exact: true })).toBeDisabled();
-  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await page.getByRole("button", { name: "Edit profile", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit profile" });
+  await editor.getByLabel("Name", { exact: true }).fill("Alice Example");
+  await editor.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(editor).toHaveCount(0);
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(page.locator(".profile-heading")).toContainText("Alice Example");
   await page.getByRole("button", { name: "Showing All", exact: true }).click();
   await page.getByRole("menuitem", { name: "New group" }).click();

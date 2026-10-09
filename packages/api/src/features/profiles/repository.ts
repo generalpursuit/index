@@ -44,7 +44,22 @@ export function findProfile(db: QueryDatabase, viewerId: string | null, filter: 
   );
 }
 
-export function updateProfile(db: QueryDatabase, actorId: string, input: UpdateProfileInput) {
+export const findImage = (db: QueryDatabase, actorId: string) =>
+  ResultAsync.fromPromise(
+    db
+      .select({ image: user.image })
+      .from(user)
+      .where(eq(user.id, actorId))
+      .then((rows) => rows[0]?.image ?? null),
+    databaseError,
+  );
+
+export function updateProfile(
+  db: QueryDatabase,
+  actorId: string,
+  // Uploads set an address of the store's own; everyone else may only remove it.
+  input: Omit<UpdateProfileInput, "image"> & { image?: string | null },
+) {
   const updated = db
     .$with("updated_profile")
     .as(db.update(user).set(input).where(eq(user.id, actorId)).returning({ id: user.id }));

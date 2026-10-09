@@ -1,6 +1,7 @@
 import { usernameSchema } from "@index/auth/username";
 import { z } from "zod";
-import { httpUrlSchema, userIdSchema, visibilitySchema } from "../../shared/schemas";
+import { userIdSchema, visibilitySchema } from "../../shared/schemas";
+import { maxPhotoBytes } from "./media";
 
 export const publicUserSchema = z.object({
   id: userIdSchema,
@@ -27,7 +28,8 @@ export const updateProfileSchema = z
   .strictObject({
     name: z.string().trim().min(1).max(80).optional(),
     username: usernameSchema.optional(),
-    image: httpUrlSchema.nullable().optional(),
+    // Photos are uploaded with `uploadImage`; here they can only be removed.
+    image: z.null().optional(),
     profileVisibility: visibilitySchema.optional(),
   })
   .refine(
@@ -35,3 +37,7 @@ export const updateProfileSchema = z
     "Provide a change.",
   );
 export type UpdateProfileInput = z.output<typeof updateProfileSchema>;
+export const uploadImageSchema = z.strictObject({
+  // The service checks what the bytes are; see `photoType`.
+  image: z.file().max(maxPhotoBytes),
+});

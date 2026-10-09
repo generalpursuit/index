@@ -30,7 +30,7 @@ bun install
 
 ## Database Setup
 
-Alchemy provisions Neon, passes its connection credentials directly to the deployed application, and manages database deployment in the same stack as the consuming app. You do not need to copy a hosted `DATABASE_URL` into the app environment.
+Alchemy provisions Neon, passes its connection credentials directly to the deployed application, and manages database deployment in the same stack as the consuming app. It also creates the private `media` R2 bucket for profile photos and binds it to the server Worker as `MEDIA`; R2 must be enabled once for the Cloudflare account in the dashboard before the first deploy. You do not need to copy a hosted `DATABASE_URL` into the app environment.
 
 Generate and commit migration SQL with `bun run db:generate`. Deployment applies checked-in migrations after provisioning the database.
 

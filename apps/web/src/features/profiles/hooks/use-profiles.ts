@@ -33,6 +33,16 @@ export function useProfileActions() {
         },
       }),
     ),
+    uploadImage: useMutation(
+      api.profiles.uploadImage.mutationOptions({
+        onSuccess: async () => {
+          await Promise.all([
+            refresh(),
+            cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
+          ]);
+        },
+      }),
+    ),
     follow: useMutation(api.follows.follow.mutationOptions({ onSuccess: refresh })),
     unfollow: useMutation(api.follows.unfollow.mutationOptions({ onSuccess: refresh })),
     removeFollower: useMutation(api.follows.removeFollower.mutationOptions({ onSuccess: refresh })),

@@ -40,6 +40,13 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
         if (ctx.path === "/sign-up/email" && typeof ctx.body?.username !== "string") {
           throw new APIError("BAD_REQUEST", { message: "Choose a username." });
         }
+        // Photos are only ever uploaded through the app's API, never set as an address.
+        if (
+          (ctx.path === "/sign-up/email" || ctx.path === "/update-user") &&
+          ctx.body?.image !== undefined
+        ) {
+          throw new APIError("BAD_REQUEST", { message: "Upload a photo in Settings instead." });
+        }
       }),
     },
     plugins: [

@@ -10,13 +10,6 @@ import { Button } from "@index/ui/components/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@index/ui/components/avatar";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@index/ui/components/dialog";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "@index/ui/components/drawer";
-import {
-  Select,
-  SelectTrigger,
-  SelectValue,
-  SelectContent,
-  SelectItem,
-} from "@index/ui/components/select";
 import { ChevronLeft } from "lucide-react";
 import { useBack } from "@/hooks/use-back";
 import { useMediaQuery } from "@/hooks/use-media-query";
@@ -123,38 +116,6 @@ export function Modal({
         {children}
       </DialogContent>
     </Dialog>
-  );
-}
-export function Choice({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <Select
-      value={value}
-      onValueChange={(v) => {
-        if (v !== null) onChange(v);
-      }}
-      items={options}
-    >
-      <SelectTrigger aria-label={label} className="choice">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 export function QueryState({

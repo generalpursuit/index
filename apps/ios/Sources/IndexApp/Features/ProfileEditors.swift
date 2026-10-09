@@ -6,7 +6,6 @@ struct SettingsView: View {
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
   @State private var username = ""
-  @State private var imageURL = ""
   @State private var initialized = false
   var body: some View {
     ScrollView {
@@ -17,15 +16,9 @@ struct SettingsView: View {
           #if os(iOS)
             .textInputAutocapitalization(.never).autocorrectionDisabled()
           #endif
-        TextField("Avatar image URL (optional)", text: $imageURL).ghostInput()
-          #if os(iOS)
-            .textInputAutocapitalization(.never).keyboardType(.URL)
-          #endif
         AsyncButton {
-          var body: [String: JSONValue] = [
-            "name": .string(name),
-            "image": imageURL.isEmpty ? .null : .string(imageURL),
-          ]
+          // Photos are uploaded (POST /me/image), never set as an address.
+          var body: [String: JSONValue] = ["name": .string(name)]
           if !username.isEmpty { body["username"] = .string(username.lowercased()) }
           app.profile = try await app.api?.request("/me/profile", method: "PATCH", body: body)
           app.changed()
@@ -45,7 +38,6 @@ struct SettingsView: View {
       guard !initialized, let profile = app.profile else { return }
       name = profile.name
       username = profile.username ?? ""
-      imageURL = profile.image ?? ""
       initialized = true
     }
   }

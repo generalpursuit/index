@@ -3,6 +3,7 @@ import { createAuth } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
 import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
+import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
 const database = await createTestDatabase();
 const auth = createAuth(
   {
@@ -423,6 +424,8 @@ async function seedMore(people, week, reading) {
   }
 }
 await seed();
+// Uploaded photos stay in memory, served at `/media/*` like the bucket on the real server.
+const media = memoryMediaStore("http://localhost:3002");
 Bun.serve({
   hostname: "127.0.0.1",
   port: 3002,
@@ -434,18 +437,28 @@ Bun.serve({
       response = Response.json(await seed());
     else if (url.pathname === "/_test/fixture") response = Response.json(fixture);
     else if (url.pathname === "/health") response = new Response("ready");
-    else if (url.pathname.startsWith("/api/auth/")) response = await auth.handler(request);
+    else if (url.pathname.startsWith("/media/")) {
+      const object = media.get(url.pathname.slice("/media/".length));
+      response = object
+        ? new Response(object.body, {
+            headers: {
+              "content-type": object.contentType,
+              "cache-control": "public, max-age=31536000, immutable",
+            },
+          })
+        : new Response("Not found", { status: 404 });
+    } else if (url.pathname.startsWith("/api/auth/")) response = await auth.handler(request);
     else {
       const session = await auth.api.getSession({ headers: request.headers });
       const result = await rpcHandler.handle(request, {
         prefix: "/rpc/v1",
-        context: { db: database.db, session, fetchPage },
+        context: { db: database.db, session, fetchPage, media },
       });
       const rest = result.matched
         ? result
         : await apiHandler.handle(request, {
             prefix: "/api/v1",
-            context: { db: database.db, session, fetchPage },
+            context: { db: database.db, session, fetchPage, media },
           });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }

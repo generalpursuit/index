@@ -1,231 +1,323 @@
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { LogOut } from "lucide-react";
+import { ChevronDown, Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { Field, FieldLabel, FieldError, FieldDescription } from "@index/ui/components/field";
+import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@index/ui/components/dropdown-menu";
 import { updateProfileSchema } from "@index/api/features/profiles/schemas";
-import { useState } from "react";
-import { Back, Choice, Confirmation, QueryState, UserAvatar } from "@/components/app/primitives";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import {
+  Back,
+  Confirmation,
+  IconButton,
+  Modal,
+  QueryState,
+  UserAvatar,
+} from "@/components/app/primitives";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "@/features/profiles/hooks/use-profiles";
+import { squarePhoto } from "@/lib/photo";
 import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
 
-const imageSchema = z
-  .string()
-  .trim()
-  .pipe(z.union([updateProfileSchema.shape.image.unwrap().unwrap(), z.literal("")]));
-
+/** Settings as a page, reached from your profile. */
 export function SettingsPage() {
   const viewer = useViewer();
-  return viewer ? <AccountSettings userId={viewer.id} /> : <QueryState pending />;
-}
-
-function AccountSettings({ userId }: { userId: string }) {
-  const profile = useProfile(userId);
   return (
     <div className="settings-page">
       <header className="page-heading">
-        <Back fallback={"/people/" + userId} />
+        <Back fallback={viewer ? "/people/" + viewer.id : "/"} />
         <h1>Settings</h1>
       </header>
-      <QueryState
-        pending={profile.isPending}
-        error={profile.error}
-        retry={() => void profile.refetch()}
-      >
-        {profile.data && <SettingsForm key={userId} profile={profile.data} />}
-      </QueryState>
+      {viewer ? <SettingsContent userId={viewer.id} /> : <QueryState pending />}
     </div>
   );
 }
 
-function SettingsForm({ profile }: { profile: Profile }) {
-  const { update } = useProfileActions();
+/** Shared account settings content. */
+export function SettingsContent({ userId }: { userId: string }) {
+  const profile = useProfile(userId);
+  return (
+    <QueryState
+      pending={profile.isPending}
+      error={profile.error}
+      retry={() => void profile.refetch()}
+    >
+      {profile.data && <SettingsBoxes key={userId} profile={profile.data} />}
+    </QueryState>
+  );
+}
+
+/** One box per concern: who you are, who sees your links, your lists, and signing out. */
+function SettingsBoxes({ profile }: { profile: Profile }) {
   const signOut = useSignOut();
+  // Editing opens with a freshly picked photo when the avatar was tapped.
+  const [editing, setEditing] = useState<{ photo?: File } | null>(null);
+  const picker = useRef<HTMLInputElement>(null);
+  return (
+    <div className="settings-content">
+      <section className="settings-box settings-profile" aria-label="Profile">
+        <button
+          type="button"
+          className="settings-photo"
+          aria-label="Change photo"
+          onClick={() => picker.current?.click()}
+        >
+          <UserAvatar person={profile} large />
+        </button>
+        <PhotoPicker input={picker} onPick={(photo) => setEditing({ photo })} />
+        <div className="settings-identity">
+          <strong>{profile.name}</strong>
+          {profile.username && <span>{profile.username}</span>}
+        </div>
+        <IconButton label="Edit profile" className="settings-edit" onClick={() => setEditing({})}>
+          <Pencil />
+        </IconButton>
+      </section>
+      <ProfileVisibility profile={profile} />
+      <GroupSettings userId={profile.id} />
+      <button
+        type="button"
+        className="settings-box settings-sign-out"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
+        {signOut.isPending ? "Signing out…" : "Sign out"}
+      </button>
+      {signOut.error && (
+        <p role="alert" className="field-error settings-sign-out-error">
+          {signOut.error.message}
+        </p>
+      )}
+      {editing && (
+        <EditProfile profile={profile} photo={editing.photo} onClose={() => setEditing(null)} />
+      )}
+    </div>
+  );
+}
+
+/** A hidden file input; picking an image hands it on. */
+function PhotoPicker({
+  input,
+  onPick,
+}: {
+  input: RefObject<HTMLInputElement | null>;
+  onPick: (photo: File) => void;
+}) {
+  return (
+    <input
+      ref={input}
+      type="file"
+      accept="image/*"
+      hidden
+      onChange={(event) => {
+        const photo = event.target.files?.[0];
+        event.target.value = "";
+        if (photo) onPick(photo);
+      }}
+    />
+  );
+}
+
+/**
+ * Photo, name and username, saved together. A new photo is squared and shrunk in the browser,
+ * then uploaded; removing it deletes the stored one.
+ */
+function EditProfile({
+  profile,
+  photo: picked,
+  onClose,
+}: {
+  profile: Profile;
+  photo?: File;
+  onClose: () => void;
+}) {
+  const { update, uploadImage } = useProfileActions();
+  // `undefined` keeps the current photo, `null` removes it, a File replaces it.
+  const [photo, setPhoto] = useState<File | null | undefined>(picked);
+  const preview = usePreview(photo);
+  const picker = useRef<HTMLInputElement>(null);
+  const saving = update.isPending || uploadImage.isPending;
   const form = useForm({
-    defaultValues: {
-      name: profile.name,
-      username: profile.username ?? "",
-      image: profile.image ?? "",
-    },
+    defaultValues: { name: profile.name, username: profile.username ?? "" },
     validators: {
       onSubmit: z.object({
         name: updateProfileSchema.shape.name.unwrap(),
         username: z
           .union([updateProfileSchema.shape.username.unwrap(), z.literal("")])
           .refine((value) => !profile.username || value.length > 0, "Enter a username."),
-        image: imageSchema,
       }),
     },
     onSubmit: async ({ value }) => {
       try {
-        const saved = await update.mutateAsync({
-          name: value.name.trim(),
-          username: value.username || undefined,
-          image: value.image.trim() || null,
-        });
-        form.reset({ name: saved.name, username: saved.username ?? "", image: saved.image ?? "" });
+        if (photo) await uploadImage.mutateAsync({ image: await squarePhoto(photo) });
+        const name = value.name.trim();
+        const username = value.username || undefined;
+        if (name !== profile.name || username !== (profile.username ?? undefined) || photo === null)
+          await update.mutateAsync({ name, username, ...(photo === null ? { image: null } : {}) });
         toast.success("Profile saved");
+        onClose();
       } catch {
-        // Keep unsaved fields intact so a failed save can be corrected or retried.
+        // Errors show below; the fields keep what was typed.
       }
     },
   });
+  const shown = photo === null ? null : (preview ?? profile.image);
+  const error = uploadImage.error ?? update.error;
   return (
-    <div className="settings-content">
+    <Modal
+      open
+      title="Edit profile"
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
       <form
-        className="form-stack settings-form"
+        className="form-stack edit-profile"
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
           void form.handleSubmit();
         }}
       >
-        <form.Subscribe selector={(state) => state.values}>
-          {(values) => (
-            <div className="settings-photo">
-              <UserAvatar
-                person={{
-                  id: profile.id,
-                  name: values.name || profile.name,
-                  image: imageSchema.safeParse(values.image).success
-                    ? values.image.trim() || null
-                    : null,
-                }}
-                large
-              />
-              <div>
-                <h2>Profile photo</h2>
-                <p className="muted">Your photo, or your initials.</p>
-                {values.image && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    disabled={update.isPending || signOut.isPending}
-                    onClick={() => form.setFieldValue("image", "")}
-                  >
-                    Remove photo
-                  </Button>
-                )}
-              </div>
-            </div>
-          )}
-        </form.Subscribe>
+        <div className="edit-profile-photo">
+          <button
+            type="button"
+            className="settings-photo"
+            aria-label="Choose photo"
+            onClick={() => picker.current?.click()}
+          >
+            <UserAvatar person={{ ...profile, image: shown }} large />
+          </button>
+          <div className="edit-profile-photo-actions">
+            <Button type="button" variant="ghost" onClick={() => picker.current?.click()}>
+              {shown ? "Change photo" : "Add photo"}
+            </Button>
+            {shown && (
+              <Button type="button" variant="ghost" onClick={() => setPhoto(null)}>
+                Remove photo
+              </Button>
+            )}
+          </div>
+          <PhotoPicker input={picker} onPick={setPhoto} />
+        </div>
         {(
           [
-            { name: "name", label: "Name", autoComplete: "name" },
-            { name: "username", label: "Username", autoComplete: "username" },
-            { name: "image", label: "Image URL", autoComplete: "off" },
+            { name: "name", label: "Name", autoComplete: "name", max: 80 },
+            { name: "username", label: "Username", autoComplete: "username", max: 30 },
           ] as const
         ).map((input) => (
           <form.Field key={input.name} name={input.name}>
             {(field) => (
               <Field data-invalid={field.state.meta.errors.length > 0}>
-                <FieldLabel htmlFor={"settings-" + input.name}>{input.label}</FieldLabel>
+                <FieldLabel className="link-form-label" htmlFor={"profile-" + input.name}>
+                  {input.label}
+                </FieldLabel>
                 <Input
-                  id={"settings-" + input.name}
+                  id={"profile-" + input.name}
                   name={input.name}
-                  type={input.name === "image" ? "url" : "text"}
                   autoComplete={input.autoComplete}
                   autoCapitalize={input.name === "name" ? "words" : "none"}
                   spellCheck={false}
-                  maxLength={input.name === "name" ? 80 : input.name === "username" ? 30 : 8192}
+                  maxLength={input.max}
                   value={field.state.value}
-                  disabled={update.isPending || signOut.isPending}
+                  disabled={saving}
                   aria-invalid={field.state.meta.errors.length > 0}
-                  aria-describedby={
-                    "settings-" +
-                    input.name +
-                    "-error" +
-                    (input.name === "image" ? " settings-image-hint" : "")
-                  }
+                  aria-describedby={"profile-" + input.name + "-error"}
                   onBlur={field.handleBlur}
-                  onChange={(event) => {
-                    field.handleChange(event.target.value);
-                    update.reset();
-                  }}
+                  onChange={(event) => field.handleChange(event.target.value)}
                 />
-                {input.name === "image" && (
-                  <FieldDescription id="settings-image-hint">
-                    Paste an image link, or leave blank to use your initials.
-                  </FieldDescription>
-                )}
                 <FieldError
-                  id={"settings-" + input.name + "-error"}
+                  id={"profile-" + input.name + "-error"}
                   errors={field.state.meta.errors}
                 />
               </Field>
             )}
           </form.Field>
         ))}
-        {update.error && (
+        {error && (
           <p role="alert" className="field-error">
-            {update.error.message}
+            {error.message}
           </p>
         )}
-        <form.Subscribe selector={(state) => [state.isPristine, state.isSubmitting]}>
-          {([pristine, submitting]) => (
-            <Button
-              className="settings-save"
-              type="submit"
-              disabled={pristine || submitting || signOut.isPending}
-            >
-              {submitting ? "Saving…" : "Save changes"}
-            </Button>
-          )}
-        </form.Subscribe>
+        <div className="modal-actions">
+          <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </div>
       </form>
-      <ProfileVisibility profile={profile} />
-      <GroupSettings userId={profile.id} />
-      <div className="settings-session">
-        <Button
-          variant="outline"
-          disabled={signOut.isPending || update.isPending}
-          onClick={() => signOut.mutate()}
-        >
-          <LogOut size={16} />
-          {signOut.isPending ? "Signing out…" : "Sign out"}
-        </Button>
-        {signOut.error && (
-          <p role="alert" className="field-error">
-            {signOut.error.message}
-          </p>
-        )}
-      </div>
-    </div>
+    </Modal>
   );
+}
+
+/** A temporary address for a picked photo, released when it changes. */
+function usePreview(photo: File | null | undefined) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!photo) {
+      setUrl(null);
+      return;
+    }
+    const address = URL.createObjectURL(photo);
+    setUrl(address);
+    return () => URL.revokeObjectURL(address);
+  }, [photo]);
+  return url;
 }
 
 // Visibility decides who sees every link outside a locked group, so changes need confirming.
 function ProfileVisibility({ profile }: { profile: Profile }) {
   const { update } = useProfileActions();
   const [next, setNext] = useState<"public" | "private" | null>(null);
+  const current = profile.profileVisibility;
   return (
-    <section className="settings-visibility">
+    <section className="settings-box settings-visibility" aria-labelledby="settings-visibility">
       <div>
-        <h2>Profile visibility</h2>
+        <h2 id="settings-visibility">Profile visibility</h2>
         <p className="muted">
-          {profile.profileVisibility === "private"
+          {current === "private"
             ? "Only approved followers see your links."
             : "Anyone can see your links."}{" "}
           Locked groups are always only yours.
         </p>
       </div>
-      <Choice
-        label="Profile visibility"
-        value={profile.profileVisibility}
-        onChange={(value) => {
-          if (value !== profile.profileVisibility) setNext(value as "public" | "private");
-        }}
-        options={[
-          { value: "public", label: "Public" },
-          { value: "private", label: "Private" },
-        ]}
-      />
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              className="list-filter"
+              aria-label={"Profile visibility: " + current}
+            />
+          }
+        >
+          {current === "private" ? "Private" : "Public"}
+          <ChevronDown aria-hidden="true" />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuRadioGroup
+            value={current}
+            onValueChange={(value) => {
+              if (value !== current) setNext(value as "public" | "private");
+            }}
+          >
+            <DropdownMenuRadioItem value="public">Public</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="private">Private</DropdownMenuRadioItem>
+          </DropdownMenuRadioGroup>
+        </DropdownMenuContent>
+      </DropdownMenu>
       <Confirmation
         open={next !== null}
         onOpenChange={(open) => {

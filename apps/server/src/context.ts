@@ -1,6 +1,8 @@
 import type { Context as ApiContext } from "@index/api/context";
 import type { Context as HonoContext } from "hono";
 
+import { ENV } from "./env.server";
+import { r2MediaStore } from "./media";
 import { getDb } from "./services";
 import { createAuth } from "./services";
 
@@ -19,6 +21,7 @@ export async function createContext({ context }: CreateContextOptions): Promise<
     db,
     session,
     fetchPage,
+    media: r2MediaStore(ENV.MEDIA, ENV.BETTER_AUTH_URL),
   };
 }
 

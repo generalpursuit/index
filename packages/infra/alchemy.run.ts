@@ -29,6 +29,9 @@ export const databaseBindings = {
 
 export const databaseProviders = Layer.mergeAll(Neon.providers());
 
+/** Profile photos. Private: the server Worker serves them at `/media/*`. */
+export const media = Cloudflare.R2.Bucket("media");
+
 export const server = Cloudflare.Worker("server", {
   main: "../../apps/server/src/index.ts",
   compatibility: {
@@ -39,6 +42,7 @@ export const server = Cloudflare.Worker("server", {
     CORS_ORIGIN: Config.String("CORS_ORIGIN"),
     BETTER_AUTH_SECRET: Config.Redacted("BETTER_AUTH_SECRET"),
     BETTER_AUTH_URL: Cloudflare.Worker.URL,
+    MEDIA: media,
   },
   dev: {
     port: 8080,

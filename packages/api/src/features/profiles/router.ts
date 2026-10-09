@@ -22,6 +22,17 @@ export const profilesRouter = api.router({
   update: api.update
     .use(requireAuth)
     .handler(async ({ context, input }) =>
-      unwrapResult(await service.updateProfile(context.db, context.actorId, input)),
+      unwrapResult(await service.updateProfile(context.db, context.media, context.actorId, input)),
     ),
+  uploadImage: api.uploadImage.use(requireAuth).handler(async ({ context, input }) =>
+    unwrapResult(
+      // zod types files minimally; what arrives is a real File (a Blob).
+      await service.uploadImage(
+        context.db,
+        context.media,
+        context.actorId,
+        input.image as unknown as Blob,
+      ),
+    ),
+  ),
 });

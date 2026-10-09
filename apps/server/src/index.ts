@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
 import { createContext } from "./context";
+import { mediaCacheControl } from "./media";
 import { desktopOrigins, ENV } from "./env.server";
 import { createAuth } from "./services";
 import { apiHandler, rpcHandler } from "./transport";
@@ -22,6 +23,17 @@ app.use(
 );
 
 app.on(["POST", "GET"], "/api/auth/*", async (c) => (await createAuth()).handler(c.req.raw));
+
+// Profile photos, straight from the bucket.
+app.get("/media/*", async (c) => {
+  const object = await ENV.MEDIA.get(c.req.path.slice("/media/".length));
+  if (!object) return c.notFound();
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", mediaCacheControl);
+  return new Response(object.body, { headers });
+});
 
 app.use("/*", async (c, next) => {
   const context = await createContext({ context: c });

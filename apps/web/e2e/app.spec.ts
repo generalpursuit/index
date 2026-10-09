@@ -129,11 +129,11 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
   // Visibility lives in Settings, behind a confirmation.
   await page.getByRole("link", { name: "Settings", exact: true }).click();
-  await page.getByRole("combobox", { name: "Profile visibility" }).click();
-  await page.getByRole("option", { name: "Public", exact: true }).click();
+  await page.getByRole("button", { name: /^Profile visibility/ }).click();
+  await page.getByRole("menuitemradio", { name: "Public", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Make profile public?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Profile visibility" })).toContainText("Private");
+  await expect(page.getByRole("button", { name: /^Profile visibility/ })).toContainText("Private");
   await page.getByRole("button", { name: "Back", exact: true }).click();
   await page.getByRole("button", { name: /followers?$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("mia");
