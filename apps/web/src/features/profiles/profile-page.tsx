@@ -1,5 +1,4 @@
 import { groupPath, profilePath } from "@index/api/routes";
-import { client } from "@/utils/orpc";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
@@ -20,7 +19,7 @@ import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
 import { WeekLinks } from "@/features/feed/feed-page";
-import { NewGroup } from "@/features/settings/groups";
+import { CreateGroup } from "@/features/groups/create-group";
 import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrubber";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
@@ -216,11 +215,10 @@ function ProfileContent({
         </Modal>
       )}
       {newGroup && (
-        <NewGroup
+        <CreateGroup
           onClose={() => setNewGroup(false)}
-          onCreated={async (id) => {
+          onCreated={(group) => {
             setNewGroup(false);
-            const group = await client.groups.get({ id });
             void navigate({
               to: groupPath(profile.username!, group.slug),
               search: (old) => ({ ...old, group: undefined }),

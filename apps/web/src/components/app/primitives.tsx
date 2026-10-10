@@ -14,7 +14,7 @@ import { ChevronLeft } from "lucide-react";
 import { useBack } from "@/hooks/use-back";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Person } from "@/lib/types";
-import type { ReactNode, ComponentProps } from "react";
+import type { ReactNode, ComponentProps, RefObject } from "react";
 
 export function IconButton({
   label,
@@ -84,6 +84,7 @@ export function Modal({
   description,
   children,
   className = "",
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -91,13 +92,14 @@ export function Modal({
   description?: string;
   children: ReactNode;
   className?: string;
+  returnFocus?: RefObject<HTMLElement | null>;
 }) {
   // Phones get a bottom sheet that can be swiped away; larger screens a centered dialog.
   const phone = useMediaQuery("(max-width: 700px)");
   if (phone)
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className={"app-dialog app-sheet " + className}>
+        <DrawerContent className={"app-dialog app-sheet " + className} finalFocus={returnFocus}>
           <DrawerTitle className="dialog-title">{title}</DrawerTitle>
           <DrawerDescription className={description ? "muted" : "sr-only"}>
             {description ?? title}
@@ -108,7 +110,7 @@ export function Modal({
     );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={"app-dialog " + className}>
+      <DialogContent className={"app-dialog " + className} finalFocus={returnFocus}>
         <DialogTitle className="dialog-title">{title}</DialogTitle>
         <DialogDescription className={description ? "muted" : "sr-only"}>
           {description ?? title}
