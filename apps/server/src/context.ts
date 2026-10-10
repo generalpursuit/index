@@ -1,3 +1,4 @@
+import { notificationCapabilities } from "./notifications/adapters";
 import type { Context as ApiContext } from "@index/api/context";
 import type { Context as HonoContext } from "hono";
 
@@ -20,6 +21,7 @@ export async function createContext({ context }: CreateContextOptions): Promise<
   return {
     db,
     session,
+    notifications: notificationCapabilities(ENV),
     fetchPage,
     media: r2MediaStore(ENV.MEDIA, ENV.BETTER_AUTH_URL),
   };

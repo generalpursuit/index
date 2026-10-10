@@ -1,5 +1,12 @@
 import type { MutationFunctionContext, MutationOptions, QueryClient } from "@tanstack/react-query";
 
+const clearListeners = new Set<() => void>();
+export function onAccountClear(listener: () => void) {
+  clearListeners.add(listener);
+  return () => {
+    clearListeners.delete(listener);
+  };
+}
 let generation = 0;
 export const accountGeneration = () => generation;
 export function assertCurrentAccount(expected: number) {
@@ -9,6 +16,7 @@ export function assertCurrentAccount(expected: number) {
 /** Keep active session observers attached, but synchronously discard the previous identity. */
 export function clearAccountState(client: QueryClient, keepSessionRequest = false) {
   generation++;
+  for (const listener of clearListeners) listener();
   const cancelled = client.cancelQueries({
     predicate: (query) => !keepSessionRequest || query.queryKey[0] !== "session",
   });

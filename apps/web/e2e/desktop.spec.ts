@@ -21,6 +21,10 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
         appearances.push({ preference: args?.preference, resolved: args?.resolved });
         return;
       }
+      if (command === "notification_status")
+        return { permission: "default", registered: false, supported: true };
+      if (command === "notification_active" || command === "notification_stop") return;
+      if (command === "notification_take_click") return null;
       if (command === "session_read") return token;
       if (command === "session_write") {
         token = args?.token ?? null;
@@ -87,6 +91,10 @@ test("desktop restricted bearer survives interruption, verifies, and is erased a
     "nativeCommand",
     async (_source, command: string, args?: { token?: string | null }) => {
       if (command === "set_appearance") return;
+      if (command === "notification_status")
+        return { permission: "default", registered: false, supported: true };
+      if (command === "notification_active" || command === "notification_stop") return;
+      if (command === "notification_take_click") return null;
       if (command === "session_read") return token;
       if (command === "session_write") {
         token = args?.token ?? null;

@@ -26,6 +26,7 @@ pub async fn session_read() -> Result<Option<String>, String> {
 
 #[tauri::command]
 pub async fn session_write(token: Option<String>) -> Result<(), String> {
+    if token.is_none() { crate::notifications::invalidate(); }
     if token
         .as_ref()
         .is_some_and(|value| value.is_empty() || value.len() > 8192)

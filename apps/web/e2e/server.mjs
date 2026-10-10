@@ -1,3 +1,4 @@
+import { deliverBatch } from "../../../packages/api/src/features/notifications/delivery.ts";
 import { apiURL, webURL } from "./urls.ts";
 import { createTestDatabase } from "../../../packages/api/src/testing/database.ts";
 import { createAuth } from "../../../packages/auth/src/index.ts";
@@ -6,6 +7,21 @@ import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
 const database = await createTestDatabase();
+// Isolated public key only; browser notification tests stub the push provider.
+const pushKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+  "sign",
+  "verify",
+]);
+const vapidPublicKey = Buffer.from(
+  await crypto.subtle.exportKey("raw", pushKey.publicKey),
+).toString("base64url");
+const notifications = {
+  web: true,
+  apns: false,
+  apnsEnvironment: null,
+  desktop: true,
+  vapidPublicKey,
+};
 const emails = [];
 const deliveries = [];
 let failEmails = false;
@@ -476,7 +492,22 @@ Bun.serve({
     if (request.method === "OPTIONS") response = new Response(null, { status: 204 });
     else if (url.pathname === "/_test/reset" && request.method === "POST")
       response = Response.json(await seed());
-    else if (url.pathname === "/_test/mail") {
+    else if (url.pathname === "/_test/notify" && request.method === "POST") {
+      const actor = createRouterClient(appRouter, {
+        context: database.context(fixture.people.Bob),
+      });
+      await actor.messages.send({
+        conversationId: fixture.conversationId,
+        clientId: crypto.randomUUID(),
+        body: "PRIVATE browser fixture",
+      });
+      const ids = [];
+      await deliverBatch(database.db, async (_device, alert) => {
+        ids.push(alert.id);
+        return { status: "sent" };
+      });
+      response = Response.json({ ids });
+    } else if (url.pathname === "/_test/mail") {
       await Promise.all(deliveries);
       response = Response.json(
         emails.filter((message) => message.to === url.searchParams.get("email")),
@@ -506,13 +537,13 @@ Bun.serve({
       const session = await auth.api.getSession({ headers: request.headers });
       const result = await rpcHandler.handle(request, {
         prefix: "/rpc/v1",
-        context: { db: database.db, session, fetchPage, media },
+        context: { db: database.db, session, fetchPage, media, notifications },
       });
       const rest = result.matched
         ? result
         : await apiHandler.handle(request, {
             prefix: "/api/v1",
-            context: { db: database.db, session, fetchPage, media },
+            context: { db: database.db, session, fetchPage, media, notifications },
           });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }

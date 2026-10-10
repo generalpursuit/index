@@ -1,3 +1,4 @@
+mod notifications;
 mod appearance;
 mod session;
 #[cfg(feature = "native-smoke")]
@@ -38,6 +39,11 @@ pub fn run() {
     let builder = builder.plugin(smoke::plugin());
     #[cfg(feature = "native-smoke")]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        notifications::notification_status,
+        notifications::notification_start,
+        notifications::notification_stop,
+        notifications::notification_active,
+        notifications::notification_take_click,
         session::session_read,
         session::session_write,
         open_website,
@@ -48,6 +54,11 @@ pub fn run() {
     ]);
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        notifications::notification_status,
+        notifications::notification_start,
+        notifications::notification_stop,
+        notifications::notification_active,
+        notifications::notification_take_click,
         session::session_read,
         session::session_write,
         open_website,
@@ -56,6 +67,7 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            notifications::init();
             if cfg!(debug_assertions) {
                 app.handle().plugin(
                     tauri_plugin_log::Builder::default()

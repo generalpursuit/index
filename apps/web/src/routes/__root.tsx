@@ -1,3 +1,4 @@
+import { NotificationLifecycle } from "@/features/notifications/lifecycle";
 import { DesktopTheme } from "@/lib/desktop/theme";
 import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
@@ -19,6 +20,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     <>
       <HeadContent />
       <DesktopTheme />
+      <NotificationLifecycle />
       <Outlet />
       <Toaster richColors />
     </>

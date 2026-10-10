@@ -1,4 +1,6 @@
 // Override endpoints and signing in the ignored Local.xcconfig.
 INDEX_API_URL = http:/$()/localhost:3002
 INDEX_WEB_URL = http:/$()/localhost:4173
+INDEX_APNS_ENVIRONMENT = sandbox
+APS_ENVIRONMENT = development
 #include? "Local.xcconfig"

@@ -27,7 +27,7 @@ The Xcode project is checked in. After adding/removing app source files, reprodu
 
 Navigation uses `NavigationStack`, including native back gestures. The feed uses native vertical paging: content moves with the gesture and settles on one week, with own links above a horizontally scrolling carousel. Empty weeks show a compact invitation to add a link, plus discovery guidance when the user follows nobody. Longer link collections have independent scroll/pagination; explicit week arrows remain available when inner scrolling or large accessibility text makes a vertical week gesture ambiguous. Forms and chat composers follow the keyboard safe area. System share sheets and native menus retain platform behavior while cards, typography, colors, and spacing follow the web design.
 
-Messages refresh while the conversation is active, conversations and activity poll while foregrounded. There are no push notifications or offline database in the current backend contract. Drafts remain in memory until sent or signed out. Unknown send outcomes retain the original UUID and payload for an idempotent retry. Restricted forwards show only author identity; locked/deleted originals show an unavailable state.
+Messages refresh while the conversation is active, conversations and activity poll while foregrounded. Opted-in APNs delivery and notification preferences are implemented; there is no offline database. See [notification configuration and native launch checks](../../docs/notifications.md). Drafts remain in memory until sent or signed out. Unknown send outcomes retain the original UUID and payload for an idempotent retry. Restricted forwards show only author identity; locked/deleted originals show an unavailable state.
 
 ## Loading and cache
 

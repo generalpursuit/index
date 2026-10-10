@@ -51,3 +51,5 @@ For the repeatable macOS native integration check, start `bun e2e/server.mjs` in
 `cargo test system_credential_round_trip -- --ignored --nocapture` additionally exercises the Rust credential store with a dummy entry. It requires an unlocked OS credential store, so it is excluded from ordinary unit runs.
 
 Unsigned development binaries can trigger a Keychain access prompt after a rebuild because their code signature changes. The smoke runner clears only its own isolated test credential before rebuilding; it never deletes normal app sessions. Distribution must use a stable signing identity. Keyboard/accessibility review and Windows/Linux builds still need their respective environments.
+
+Notification preferences, native background delivery, menu-bar lifecycle contract and unverified Mac/service launch checks: [notifications](notifications.md).

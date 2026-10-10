@@ -1,3 +1,4 @@
+import { runNotifications } from "./notifications/worker";
 import { trustedWebOrigins } from "@index/auth/origins";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
@@ -65,4 +66,10 @@ app.get("/", (c) => {
   return c.text("OK");
 });
 
-export default app;
+// Postgres is the durable queue. Cron recovers interrupted delivery attempts.
+export default {
+  fetch: app.fetch,
+  scheduled(_controller: ScheduledController, _env: unknown, ctx: ExecutionContext) {
+    ctx.waitUntil(runNotifications());
+  },
+};

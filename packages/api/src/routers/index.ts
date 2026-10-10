@@ -1,3 +1,4 @@
+import { notificationsRouter } from "../features/notifications/router";
 import { requireVerifiedSession } from "../procedures";
 import { routesRouter } from "../features/routes/router";
 import { activityRouter } from "../features/activity/router";
@@ -38,6 +39,7 @@ export const appRouter = api.router({
       },
     };
   }),
+  notifications: notificationsRouter,
   routes: routesRouter,
   links: linksRouter,
   groups: groupsRouter,
