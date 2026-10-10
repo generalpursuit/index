@@ -24,13 +24,13 @@ ALTER TABLE "links" ADD COLUMN "short_id" text DEFAULT '' NOT NULL;--> statement
 
 -- These immutable functions are the single database normalization contract.
 CREATE FUNCTION public.index_group_name(value text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
-  SELECT btrim(regexp_replace(normalize(value, NFKC), E'[ \\t\\r\\n\\f\\v]+', ' ', 'g'))
+  SELECT btrim(regexp_replace(normalize(value, NFKC), '[' || chr(9) || chr(10) || chr(11) || chr(12) || chr(13) || ' ]+', ' ', 'g'), ' ' || chr(65279))
 $$;
 CREATE FUNCTION public.index_group_name_key(value text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
   SELECT lower(public.index_group_name(value))
 $$;
 CREATE FUNCTION public.index_group_slug(value text) RETURNS text LANGUAGE sql IMMUTABLE STRICT AS $$
-  SELECT coalesce(nullif(btrim(regexp_replace(public.index_group_name_key(value), '[^a-z0-9]+', '-', 'g'), '-'), ''), 'group')
+  SELECT coalesce(nullif(btrim(regexp_replace(translate(public.index_group_name(value), 'ABCDEFGHIJKLMNOPQRSTUVWXYZ', 'abcdefghijklmnopqrstuvwxyz'), '[^a-z0-9]+', '-', 'g'), '-'), ''), 'group')
 $$;
 -- Deterministic duplicate repair, preserving every group and its original UUID/links.
 -- System groups win. Other groups win by creation time, then UUID. Losers get (2), (3), ... .

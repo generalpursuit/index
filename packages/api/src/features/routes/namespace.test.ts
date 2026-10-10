@@ -13,6 +13,9 @@ describe("durable route namespaces", () => {
     for (const value of [
       "  Read\t\nLater  ",
       "Ｒｅａｄ",
+      "İdea",
+      "FAVORİTES",
+      "\uFEFFRead\uFEFF",
       "Café",
       "CAFÉ",
       "東京",

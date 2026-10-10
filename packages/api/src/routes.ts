@@ -4,13 +4,13 @@ export function normalizeGroupName(value: string): string {
   return value
     .normalize("NFKC")
     .replace(/[ \t\r\n\f\v]+/g, " ")
-    .trim();
+    .replace(/^[ \uFEFF]+|[ \uFEFF]+$/g, "");
 }
 /** Deliberately ASCII, without locale-dependent transliteration. */
 export function groupSlug(value: string): string {
   return (
     normalizeGroupName(value)
-      .toLowerCase()
+      .replace(/[A-Z]/g, (letter) => letter.toLowerCase())
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-|-$/g, "") || "group"
   );

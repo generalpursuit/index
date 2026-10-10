@@ -11,7 +11,8 @@ const customNameSchema = nameSchema.refine(
 export const groupSchema = z.object({
   id: z.uuid(),
   ownerId: userIdSchema,
-  name: nameSchema,
+  // Legacy names may expand under NFKC. Reads preserve the full repaired display name.
+  name: z.string().min(1),
   slug: z.string().min(1),
   kind: z.enum(["custom", "starred", "favorites"]),
   visibility: visibilitySchema,
