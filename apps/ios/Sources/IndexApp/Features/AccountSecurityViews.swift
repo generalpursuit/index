@@ -1,6 +1,16 @@
 import IndexCore
 import SwiftUI
 
+private struct SecurityButtonStyle: ButtonStyle {
+  var selected = false
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.font(.subheadline).padding(.horizontal, 15).padding(.vertical, 10)
+      .background(selected ? IndexPalette.primary : Color.clear, in: Capsule())
+      .foregroundStyle(selected ? IndexPalette.primaryForeground : IndexPalette.foreground)
+      .overlay(Capsule().stroke(selected ? Color.clear : IndexPalette.border))
+      .opacity(configuration.isPressed ? 0.6 : 1)
+  }
+}
 private struct EmailInput: View {
   let title: String
   @Binding var value: String
@@ -28,7 +38,7 @@ private struct CodeDelivery: View {
     Text(status?.delivery == "failed"
       ? "We couldn’t send the email. Try resending after the cooldown."
       : "Check your inbox and spam folder. Delivery may take a few minutes. Only the latest code works, for 10 minutes.")
-      .font(.subheadline).foregroundStyle(.secondary)
+      .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
   }
 }
 private struct CooldownAction: View {
@@ -39,7 +49,7 @@ private struct CooldownAction: View {
     TimelineView(.periodic(from: .now, by: 1)) { context in
       let seconds = max(0, Int(ceil(retryAt.timeIntervalSince(context.date))))
       AsyncButton(action: action) { Text(seconds > 0 ? "Try again in \(seconds)s" : title) }
-        .buttonStyle(PillStyle()).disabled(seconds > 0)
+        .buttonStyle(SecurityButtonStyle()).disabled(seconds > 0)
     }
   }
 }
@@ -63,7 +73,7 @@ struct VerificationView: View {
           try await app.verifyEmail(code: code)
           code = ""
         } label: { Text("Verify email") }
-          .buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
+          .buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6)
         CooldownAction(title: "Resend code", retryAt: retryAt) {
           guard let api = app.api else { throw APIError.invalidServer }
           let result = try await api.sendVerification()
@@ -74,7 +84,7 @@ struct VerificationView: View {
         Button("Correct email address") { correcting.toggle(); newEmail = status?.email ?? email }
         if correcting {
           Text("Confirm your signup password. The original address stays unchanged until you verify the corrected address.")
-            .font(.subheadline).foregroundStyle(.secondary)
+            .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
           EmailInput(title: "Correct email", value: $newEmail)
           SecureField("Signup password", text: $password).textContentType(.password).ghostInput()
           CooldownAction(title: "Send to corrected address", retryAt: retryAt) {
@@ -85,9 +95,10 @@ struct VerificationView: View {
             try await refresh()
           }
         }
-        AsyncButton { await app.signOut() } label: { Text("Sign out") }.buttonStyle(PillStyle())
+        AsyncButton { await app.signOut() } label: { Text("Sign out") }.buttonStyle(SecurityButtonStyle())
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
-    }.scrollDismissesKeyboard(.interactively)
+    }.foregroundStyle(IndexPalette.foreground).background(IndexPalette.background)
+      .scrollDismissesKeyboard(.interactively)
       .task { do { try await refresh() } catch { app.handle(error) } }
       .onDisappear { code = ""; password = "" }
   }
@@ -123,7 +134,7 @@ struct PasswordRecoveryView: View {
           }
           if requested {
             Text("If an account uses this address, a code is on its way. Check spam or retry after the cooldown. Codes expire in 10 minutes.")
-              .font(.subheadline).foregroundStyle(.secondary)
+              .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
             CodeInput(value: $code)
             SecureField("New password", text: $password).textContentType(.newPassword).ghostInput()
             SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword).ghostInput()
@@ -134,12 +145,13 @@ struct PasswordRecoveryView: View {
               app.clearAccount()
               password = ""; confirmation = ""; code = ""; completed = true
             } label: { Text("Reset password") }
-              .buttonStyle(PillStyle(selected: true)).disabled(code.count != 6 || password.count < 8 || password.count > 128)
+              .buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6 || password.count < 8 || password.count > 128)
           }
         }
-        Button("Back to sign in") { dismiss() }.buttonStyle(PillStyle())
+        Button("Back to sign in") { dismiss() }.buttonStyle(SecurityButtonStyle())
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
-    }.scrollDismissesKeyboard(.interactively)
+    }.foregroundStyle(IndexPalette.foreground).background(IndexPalette.background)
+      .scrollDismissesKeyboard(.interactively)
       .onDisappear { password = ""; confirmation = ""; code = "" }
   }
 }
@@ -163,7 +175,7 @@ struct AccountSecurityView: View {
         }.pickerStyle(.segmented)
         SecureField("Current password", text: $password).textContentType(.password).ghostInput()
         if changingEmail {
-          Text("Your current email stays active until you verify the new address.").font(.subheadline).foregroundStyle(.secondary)
+          Text("Your current email stays active until you verify the new address.").font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
           EmailInput(title: "New email", value: $email)
           CooldownAction(title: "Send email change code", retryAt: retryAt) {
             guard let api = app.api else { throw APIError.invalidServer }
@@ -183,7 +195,7 @@ struct AccountSecurityView: View {
             message = "Password changed. Other sessions have been signed out."
             try await refresh()
           } label: { Text("Save password") }
-            .buttonStyle(PillStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
+            .buttonStyle(SecurityButtonStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
         }
         if let pending, pending.pending {
           Text("Verify \(pending.email)")
@@ -194,9 +206,9 @@ struct AccountSecurityView: View {
             try await api.confirmEmailChange(code: code)
             code = ""; message = "Email changed. Other sessions have been signed out."
             try await refresh()
-          } label: { Text("Confirm new email") }.buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
+          } label: { Text("Confirm new email") }.buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6)
         }
-        if !message.isEmpty { Text(message).foregroundStyle(.secondary).accessibilityAddTraits(.updatesFrequently) }
+        if !message.isEmpty { Text(message).foregroundStyle(IndexPalette.mutedForeground).accessibilityAddTraits(.updatesFrequently) }
       }.padding(.top)
     }.task { do { try await refresh() } catch { app.handle(error) } }
       .onDisappear { password = ""; newPassword = ""; confirmation = ""; code = "" }
