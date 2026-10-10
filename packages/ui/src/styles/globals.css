@@ -33,6 +33,8 @@
   --input: #b8b8b8;
   --ring: #626262;
   --overlay: rgb(0 0 0 / 0.4);
+  --menu-shadow: 0 12px 32px rgb(0 0 0 / 0.15);
+  --avatar-lightness: 30%;
   --avatar-foreground: #ffffff;
   --category-article: #315cb5;
   --category-video: #b23b3b;
@@ -40,7 +42,7 @@
   --category-podcast: #7c4bbc;
   --category-book: #966218;
   --category-tool: #237577;
-  --category-note: #626262;
+  --category-note: #a33679;
   --category-image: #ae3973;
   --category-other: #737373;
   --sidebar: var(--card);
@@ -83,14 +85,16 @@
   --input: #454545;
   --ring: #bdbdbd;
   --overlay: rgb(0 0 0 / 0.7);
+  --menu-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+  --avatar-lightness: 30%;
   --avatar-foreground: #ffffff;
   --category-article: #7aa2ff;
   --category-video: #ff7a7a;
   --category-music: #5fd39a;
   --category-podcast: #b794ff;
   --category-book: #f0b45a;
-  --category-tool: #74cfce;
-  --category-note: #b5b5b5;
+  --category-tool: #5ccfe6;
+  --category-note: #ff9ad5;
   --category-image: #f591ce;
   --category-other: #929292;
   --sidebar: var(--card);
@@ -181,5 +185,33 @@
   }
   html {
     @apply font-sans;
+  }
+}
+
+/* Editing, motion preferences and the shared loading animation are document resets. */
+input {
+  user-select: text;
+  -webkit-user-select: text;
+}
+textarea {
+  user-select: text;
+  -webkit-user-select: text;
+}
+[contenteditable]:not([contenteditable="false"]) {
+  user-select: text;
+  -webkit-user-select: text;
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+@keyframes loading-pulse {
+  50% {
+    opacity: 0.45;
   }
 }

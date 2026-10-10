@@ -15,7 +15,6 @@
 <key>UILaunchScreen</key><dict/>
 <key>UISupportedInterfaceOrientations</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
 <key>UISupportedInterfaceOrientations~ipad</key><array><string>UIInterfaceOrientationPortrait</string><string>UIInterfaceOrientationPortraitUpsideDown</string><string>UIInterfaceOrientationLandscapeLeft</string><string>UIInterfaceOrientationLandscapeRight</string></array>
-<key>UIUserInterfaceStyle</key><string>Dark</string>
 <key>NSAppTransportSecurity</key><dict><key>NSAllowsLocalNetworking</key><true/></dict>
 <key>CFBundleURLTypes</key><array><dict><key>CFBundleURLName</key><string>com.generalpursuit.index</string><key>CFBundleURLSchemes</key><array><string>index</string></array></dict></array>
 </dict></plist>

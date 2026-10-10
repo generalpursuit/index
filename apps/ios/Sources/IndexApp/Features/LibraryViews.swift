@@ -181,7 +181,7 @@ struct LinkDetailView: View {
             HStack {
               TextField("Comment", text: $bodyText, axis: .vertical).lineLimit(1...5).focused(
                 $focus
-              ).padding(12).background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
+              ).padding(12).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 22))
               AsyncButton {
                 let text = (replying.map { "@\($0.label) " } ?? "") + bodyText
                 let _: Comment? = try await app.api?.request(
@@ -192,12 +192,12 @@ struct LinkDetailView: View {
                 app.changed()
               } label: {
                 Image(systemName: "arrow.up").frame(width: 40, height: 40).background(
-                  .white.opacity(0.15), in: Circle())
+                  IndexPalette.muted, in: Circle())
               }
               .disabled(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
               .accessibilityLabel("Send comment")
             }
-          }.padding(16).background(.black)
+          }.padding(16).background(IndexPalette.background)
         }
       }
       .confirmationDialog(

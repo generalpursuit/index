@@ -55,7 +55,12 @@ for (const viewport of [
     await expect(page.getByRole("textbox")).toHaveCount(0);
     await expect(page.getByLabel("Bio", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(viewport.width);
+    // Compare rendered CSS geometry: headed emulation can round a requested 390px to 391px.
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      ),
+    ).toBe(0);
     await page.screenshot({ path: `test-results/settings-${viewport.width}.png` });
     await leave();
     await expect(page).toHaveURL(profileURL);

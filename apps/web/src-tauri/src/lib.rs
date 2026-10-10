@@ -1,3 +1,4 @@
+mod appearance;
 mod session;
 #[cfg(feature = "native-smoke")]
 mod smoke;
@@ -40,6 +41,7 @@ pub fn run() {
         session::session_read,
         session::session_write,
         open_website,
+        appearance::set_appearance,
         smoke::smoke_complete,
         smoke::smoke_resize,
         smoke::smoke_progress
@@ -48,7 +50,8 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         session::session_read,
         session::session_write,
-        open_website
+        open_website,
+        appearance::set_appearance
     ]);
     builder
         .plugin(tauri_plugin_opener::init())

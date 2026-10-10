@@ -86,13 +86,25 @@ function Login() {
     },
   });
   return (
-    <main className="auth-page">
-      <div className="auth-form">
-        <h1 className="auth-wordmark">
+    <main
+      className={
+        "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_button]:cursor-pointer [&_[data-slot='button']]:rounded-full"
+      }
+    >
+      <div
+        className={
+          "auth-form w-[min(100%,_360px)] [&_input]:h-11 [&_input]:bg-surface [&_input]:rounded-[10px] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
+        }
+      >
+        <h1
+          className={
+            "auth-wordmark [&_img]:invert dark:[&_img]:invert-0 flex justify-center mb-12 [&_img]:h-8.5"
+          }
+        >
           <img src={wordmark} alt="Index" />
         </h1>
         <form
-          className="form-stack"
+          className={"form-stack flex flex-col gap-4.5"}
           onSubmit={(e) => {
             e.preventDefault();
             void form.handleSubmit();
@@ -118,7 +130,7 @@ function Login() {
             </form.Field>
           ))}
           {error && (
-            <p role="alert" className="field-error">
+            <p role="alert" className={"field-error select-text text-[12px] text-destructive"}>
               {error}
             </p>
           )}
@@ -130,7 +142,11 @@ function Login() {
             )}
           </form.Subscribe>
         </form>
-        <p className="auth-switch">
+        <p
+          className={
+            "auth-switch mt-6 text-subtle-foreground text-center [&_button]:text-foreground [&_button]:underline-offset-[4px] [&_button:hover]:underline"
+          }
+        >
           {signUp ? "Already have an account? " : "New here? "}
           <button
             type="button"

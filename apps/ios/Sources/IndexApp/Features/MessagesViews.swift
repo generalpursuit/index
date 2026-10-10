@@ -21,7 +21,7 @@ struct MessagesView: View {
           }.accessibilityLabel("New message")
         }
         TextField("Search", text: $query).padding(14).background(
-          .white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(conversations) { conversation in
           Button {
@@ -104,7 +104,7 @@ struct ParticipantAvatars: View {
     } else {
       ZStack {
         ForEach(Array(people.prefix(3).enumerated()), id: \.element.id) { index, person in
-          PersonAvatar(person: person, size: 29).overlay(Circle().stroke(.black, lineWidth: 2))
+          PersonAvatar(person: person, size: 29).overlay(Circle().stroke(IndexPalette.background, lineWidth: 2))
             .offset(x: CGFloat(index % 2) * 15 - 7, y: CGFloat(index) * 9 - 9)
         }
       }.frame(width: 46, height: 46)
@@ -138,7 +138,7 @@ struct RecipientView: View {
           }
         }
         TextField("Search people you follow", text: $query).padding(14).background(
-          .white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(people) { person in
           Button {
@@ -187,7 +187,7 @@ struct RecipientView: View {
           Text("Continue\(selected.isEmpty ? "" : " · \(selected.count)")").frame(
             maxWidth: .infinity)
         }.buttonStyle(PillStyle(selected: true)).disabled(selected.isEmpty).padding(20).background(
-          .black)
+          IndexPalette.background)
       }
       .task(id: query) {
         do {
@@ -309,7 +309,7 @@ struct ConversationView: View {
               Image(systemName: "xmark").frame(width: 32, height: 32)
             }.accessibilityLabel("Remove attachment")
           }
-        }.padding(14).background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+        }.padding(14).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 14))
       }
       if draft.attemptedBody != nil && !sending {
         Text("Send not confirmed. Retry to check or complete this same message.").font(.caption)
@@ -317,12 +317,12 @@ struct ConversationView: View {
       }
       HStack {
         TextField("Message", text: text, axis: .vertical).lineLimit(1...5).focused($focused)
-          .padding(12).background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 22))
+          .padding(12).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 22))
           .disabled(draft.attemptedBody != nil)
         AsyncButton(action: send) {
           Image(systemName: draft.attemptedBody == nil ? "arrow.up" : "arrow.clockwise").frame(
             width: 42, height: 42
-          ).background(.white, in: Circle()).foregroundStyle(.black)
+          ).background(IndexPalette.primary, in: Circle()).foregroundStyle(IndexPalette.primaryForeground)
         }
         .disabled(
           conversation?.canSend != true
@@ -331,7 +331,7 @@ struct ConversationView: View {
         )
         .accessibilityLabel(draft.attemptedBody == nil ? "Send message" : "Retry message")
       }
-    }.padding(16).background(.black)
+    }.padding(16).background(IndexPalette.background)
   }
   private func send() async throws {
     var value = draft
@@ -465,8 +465,8 @@ struct MessageBubble: View {
           }
           if !message.body.isEmpty { Text(message.body).font(.subheadline).textSelection(.enabled) }
         }.padding(14).background(
-          own ? .white : .white.opacity(0.12), in: RoundedRectangle(cornerRadius: 20)
-        ).foregroundStyle(own ? .black : .white)
+          own ? IndexPalette.primary : IndexPalette.muted, in: RoundedRectangle(cornerRadius: 20)
+        ).foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
         Text(relativeTime(message.createdAt)).font(.caption2).foregroundStyle(.secondary)
       }.frame(maxWidth: 420, alignment: own ? .trailing : .leading)
       if !own { Spacer(minLength: 45) }

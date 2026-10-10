@@ -2,10 +2,10 @@ import IndexCore
 import SwiftUI
 
 extension View {
-  func indexPage() -> some View { self.padding(.horizontal, 20).background(.black) }
+  func indexPage() -> some View { self.padding(.horizontal, 20).background(IndexPalette.background) }
   func outlineCard() -> some View {
     self.padding(.horizontal, 14).overlay(
-      RoundedRectangle(cornerRadius: 20).stroke(.white.opacity(0.2), lineWidth: 1))
+      RoundedRectangle(cornerRadius: 20).stroke(IndexPalette.border, lineWidth: 1))
   }
   func ghostInput() -> some View { self.textFieldStyle(.plain).padding(.vertical, 13) }
 }
@@ -33,14 +33,10 @@ struct PageHeading: View {
 struct PersonAvatar: View {
   let person: Person
   var size: CGFloat = 36
-  private var color: Color {
-    let colors: [Color] = [.indigo, .teal, .purple, .orange, .pink, .green]
-    return colors[person.id.utf8.reduce(0) { ($0 + Int($1)) % colors.count }]
-  }
   var body: some View {
     ZStack {
-      Circle().fill(color.opacity(0.8))
-      Text(person.initials).font(.system(size: size * 0.3, weight: .medium))
+      Circle().fill(IndexPalette.avatarBackground(for: person.id))
+      Text(person.initials).foregroundStyle(IndexPalette.avatarForeground).font(.system(size: size * 0.3, weight: .medium))
       if let image = person.image, let url = URL(string: image) {
         AsyncImage(url: url) { phase in
           if let image = phase.image { image.resizable().scaledToFill() }
@@ -66,9 +62,9 @@ struct PillStyle: ButtonStyle {
   var selected = false
   func makeBody(configuration: Configuration) -> some View {
     configuration.label.font(.subheadline).padding(.horizontal, 15).padding(.vertical, 10)
-      .background(selected ? Color.white : Color.clear, in: Capsule())
-      .foregroundStyle(selected ? .black : .white)
-      .overlay(Capsule().stroke(.white.opacity(selected ? 0 : 0.25)))
+      .background(selected ? IndexPalette.primary : Color.clear, in: Capsule())
+      .foregroundStyle(selected ? IndexPalette.primaryForeground : IndexPalette.foreground)
+      .overlay(Capsule().stroke(IndexPalette.border.opacity(selected ? 0 : 1)))
       .opacity(configuration.isPressed ? 0.6 : 1)
   }
 }

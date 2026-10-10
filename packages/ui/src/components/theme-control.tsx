@@ -21,7 +21,7 @@ export function ThemeControl() {
               value={value}
               checked={preference === value}
               onChange={() => setPreference(value)}
-              className="peer sr-only"
+              className="peer absolute inset-0 size-full cursor-pointer opacity-0"
             />
             <span className="flex min-h-11 items-center rounded-full border border-border px-4 text-sm text-muted-foreground peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-offset-3 peer-focus-visible:outline-ring hover:bg-accent">
               {value.charAt(0).toUpperCase() + value.slice(1)}

@@ -45,11 +45,23 @@ function Post({
     [text, setText] = useState(""),
     input = useRef<HTMLInputElement>(null);
   return (
-    <article className="post-detail">
-      <header className="post-author">
+    <article
+      className={
+        "post-detail [&_h1]:select-text [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[36px] [&_h1]:m-[0_0_24px] [&_h1]:wrap-anywhere [&_small]:text-subtle-foreground flex flex-col min-h-[70dvh] [@media(width<=700px)]:[&_h1]:text-[32px]"
+      }
+    >
+      <header
+        className={
+          "post-author flex items-center gap-3 pr-6 mb-7.5 text-[13px] [&_.user-avatar]:w-7.5 [&_.user-avatar]:h-7.5"
+        }
+      >
         {standalone && <Back />}
         {author.data && (
-          <Link to="/people/$userId" params={{ userId: link.ownerId }} className="person-inline">
+          <Link
+            to="/people/$userId"
+            params={{ userId: link.ownerId }}
+            className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
+          >
             <UserAvatar person={author.data} />
             <strong>{author.data.username ?? author.data.name}</strong>
           </Link>
@@ -57,14 +69,30 @@ function Post({
         <small>{timeAgo(link.createdAt)}</small>
       </header>
       <h1>{link.title}</h1>
-      <div className="post-meta">
+      <div
+        className={
+          "post-meta [&>a]:select-text [&>a]:flex [&>a]:items-center [&>a]:gap-1.5 flex items-center justify-between text-muted-foreground mb-6"
+        }
+      >
         <a href={link.url} target="_blank" rel="noreferrer">
           {domain(link.url)} <ArrowUpRight size={16} />
         </a>
         <LinkActions link={link} />
       </div>
-      {link.description && <p className="post-description">{link.description}</p>}
-      <div className="comments">
+      {link.description && (
+        <p
+          className={
+            "post-description select-text whitespace-pre-wrap wrap-anywhere mb-6 max-h-[20dvh] overflow-auto"
+          }
+        >
+          {link.description}
+        </p>
+      )}
+      <div
+        className={
+          "comments border-t border-t-border pt-6 min-h-0 overflow-auto flex-1 [&_h2]:text-[14px] [&_h2]:mb-5"
+        }
+      >
         <h2>Comments</h2>
         <QueryState
           pending={list.isPending}
@@ -75,11 +103,20 @@ function Post({
           {list.data?.pages
             .flatMap((p) => p.items)
             .map((c) => (
-              <article className="comment" key={c.id}>
+              <article
+                className={
+                  "comment flex items-start gap-2.5 p-[12px_0] [&_.user-avatar]:w-8 [&_.user-avatar]:h-8"
+                }
+                key={c.id}
+              >
                 <Link to="/people/$userId" params={{ userId: c.author.id }}>
                   <UserAvatar person={c.author} />
                 </Link>
-                <div className="comment-body">
+                <div
+                  className={
+                    "comment-body [&_p]:select-text [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere [&_p]:mt-1.5 [&_p]:text-foreground [&_header]:flex [&_header]:items-center [&_header]:gap-2 [&_header]:text-[13px] [&_small]:text-[11px] flex-1 min-w-0"
+                  }
+                >
                   <header>
                     <Link to="/people/$userId" params={{ userId: c.author.id }}>
                       {c.author.username ?? c.author.name}
@@ -126,7 +163,9 @@ function Post({
                 )}
               </article>
             ))}
-          {list.data?.pages[0]?.items.length === 0 && <p className="muted">No comments yet.</p>}
+          {list.data?.pages[0]?.items.length === 0 && (
+            <p className={"muted text-subtle-foreground"}>No comments yet.</p>
+          )}
           <More
             hasNext={list.hasNextPage}
             isFetching={list.isFetchingNextPage}
@@ -136,7 +175,9 @@ function Post({
       </div>
       {viewer ? (
         <form
-          className="composer"
+          className={
+            "composer flex gap-2.5 items-center pt-4 [&_input]:flex-1 [&_input]:min-w-0 [&_input]:bg-muted! [&_input]:border [&_input]:border-border [&_input]:rounded-full [&_input]:h-11.5 [&_input]:p-[0_16px] [&_input]:text-[14px] [&_button]:w-10 [&_button]:h-10 [&_button]:flex-none"
+          }
           onSubmit={(e) => {
             e.preventDefault();
             if (text.trim())

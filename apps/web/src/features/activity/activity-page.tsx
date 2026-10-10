@@ -31,9 +31,17 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
     };
   }, [unread, markRead]);
   return (
-    <div className="activity-page">
+    <div
+      className={
+        "activity-page [&>.page-heading_h1]:font-serif [&>.page-heading_h1]:font-bold [&>.page-heading_h1]:[font-variation-settings:'opsz'_60] [&>.page-heading_h1]:tracking-[-0.015em] [&>.page-heading_h1]:leading-[1] [&>.page-heading_h1]:text-[clamp(44px,_5vw,_62px)] [@media(width<=700px)_and_(height<=740px)]:[&>.page-heading_h1]:text-[36px]"
+      }
+    >
       <Heading>Activity</Heading>
-      <div className="filter-strip">
+      <div
+        className={
+          "filter-strip flex gap-2 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] mb-6 [&>*]:shrink-0 [&_button]:text-[12px] [&_button]:h-8.5 [&_button]:p-[0_14px]"
+        }
+      >
         {(
           [
             ["all", "All"],
@@ -63,11 +71,20 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
       >
         <div className="activity-list">
           {items.map((a) => (
-            <article className="activity-row" key={a.id}>
+            <article
+              className={
+                "activity-row [&_small]:text-subtle-foreground flex items-center gap-3 p-[14px_0] [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:p-[14px_0] [@media(width<=700px)]:[&_.user-avatar]:w-8.5 [@media(width<=700px)]:[&_.user-avatar]:h-8.5"
+              }
+              key={a.id}
+            >
               <Link to="/people/$userId" params={{ userId: a.actor.id }}>
                 <UserAvatar person={a.actor} />
               </Link>
-              <div className="activity-body">
+              <div
+                className={
+                  "activity-body flex-1 min-w-0 text-[13px] [&_header]:flex [&_header]:items-center [&_header]:gap-2 [&_header]:text-[13px] [&_small]:text-[11px] [&_p]:mt-0.5 [&_p]:text-foreground [&_p]:wrap-anywhere [@media(width<=700px)]:text-[12px] [@media(width<=700px)]:[&_header]:text-[12px] [@media(width<=700px)]:[&_header]:gap-1.5"
+                }
+              >
                 <header>
                   <Link to="/people/$userId" params={{ userId: a.actor.id }}>
                     {a.actor.username ?? a.actor.name}
@@ -93,7 +110,11 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
                 </p>
               </div>
               {a.type === "request" && a.requestStatus === "pending" ? (
-                <div className="request-actions">
+                <div
+                  className={
+                    "request-actions flex gap-1.5 shrink-0 [&_button]:text-[11px] [&_button]:p-[0_11px] [&_button]:h-9 [@media(width<=700px)]:[&_button]:p-[0_9px] [@media(width<=700px)]:[&_button]:text-[10px] [@media(width<=700px)]:gap-1.25"
+                  }
+                >
                   <Button
                     disabled={actions.accept.isPending || actions.reject.isPending}
                     onClick={() => actions.accept.mutate({ userId: a.actor.id })}
@@ -124,7 +145,15 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
             </article>
           ))}
         </div>
-        {!items.length && <p className="empty-state">You’re all caught up.</p>}
+        {!items.length && (
+          <p
+            className={
+              "empty-state [&[role='alert']>p]:select-text text-muted-foreground p-[32px_12px] text-center [&_p]:mb-3.5 [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-[4px]"
+            }
+          >
+            You’re all caught up.
+          </p>
+        )}
         <More
           hasNext={list.hasNextPage}
           isFetching={list.isFetchingNextPage}
