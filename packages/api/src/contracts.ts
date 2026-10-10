@@ -1,3 +1,4 @@
+import { notificationsContract } from "./features/notifications/contract";
 import { routesContract } from "./features/routes/contract";
 import { activityContract } from "./features/activity/contract";
 import { messagesContract } from "./features/messages/contract";
@@ -37,6 +38,7 @@ export const appContract = {
         }),
       }),
     ),
+  notifications: notificationsContract,
   routes: routesContract,
   links: linksContract,
   groups: groupsContract,

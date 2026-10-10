@@ -55,3 +55,4 @@ Unsigned development binaries can trigger a Keychain access prompt after a rebui
 ## Native Share extension
 
 Normal macOS packaging now builds and embeds the real IndexShareMac extension and requires the configured shared Keychain group, signing identity and provisioning profiles. See [sharing packaging and Mac checks](sharing.md#tauri-macos-packaging). Existing host-only smoke checks use their separate credential namespace and do not verify sharing.
+Notification preferences, native background delivery, menu-bar lifecycle contract and unverified Mac/service launch checks: [notifications](notifications.md).

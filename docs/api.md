@@ -148,3 +148,7 @@ Read state is a monotonic message watermark. Marking an older message read canno
 `bun test packages/api/src apps/server/src` runs real PostgreSQL queries in isolated PGlite databases with the project's migrations. Coverage includes profile/group visibility, original-link revocation, owner-only graphs, Favorites ownership, weekly boundaries, comment/follow activity, unnamed group conversations, send retries, unread watermarks, atomic rollback, pagination/search, HTTP/RPC contracts, browser-safe contract imports and the Better Auth session lifecycle. This does not replace a deployment smoke test against Neon and the Workers runtime.
 
 Deployment smoke tests, native packaging, and device verification are separate from these backend tests. See `docs/desktop.md` and `apps/ios/README.md` for the native implementation and remaining verification.
+
+## Notification delivery
+
+Verified `/me/notifications/*` endpoints expose account preferences, device capabilities, enrollment/removal/status, active conversation leases, desktop poll/ack and Web Push resolution. Device operations include installation proof and the exact expected session ID. Durable outbox triggers, delivery privacy, APNs/Web Push configuration and launch checks are documented in [notifications](notifications.md).

@@ -2,4 +2,6 @@
 INDEX_API_URL =
 INDEX_WEB_URL =
 INDEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)com.generalpursuit.index.shared
+INDEX_APNS_ENVIRONMENT = production
+APS_ENVIRONMENT = production
 #include? "Local.xcconfig"

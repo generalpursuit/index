@@ -2,4 +2,6 @@
 INDEX_API_URL = http:/$()/localhost:3002
 INDEX_WEB_URL = http:/$()/localhost:4173
 INDEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)com.generalpursuit.index.shared
+INDEX_APNS_ENVIRONMENT = sandbox
+APS_ENVIRONMENT = development
 #include? "Local.xcconfig"

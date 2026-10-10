@@ -34,7 +34,7 @@ public enum JSONValue: Encodable, Sendable {
 /// A single native transport owns signed bearer rotation and account isolation.
 /// Session cookies are disabled; credentials never enter UserDefaults or URLs.
 public actor APIClient {
-  public let baseURL: URL
+  public nonisolated let baseURL: URL
   private let credentials: any CredentialStore
   private let session: URLSession
   private var token: String?

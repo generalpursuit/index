@@ -4,6 +4,9 @@ import SwiftUI
 
 @main
 struct IndexApp: App {
+  #if os(iOS)
+  @UIApplicationDelegateAdaptor(NotificationAppDelegate.self) private var notificationDelegate
+  #endif
   @State private var app = AppModel()
   @AppStorage(ThemePreference.storageKey) private var storedTheme = ThemePreference.system.rawValue
   var body: some Scene {
@@ -122,6 +125,7 @@ final class AppModel {
   }
   func signIn(identifier: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
+    await NotificationController.shared.disable()
     let session = try await api.signIn(identifier: identifier, password: password)
     try await acceptSession(session)
   }
@@ -132,6 +136,7 @@ final class AppModel {
   }
   private func acceptSession(_ session: AuthSession) async throws {
     guard let api else { throw APIError.invalidServer }
+    if !session.user.emailVerified || (profile != nil && profile?.id != session.user.id) { NotificationController.shared.clearAccount(preservePendingClick: restoring) }
     routeTask?.cancel()
     routeTask = nil
     if let owner = pendingRouteAccountID, owner != session.user.id { pendingRouteURL = nil }
@@ -159,10 +164,13 @@ final class AppModel {
   }
   func signOut() async {
     guard let api else { return }
-    do { try await api.signOut() } catch { self.error = error.localizedDescription }
+    let notificationRemoval = NotificationController.shared.beginDisable()
     clearAccount()
+    do { try await api.signOut() } catch { self.error = error.localizedDescription }
+    await notificationRemoval.value
   }
   func clearAccount(preserveUnownedRoute: Bool = false) {
+    NotificationController.shared.clearAccount(preservePendingClick: restoring)
     routeTask?.cancel()
     routeTask = nil
     if !preserveUnownedRoute || pendingRouteAccountID != nil { pendingRouteURL = nil }
@@ -182,6 +190,7 @@ final class AppModel {
     if error is CancellationError { return }
     if case APIError.unauthenticated = error { clearAccount() }
     if case APIError.emailNotVerified = error {
+      NotificationController.shared.clearAccount()
       profile = nil
       drafts = [:]
       path = []
@@ -280,14 +289,31 @@ struct RootView: View {
           guard scenePhase == .active else { return }
           while !Task.isCancelled {
             await app.pollUnread()
+            await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
             do { try await Task.sleep(for: .seconds(15)) } catch { return }
           }
         }
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(IndexPalette.background)
+    .onAppear { NotificationController.shared.attach(app) }
+    .onChange(of: app.restoring) { _, restoring in
+      if !restoring { NotificationController.shared.attach(app) }
+    }
     .onChange(of: app.verifiedSessionRevision, initial: true) { _, _ in
-      if app.verificationUser == nil && app.profile != nil { app.resumeReadableURL() }
+      if app.verificationUser == nil && app.profile != nil {
+        app.resumeReadableURL()
+        Task { await NotificationController.shared.synchronize(app) }
+      }
+    }
+    .onChange(of: app.path) { _, _ in
+      Task { await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active) }
+    }
+    .onChange(of: scenePhase) { _, phase in
+      Task {
+        if phase == .active { await NotificationController.shared.synchronize(app) }
+        await NotificationController.shared.setActive(app: app, foreground: phase == .active)
+      }
     }
     .alert(
       "Couldn’t complete that",

@@ -1,3 +1,4 @@
+import { NotificationSettings } from "@/features/notifications/settings";
 import { AccountSecurity } from "@/features/auth/security-forms";
 import { ThemeControl } from "@index/ui/components/theme-control";
 import { useForm } from "@tanstack/react-form";
@@ -120,6 +121,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
       </section>
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />
+      <NotificationSettings />
       <AccountSecurity />
       <button
         type="button"

@@ -8,6 +8,8 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
 }) => {
   await request.post(apiURL + "/_test/reset");
   let token: string | null = null;
+  let stopCleanup: Promise<void> | undefined;
+  let stopped = 0;
   const opened: string[] = [];
   const appearances: { preference?: string; resolved?: string }[] = [];
   await page.exposeBinding(
@@ -21,6 +23,14 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
         appearances.push({ preference: args?.preference, resolved: args?.resolved });
         return;
       }
+      if (command === "notification_status")
+        return { permission: "default", registered: false, supported: true };
+      if (command === "notification_active") return;
+      if (command === "notification_stop") {
+        stopped++;
+        return stopCleanup;
+      }
+      if (command === "notification_take_click") return null;
       if (command === "session_read") return token;
       if (command === "session_write") {
         token = args?.token ?? null;
@@ -69,9 +79,20 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   await page.getByRole("radio", { name: "System", exact: true }).check();
   await page.emulateMedia({ colorScheme: "light" });
   await expect.poll(() => appearances.at(-1)).toEqual({ preference: "system", resolved: "light" });
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await expect(page).toHaveURL(/login/);
-  expect(token).toBeNull();
+  // Native cleanup can remain offline while auth sign-out clears the current account.
+  let releaseCleanup!: () => void;
+  stopCleanup = new Promise<void>((resolve) => {
+    releaseCleanup = resolve;
+  });
+  const previousStops = stopped;
+  try {
+    await page.getByRole("button", { name: "Sign out", exact: true }).click();
+    await expect.poll(() => stopped).toBeGreaterThan(previousStops);
+    await expect(page).toHaveURL(/login/);
+    expect(token).toBeNull();
+  } finally {
+    releaseCleanup();
+  }
   await page.reload();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });
@@ -87,6 +108,10 @@ test("desktop restricted bearer survives interruption, verifies, and is erased a
     "nativeCommand",
     async (_source, command: string, args?: { token?: string | null }) => {
       if (command === "set_appearance") return;
+      if (command === "notification_status")
+        return { permission: "default", registered: false, supported: true };
+      if (command === "notification_active" || command === "notification_stop") return;
+      if (command === "notification_take_click") return null;
       if (command === "session_read") return token;
       if (command === "session_write") {
         token = args?.token ?? null;

@@ -54,6 +54,7 @@ export const server = Cloudflare.Worker(
       name: release?.serverName,
       domain: release?.apiDomain,
       main: "../../apps/server/src/index.ts",
+      crons: ["* * * * *"],
       compatibility: {
         flags: ["nodejs_compat"],
       },
@@ -64,6 +65,19 @@ export const server = Cloudflare.Worker(
         AUTH_TRUSTED_ORIGINS: Config.String("AUTH_TRUSTED_ORIGINS").pipe(Config.withDefault("")),
         AUTH_EMAIL_FROM: Config.String("AUTH_EMAIL_FROM").pipe(Config.withDefault("")),
         RESEND_API_KEY: Config.Redacted("RESEND_API_KEY").pipe(
+          Config.withDefault(Redacted.make("")),
+        ),
+        NOTIFICATIONS_ENABLED: Config.String("NOTIFICATIONS_ENABLED").pipe(Config.withDefault("")),
+        VAPID_PUBLIC_KEY: Config.String("VAPID_PUBLIC_KEY").pipe(Config.withDefault("")),
+        VAPID_SUBJECT: Config.String("VAPID_SUBJECT").pipe(Config.withDefault("")),
+        APNS_KEY_ID: Config.String("APNS_KEY_ID").pipe(Config.withDefault("")),
+        APNS_TEAM_ID: Config.String("APNS_TEAM_ID").pipe(Config.withDefault("")),
+        APNS_TOPIC: Config.String("APNS_TOPIC").pipe(Config.withDefault("")),
+        APNS_ENVIRONMENT: Config.String("APNS_ENVIRONMENT").pipe(Config.withDefault("")),
+        VAPID_PRIVATE_KEY: Config.Redacted("VAPID_PRIVATE_KEY").pipe(
+          Config.withDefault(Redacted.make("")),
+        ),
+        APNS_PRIVATE_KEY: Config.Redacted("APNS_PRIVATE_KEY").pipe(
           Config.withDefault(Redacted.make("")),
         ),
         BETTER_AUTH_URL: Cloudflare.Worker.URL,

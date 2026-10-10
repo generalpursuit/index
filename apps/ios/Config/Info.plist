@@ -9,6 +9,7 @@
 <key>CFBundleShortVersionString</key><string>1.0.0</string>
 <key>CFBundleVersion</key><string>1</string>
 <key>IndexKeychainGroup</key><string>$(INDEX_KEYCHAIN_GROUP)</string>
+<key>IndexAPNSEnvironment</key><string>$(INDEX_APNS_ENVIRONMENT)</string>
 <key>IndexAPIURL</key><string>$(INDEX_API_URL)</string>
 <key>IndexWebURL</key><string>$(INDEX_WEB_URL)</string>
 <key>IndexWebAliases</key><string>$(INDEX_WEB_ALIASES)</string>

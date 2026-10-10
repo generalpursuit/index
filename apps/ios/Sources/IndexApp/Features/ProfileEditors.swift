@@ -31,6 +31,8 @@ struct SettingsView: View {
         Divider().padding(.vertical)
         GroupSettingsView()
         Divider().padding(.vertical)
+        NotificationSettings()
+        Divider().padding(.vertical)
         AccountSecurityView()
         AsyncButton {
           await app.signOut()
