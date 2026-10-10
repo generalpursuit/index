@@ -25,6 +25,18 @@ Messaging uses exact participant sets for unnamed groups. Selecting recipients q
 
 Messages poll every 5 seconds, conversation lists every 10 seconds, and activity every 30 seconds while the app is foregrounded. There is no push or websocket dependency.
 
+## Phone layouts and focus
+
+Editable controls use at least 16px text on narrow or coarse-pointer screens, including portaled forms and landscape phones. Smaller controls made iOS zoom on focus and remain zoomed after the sheet closed, allowing the whole page to pan. The viewport continues to allow pinch zoom; there is no forced zoom reset or blanket document scroll suppression.
+
+Phone sheets initially focus their own popup, so opening a picker does not bring up the keyboard before the person chooses to type. Desktop dialogs still focus their first control. Explicit validation errors focus the relevant field, and closing a sheet restores its launch control. Avoid adding React `autoFocus` to shared form contents: it runs before the modal's focus policy.
+
+Sheets fit the visual viewport with safe-area padding and a scrollable body. The frame follows actual browser viewport changes, while Base UI handles focused-field scrolling. Do not position the frame with Base UI's keyboard inset: it resets on blur and can move a footer button between pointerdown and click. Phone sheets override desktop caller widths/heights; the post sheet no longer places its comment controls below the visible bottom edge. Long page lists, sheet contents and the friends carousel retain their intended scrolling.
+
+`e2e/mobile-layout.spec.ts` checks routes, authentication forms and every shared modal flow at 402×874, 320×568 and 874×402 with touch emulation. It asserts document/app horizontal bounds, absence of extra document scrolling around the app, readable input sizes, modal/body bounds, and focus behavior. The keyboard case simulates a reduced VisualViewport against the real Drawer provider; it is not a physical iOS keyboard test. On an iPhone, also check opening/closing Save to, tapping its search field, switching fields, dismissing the keyboard, rotating the phone and deliberately pinch-zooming. Linux Chromium emulation cannot confirm Safari's native keyboard/zoom behavior.
+
+Validated on 2026-10-10: the built-production headed Chromium suite passed 98/98, including all 16 mobile-layout cases. Web/API/UI type checks, the Vite production build, scoped lint and formatting passed. Screenshots inspected: phone feed, destination picker, nested dark Settings/group sheets and simulated-keyboard destination picker. Native Safari was not run; Playwright WebKit's dependency check reported missing native runtime libraries on this VM.
+
 ## Loading and refresh
 
 Feature query options are shared by route loaders and hooks. Navigation intent preloads the first screen of activity, conversations, profiles, and settings; discovery preloads suggestions while typed searches remain debounced. Conversation headers and messages load together. Cached data stays available for 30 minutes of inactivity, remains fresh for 30 seconds, and refreshes in the background. Session revalidation does not block navigation when a session is already known. Account-specific keys and sign-out clearing still isolate readers.

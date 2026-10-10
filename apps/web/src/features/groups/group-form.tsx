@@ -91,7 +91,6 @@ export function GroupForm({
                   <Input
                     ref={input}
                     id={id}
-                    autoFocus
                     className="min-w-0 flex-1 text-base!"
                     placeholder="Reading, Wishlist, …"
                     value={field.state.value}

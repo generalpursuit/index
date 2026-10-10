@@ -25,7 +25,8 @@ for (const scheme of ["light", "dark"] as const) {
       const form = page.getByRole("dialog", { name: "New group", exact: true });
       const input = form.getByRole("textbox", { name: "Name", exact: true });
       const lock = form.getByRole("button", { name: "Lock group", exact: true });
-      await expect(input).toBeFocused();
+      // A phone sheet receives focus without opening the software keyboard.
+      await expect(width === 390 ? form : input).toBeFocused();
       await expect(lock).toHaveAttribute("aria-pressed", "false");
       await expect(form.getByText("Visible to anyone who can see your profile.")).toBeVisible();
       await expect(form.getByRole("radio")).toHaveCount(0);

@@ -117,7 +117,6 @@ export function DestinationPicker({
             <label className="flex items-center gap-2">
               <Search size={16} aria-hidden="true" />
               <Input
-                autoFocus
                 aria-label="Search destinations"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

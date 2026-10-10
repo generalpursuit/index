@@ -201,6 +201,16 @@ textarea {
   user-select: text;
   -webkit-user-select: text;
 }
+/* Keep editable controls readable without iOS focus zoom. This document reset also
+   covers portaled forms and landscape touch screens; pinch zoom stays available. */
+@media (width <= 700px), (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select,
+  [contenteditable]:not([contenteditable="false"]) {
+    font-size: max(16px, 1em);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
