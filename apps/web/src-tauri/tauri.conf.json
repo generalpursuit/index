@@ -12,6 +12,9 @@
     "windows": [
       {
         "title": "Index",
+        "hiddenTitle": true,
+        "titleBarStyle": "Transparent",
+        "backgroundColor": "#000000",
         "width": 1200,
         "height": 860,
         "resizable": true,
