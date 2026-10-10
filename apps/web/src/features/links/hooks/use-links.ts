@@ -84,7 +84,11 @@ export function useLibraryActions() {
     accountMutationOptions(api.groups.create.mutationOptions({ onSuccess: refresh })),
   );
   const refreshGroups = () =>
-    Promise.all([refresh(), router.invalidate(), cache.invalidateQueries({ queryKey: api.links.get.key() })]);
+    Promise.all([
+      refresh(),
+      router.invalidate(),
+      cache.invalidateQueries({ queryKey: api.links.get.key() }),
+    ]);
   const updateGroup = useMutation(
     accountMutationOptions(api.groups.update.mutationOptions({ onSuccess: refreshGroups })),
   );

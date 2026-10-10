@@ -31,7 +31,7 @@ Paths below are relative to `/api/v1`. All mutations require authentication. Pub
 | `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                                            |
 | `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                                     |
 | `groups.delete`             | DELETE `/groups/{id}`                      | Keep its links outside any group; JSON body `{ deleteLinks: true }` deletes them instead                       |
-| `links.share`              | POST `/links/share`                        | Duplicate-aware current-week save with an account/payload-bound retry ID; see [sharing](sharing.md) |
+| `links.share`               | POST `/links/share`                        | Duplicate-aware current-week save with an account/payload-bound retry ID; see [sharing](sharing.md)            |
 | `links.create`              | POST `/links`                              | Save a link, optionally into an owned custom `groupId`; `title` is read from the page if omitted               |
 | `links.listMine`            | GET `/links`                               | Owned links; optional `groupId` and `category` filters; authenticated                                          |
 | `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                                    |

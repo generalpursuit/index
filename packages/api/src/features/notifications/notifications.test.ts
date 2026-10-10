@@ -25,17 +25,15 @@ describe("durable notifications", () => {
   });
   beforeEach(async () => {
     await fixture.reset();
-    await fixture.db
-      .insert(session)
-      .values(
-        ["alice", "bob"].map((id) => ({
-          id: `session-${id}`,
-          userId: id,
-          token: `fixture-${id}`,
-          expiresAt: new Date(Date.now() + 86400_000),
-          updatedAt: new Date(),
-        })),
-      );
+    await fixture.db.insert(session).values(
+      ["alice", "bob"].map((id) => ({
+        id: `session-${id}`,
+        userId: id,
+        token: `fixture-${id}`,
+        expiresAt: new Date(Date.now() + 86400_000),
+        updatedAt: new Date(),
+      })),
+    );
   });
   const api = (id: string | null) =>
     createRouterClient(appRouter, {
