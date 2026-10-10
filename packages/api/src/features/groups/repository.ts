@@ -15,7 +15,9 @@ export const groupSelection = {
   name: groups.name,
   slug: groups.slug,
   kind: groups.kind,
-  visibility: groups.visibility,
+  visibility: sql<
+    "private" | "public"
+  >`case when ${groups.kind}='starred' then 'private' else ${groups.visibility} end`,
   createdAt: timestamp(groups.createdAt),
   updatedAt: timestamp(groups.updatedAt),
 };
@@ -39,7 +41,12 @@ export function ensureSystemGroup(
   return ResultAsync.fromPromise(
     db
       .insert(groups)
-      .values({ ownerId, name: kind === "starred" ? "Starred" : "Favorites", kind })
+      .values({
+        ownerId,
+        name: kind === "starred" ? "Starred" : "Favorites",
+        kind,
+        visibility: kind === "starred" ? "private" : "public",
+      })
       .onConflictDoNothing()
       .then(() => undefined),
     databaseError,

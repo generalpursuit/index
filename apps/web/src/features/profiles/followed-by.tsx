@@ -21,7 +21,7 @@ export function FollowedBy({
         <Fragment key={person.id}>
           {i > 0 && " and "}
           {linked ? (
-            <Link to="/people/$userId" params={{ userId: person.id }}>
+            <Link to="/u/$username" params={{ username: person.username! }}>
               {person.username ?? person.name}
             </Link>
           ) : (

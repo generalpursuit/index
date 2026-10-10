@@ -1,5 +1,5 @@
-import { user } from "@index/db/schema/auth";
-import { eq } from "drizzle-orm";
+import { user, usernameAliases } from "@index/db/schema/auth";
+import { eq, sql } from "drizzle-orm";
 import { err, ok, okAsync, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { databaseError, notFound } from "../../errors";
@@ -16,7 +16,9 @@ export function getProfile(
     .findProfile(
       db,
       viewerId,
-      "userId" in lookup ? eq(user.id, lookup.userId) : eq(user.username, lookup.username),
+      "userId" in lookup
+        ? eq(user.id, lookup.userId)
+        : sql`${user.id} = (select ${usernameAliases.userId} from ${usernameAliases} where ${usernameAliases.username} = ${lookup.username})`,
     )
     .andThen((profile) => (profile ? ok(profile) : err(notFound("Profile"))))
     .andThen((profile) =>

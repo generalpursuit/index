@@ -3,6 +3,10 @@ import SwiftUI
 
 struct ProfileView: View {
   let userID: String
+  init(userID: String, groupID: String? = nil) {
+    self.userID = userID
+    _filter = State(initialValue: groupID ?? "all")
+  }
   @Environment(AppModel.self) private var app
   @State private var profile: Profile?
   @State private var groups: [LinkGroup] = []
@@ -56,7 +60,8 @@ struct ProfileView: View {
           }
           if own {
             HStack {
-              if let url = app.webURL?.appendingPathComponent("people/\(userID)") {
+              if let username = profile.username,
+                let url = app.webURL?.appendingPathComponent(selected.map { ReadableRoutes.group(username, $0.slug ?? $0.kind) } ?? ReadableRoutes.profile(username)) {
                 ShareLink(item: url) {
                   Label("Share", systemImage: "square.on.square").frame(maxWidth: .infinity)
                 }.buttonStyle(PillStyle())
@@ -130,9 +135,10 @@ struct ProfileView: View {
                   app.changed()
                 } label: {
                   Label(
-                    selected.visibility == .private ? "Locked" : "Unlocked",
+                    selected.kind == "starred" ? "Always private" : selected.visibility == .private ? "Locked" : "Unlocked",
                     systemImage: selected.visibility == .private ? "lock" : "lock.open")
-                }
+                }.disabled(selected.kind == "starred")
+                  .accessibilityHint(selected.kind == "starred" ? "Starred is always private" : "")
                 Spacer()
                 if selected.kind == "custom" {
                   Button("Edit group") { app.path.append(.group(selected)) }

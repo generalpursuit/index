@@ -2,8 +2,16 @@ import { z } from "zod";
 import { monday } from "./weeks";
 // Modals that open over any page: a post and editing a link.
 export const appSearch = z.object({
-  post: z.uuid().optional().catch(undefined),
-  edit: z.uuid().optional().catch(undefined),
+  post: z
+    .string()
+    .regex(/^(?:[A-Za-z0-9_-]{16}|[0-9a-f-]{36})$/)
+    .optional()
+    .catch(undefined),
+  edit: z
+    .string()
+    .regex(/^(?:[A-Za-z0-9_-]{16}|[0-9a-f-]{36})$/)
+    .optional()
+    .catch(undefined),
 });
 export const weekSearch = z.iso
   .date()

@@ -18,44 +18,45 @@ Better Auth continues to own login, credentials and sessions. Its routes are not
 
 Paths below are relative to `/api/v1`. All mutations require authentication. Public reads accept optional credentials and return only content visible to that viewer. Missing and inaccessible resources both return 404.
 
-| Procedure                   | HTTP                                       | Behavior                                                                                          |
-| --------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `profiles.me`               | GET `/me/profile`                          | Current user's profile; authenticated                                                             |
-| `profiles.update`           | PATCH `/me/profile`                        | Edit name, username and profile visibility; `image: null` removes the photo                       |
-| `profiles.uploadImage`      | POST `/me/image`                           | Upload a profile photo (multipart `image`, JPEG/PNG/WebP, at most 5 MB); replaces the current one |
-| `profiles.get`              | GET `/profiles/{userId}`                   | Public identity, viewer access, private counts and social context                                 |
-| `profiles.byUsername`       | GET `/profiles/by-username/{username}`     | Look up a normalized username                                                                     |
-| `groups.create`             | POST `/groups`                             | Create an owned custom group; defaults to public                                                  |
-| `groups.list`               | GET `/groups`                              | Visible groups, including Starred and Favorites, each with the `linkCount` the viewer may see     |
-| `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                               |
-| `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                        |
-| `groups.delete`             | DELETE `/groups/{id}`                      | Keep its links outside any group; JSON body `{ deleteLinks: true }` deletes them instead          |
-| `links.create`              | POST `/links`                              | Save a link, optionally into an owned custom `groupId`; `title` is read from the page if omitted  |
-| `links.listMine`            | GET `/links`                               | Owned links; optional `groupId` and `category` filters; authenticated                             |
-| `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                       |
-| `links.update`              | PATCH `/links/{id}`                        | Edit an owned link or move it; `groupId: null` takes it out of its group                          |
-| `links.delete`              | DELETE `/links/{id}`                       | Delete an owned link and cascade its stars, favorites and comments                                |
-| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group, each with its owner's `ownerName`      |
-| `follows.follow`            | POST `/profiles/{userId}/follow`           | Follow a public profile or request a private profile                                              |
-| `follows.unfollow`          | DELETE `/profiles/{userId}/follow`         | Unfollow or cancel a pending request                                                              |
-| `follows.followers`         | GET `/profiles/{userId}/followers`         | Own accepted followers; other users receive 404                                                   |
-| `follows.following`         | GET `/profiles/{userId}/following`         | Own accepted followees; optional literal `query` for recipient search                             |
-| `follows.requests`          | GET `/me/follow-requests`                  | Pending incoming requests; authenticated                                                          |
-| `follows.accept`            | POST `/me/follow-requests/{userId}/accept` | Accept an incoming request                                                                        |
-| `follows.reject`            | DELETE `/me/follow-requests/{userId}`      | Remove a pending incoming request                                                                 |
-| `follows.removeFollower`    | DELETE `/me/followers/{userId}`            | Remove an incoming relationship                                                                   |
-| `stars.add`                 | PUT `/links/{linkId}/star`                 | Star another person's visible original link                                                       |
-| `stars.remove`              | DELETE `/links/{linkId}/star`              | Remove own star, even if the original is now inaccessible                                         |
-| `stars.group`               | GET `/me/starred/group`                    | Get/create own Starred group; authenticated                                                       |
-| `stars.list`                | GET `/me/starred`                          | Accessible originals in own Starred group; authenticated                                          |
-| `comments.create`           | POST `/links/{linkId}/comments`            | Add a flat text comment to an accessible link                                                     |
-| `comments.list`             | GET `/links/{linkId}/comments`             | Visible comments with public author identity                                                      |
-| `comments.update`           | PATCH `/comments/{id}`                     | Edit own comment while the link is accessible                                                     |
-| `comments.delete`           | DELETE `/comments/{id}`                    | Delete own comment, or moderate a comment on an owned link                                        |
-| `feed.weeks`                | GET `/feed/weeks`                          | Weeks with links from you or accepted follows, newest first, with counts; authenticated           |
-| `feed.list`                 | GET `/feed`                                | Newest accessible original saves from accepted followees; authenticated                           |
-| `discovery.searchUsers`     | GET `/discovery/users`                     | Search public names/usernames using `query`                                                       |
-| `discovery.recommendations` | GET `/discovery/recommendations`           | Second-degree suggestions; authenticated                                                          |
+| Procedure                   | HTTP                                       | Behavior                                                                                                       |
+| --------------------------- | ------------------------------------------ | -------------------------------------------------------------------------------------------------------------- |
+| `routes.resolve`            | GET `/routes/resolve`                      | Resolve canonical/legacy readable paths after checking viewer access; see [route contract](readable-routes.md) |
+| `profiles.me`               | GET `/me/profile`                          | Current user's profile; authenticated                                                                          |
+| `profiles.update`           | PATCH `/me/profile`                        | Edit name, username and profile visibility; `image: null` removes the photo                                    |
+| `profiles.uploadImage`      | POST `/me/image`                           | Upload a profile photo (multipart `image`, JPEG/PNG/WebP, at most 5 MB); replaces the current one              |
+| `profiles.get`              | GET `/profiles/{userId}`                   | Public identity, viewer access, private counts and social context                                              |
+| `profiles.byUsername`       | GET `/profiles/by-username/{username}`     | Look up a normalized username                                                                                  |
+| `groups.create`             | POST `/groups`                             | Create an owned custom group; defaults to public                                                               |
+| `groups.list`               | GET `/groups`                              | Visible groups, including Starred and Favorites, each with the `linkCount` the viewer may see                  |
+| `groups.get`                | GET `/groups/{id}`                         | Get a visible group                                                                                            |
+| `groups.update`             | PATCH `/groups/{id}`                       | Change an owned group's name or visibility                                                                     |
+| `groups.delete`             | DELETE `/groups/{id}`                      | Keep its links outside any group; JSON body `{ deleteLinks: true }` deletes them instead                       |
+| `links.create`              | POST `/links`                              | Save a link, optionally into an owned custom `groupId`; `title` is read from the page if omitted               |
+| `links.listMine`            | GET `/links`                               | Owned links; optional `groupId` and `category` filters; authenticated                                          |
+| `links.get`                 | GET `/links/{id}`                          | Get a visible original link                                                                                    |
+| `links.update`              | PATCH `/links/{id}`                        | Edit an owned link or move it; `groupId: null` takes it out of its group                                       |
+| `links.delete`              | DELETE `/links/{id}`                       | Delete an owned link and cascade its stars, favorites and comments                                             |
+| `links.listInGroup`         | GET `/groups/{groupId}/links`              | Visible originals in a custom, Starred or Favorites group, each with its owner's `ownerName`                   |
+| `follows.follow`            | POST `/profiles/{userId}/follow`           | Follow a public profile or request a private profile                                                           |
+| `follows.unfollow`          | DELETE `/profiles/{userId}/follow`         | Unfollow or cancel a pending request                                                                           |
+| `follows.followers`         | GET `/profiles/{userId}/followers`         | Own accepted followers; other users receive 404                                                                |
+| `follows.following`         | GET `/profiles/{userId}/following`         | Own accepted followees; optional literal `query` for recipient search                                          |
+| `follows.requests`          | GET `/me/follow-requests`                  | Pending incoming requests; authenticated                                                                       |
+| `follows.accept`            | POST `/me/follow-requests/{userId}/accept` | Accept an incoming request                                                                                     |
+| `follows.reject`            | DELETE `/me/follow-requests/{userId}`      | Remove a pending incoming request                                                                              |
+| `follows.removeFollower`    | DELETE `/me/followers/{userId}`            | Remove an incoming relationship                                                                                |
+| `stars.add`                 | PUT `/links/{linkId}/star`                 | Star another person's visible original link                                                                    |
+| `stars.remove`              | DELETE `/links/{linkId}/star`              | Remove own star, even if the original is now inaccessible                                                      |
+| `stars.group`               | GET `/me/starred/group`                    | Get/create own Starred group; authenticated                                                                    |
+| `stars.list`                | GET `/me/starred`                          | Accessible originals in own Starred group; authenticated                                                       |
+| `comments.create`           | POST `/links/{linkId}/comments`            | Add a flat text comment to an accessible link                                                                  |
+| `comments.list`             | GET `/links/{linkId}/comments`             | Visible comments with public author identity                                                                   |
+| `comments.update`           | PATCH `/comments/{id}`                     | Edit own comment while the link is accessible                                                                  |
+| `comments.delete`           | DELETE `/comments/{id}`                    | Delete own comment, or moderate a comment on an owned link                                                     |
+| `feed.weeks`                | GET `/feed/weeks`                          | Weeks with links from you or accepted follows, newest first, with counts; authenticated                        |
+| `feed.list`                 | GET `/feed`                                | Newest accessible original saves from accepted followees; authenticated                                        |
+| `discovery.searchUsers`     | GET `/discovery/users`                     | Search public names/usernames using `query`                                                                    |
+| `discovery.recommendations` | GET `/discovery/recommendations`           | Second-degree suggestions; authenticated                                                                       |
 
 `/health` reports server status.
 
@@ -68,7 +69,7 @@ Paths below are relative to `/api/v1`. All mutations require authentication. Pub
 - Profiles include `followedBy: { users, total }`: at most two of the viewer's accepted followees who also follow that profile, plus their total. This supports “Followed by…” without exposing the profile's follower count.
 - Profile photos are only uploaded, never set as an address: `profiles.uploadImage` reads the file's type from its first bytes (JPEG, PNG or WebP; the declared type is ignored, since some runtimes drop it and any client can fake it), stores it in the `media` R2 bucket under a fresh `avatars/<userId>/<uuid>` key and saves its address `<server>/media/<key>`; the previous photo is deleted, as is the photo removed with `image: null`. The bucket is private; the server serves `/media/*` from it with a year-long immutable cache, since every upload has its own address. Better Auth's sign-up and update-user refuse an `image`. Clients square and shrink photos to 512×512 before uploading. Tests and the local sample backend keep photos in memory.
 - Switching a profile to public accepts existing pending requests atomically. Switching to private retains accepted followers. The client presents the confirmation and implications before calling `profiles.update`.
-- Starred contains references to other people's links; Favorites contains references to the owner's own links. Each is a lazily created, unique system group, public by default. Their visibility is editable, but their names and existence are protected. Original links cannot be moved into them. Their contents must pass **both** the collection's visibility and the original link's visibility. Revocation hides a reference without deleting it; restoring access can reveal it again.
+- Starred contains references to other people's links; Favorites contains references to the owner's own links. Each is a lazily created, unique system group. Starred is always owner-only, including legacy rows marked public. Favorites defaults to public and its visibility is editable; but their names and existence are protected. Original links cannot be moved into them. Their contents must pass **both** the collection's visibility and the original link's visibility. Revocation hides a reference without deleting it; restoring access can reveal it again.
 - Repeating a star or follow operation preserves the existing relationship and timestamps. Unfollow, reject, remove-follower and unstar are idempotent. Rejecting a request does not remove an already accepted follower.
 - Any signed-in viewer who can access a link may comment. Authors can edit their own comments while access remains and delete their own comments even after losing access. Link owners may delete comments on their links. Comments are plain text; clients must render them as text, not HTML. Responding adds another flat comment with an optional @username in its text; there are no threaded replies.
 - Feed ordering uses the original link's save time; starring, commenting and editing do not create feed events. Following someone includes their existing visible saves.
@@ -84,7 +85,7 @@ User search and follow lists use ascending user ID pagination with `after`/`next
 
 Group deletion, profile publication, activity-producing writes, conversation creation and message/inbox updates use data-modifying PostgreSQL CTEs to keep dependent writes in a single atomic statement. This works with the existing Neon HTTP driver without pretending it supports interactive transactions. The additive migration described below is required. No dependencies were added.
 
-Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits or underscores. Sign-up requires one; Better Auth's username plugin validates it with the same rule and rejects a taken username with 400. Accounts created before this requirement may have none. In `profiles.update`, a conflicting username returns 409. Other invalid input returns 400, missing authentication 401, inaccessible resources 404, and unexpected persistence failures a generic 500.
+Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits or underscores. Sign-up requires one; Better Auth's username plugin validates it with the same rule and rejects a taken username with 400. The readable-routes migration assigns deterministic handles to older accounts that had none. Old usernames remain globally reserved after rename or account deletion. In `profiles.update`, a conflicting username returns 409. Other invalid input returns 400, missing authentication 401, inaccessible resources 404, and unexpected persistence failures a generic 500.
 
 ## Weekly views and Favorites
 
@@ -99,7 +100,7 @@ Usernames are normalized to lowercase and must be 3–30 ASCII letters, digits o
 - `favorites.add` / `favorites.remove` — PUT / DELETE `/links/{linkId}/favorite`.
 - `favorites.group` — GET `/me/favorites/group`; `favorites.list` — GET `/me/favorites`.
 - Favoriting is idempotent and restricted to the original owner, including a database ownership constraint. It never moves or duplicates a link.
-- All, Starred and Favorites are reserved names for new or renamed custom groups.
+- All, Starred, Favorites and Settings are reserved route names for new or renamed custom groups. Group names/slugs are unique per owner; historical slugs remain reserved. See [readable routes](readable-routes.md) for canonical URLs, resolution, collision handling and migration repair.
 
 ## Activity
 

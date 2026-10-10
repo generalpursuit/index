@@ -51,6 +51,7 @@ public enum Category: String, Codable, CaseIterable, Sendable {
 }
 public struct SavedLink: Codable, Identifiable, Hashable, Sendable {
   public let id: String
+  public let shortId: String?
   public let ownerId: String
   public let groupId: String?
   public let url: String
@@ -69,6 +70,7 @@ public struct SavedLink: Codable, Identifiable, Hashable, Sendable {
 }
 public struct LinkGroup: Codable, Identifiable, Hashable, Sendable {
   public let id: String
+  public let slug: String?
   public let ownerId: String
   public var name: String
   public let kind: String
@@ -142,6 +144,7 @@ public struct Message: Codable, Identifiable, Sendable {
 }
 public struct Conversation: Codable, Identifiable, Sendable {
   public let id: String
+  public let shortId: String?
   public let participants: [Person]
   public let canSend: Bool
   public let unreadCount: Int

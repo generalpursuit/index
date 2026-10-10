@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import {
   accountMutationOptions,
   accountGeneration,
@@ -36,6 +37,7 @@ export function useLibraryWeeks(userId: string, groupId?: string, enabled = true
   return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
 }
 export function useLibraryActions() {
+  const router = useRouter();
   const api = useAPI(),
     cache = useQueryClient();
   const refresh = async () => {
@@ -82,7 +84,7 @@ export function useLibraryActions() {
     accountMutationOptions(api.groups.create.mutationOptions({ onSuccess: refresh })),
   );
   const refreshGroups = () =>
-    Promise.all([refresh(), cache.invalidateQueries({ queryKey: api.links.get.key() })]);
+    Promise.all([refresh(), router.invalidate(), cache.invalidateQueries({ queryKey: api.links.get.key() })]);
   const updateGroup = useMutation(
     accountMutationOptions(api.groups.update.mutationOptions({ onSuccess: refreshGroups })),
   );

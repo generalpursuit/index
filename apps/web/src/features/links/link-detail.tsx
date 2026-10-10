@@ -49,7 +49,11 @@ function Post({
       <header className="post-author">
         {standalone && <Back />}
         {author.data && (
-          <Link to="/people/$userId" params={{ userId: link.ownerId }} className="person-inline">
+          <Link
+            to="/u/$username"
+            params={{ username: author.data.username! }}
+            className="person-inline"
+          >
             <UserAvatar person={author.data} />
             <strong>{author.data.username ?? author.data.name}</strong>
           </Link>
@@ -76,12 +80,12 @@ function Post({
             .flatMap((p) => p.items)
             .map((c) => (
               <article className="comment" key={c.id}>
-                <Link to="/people/$userId" params={{ userId: c.author.id }}>
+                <Link to="/u/$username" params={{ username: c.author.username! }}>
                   <UserAvatar person={c.author} />
                 </Link>
                 <div className="comment-body">
                   <header>
-                    <Link to="/people/$userId" params={{ userId: c.author.id }}>
+                    <Link to="/u/$username" params={{ username: c.author.username! }}>
                       {c.author.username ?? c.author.name}
                     </Link>
                     <small>{timeAgo(c.createdAt)}</small>

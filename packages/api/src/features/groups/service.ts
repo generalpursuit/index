@@ -15,7 +15,12 @@ export const getGroup = (db: QueryDatabase, viewerId: string | null, id: string)
     .andThen((group) => (group ? ok(group) : err(notFound("Group"))));
 export const updateGroup = (db: QueryDatabase, actorId: string, input: UpdateGroupInput) =>
   repository
-    .updateGroup(db, actorId, input)
+    .findGroup(db, actorId, input.id)
+    .andThen((group) =>
+      group?.kind === "starred" && input.visibility === "public"
+        ? err({ code: "BAD_REQUEST" as const, message: "Starred is always private." })
+        : repository.updateGroup(db, actorId, input),
+    )
     .andThen((group) => (group ? ok(group) : err(notFound("Editable group"))));
 export const deleteGroup = (db: QueryDatabase, actorId: string, id: string, deleteLinks: boolean) =>
   repository

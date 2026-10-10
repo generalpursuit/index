@@ -128,7 +128,7 @@ function FriendCard({
 }) {
   return (
     <article className="friend-card">
-      <Link className="person-inline" to="/people/$userId" params={{ userId: person.id }}>
+      <Link className="person-inline" to="/u/$username" params={{ username: person.username! }}>
         <UserAvatar person={person} />
         <strong>{person.username ?? person.name}</strong>
       </Link>

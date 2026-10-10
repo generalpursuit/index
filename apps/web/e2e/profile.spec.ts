@@ -60,7 +60,12 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await page.locator(".week-tick").nth(1).click();
   await expect.poll(headingOffset(older)).toBe(0);
   await expect(page.locator(".week-tick").nth(1)).toHaveAttribute("data-active", "true");
-  expect(await scroller.evaluate((el) => el.scrollHeight - el.clientHeight - el.scrollTop)).toBe(0);
+  // scrollHeight/clientHeight are integers; scrollTop retains subpixel precision.
+  await expect
+    .poll(() =>
+      scroller.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
+    )
+    .toBeLessThanOrEqual(1);
   await page.locator(".week-tick").first().click();
   await expect.poll(headingOffset(weeks.first())).toBe(0);
   await expect(page.locator(".week-tick").first()).toHaveAttribute("data-active", "true");

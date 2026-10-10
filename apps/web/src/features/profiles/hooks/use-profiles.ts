@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { accountMutationOptions } from "@/lib/account-boundary";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
@@ -7,6 +8,7 @@ export function useProfile(userId: string, enabled = true) {
   return useQuery(api.profiles.get.queryOptions({ input: { userId }, enabled }));
 }
 export function useProfileActions() {
+  const router = useRouter();
   const api = useAPI(),
     cache = useQueryClient();
   const refresh = async () => {
@@ -30,6 +32,7 @@ export function useProfileActions() {
           onSuccess: async () => {
             await Promise.all([
               refresh(),
+              router.invalidate(),
               cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
             ]);
           },
@@ -42,6 +45,7 @@ export function useProfileActions() {
           onSuccess: async () => {
             await Promise.all([
               refresh(),
+              router.invalidate(),
               cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
             ]);
           },

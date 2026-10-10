@@ -64,12 +64,12 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
         <div className="activity-list">
           {items.map((a) => (
             <article className="activity-row" key={a.id}>
-              <Link to="/people/$userId" params={{ userId: a.actor.id }}>
+              <Link to="/u/$username" params={{ username: a.actor.username! }}>
                 <UserAvatar person={a.actor} />
               </Link>
               <div className="activity-body">
                 <header>
-                  <Link to="/people/$userId" params={{ userId: a.actor.id }}>
+                  <Link to="/u/$username" params={{ username: a.actor.username! }}>
                     {a.actor.username ?? a.actor.name}
                   </Link>
                   <small>{timeAgo(a.createdAt)}</small>
@@ -114,7 +114,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
                   onClick={() =>
                     void navigate({
                       to: ".",
-                      search: (old) => ({ ...old, post: a.linkId ?? undefined }),
+                      search: (old) => ({ ...old, post: a.linkShortId ?? undefined }),
                     })
                   }
                 >

@@ -10,6 +10,7 @@ type Fixture = {
   notes: { id: string };
   locked: { id: string };
   conversationId: string;
+  conversationShortId: string;
 };
 let data: Fixture;
 async function login(page: Page, name = "Alice") {
@@ -157,7 +158,7 @@ test("forward to multiple recipients, restricted card and member reply", async (
   await page.getByRole("checkbox", { name: "Bob", exact: true }).click();
   await page.getByRole("checkbox", { name: "Lena", exact: true }).click();
   await page.getByRole("button", { name: "Next (2)", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp("/messages/" + data.conversationId));
+  await expect(page).toHaveURL(new RegExp("/messages/" + data.conversationShortId));
   await expect(page.getByLabel("Message", { exact: true })).toBeFocused();
   await expect(page.locator(".draft-attachment")).toContainText(data.privateLink.title);
   await expect(page.locator(".chat-scroller")).not.toContainText(data.privateLink.title);

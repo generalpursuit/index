@@ -8,12 +8,16 @@ struct IndexApp: App {
     WindowGroup {
       RootView().environment(app).preferredColorScheme(.dark).tint(.white)
         .onOpenURL { app.open($0) }
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+          if let url = activity.webpageURL { app.open(url) }
+        }
     }
   }
 }
 
 enum Destination: Hashable {
   case profile(String)
+  case collection(String, String)
   case link(String)
   case messages
   case conversation(String)
@@ -68,6 +72,9 @@ final class AppModel {
     openingLink = link
     path.append(.link(link.id))
   }
+  var pendingRouteURL: URL?
+  var pendingRouteAccountID: String?
+  var routeTask: Task<Void, Never>?
   var webURL: URL?
   var showsTabs: Bool {
     guard let destination = path.last else { return true }
@@ -100,7 +107,7 @@ final class AppModel {
     defer { restoring = false }
     guard let api else { return }
     do {
-      if let session = try await api.restore() { try await acceptSession(session) } else { clearAccount() }
+      if let session = try await api.restore() { try await acceptSession(session) } else { clearAccount(preserveUnownedRoute: true) }
     } catch APIError.unauthenticated { clearAccount() } catch {
       self.error = error.localizedDescription
     }
@@ -117,6 +124,10 @@ final class AppModel {
   }
   private func acceptSession(_ session: AuthSession) async throws {
     guard let api else { throw APIError.invalidServer }
+    routeTask?.cancel()
+    routeTask = nil
+    if let owner = pendingRouteAccountID, owner != session.user.id { pendingRouteURL = nil }
+    pendingRouteAccountID = pendingRouteURL == nil ? nil : session.user.id
     // Verification and account switches must drop all previous private UI state.
     profile = nil
     drafts = [:]
@@ -143,7 +154,11 @@ final class AppModel {
     do { try await api.signOut() } catch { self.error = error.localizedDescription }
     clearAccount()
   }
-  func clearAccount() {
+  func clearAccount(preserveUnownedRoute: Bool = false) {
+    routeTask?.cancel()
+    routeTask = nil
+    if !preserveUnownedRoute || pendingRouteAccountID != nil { pendingRouteURL = nil }
+    pendingRouteAccountID = nil
     profile = nil
     verificationUser = nil
     drafts = [:]
@@ -169,13 +184,7 @@ final class AppModel {
     self.error = error.localizedDescription
   }
   func changed() { revision += 1 }
-  func open(_ url: URL) {
-    var parts = url.pathComponents.filter { $0 != "/" }
-    if url.scheme == "index", let host = url.host { parts.insert(host, at: 0) }
-    guard parts.count >= 2 else { return }
-    if parts[0] == "people" { path.append(.profile(parts[1])) }
-    if parts[0] == "links" { path.append(.link(parts[1])) }
-  }
+  func open(_ url: URL) { openReadableURL(url) }
   func pollUnread() async {
     guard let api, profile != nil else { return }
     do {
@@ -216,6 +225,7 @@ struct RootView: View {
           .navigationDestination(for: Destination.self) { destination in
             switch destination {
             case .profile(let id): ProfileView(userID: id)
+            case .collection(let id, let group): ProfileView(userID: id, groupID: group)
             case .link(let id): LinkDetailView(linkID: id)
             case .messages: MessagesView()
             case .conversation(let id): ConversationView(conversationID: id)
@@ -268,6 +278,9 @@ struct RootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(.black)
+    .onChange(of: app.verifiedSessionRevision, initial: true) { _, _ in
+      if app.verificationUser == nil && app.profile != nil { app.resumeReadableURL() }
+    }
     .alert(
       "Couldn’t complete that",
       isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })

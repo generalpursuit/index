@@ -19,18 +19,16 @@ describe("starred references", () => {
     assert.equal((await api.db.select().from(stars)).length, 1);
     assert.equal((await bob.stars.list({})).items[0]?.ownerId, "alice");
     const starred = await bob.stars.group();
-    assert.equal(
-      (await api.client(null).links.listInGroup({ groupId: starred.id })).items[0]?.id,
-      link.id,
-    );
+    await assert.rejects(api.client(null).links.listInGroup({ groupId: starred.id }), {
+      code: "NOT_FOUND",
+    });
     await alice.links.update({ id: link.id, title: "Updated original" });
     assert.equal((await bob.stars.list({})).items[0]?.title, "Updated original");
     await alice.groups.update({ id: group.id, visibility: "private" });
     assert.equal((await bob.stars.list({})).items.length, 0);
-    assert.equal(
-      (await api.client(null).links.listInGroup({ groupId: starred.id })).items.length,
-      0,
-    );
+    await assert.rejects(api.client(null).links.listInGroup({ groupId: starred.id }), {
+      code: "NOT_FOUND",
+    });
     await assert.rejects(bob.stars.add({ linkId: link.id }), { code: "NOT_FOUND" });
     // Even the original owner cannot bypass the starring group's visibility.
     await bob.groups.update({ id: starred.id, visibility: "private" });
@@ -55,10 +53,9 @@ describe("starred references", () => {
     await bob.stars.add({ linkId: link.id });
     const starred = await bob.stars.group();
     assert.equal((await bob.stars.list({})).items.length, 1);
-    assert.equal(
-      (await api.client("carol").links.listInGroup({ groupId: starred.id })).items.length,
-      0,
-    );
+    await assert.rejects(api.client("carol").links.listInGroup({ groupId: starred.id }), {
+      code: "NOT_FOUND",
+    });
     await alice.follows.removeFollower({ userId: "bob" });
     assert.equal((await bob.stars.list({})).items.length, 0);
     assert.equal((await api.db.select().from(stars)).length, 1);

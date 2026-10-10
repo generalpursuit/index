@@ -1,3 +1,4 @@
+import { URL } from "node:url";
 import assert from "node:assert/strict";
 import { it } from "node:test";
 import { PGlite } from "@electric-sql/pglite";

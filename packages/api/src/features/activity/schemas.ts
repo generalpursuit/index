@@ -8,6 +8,7 @@ export const activitySchema = z.object({
   createdAt: z.iso.datetime(),
   readAt: z.iso.datetime().nullable(),
   linkId: z.uuid().nullable(),
+  linkShortId: z.string().nullable(),
   commentId: z.uuid().nullable(),
   body: z.string().nullable(),
   requestStatus: z.enum(["pending", "accepted", "declined", "canceled"]).nullable(),

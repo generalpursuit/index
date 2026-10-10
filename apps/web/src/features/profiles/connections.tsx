@@ -42,8 +42,8 @@ export function Connections({
             .map((p) => (
               <div className="person-row" key={p.id}>
                 <Link
-                  to="/people/$userId"
-                  params={{ userId: p.id }}
+                  to="/u/$username"
+                  params={{ username: p.username! }}
                   onClick={onClose}
                   className="person-inline"
                 >
