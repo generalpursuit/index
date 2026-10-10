@@ -1,4 +1,5 @@
 import { NotificationLifecycle } from "@/features/notifications/lifecycle";
+import { isMenuBar } from "@/lib/desktop";
 import { DesktopTheme } from "@/lib/desktop/theme";
 import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
@@ -20,9 +21,13 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     <>
       <HeadContent />
       <DesktopTheme />
-      <NotificationLifecycle />
+      {!isMenuBar && <NotificationLifecycle />}
       <Outlet />
-      <Toaster richColors />
+      <Toaster
+        richColors
+        offset={isMenuBar ? 104 : undefined}
+        mobileOffset={isMenuBar ? { bottom: 104, left: 16, right: 16 } : undefined}
+      />
     </>
   ),
   head: () => ({

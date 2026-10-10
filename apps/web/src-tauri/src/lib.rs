@@ -1,4 +1,6 @@
 mod notifications;
+mod menu_bar;
+mod session_revision;
 mod appearance;
 mod session;
 #[cfg(feature = "native-smoke")]
@@ -33,6 +35,20 @@ fn internal_navigation(url: &Url, development: Option<&Url>) -> bool {
         || (matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost"))
 }
 
+fn restrict_navigation<'a>(builder: WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>, app: &tauri::AppHandle) -> WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
+    let navigation_app = app.clone();
+    let popup_app = app.clone();
+    let development = app.config().build.dev_url.clone();
+    builder.on_navigation(move |url| {
+        if internal_navigation(url, development.as_ref()) { return true; }
+        if is_website(url) { let _ = navigation_app.opener().open_url(url.as_str(), None::<&str>); }
+        false
+    }).on_new_window(move |url, _| {
+        if is_website(&url) { let _ = popup_app.opener().open_url(url.as_str(), None::<&str>); }
+        NewWindowResponse::Deny
+    })
+}
+
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(feature = "native-smoke")]
@@ -44,6 +60,20 @@ pub fn run() {
         notifications::notification_stop,
         notifications::notification_active,
         notifications::notification_take_click,
+        session::session_snapshot,
+        session::session_revision,
+        session::session_compare_write,
+        session::session_touch,
+        menu_bar::desktop_open,
+        menu_bar::desktop_take_navigation,
+        menu_bar::desktop_changed,
+        menu_bar::desktop_hide,
+        menu_bar::desktop_panel_ready,
+        menu_bar::desktop_quit,
+        menu_bar::desktop_window,
+        menu_bar::launch_at_login_status,
+        menu_bar::launch_at_login_set,
+        menu_bar::launch_at_login_settings,
         session::session_read,
         session::session_write,
         open_website,
@@ -59,6 +89,20 @@ pub fn run() {
         notifications::notification_stop,
         notifications::notification_active,
         notifications::notification_take_click,
+        session::session_snapshot,
+        session::session_revision,
+        session::session_compare_write,
+        session::session_touch,
+        menu_bar::desktop_open,
+        menu_bar::desktop_take_navigation,
+        menu_bar::desktop_changed,
+        menu_bar::desktop_hide,
+        menu_bar::desktop_panel_ready,
+        menu_bar::desktop_quit,
+        menu_bar::desktop_window,
+        menu_bar::launch_at_login_status,
+        menu_bar::launch_at_login_set,
+        menu_bar::launch_at_login_settings,
         session::session_read,
         session::session_write,
         open_website,
@@ -67,6 +111,8 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            session::init(app.handle().clone());
+            if !menu_bar::init(app.handle())? { app.handle().exit(0); return Ok(()); }
             notifications::init();
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -75,36 +121,19 @@ pub fn run() {
                         .build(),
                 )?;
             }
-            let config = app
-                .config()
-                .app
-                .windows
-                .first()
-                .expect("main window configuration");
-            let navigation_app = app.handle().clone();
-            let popup_app = app.handle().clone();
-            let development = app.config().build.dev_url.clone();
-            WebviewWindowBuilder::from_config(app, config)?
-                .on_navigation(move |url| {
-                    if internal_navigation(url, development.as_ref()) {
-                        return true;
-                    }
-                    if is_website(url) {
-                        let _ = navigation_app.opener().open_url(url.as_str(), None::<&str>);
-                    }
-                    false
-                })
-                .on_new_window(move |url, _| {
-                    if is_website(&url) {
-                        let _ = popup_app.opener().open_url(url.as_str(), None::<&str>);
-                    }
-                    NewWindowResponse::Deny
-                })
-                .build()?;
+            menu_bar::ensure_main(app.handle())?;
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running Index");
+        .build(tauri::generate_context!())
+        .expect("error while building Index")
+        .run(|app, event| match event {
+            #[cfg(target_os = "macos")]
+            tauri::RunEvent::Reopen { .. } => { let _ = menu_bar::show_main(app); }
+            // Closing a macOS window is intercepted by its lifecycle handler; Quit
+            // (including Command-Q) exits normally and retains device opt-in.
+            tauri::RunEvent::Exit => notifications::shutdown(),
+            _ => { let _ = app; }
+        });
 }
 
 #[cfg(test)]

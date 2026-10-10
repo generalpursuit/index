@@ -2,6 +2,7 @@ import { disableDevice } from "@/features/notifications/device";
 import { useMutation } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { authClient } from "@/lib/auth-client";
+import { isDesktop } from "@/lib/desktop";
 import { resetSession } from "@/lib/session";
 
 export function useSignOut() {
@@ -14,6 +15,9 @@ export function useSignOut() {
       if (result.error) throw new Error(result.error.message || "Could not sign out. Try again.");
     },
     onSuccess: async () => {
+      // Native transport already erased credentials and cleared/navigated both
+      // windows before revocation. A delayed completion must not affect a new login.
+      if (isDesktop) return;
       // A successful sign-out remains signed out even if revalidation is offline.
       await resetSession().catch(() => {});
       await router.navigate({ to: "/login", replace: true });

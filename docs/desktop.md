@@ -2,9 +2,13 @@
 
 The existing Tauri wrapper hosts the same production React application. Native commands read/write one API-scoped session credential, open HTTP(S) websites, and apply the device appearance to native window chrome. Remote navigations and new WebView windows are blocked; websites open in the default browser. The desktop uses the documented global Tauri bridge, so no additional JavaScript bridge dependency is needed.
 
+## Menu bar
+
+The macOS host now provides a compact menu-bar window with this week's own links, the shared quick-add/destination picker, Open Index, Quit and optional OS-managed Launch at login. Closing main hides it while the native notification runtime continues. Both windows share revision-guarded secure sessions and content-free cache invalidation. See [menu-bar behavior, commands, VM tests and required Mac checks](menu-bar.md).
+
 ## Integration status
 
-The verification below describes an earlier Mac build. The current appearance changes have browser/bridge coverage on Linux, but Rust compilation, packaged WKWebView and macOS titlebar behavior remain unverified. Follow the [appearance Mac checklist](themes.md#remaining-mac-verification).
+The verification below describes an earlier Mac build. The current appearance and menu-bar changes have browser/bridge coverage on Linux, but Rust/Objective-C compilation, packaged WKWebView and macOS window/login-item behavior remain unverified. Follow the [appearance Mac checklist](themes.md#remaining-mac-verification).
 
 The macOS app compiles and packages with `keyring` 4.2 (OS credential store) and `tauri-plugin-opener` 2; resolved dependencies are recorded in Cargo.lock. Native verification passed in the packaged WKWebView: UI login against the real fixture backend, Keychain persistence across separate app processes, logout and a signed-out restart, external-browser dispatch, rejection of non-web URLs, resizing between 390×844 and 1200×860, and animated week scrolling that snaps and loads the correct week’s data. The web build/types, transport tests, and Playwright desktop-bridge test also passed.
 

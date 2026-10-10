@@ -4,6 +4,7 @@ import ReactDOM from "react-dom/client";
 
 import { clearAccountState } from "./lib/account-boundary";
 import { resetSession } from "./lib/session";
+import { installDesktopSync } from "./lib/desktop/sync";
 import { installDesktopLinks } from "./lib/desktop";
 import { toast } from "sonner";
 
@@ -31,6 +32,11 @@ declare module "@tanstack/react-router" {
 }
 
 installDesktopLinks((message) => toast.error(message));
+window.addEventListener("index:desktop-signed-out", () => {
+  void clearAccountState(queryClient);
+  toast.dismiss();
+  void router.navigate({ to: "/login", replace: true }).then(() => router.invalidate());
+});
 window.addEventListener("index:session-expired", () => {
   void clearAccountState(queryClient);
   void router.invalidate();
@@ -48,7 +54,18 @@ if (!rootElement) {
   throw new Error("Root element not found");
 }
 
-if (!rootElement.innerHTML) {
-  const root = ReactDOM.createRoot(rootElement);
-  root.render(<RouterProvider router={router} />);
+async function mount() {
+  const dispose = await installDesktopSync(
+    queryClient,
+    () => router.invalidate(),
+    (href) => router.navigate({ href }),
+  );
+  if (import.meta.hot) import.meta.hot.dispose(dispose);
+  if (!rootElement!.innerHTML) {
+    ReactDOM.createRoot(rootElement!).render(<RouterProvider router={router} />);
+  }
 }
+void mount().catch(() => {
+  rootElement.textContent =
+    "Could not connect to Index’s desktop session. Close and reopen this window to try again.";
+});

@@ -1,17 +1,31 @@
 import { queryOptions } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
-import { clearAccountState } from "./account-boundary";
+import { accountGeneration, assertCurrentAccount, clearAccountState } from "./account-boundary";
+import { acceptDesktopSession, checkedSessionRevision, revokeDesktopAccess } from "./desktop";
 import { authClient } from "./auth-client";
 import { queryClient } from "@/utils/orpc";
 
 export const sessionOptions = queryOptions({
   queryKey: ["session"],
   queryFn: async () => {
+    const generation = accountGeneration();
     const result = await authClient.getSession();
+    let nativeRevision = checkedSessionRevision();
+    let acceptedGeneration = generation;
+    assertCurrentAccount(generation);
     if (result.error) throw new Error(result.error.message || "Could not check your session.");
     const previous = queryClient.getQueryData<{ user: { id: string; emailVerified: boolean } }>([
       "session",
     ]);
+    if (
+      previous?.user.id === result.data?.user.id &&
+      previous?.user.emailVerified &&
+      !result.data?.user.emailVerified
+    ) {
+      await revokeDesktopAccess();
+      nativeRevision = checkedSessionRevision();
+      assertCurrentAccount(generation);
+    }
     if (
       previous &&
       (previous.user.id !== result.data?.user.id ||
@@ -19,8 +33,12 @@ export const sessionOptions = queryOptions({
     ) {
       // An expired/replaced cookie in another tab is an account boundary too. Do not
       // cancel this very request: its new identity must still reach its observers.
-      await clearAccountState(queryClient, true);
+      const cancelled = clearAccountState(queryClient, true);
+      acceptedGeneration = accountGeneration();
+      await cancelled;
     }
+    assertCurrentAccount(acceptedGeneration);
+    acceptDesktopSession(nativeRevision);
     return result.data;
   },
   staleTime: 15_000,

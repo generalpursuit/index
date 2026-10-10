@@ -31,12 +31,14 @@ export function QuickAdd({
   links,
   label,
   onSave,
+  onViewExisting,
 }: {
   groupId?: string;
   links: SavedLink[];
   label: string;
   /** Called as a save starts, before the server has read the page. */
   onSave?: () => void;
+  onViewExisting?: (link: SavedLink) => Promise<void>;
 }) {
   const { remove } = useLibraryActions();
   const share = useShareSave(),
@@ -101,7 +103,12 @@ export function QuickAdd({
       setDuplicate(null);
       setAnnouncement("Added " + link.title);
       successToast.current = toast.success("Link added", {
-        action: { label: "Undo", onClick: () => remove.mutate({ id: link.id }) },
+        action: {
+          label: "Undo",
+          onClick: () => {
+            if (generation === accountGeneration()) remove.mutate({ id: link.id });
+          },
+        },
       });
     } catch (error) {
       if (generation !== accountGeneration() || !active.current) return;
@@ -206,9 +213,17 @@ export function QuickAdd({
               variant="outline"
               disabled={share.pending}
               onClick={() => {
-                if (duplicate)
+                if (!duplicate) return;
+                if (onViewExisting) {
+                  void onViewExisting(duplicate)
+                    .then(() => {
+                      if (active.current) setDuplicate(null);
+                    })
+                    .catch(() => toast.error("Could not open this Index destination. Try again."));
+                } else {
                   void navigate({ to: "/l/$shortId", params: { shortId: duplicate.shortId } });
-                setDuplicate(null);
+                  setDuplicate(null);
+                }
               }}
             >
               View existing

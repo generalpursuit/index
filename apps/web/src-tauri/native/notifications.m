@@ -5,9 +5,12 @@
 #include <stdbool.h>
 #include <stdatomic.h>
 static atomic_uint_fast64_t notificationEpoch;
+extern void index_show_main(void);
 
 // OS-only bridge. Session credentials remain exclusively behind Rust session_read().
 static NSLock *clickLock;
+// Orders display submission/seen updates with epoch invalidation. Never held while waiting.
+static NSRecursiveLock *deliveryLock;
 static NSString *pendingClick;
 @interface IndexNotificationDelegate : NSObject <UNUserNotificationCenterDelegate>
 @end
@@ -16,10 +19,8 @@ static NSString *pendingClick;
   NSData *data = [NSJSONSerialization dataWithJSONObject:response.notification.request.content.userInfo options:0 error:nil];
   [clickLock lock]; pendingClick = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]; [clickLock unlock];
   dispatch_async(dispatch_get_main_queue(), ^{
-    [NSApp activateIgnoringOtherApps:YES];
-    for (NSWindow *window in NSApp.windows) {
-      if (window.canBecomeKeyWindow) { [window makeKeyAndOrderFront:nil]; break; }
-    }
+    // Deliberately target/recreate main; the menu panel must never consume this click.
+    index_show_main();
   });
   completion();
 }
@@ -30,6 +31,7 @@ static NSString *pendingClick;
 static IndexNotificationDelegate *delegate;
 void index_notifications_init(void) {
   clickLock = [NSLock new];
+  deliveryLock = [NSRecursiveLock new];
   delegate = [IndexNotificationDelegate new];
   UNUserNotificationCenter.currentNotificationCenter.delegate = delegate;
 }
@@ -55,21 +57,28 @@ int index_notifications_permission(bool request) {
   if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 120 * NSEC_PER_SEC))) return -1;
   return result;
 }
-int index_notifications_show(const char *json) {
+// Rust captures this under its runtime lock, before submitting any blocking work.
+uint64_t index_notifications_epoch(void) { return atomic_load(&notificationEpoch); }
+int index_notifications_show(const char *json, uint64_t epoch) {
   @autoreleasepool {
+    if (epoch != atomic_load(&notificationEpoch)) return 0;
     NSData *data = [[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
     NSDictionary *alert = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
     if (![alert[@"id"] isKindOfClass:NSString.class] || ![alert[@"body"] isKindOfClass:NSString.class]) return 0;
-    uint64_t epoch = atomic_load(&notificationEpoch);
+    [deliveryLock lock];
+    if (epoch != atomic_load(&notificationEpoch)) { [deliveryLock unlock]; return 0; }
     NSArray *seen = [NSUserDefaults.standardUserDefaults arrayForKey:@"index.notifications.seen"] ?: @[];
-    if ([seen containsObject:alert[@"id"]]) return 1;
+    BOOL alreadySeen = [seen containsObject:alert[@"id"]];
+    [deliveryLock unlock];
+    if (alreadySeen) return 1;
     UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     __block int success = 0;
     [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *delivered) {
-      if (epoch != atomic_load(&notificationEpoch)) { dispatch_semaphore_signal(done); return; }
+      [deliveryLock lock];
+      if (epoch != atomic_load(&notificationEpoch)) { [deliveryLock unlock]; dispatch_semaphore_signal(done); return; }
       for (UNNotification *notification in delivered) {
-        if ([notification.request.identifier isEqualToString:alert[@"id"]]) { success = 1; dispatch_semaphore_signal(done); return; }
+        if ([notification.request.identifier isEqualToString:alert[@"id"]]) { success = 1; [deliveryLock unlock]; dispatch_semaphore_signal(done); return; }
       }
       UNMutableNotificationContent *content = [UNMutableNotificationContent new];
       content.title = @"Index"; content.body = alert[@"body"]; content.sound = UNNotificationSound.defaultSound;
@@ -77,29 +86,40 @@ int index_notifications_show(const char *json) {
       content.userInfo = @{ @"id": alert[@"id"], @"recipientId": alert[@"recipientId"], @"path": alert[@"path"] };
       UNNotificationRequest *request = [UNNotificationRequest requestWithIdentifier:alert[@"id"] content:content trigger:nil];
       [center addNotificationRequest:request withCompletionHandler:^(NSError *error) {
+        [deliveryLock lock];
         if (epoch != atomic_load(&notificationEpoch)) {
+          // A late completion owns only this alert, never B's global state/epoch.
           [center removeDeliveredNotificationsWithIdentifiers:@[alert[@"id"]]];
           [center removePendingNotificationRequestsWithIdentifiers:@[alert[@"id"]]];
           success = 0;
         } else success = error ? 0 : 1;
+        [deliveryLock unlock];
         dispatch_semaphore_signal(done);
       }];
+      [deliveryLock unlock];
     }];
     if (dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC))) return 0;
+    [deliveryLock lock];
+    if (epoch != atomic_load(&notificationEpoch)) { [deliveryLock unlock]; return 0; }
     if (success) {
-      NSMutableArray *next = [seen mutableCopy]; [next addObject:alert[@"id"]];
+      // Read again inside the lock; another current job may have completed first.
+      NSMutableArray *next = [[NSUserDefaults.standardUserDefaults arrayForKey:@"index.notifications.seen"] mutableCopy] ?: [NSMutableArray new];
+      if (![next containsObject:alert[@"id"]]) [next addObject:alert[@"id"]];
       while (next.count > 256) [next removeObjectAtIndex:0];
       [NSUserDefaults.standardUserDefaults setObject:next forKey:@"index.notifications.seen"];
     }
+    [deliveryLock unlock];
     return success;
   }
 }
 void index_notifications_clear(bool clearClick) {
+  [deliveryLock lock];
   atomic_fetch_add(&notificationEpoch, 1);
   [NSUserDefaults.standardUserDefaults removeObjectForKey:@"index.notifications.seen"];
   if (clearClick) { [clickLock lock]; pendingClick = nil; [clickLock unlock]; }
   [UNUserNotificationCenter.currentNotificationCenter removeAllDeliveredNotifications];
   [UNUserNotificationCenter.currentNotificationCenter removeAllPendingNotificationRequests];
+  [deliveryLock unlock];
 }
 char *index_notifications_click(const char *ack) {
   [clickLock lock];

@@ -1,5 +1,5 @@
 import { ENV } from "@/env.public";
-import { isDesktop } from "@/lib/desktop";
+import { acceptedDesktopRevision, isDesktop } from "@/lib/desktop";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { client } from "@/utils/orpc";
 export type DeviceStatus = { permission: string; registered: boolean; supported: boolean };
@@ -11,8 +11,17 @@ type State = {
 let worker: Promise<ServiceWorkerRegistration> | undefined;
 let binding: State | null = null;
 let cleanup: Promise<void> = Promise.resolve();
-export const desktopInvoke = <T>(command: string, args?: Record<string, unknown>) =>
-  window.__TAURI__!.core.invoke<T>(command, args);
+export const desktopInvoke = <T>(
+  command: string,
+  args?: Record<string, unknown>,
+  expectedRevision = acceptedDesktopRevision(),
+) =>
+  window.__TAURI__!.core.invoke<T>(command, {
+    ...args,
+    // Bind native mutations to the account the window accepted, never a freshly
+    // read credential that could belong to a different account.
+    expectedRevision,
+  });
 export function supportedBrowser() {
   return (
     window.isSecureContext &&
@@ -159,12 +168,18 @@ export function disableDevice(): Promise<void> {
 export function clearNotificationAccount() {
   if (isDesktop) {
     binding = null;
-    cleanup = desktopInvoke<void>("notification_stop", { preserveClick: true }).catch(() => {});
+    // Native session_write(None) owns process invalidation. A window clearing its
+    // query cache (including a peer's verification refresh) must not opt out the
+    // process or race a new account's registration. Explicit disable still stops.
+    cleanup = Promise.resolve();
   } else void disableDevice().catch(() => {});
 }
-export async function activeConversation(conversationId: string | null) {
+export async function activeConversation(
+  conversationId: string | null,
+  expectedRevision = acceptedDesktopRevision(),
+) {
   if (isDesktop) {
-    await desktopInvoke("notification_active", { conversationId });
+    await desktopInvoke("notification_active", { conversationId }, expectedRevision);
     return;
   }
   const current = binding;

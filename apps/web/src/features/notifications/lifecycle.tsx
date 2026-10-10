@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useViewer } from "@/hooks/use-api";
 import { client } from "@/utils/orpc";
-import { isDesktop } from "@/lib/desktop";
+import { acceptedDesktopRevision, isDesktop } from "@/lib/desktop";
 import { accountGeneration, assertCurrentAccount, onAccountClear } from "@/lib/account-boundary";
 import {
   activeConversation,
@@ -24,7 +24,9 @@ export function NotificationLifecycle() {
     if (!viewer) return;
     let disposed = false;
     const generation = accountGeneration();
+    const cleanupRevision = acceptedDesktopRevision();
     async function update() {
+      const expectedRevision = acceptedDesktopRevision();
       try {
         let id: string | null = null;
         if (
@@ -37,13 +39,13 @@ export function NotificationLifecycle() {
         }
         assertCurrentAccount(generation);
         if (disposed) return;
-        await activeConversation(id);
+        await activeConversation(id, expectedRevision);
         if (isDesktop) {
           const click = await desktopInvoke<{
             id: string;
             path: string;
             recipientId: string;
-          } | null>("notification_take_click");
+          } | null>("notification_take_click", undefined, expectedRevision);
           assertCurrentAccount(generation);
           const destination = notificationPath(click, viewer!.id);
           if (destination && !disposed) {
@@ -51,7 +53,7 @@ export function NotificationLifecycle() {
             assertCurrentAccount(generation);
             if (!disposed) {
               await router.navigate({ href: route.canonicalPath });
-              await desktopInvoke("notification_take_click", { ack: click!.id });
+              await desktopInvoke("notification_take_click", { ack: click!.id }, expectedRevision);
             }
           }
         }
@@ -71,7 +73,7 @@ export function NotificationLifecycle() {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("blur", refresh);
       document.removeEventListener("visibilitychange", refresh);
-      void activeConversation(null).catch(() => {});
+      void activeConversation(null, cleanupRevision).catch(() => {});
     };
   }, [viewer?.id, path, router]);
   return null;

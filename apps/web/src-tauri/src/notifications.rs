@@ -5,13 +5,14 @@ use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use tauri::Manager;
 
-#[cfg(all(target_os = "macos", not(feature = "native-smoke")))]
+#[cfg(all(target_os = "macos", not(feature = "native-smoke"), not(test)))]
 mod os {
     use std::ffi::{CStr, CString, c_char};
     unsafe extern "C" {
         fn index_notifications_init();
         fn index_notifications_permission(request: bool) -> i32;
-        fn index_notifications_show(json: *const c_char) -> i32;
+        fn index_notifications_epoch() -> u64;
+        fn index_notifications_show(json: *const c_char, epoch: u64) -> i32;
         fn index_notifications_clear(clear_click: bool);
         fn index_notifications_click(ack: *const c_char) -> *mut c_char;
         fn index_notifications_identity(api: *const c_char) -> *mut c_char;
@@ -33,7 +34,8 @@ mod os {
     }
     pub fn init() { unsafe { index_notifications_init(); } }
     pub fn permission(request: bool) -> i32 { unsafe { index_notifications_permission(request) } }
-    pub fn show(value: &str) -> bool { CString::new(value).ok().is_some_and(|s| unsafe { index_notifications_show(s.as_ptr()) == 1 }) }
+    pub fn epoch() -> u64 { unsafe { index_notifications_epoch() } }
+    pub fn show(value: &str, epoch: u64) -> bool { CString::new(value).ok().is_some_and(|s| unsafe { index_notifications_show(s.as_ptr(), epoch) == 1 }) }
     pub fn clear() { unsafe { index_notifications_clear(false); } }
     pub fn clear_click() { unsafe { index_notifications_clear(true); } }
     pub fn click(ack: Option<&str>) -> Option<String> {
@@ -50,14 +52,17 @@ mod os {
         string(unsafe { index_notifications_optin(api.as_ptr(), value.as_ref().map_or(std::ptr::null(), |s| s.as_ptr())) })
     }
 }
-#[cfg(any(not(target_os = "macos"), feature = "native-smoke"))]
+#[cfg(any(not(target_os = "macos"), feature = "native-smoke", test))]
 mod os {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static EPOCH: AtomicU64 = AtomicU64::new(0);
     pub fn request(_: &str, _: &str, _: Option<&str>) -> Option<String> { None }
     pub fn init() {}
     pub fn permission(_: bool) -> i32 { -1 }
-    pub fn show(_: &str) -> bool { false }
-    pub fn clear() {}
-    pub fn clear_click() {}
+    pub fn epoch() -> u64 { EPOCH.load(Ordering::SeqCst) }
+    pub fn show(_: &str, expected: u64) -> bool { cfg!(test) && expected == epoch() }
+    pub fn clear() { EPOCH.fetch_add(1, Ordering::SeqCst); }
+    pub fn clear_click() { clear(); }
     pub fn click(_: Option<&str>) -> Option<String> { None }
     pub fn identity() -> Option<String> { None }
     pub fn optin(_: Option<&str>) -> Option<String> { None }
@@ -70,13 +75,30 @@ static RUNTIME: OnceLock<Mutex<Runtime>> = OnceLock::new();
 fn runtime() -> &'static Mutex<Runtime> { RUNTIME.get_or_init(|| Mutex::new(Runtime::default())) }
 fn current(generation: u64) -> bool { runtime().lock().unwrap().generation == generation }
 pub fn init() { os::init(); }
-/// Called synchronously before session storage is erased/replaced and by menu-bar Quit.
-pub fn invalidate() {
-    let mut state = runtime().lock().unwrap();
+// All transitions and epoch capture share the runtime lock. Never acquire the
+// session lock here: window commands already hold session -> runtime in that order.
+fn advance(state: &mut Runtime) -> u64 {
     state.generation += 1; state.binding = None; state.active = None;
-    #[cfg(not(test))]
-    { os::optin(Some("")); os::clear(); }
+    os::clear();
+    state.generation
 }
+fn display_epoch(generation: u64) -> Option<u64> {
+    let state = runtime().lock().unwrap();
+    (state.generation == generation).then(os::epoch)
+}
+fn invalidate_locked(state: &mut Runtime) {
+    advance(state);
+    #[cfg(not(test))]
+    { os::optin(Some("")); }
+}
+fn invalidate_if_current(generation: u64) {
+    let mut state = runtime().lock().unwrap();
+    if state.generation == generation { invalidate_locked(&mut state); }
+}
+/// Process exit stops delivery but does not opt the device out on its next launch.
+pub fn shutdown() { advance(&mut runtime().lock().unwrap()); }
+/// Called synchronously before session storage is erased/replaced.
+pub fn invalidate() { invalidate_locked(&mut runtime().lock().unwrap()); }
 fn body(binding: &Binding) -> Value { json!({ "installation": binding.installation, "sessionId": binding.session_id }) }
 fn check_api() -> Result<(), String> {
     let url = tauri::Url::parse(env!("INDEX_API_SERVER")).map_err(|_| "Invalid notification API.")?;
@@ -99,71 +121,92 @@ async fn permission(request: bool) -> i32 { tauri::async_runtime::spawn_blocking
 #[derive(Serialize)]
 pub struct DeviceStatus { permission: &'static str, registered: bool, supported: bool }
 #[tauri::command]
-pub async fn notification_status(app: tauri::AppHandle) -> DeviceStatus {
+pub async fn notification_status(app: tauri::AppHandle, expected_revision: u64) -> Result<DeviceStatus, String> {
+    crate::session::check_revision(expected_revision)?;
     let allowed = permission(false).await;
-    if allowed == 1 { let _ = notification_stop(None).await; }
+    if allowed == 1 { let _ = stop(None, expected_revision).await; }
+    crate::session::check_revision(expected_revision)?;
     let needs_start = runtime().lock().unwrap().binding.is_none();
     if allowed >= 2 && needs_start {
-        if let account = os::optin(None) { let _ = start(app, account, false).await; }
+        if let Some(account) = os::optin(None) { let _ = start(app, account, false, expected_revision).await; }
     }
+    crate::session::check_revision(expected_revision)?;
     let registered = runtime().lock().unwrap().binding.is_some() && allowed >= 2;
-    DeviceStatus { permission: match allowed { 0 => "default", 1 => "denied", 2 | 3 => "granted", _ => "unsupported" }, registered, supported: cfg!(all(target_os = "macos", not(feature = "native-smoke"))) }
+    Ok(DeviceStatus { permission: match allowed { 0 => "default", 1 => "denied", 2 | 3 => "granted", _ => "unsupported" }, registered, supported: cfg!(all(target_os = "macos", not(feature = "native-smoke"))) })
 }
 #[tauri::command]
-pub async fn notification_start(app: tauri::AppHandle, user_id: String) -> Result<(), String> { start(app, user_id, true).await }
-async fn start(app: tauri::AppHandle, user_id: String, ask: bool) -> Result<(), String> {
-    let generation = { let mut state = runtime().lock().unwrap(); state.generation += 1; state.binding = None; state.active = None; state.generation };
-    if permission(ask).await < 2 { return Err("Notifications are blocked or unsupported. Check system settings.".into()); }
-    if !current(generation) { return Err("Session changed.".into()); }
+pub async fn notification_start(app: tauri::AppHandle, user_id: String, expected_revision: u64) -> Result<(), String> { start(app, user_id, true, expected_revision).await }
+async fn start(app: tauri::AppHandle, user_id: String, ask: bool, expected_revision: u64) -> Result<(), String> {
+    crate::session::check_revision(expected_revision)?;
     let token = crate::session::session_read().await?.ok_or("Sign in to enable notifications.")?;
     check_api()?;
     let auth = request(&token, "/api/auth/get-session", None).await?;
     if auth["user"]["id"].as_str() != Some(user_id.as_str()) || auth["user"]["emailVerified"] != true { return Err("Verify your account before enabling notifications.".into()); }
+    crate::session::check_revision(expected_revision)?;
+    if permission(ask).await < 2 { return Err("Notifications are blocked or unsupported. Check system settings.".into()); }
     let config = request(&token, "/api/v1/me/notifications/capabilities", None).await?;
     let installation = tauri::async_runtime::spawn_blocking(os::identity).await.map_err(|_| "Secure storage unavailable.")?.ok_or("Unlock your secure storage and try again.")?;
     let binding = Binding { installation, user_id, session_id: config["sessionId"].as_str().ok_or("Invalid notification configuration.")?.into() };
-    if !current(generation) || crate::session::session_read().await?.as_deref() != Some(token.as_str()) { return Err("Session changed.".into()); }
+    // Do not replace a runtime until the supplied user was freshly verified. The
+    // session lock makes revision validation + generation change one operation.
+    let generation = crate::session::with_revision(expected_revision, || {
+        let mut state = runtime().lock().unwrap();
+        if state.binding.as_ref().is_some_and(|old| old.user_id == binding.user_id && old.session_id == binding.session_id) { return None; }
+        Some(advance(&mut state))
+    })?;
+    let Some(generation) = generation else { return Ok(()); };
     let mut registration = body(&binding); registration["kind"] = json!("desktop");
     request(&token, "/api/v1/me/notifications/devices", Some(registration)).await?;
-    if !current(generation) || crate::session::session_read().await?.as_deref() != Some(token.as_str()) { return Err("Session changed.".into()); }
-    {
+    let accepted = crate::session::with_revision(expected_revision, || {
         let mut state = runtime().lock().unwrap();
-        if state.generation != generation { return Err("Session changed.".into()); }
+        if state.generation != generation { return false; }
         os::optin(Some(binding.user_id.as_str())); state.binding = Some(binding.clone());
-    }
+        true
+    })?;
+    if !accepted { return Err("Session changed.".into()); }
     tauri::async_runtime::spawn(run(app, binding, generation));
     Ok(())
 }
 #[tauri::command]
-pub async fn notification_stop(preserve_click: Option<bool>) -> Result<(), String> {
-    let previous = runtime().lock().unwrap().binding.clone();
-    invalidate();
-    if preserve_click != Some(true) { os::clear_click(); }
+pub async fn notification_stop(preserve_click: Option<bool>, expected_revision: u64) -> Result<(), String> {
+    stop(preserve_click, expected_revision).await
+}
+async fn stop(preserve_click: Option<bool>, expected_revision: u64) -> Result<(), String> {
+    let previous = crate::session::with_revision(expected_revision, || {
+        let previous = runtime().lock().unwrap().binding.clone();
+        invalidate();
+        if preserve_click != Some(true) { os::clear_click(); }
+        previous
+    })?;
     if let (Some(binding), Some(token)) = (previous, crate::session::session_read().await?) {
         let _ = request(&token, "/api/v1/me/notifications/devices/remove", Some(body(&binding))).await;
     }
     Ok(())
 }
+/// Native window lifecycle owns this internal cleanup independently of any webview.
+pub fn clear_active() { runtime().lock().unwrap().active = None; }
 #[tauri::command]
-pub fn notification_active(conversation_id: Option<String>) {
-    runtime().lock().unwrap().active = conversation_id;
+pub async fn notification_active(conversation_id: Option<String>, expected_revision: u64) -> Result<(), String> {
+    crate::session::with_revision(expected_revision, || { runtime().lock().unwrap().active = conversation_id; })
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Click { id: String, path: String, recipient_id: String }
 #[tauri::command]
-pub async fn notification_take_click(ack: Option<String>) -> Option<Click> {
+pub async fn notification_take_click(ack: Option<String>, expected_revision: u64) -> Option<Click> {
+    crate::session::check_revision(expected_revision).ok()?;
     // Routing is independent of re-enrollment. Keep an opaque click through restricted
     // sessions; only a fresh verified session of its recipient can consume it.
     let click: Click = serde_json::from_str(&os::click(None)?).ok()?;
-    if !valid_path(&click.path) { os::click(Some(&click.id)); return None; }
+    if !valid_path(&click.path) { let _ = crate::session::with_revision(expected_revision, || os::click(Some(&click.id))); return None; }
     let token = crate::session::session_read().await.ok()??;
     let auth = request(&token, "/api/auth/get-session", None).await.ok()?;
     if crate::session::session_read().await.ok().flatten().as_deref() != Some(token.as_str()) { return None; }
     let user_id = auth["user"]["id"].as_str()?;
-    if user_id != click.recipient_id { os::click(Some(&click.id)); return None; }
+    if user_id != click.recipient_id { let _ = crate::session::with_revision(expected_revision, || os::click(Some(&click.id))); return None; }
     if auth["user"]["emailVerified"] != true { return None; }
-    if ack.as_deref() == Some(click.id.as_str()) { os::click(Some(&click.id)); return None; }
+    crate::session::check_revision(expected_revision).ok()?;
+    if ack.as_deref() == Some(click.id.as_str()) { let _ = crate::session::with_revision(expected_revision, || os::click(Some(&click.id))); return None; }
     Some(click)
 }
 fn valid_path(path: &str) -> bool {
@@ -191,10 +234,13 @@ async fn run(app: tauri::AppHandle, binding: Binding, generation: u64) {
                     if alert["recipientId"].as_str() != Some(binding.user_id.as_str()) || !alert["path"].as_str().is_some_and(valid_path) { continue; }
                     let Some(id) = alert["id"].as_str() else { continue; };
                     let delivered = if seen.iter().any(|old| old == id) { true } else {
+                        // Capture while this runtime owns delivery, before queueing the
+                        // blocking job. A delayed job must never adopt B's new epoch.
+                        let Some(epoch) = display_epoch(generation) else { return; };
                         let data = alert.to_string();
-                        tauri::async_runtime::spawn_blocking(move || os::show(&data)).await.unwrap_or(false)
+                        tauri::async_runtime::spawn_blocking(move || os::show(&data, epoch)).await.unwrap_or(false)
                     };
-                    if !current(generation) { os::clear(); return; }
+                    if !current(generation) { return; }
                     if delivered {
                         seen.push_back(id.into()); if seen.len() > 256 { seen.pop_front(); }
                         let mut ack = body(&binding); ack["id"] = json!(id); ack["lease"] = item["lease"].clone();
@@ -206,16 +252,69 @@ async fn run(app: tauri::AppHandle, binding: Binding, generation: u64) {
         }
         tokio::time::sleep(Duration::from_secs(15)).await;
     }
-    if current(generation) { invalidate(); }
+    invalidate_if_current(generation);
 }
 #[cfg(test)]
 mod tests {
     use super::*;
+    static TEST_RUNTIME: Mutex<()> = Mutex::new(());
     #[test] fn notification_paths_cannot_escape_the_resolver() {
         assert!(valid_path("/messages/abc_123"));
         for path in ["//evil.test", "https://evil.test", "/l/a?token=b", "/u/../settings", "/l/a%2Fb"] { assert!(!valid_path(path)); }
     }
+    #[test] fn hiding_main_keeps_delivery_and_quit_ends_it() {
+        let _serial = TEST_RUNTIME.lock().unwrap();
+        let before = {
+            let mut state = runtime().lock().unwrap();
+            state.binding = Some(Binding { installation: "fixture".into(), session_id: "session".into(), user_id: "account".into() });
+            state.active = Some("conversation".into());
+            state.generation
+        };
+        clear_active();
+        assert!(current(before));
+        assert!(runtime().lock().unwrap().binding.is_some());
+        assert!(runtime().lock().unwrap().active.is_none());
+        shutdown();
+        assert!(!current(before));
+        assert!(runtime().lock().unwrap().binding.is_none());
+    }
+    #[test] fn old_worker_termination_cannot_invalidate_new_runtime() {
+        let _serial = TEST_RUNTIME.lock().unwrap();
+        let old = runtime().lock().unwrap().generation;
+        assert!(current(old)); // A passed the old check before B installed.
+        let new = {
+            let mut state = runtime().lock().unwrap();
+            let next = advance(&mut state);
+            state.binding = Some(Binding { installation: "fixture".into(), session_id: "B".into(), user_id: "B".into() });
+            state.active = Some("B-conversation".into());
+            next
+        };
+        let epoch = os::epoch();
+        invalidate_if_current(old);
+        assert!(current(new));
+        assert_eq!(os::epoch(), epoch);
+        assert_eq!(runtime().lock().unwrap().binding.as_ref().unwrap().user_id, "B");
+        assert_eq!(runtime().lock().unwrap().active.as_deref(), Some("B-conversation"));
+        invalidate_if_current(new);
+        assert!(!current(new));
+        assert!(runtime().lock().unwrap().binding.is_none());
+    }
+    #[test] fn queued_old_display_cannot_adopt_new_epoch_or_clear_it() {
+        let _serial = TEST_RUNTIME.lock().unwrap();
+        let old = runtime().lock().unwrap().generation;
+        let queued_epoch = display_epoch(old).unwrap();
+        let new = advance(&mut runtime().lock().unwrap());
+        let new_epoch = display_epoch(new).unwrap();
+        assert_ne!(queued_epoch, new_epoch);
+        assert!(display_epoch(old).is_none());
+        // The fake OS bridge models the passed epoch contract, not AppKit delivery.
+        assert!(!os::show("old queued alert", queued_epoch));
+        invalidate_if_current(old);
+        assert_eq!(os::epoch(), new_epoch);
+        assert!(os::show("new alert", new_epoch));
+    }
     #[test] fn stopping_invalidates_old_tasks_and_presence() {
+        let _serial = TEST_RUNTIME.lock().unwrap();
         let before = { let mut s = runtime().lock().unwrap(); s.active = Some("old-conversation".into()); s.generation };
         invalidate(); assert!(!current(before)); assert!(runtime().lock().unwrap().active.is_none());
     }
