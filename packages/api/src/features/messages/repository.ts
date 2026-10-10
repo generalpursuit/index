@@ -45,6 +45,7 @@ export function createConversation(db: QueryDatabase, actorId: string, recipient
 }
 const conversationSelection = (actorId: string) => ({
   id: conversations.id,
+  shortId: conversations.shortId,
   // The shared cursor uses createdAt internally; inbox ordering uses last activity.
   createdAt: timestamp(conversations.updatedAt),
   canSend: canSend(actorId, sql`"conversations"."id"`),

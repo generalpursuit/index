@@ -1,15 +1,18 @@
 import { z } from "zod";
 import { pageInputSchema, userIdSchema, visibilitySchema } from "../../shared/schemas";
 
-const nameSchema = z.string().trim().min(1).max(100);
+import { normalizeGroupName, groupSlug, reservedGroupSlugs } from "../../routes";
+
+const nameSchema = z.string().transform(normalizeGroupName).pipe(z.string().min(1).max(100));
 const customNameSchema = nameSchema.refine(
-  (name) => !["all", "starred", "favorites"].includes(name.toLowerCase()),
+  (name) => !reservedGroupSlugs.has(groupSlug(name)),
   "This group name is reserved.",
 );
 export const groupSchema = z.object({
   id: z.uuid(),
   ownerId: userIdSchema,
   name: nameSchema,
+  slug: z.string().min(1),
   kind: z.enum(["custom", "starred", "favorites"]),
   visibility: visibilitySchema,
   createdAt: z.iso.datetime(),

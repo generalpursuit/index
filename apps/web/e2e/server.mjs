@@ -35,7 +35,7 @@ async function fetchPage(url, init) {
   throw new TypeError("Offline: only fixture pages are available.");
 }
 async function seed() {
-  await database.client.exec('TRUNCATE TABLE "user", conversations CASCADE');
+  await database.client.exec('TRUNCATE TABLE "user", conversations, short_routes CASCADE');
   const people = {};
   for (const name of ["Alice", "Bob", "Lena", "Amir", "Iris", "Mia", "Noah"]) {
     const result = await auth.api.signUpEmail({

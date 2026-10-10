@@ -15,6 +15,7 @@ export function getConversation(db: QueryDatabase, actorId: string, id: string) 
         repository.listMessages(db, actorId, id, 1),
       ]).map(([participants, messages]) => ({
         id: row.id,
+        shortId: row.shortId,
         updatedAt: row.createdAt,
         canSend: row.canSend,
         unreadCount: row.unreadCount,
@@ -52,6 +53,7 @@ export function listConversations(
           ...page,
           items: page.items.map((row) => ({
             id: row.id,
+            shortId: row.shortId,
             updatedAt: row.createdAt,
             canSend: row.canSend,
             unreadCount: row.unreadCount,

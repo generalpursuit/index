@@ -11,6 +11,7 @@ import type { Link, ListMyLinksInput, UpdateLinkInput } from "./schemas";
 
 export const linkSelection = {
   id: links.id,
+  shortId: links.shortId,
   ownerId: links.ownerId,
   groupId: links.groupId,
   url: links.url,
