@@ -1,16 +1,6 @@
 import IndexCore
 import SwiftUI
 
-private struct SecurityButtonStyle: ButtonStyle {
-  var selected = false
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label.font(.subheadline).padding(.horizontal, 15).padding(.vertical, 10)
-      .background(selected ? IndexPalette.primary : Color.clear, in: Capsule())
-      .foregroundStyle(selected ? IndexPalette.primaryForeground : IndexPalette.foreground)
-      .overlay(Capsule().stroke(selected ? Color.clear : IndexPalette.border))
-      .opacity(configuration.isPressed ? 0.6 : 1)
-  }
-}
 private struct EmailInput: View {
   let title: String
   @Binding var value: String
@@ -49,7 +39,7 @@ private struct CooldownAction: View {
     TimelineView(.periodic(from: .now, by: 1)) { context in
       let seconds = max(0, Int(ceil(retryAt.timeIntervalSince(context.date))))
       AsyncButton(action: action) { Text(seconds > 0 ? "Try again in \(seconds)s" : title) }
-        .buttonStyle(SecurityButtonStyle()).disabled(seconds > 0)
+        .buttonStyle(PillStyle()).disabled(seconds > 0)
     }
   }
 }
@@ -73,7 +63,7 @@ struct VerificationView: View {
           try await app.verifyEmail(code: code)
           code = ""
         } label: { Text("Verify email") }
-          .buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6)
+          .buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
         CooldownAction(title: "Resend code", retryAt: retryAt) {
           guard let api = app.api else { throw APIError.invalidServer }
           let result = try await api.sendVerification()
@@ -95,7 +85,7 @@ struct VerificationView: View {
             try await refresh()
           }
         }
-        AsyncButton { await app.signOut() } label: { Text("Sign out") }.buttonStyle(SecurityButtonStyle())
+        AsyncButton { await app.signOut() } label: { Text("Sign out") }.buttonStyle(PillStyle())
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
     }.foregroundStyle(IndexPalette.foreground).background(IndexPalette.background)
       .scrollDismissesKeyboard(.interactively)
@@ -145,10 +135,10 @@ struct PasswordRecoveryView: View {
               app.clearAccount()
               password = ""; confirmation = ""; code = ""; completed = true
             } label: { Text("Reset password") }
-              .buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6 || password.count < 8 || password.count > 128)
+              .buttonStyle(PillStyle(selected: true)).disabled(code.count != 6 || password.count < 8 || password.count > 128)
           }
         }
-        Button("Back to sign in") { dismiss() }.buttonStyle(SecurityButtonStyle())
+        Button("Back to sign in") { dismiss() }.buttonStyle(PillStyle())
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
     }.foregroundStyle(IndexPalette.foreground).background(IndexPalette.background)
       .scrollDismissesKeyboard(.interactively)
@@ -195,7 +185,7 @@ struct AccountSecurityView: View {
             message = "Password changed. Other sessions have been signed out."
             try await refresh()
           } label: { Text("Save password") }
-            .buttonStyle(SecurityButtonStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
+            .buttonStyle(PillStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
         }
         if let pending, pending.pending {
           Text("Verify \(pending.email)")
@@ -206,7 +196,7 @@ struct AccountSecurityView: View {
             try await api.confirmEmailChange(code: code)
             code = ""; message = "Email changed. Other sessions have been signed out."
             try await refresh()
-          } label: { Text("Confirm new email") }.buttonStyle(SecurityButtonStyle(selected: true)).disabled(code.count != 6)
+          } label: { Text("Confirm new email") }.buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
         }
         if !message.isEmpty { Text(message).foregroundStyle(IndexPalette.mutedForeground).accessibilityAddTraits(.updatesFrequently) }
       }.padding(.top)

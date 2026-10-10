@@ -20,6 +20,10 @@ import { Confirmation, Modal, IconButton, QueryState } from "@/components/app/pr
 import { useGroups, useLibraryActions } from "@/features/links/hooks/use-links";
 import type { Group } from "@/lib/types";
 
+// Shared by instances in this component; markers remain available to scroll hooks/tests.
+const modalActionsClassName =
+  "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full";
+
 /**
  * Your lists in one place: create groups, lock any list (Favorites and Starred too), and
  * rename or delete your own groups. The profile only shows and filters them.
@@ -33,11 +37,22 @@ export function GroupSettings({ userId }: { userId: string }) {
     );
   const [creating, setCreating] = useState(false);
   return (
-    <section className="settings-box settings-groups" aria-labelledby="settings-groups">
-      <div className="settings-groups-heading">
+    <section
+      className={
+        "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-groups"
+      }
+      aria-labelledby="settings-groups"
+    >
+      <div
+        className={
+          "settings-groups-heading flex items-start justify-between gap-4 mb-2.5 [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:m-[-4px_-8px_0_0] [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
+        }
+      >
         <div>
           <h2 id="settings-groups">Groups</h2>
-          <p className="muted">Locked lists are only yours, whoever can see your profile.</p>
+          <p className={"muted text-subtle-foreground"}>
+            Locked lists are only yours, whoever can see your profile.
+          </p>
         </div>
         <IconButton label="New group" onClick={() => setCreating(true)}>
           <Plus />
@@ -51,12 +66,23 @@ export function GroupSettings({ userId }: { userId: string }) {
       >
         <ul className="settings-group-list">
           {all.map((g) => (
-            <li key={g.id} className="settings-group">
-              <span className="settings-group-name">
+            <li
+              key={g.id}
+              className={
+                "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
+              }
+            >
+              <span
+                className={"settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px]"}
+              >
                 {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
                 {g.name}
               </span>
-              <span className="settings-group-count">
+              <span
+                className={
+                  "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
+                }
+              >
                 {g.linkCount === 1 ? "1 link" : g.linkCount + " links"}
               </span>
               <GroupActions group={g} />
@@ -78,7 +104,11 @@ function GroupActions({ group }: { group: Group }) {
     [remove, setRemove] = useState(false),
     locked = group.visibility === "private";
   return (
-    <div className="settings-group-actions">
+    <div
+      className={
+        "settings-group-actions flex items-center gap-0.5 mr-[-8px] [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
+      }
+    >
       <IconButton
         label={
           group.kind === "starred"
@@ -94,7 +124,7 @@ function GroupActions({ group }: { group: Group }) {
       >
         {locked ? <LockKeyhole /> : <LockKeyholeOpen />}
       </IconButton>
-      {group.kind !== "custom" && <span className="settings-group-slot" aria-hidden="true" />}
+      {group.kind !== "custom" && <span className={"settings-group-slot w-8"} aria-hidden="true" />}
       {group.kind === "custom" && (
         <DropdownMenu>
           <DropdownMenuTrigger
@@ -121,17 +151,23 @@ function GroupActions({ group }: { group: Group }) {
       )}
       <Modal open={edit} onOpenChange={setEdit} title="Rename group">
         <form
-          className="form-stack"
+          className={"form-stack flex flex-col gap-4.5"}
           onSubmit={(e) => {
             e.preventDefault();
             actions.updateGroup.mutate({ id: group.id, name }, { onSuccess: () => setEdit(false) });
           }}
         >
-          <label className="modal-field">
-            <span className="link-form-label">Name</span>
+          <label className={"modal-field flex flex-col gap-2"}>
+            <span
+              className={
+                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+              }
+            >
+              Name
+            </span>
             <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
           </label>
-          <div className="modal-actions">
+          <div className={modalActionsClassName}>
             <Button
               type="button"
               variant="ghost"
@@ -189,7 +225,7 @@ export function NewGroup({
       title="New group"
     >
       <form
-        className="form-stack"
+        className={"form-stack flex flex-col gap-4.5"}
         onSubmit={(e) => {
           e.preventDefault();
           actions.createGroup.mutate(
@@ -198,8 +234,14 @@ export function NewGroup({
           );
         }}
       >
-        <label className="modal-field">
-          <span className="link-form-label">Name</span>
+        <label className={"modal-field flex flex-col gap-2"}>
+          <span
+            className={
+              "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+            }
+          >
+            Name
+          </span>
           <Input
             autoFocus
             placeholder="Reading, Wishlist, …"
@@ -209,12 +251,19 @@ export function NewGroup({
             onChange={(e) => setName(e.target.value)}
           />
         </label>
-        <div className="link-form-group">
-          <span className="link-form-label" id="new-group-visibility">
+        <div className={"link-form-group flex flex-col gap-2.5 [&_.muted]:text-[13px]"}>
+          <span
+            className={
+              "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+            }
+            id="new-group-visibility"
+          >
             Visibility
           </span>
           <div
-            className="link-group-choices"
+            className={
+              "link-group-choices flex flex-wrap items-center gap-[6px_22px] [&_[role='radio']]:inline-flex [&_[role='radio']]:items-center [&_[role='radio']]:gap-1.5 [&_[role='radio']]:h-8 [&_[role='radio']]:[border-bottom:2px_solid_transparent] [&_[role='radio']]:text-[14px] [&_[role='radio']]:text-subtle-foreground [&_[role='radio']:hover]:text-foreground [&_[aria-checked='true']]:border-b-foreground [&_[aria-checked='true']]:text-foreground"
+            }
             role="radiogroup"
             aria-labelledby="new-group-visibility"
           >
@@ -237,13 +286,13 @@ export function NewGroup({
               Locked
             </button>
           </div>
-          <p className="muted">
+          <p className={"muted text-subtle-foreground"}>
             {locked
               ? "Only you will see links in this group."
               : "Visible to everyone who can see your profile."}
           </p>
         </div>
-        <div className="modal-actions">
+        <div className={modalActionsClassName}>
           <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
             Cancel
           </Button>

@@ -1,8 +1,10 @@
 # Desktop application
 
-The existing Tauri wrapper hosts the same production React application. Native commands are limited to reading/writing one API-scoped session credential and opening HTTP(S) websites. Remote navigations and new WebView windows are blocked; websites open in the default browser. The desktop uses the documented global Tauri bridge, so no additional JavaScript bridge dependency is needed.
+The existing Tauri wrapper hosts the same production React application. Native commands read/write one API-scoped session credential, open HTTP(S) websites, and apply the device appearance to native window chrome. Remote navigations and new WebView windows are blocked; websites open in the default browser. The desktop uses the documented global Tauri bridge, so no additional JavaScript bridge dependency is needed.
 
 ## Integration status
+
+The verification below describes an earlier Mac build. The current appearance changes have browser/bridge coverage on Linux, but Rust compilation, packaged WKWebView and macOS titlebar behavior remain unverified. Follow the [appearance Mac checklist](themes.md#remaining-mac-verification).
 
 The macOS app compiles and packages with `keyring` 4.2 (OS credential store) and `tauri-plugin-opener` 2; resolved dependencies are recorded in Cargo.lock. Native verification passed in the packaged WKWebView: UI login against the real fixture backend, Keychain persistence across separate app processes, logout and a signed-out restart, external-browser dispatch, rejection of non-web URLs, resizing between 390×844 and 1200×860, and animated week scrolling that snaps and loads the correct week’s data. The web build/types, transport tests, and Playwright desktop-bridge test also passed.
 

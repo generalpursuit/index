@@ -42,7 +42,7 @@ export function FollowButton({
   if (viewer?.id === person.id) return null;
   if (!viewer)
     return (
-      <Link className="pill" to="/login">
+      <Link className={"pill border border-input p-[8px_12px] rounded-full"} to="/login">
         Sign in to follow
       </Link>
     );
@@ -62,7 +62,9 @@ export function FollowButton({
       }
     >
       {/* Every label sits in the same cell, so the button keeps one width in every state. */}
-      <span className="size-stack follow-label">
+      <span
+        className={"size-stack grid [&>*]:[grid-area:1_/_1] follow-label [justify-items:center]"}
+      >
         <span>
           {status === "accepted"
             ? "Following"
@@ -73,7 +75,7 @@ export function FollowButton({
                 : "Follow"}
         </span>
         {followLabels.map((label) => (
-          <span key={label} className="size-stack-ghost">
+          <span key={label} className={"size-stack-ghost [visibility:hidden]"}>
             {label}
           </span>
         ))}
@@ -122,13 +124,21 @@ function ProfileContent({
   const hidden = !profile.canViewContent;
   return (
     <div className="profile-page">
-      <header className="profile-heading">
+      <header
+        className={
+          "profile-heading flex items-center gap-5 mb-8 [@media(width<=700px)]:[&_.user-avatar.large]:w-16 [@media(width<=700px)]:[&_.user-avatar.large]:h-16 [@media(width<=700px)]:[&_.user-avatar.large_[data-slot='avatar-fallback']]:text-[20px] [&_h1]:font-serif [&_h1]:font-bold [&_h1]:[font-variation-settings:'opsz'_60] [&_h1]:tracking-[-0.015em] [&_h1]:leading-[1] [&_h1]:text-[clamp(30px,_3.4vw,_40px)]"
+        }
+      >
         <UserAvatar person={profile} large />
-        <div className="profile-identity">
-          <div className="profile-name">
+        <div className={"profile-identity flex-1 min-w-0 flex flex-col gap-2.5"}>
+          <div
+            className={
+              "profile-name flex items-center gap-2.5 min-w-0 [&_h1]:min-w-0 [&_h1]:wrap-anywhere [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
+            }
+          >
             <h1>{profile.name}</h1>
             <span
-              className="profile-visibility"
+              className={"profile-visibility inline-flex flex-none text-subtle-foreground"}
               role="img"
               aria-label={
                 profile.profileVisibility === "private" ? "Private profile" : "Public profile"
@@ -142,7 +152,11 @@ function ProfileContent({
               )}
             </span>
           </div>
-          <p className="profile-meta">
+          <p
+            className={
+              "profile-meta flex flex-wrap items-center gap-[4px_14px] text-[13px] text-subtle-foreground [&_span]:inline-flex [&_span]:items-center [&_span]:gap-1 [&_button:hover]:text-foreground"
+            }
+          >
             {profile.username && <span>{profile.username}</span>}
             {profile.linkCount !== null && <span>{count(profile.linkCount, "link")}</span>}
             {own && (
@@ -157,13 +171,19 @@ function ProfileContent({
             )}
           </p>
         </div>
-        <div className="heading-actions">
+        <div
+          className={
+            "heading-actions flex gap-1 items-center ml-auto [@media(width<=700px)]:gap-0.5"
+          }
+        >
           {own ? (
             // Phones only: larger screens have Settings at the foot of the navigation rail.
             <Link
               to="."
               search={(old) => ({ ...old, settings: true })}
-              className="icon-link profile-settings"
+              className={
+                "icon-link [@media(width>=701px)]:[&.profile-settings]:hidden relative flex items-center justify-center w-11 h-11 text-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] profile-settings"
+              }
               aria-label="Settings"
               title="Settings"
             >
@@ -175,15 +195,25 @@ function ProfileContent({
         </div>
       </header>
       {!own && profile.followedBy.total > 0 && (
-        <p className="muted social-context">
+        <p
+          className={
+            "muted text-subtle-foreground social-context m-[-16px_0_28px] text-[13px] [&_a]:text-foreground"
+          }
+        >
           <FollowedBy context={profile.followedBy} linked />
         </p>
       )}
       {hidden ? (
-        <div className="private-profile">
+        <div
+          className={
+            "private-profile text-center border-t border-t-border p-[65px_24px] flex flex-col items-center gap-4 [&_h2]:text-[18px] [&_p]:max-w-75 [&_button]:mt-2 [&_button]:min-w-40"
+          }
+        >
           <LockKeyhole size={32} />
           <h2>Private profile</h2>
-          <p className="muted">Only {profile.name}’s followers can view their posts.</p>
+          <p className={"muted text-subtle-foreground"}>
+            Only {profile.name}’s followers can view their posts.
+          </p>
           <FollowButton person={profile} />
         </div>
       ) : (
@@ -302,7 +332,10 @@ function ProfileLinks({
     />
   );
   return (
-    <div ref={listRef} className="profile-links">
+    <div
+      ref={listRef}
+      className={"profile-links [--row:48px] relative [@media(width<=700px)]:[--row:46px]"}
+    >
       {groups.error && <QueryState error={groups.error} retry={() => void groups.refetch()} />}
       <QueryState
         pending={!ready || (!missing && list.isPending)}
@@ -313,7 +346,9 @@ function ProfileLinks({
         {weeks.length ? (
           <>
             {/* No height of its own: the menu sits over the end of whichever heading sticks. */}
-            <div className="profile-list-bar">{filterMenu}</div>
+            <div className={"profile-list-bar sticky top-0 z-3 h-0 flex justify-end [&>*]:mt-2.5"}>
+              {filterMenu}
+            </div>
             {weeks.map((w) => (
               <ProfileWeek
                 key={w.weekStart}
@@ -339,8 +374,18 @@ function ProfileLinks({
         ) : (
           <>
             {/* Without weeks the menu keeps its place at the end of the row. */}
-            <div className="profile-week-heading profile-menu-only">{filterMenu}</div>
-            <div className="empty-box">
+            <div
+              className={
+                "profile-week-heading sticky top-0 z-2 flex items-center justify-between h-13 bg-background profile-menu-only justify-end"
+              }
+            >
+              {filterMenu}
+            </div>
+            <div
+              className={
+                "empty-box flex flex-col justify-center items-center gap-3 min-h-40 p-6 text-subtle-foreground text-center [&_a]:text-foreground [&_a:hover]:underline [&_a:hover]:underline-offset-[4px]"
+              }
+            >
               <p>
                 {filter === "all"
                   ? "No links yet"
@@ -399,11 +444,17 @@ function ProfileWeek({
   return (
     <section
       ref={section}
-      className="profile-week"
+      className={
+        "profile-week [&+.profile-week]:mt-5 [&_h2_button]:flex [&_h2_button]:[align-items:baseline] [&_h2_button]:gap-3 [&_h2_button]:text-[24px] [&_h2_button]:whitespace-nowrap [&_h2_span]:font-mono [&_h2_span]:text-[12px] [&_h2_span]:font-normal [&_h2_span]:[font-variation-settings:normal] [&_h2_span]:tracking-[0.06em] [&_h2_span]:uppercase [&_h2_span]:text-subtle-foreground [&_h2]:font-serif [&_h2]:font-bold [&_h2]:[font-variation-settings:'opsz'_60] [&_h2]:tracking-[-0.015em] [&_h2]:leading-[1]"
+      }
       data-week={week.weekStart}
       aria-label={weekLabel(week.weekStart)}
     >
-      <div className="profile-week-heading">
+      <div
+        className={
+          "profile-week-heading sticky top-0 z-2 flex items-center justify-between h-13 bg-background"
+        }
+      >
         <h2>
           <button
             type="button"
@@ -426,7 +477,7 @@ function ProfileWeek({
         />
       ) : (
         <div
-          className="profile-week-placeholder"
+          className={"profile-week-placeholder h-[calc(var(--rows)_*_var(--row))]"}
           style={{ "--rows": week.count + (add ? 1 : 0) } as CSSProperties}
         />
       )}
@@ -511,7 +562,15 @@ function ListFilter({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        render={<Button variant="ghost" className="list-filter" aria-label={"Showing " + name} />}
+        render={
+          <Button
+            variant="ghost"
+            className={
+              "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
+            }
+            aria-label={"Showing " + name}
+          />
+        }
       >
         {chosen?.visibility === "private" && <LockKeyhole size={13} aria-hidden="true" />}
         {name}

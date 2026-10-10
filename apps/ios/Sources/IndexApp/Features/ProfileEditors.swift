@@ -11,6 +11,7 @@ struct SettingsView: View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
         PageHeading(title: "Settings")
+        AppearanceSettings()
         TextField("Name", text: $name).ghostInput()
         TextField("Username", text: $username).ghostInput()
           #if os(iOS)

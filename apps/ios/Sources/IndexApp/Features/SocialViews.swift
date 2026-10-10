@@ -13,7 +13,7 @@ struct DiscoverView: View {
       VStack(alignment: .leading, spacing: 18) {
         PageHeading(title: "Discover", messages: true)
         TextField("Search people", text: $query).padding(14).background(
-          .white.opacity(0.1), in: RoundedRectangle(cornerRadius: 12))
+          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(people) { person in
           HStack {

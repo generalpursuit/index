@@ -82,7 +82,9 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
     setDraft({ ...form.state.values, [name]: value });
   return (
     <form
-      className="link-form"
+      className={
+        "link-form flex flex-col gap-6 max-w-140 [&_input]:min-h-11.5 [&_input]:p-[11px_14px] [&_input]:border-border [&_input]:rounded-[10px] [&_input]:bg-surface [&_input]:text-[16px] [&_textarea]:min-h-11.5 [&_textarea]:p-[11px_14px] [&_textarea]:border-border [&_textarea]:rounded-[10px] [&_textarea]:bg-surface [&_textarea]:text-[16px] [&_textarea]:[field-sizing:content] [&_textarea]:max-h-60 [&_textarea]:[resize:none] [&_label.link-form-label]:font-mono [&_label.link-form-label]:text-[11px] [&_label.link-form-label]:font-normal [&_label.link-form-label]:tracking-[0.06em] [&_label.link-form-label]:uppercase [&_label.link-form-label]:text-subtle-foreground"
+      }
       onSubmit={(e) => {
         e.preventDefault();
         void form.handleSubmit();
@@ -91,7 +93,12 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
       <form.Field name="url">
         {(field) => (
           <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel className="link-form-label" htmlFor="link-url">
+            <FieldLabel
+              className={
+                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+              }
+              htmlFor="link-url"
+            >
               Link
             </FieldLabel>
             <Input
@@ -111,7 +118,12 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
       <form.Field name="title">
         {(field) => (
           <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel className="link-form-label" htmlFor="link-title">
+            <FieldLabel
+              className={
+                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+              }
+              htmlFor="link-title"
+            >
               Title
             </FieldLabel>
             <Input
@@ -130,7 +142,12 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
       <form.Field name="description">
         {(field) => (
           <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel className="link-form-label" htmlFor="link-note">
+            <FieldLabel
+              className={
+                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+              }
+              htmlFor="link-note"
+            >
               Note
             </FieldLabel>
             <Textarea
@@ -156,12 +173,19 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
             change("groupId", id);
           };
           return (
-            <div className="link-form-group">
-              <span className="link-form-label" id="link-group-label">
+            <div className={"link-form-group flex flex-col gap-2.5 [&_.muted]:text-[13px]"}>
+              <span
+                className={
+                  "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+                }
+                id="link-group-label"
+              >
                 Group
               </span>
               <div
-                className="link-group-choices"
+                className={
+                  "link-group-choices flex flex-wrap items-center gap-[6px_22px] [&_[role='radio']]:inline-flex [&_[role='radio']]:items-center [&_[role='radio']]:gap-1.5 [&_[role='radio']]:h-8 [&_[role='radio']]:[border-bottom:2px_solid_transparent] [&_[role='radio']]:text-[14px] [&_[role='radio']]:text-subtle-foreground [&_[role='radio']:hover]:text-foreground [&_[aria-checked='true']]:border-b-foreground [&_[aria-checked='true']]:text-foreground"
+                }
                 role="radiogroup"
                 aria-labelledby="link-group-label"
               >
@@ -191,7 +215,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
                   fetch={groups.fetchNextPage}
                 />
               </div>
-              <p className="muted">
+              <p className={"muted text-subtle-foreground"}>
                 {chosen?.visibility === "private"
                   ? "Only you will see this link."
                   : "Visible to everyone who can see your profile."}
@@ -200,7 +224,11 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
           );
         }}
       </form.Field>
-      <div className="modal-actions">
+      <div
+        className={
+          "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
+        }
+      >
         <Button type="button" variant="ghost" className="modal-cancel" onClick={onDone}>
           Cancel
         </Button>

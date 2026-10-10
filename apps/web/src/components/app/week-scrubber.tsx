@@ -58,7 +58,9 @@ export function WeekScrubber({
   const shown = hovered && weeks[hovered.index];
   return (
     <div
-      className="week-scrubber"
+      className={
+        "week-scrubber [--scrubber-bottom:24px] fixed top-[var(--scrubber-top)] left-[min(calc(50%_+_50px_+_370px_+_16px),_calc(100%_-_36px))] z-5 flex flex-col w-7 h-[min(_calc(100dvh_-_var(--scrubber-top)_-_var(--scrubber-bottom)),_calc(var(--weeks)_*_12px)_)] cursor-pointer touch-none select-none [@media(width<=700px)]:[--scrubber-bottom:calc(86px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:right-1 [@media(width<=700px)]:left-auto"
+      }
       aria-hidden="true"
       style={{ "--weeks": weeks.length, "--scrubber-top": top + "px" } as CSSProperties}
       onPointerDown={(e) => {
@@ -86,26 +88,30 @@ export function WeekScrubber({
       {weeks.map((w, index) => (
         <span
           key={w.weekStart}
-          className="week-tick"
+          className={
+            "week-tick relative flex-1 min-h-0.5 flex items-center justify-start [&::after]:[content:''] [&::after]:w-2.5 [&::after]:h-0.5 [&::after]:rounded-px [&::after]:bg-input [&::after]:[transition:width_120ms_ease,_background_120ms_ease] [&[data-hovered]::after]:w-4 [&[data-hovered]::after]:bg-subtle-foreground [&[data-active]::after]:w-5.5 [&[data-active]::after]:bg-foreground"
+          }
           data-active={w.weekStart === active || undefined}
           data-hovered={index === hovered?.index || undefined}
         />
       ))}
       <div
         ref={label}
-        className="week-tick-label"
+        className={
+          "week-tick-label absolute left-9 flex [visibility:hidden] flex-col gap-0.5 p-[8px_12px] border border-border rounded-[12px] bg-card text-subtle-foreground text-[12px] text-left whitespace-nowrap [font-variant-numeric:tabular-nums] pointer-events-none [transform:translateY(-50%)] [&[data-visible]]:[visibility:visible] [&[data-inside]]:right-9 [&[data-inside]]:left-auto [&_strong]:font-serif [&_strong]:text-[16px] [&_strong]:font-bold [&_strong]:text-foreground"
+        }
         data-visible={shown ? true : undefined}
         data-inside={hovered?.inside || undefined}
         style={{ top: `calc((${hovered?.index ?? 0} + 0.5) * 100% / ${weeks.length})` }}
       >
-        <strong className="size-stack">
+        <strong className={"size-stack grid [&>*]:[grid-area:1_/_1]"}>
           <span>{shown && weekLabel(shown.weekStart)}</span>
-          <span className="size-stack-ghost">Week 53</span>
+          <span className={"size-stack-ghost [visibility:hidden]"}>Week 53</span>
         </strong>
-        <span className="size-stack">
+        <span className={"size-stack grid [&>*]:[grid-area:1_/_1]"}>
           <span>{shown && weekRange(shown.weekStart)}</span>
           {ranges.map((range) => (
-            <span key={range} className="size-stack-ghost">
+            <span key={range} className={"size-stack-ghost [visibility:hidden]"}>
               {range}
             </span>
           ))}
@@ -161,7 +167,11 @@ export function WeekPicker({
 }) {
   return (
     <Modal open={open} onOpenChange={onOpenChange} title="Weeks">
-      <ul className="week-picker">
+      <ul
+        className={
+          "week-picker flex flex-col max-h-[60vh] overflow-y-auto [&_button]:grid [&_button]:grid-cols-[auto_1fr_auto] [&_button]:[align-items:baseline] [&_button]:gap-3 [&_button]:w-full [&_button]:min-h-11 [&_button]:text-left [&_strong]:font-serif [&_strong]:text-[18px] [&_strong]:font-bold [&_span]:font-mono [&_span]:text-[11px] [&_span]:tracking-[0.06em] [&_span]:uppercase [&_span]:text-subtle-foreground [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_button:hover_strong]:underline [&_button:hover_strong]:underline-offset-[4px]"
+        }
+      >
         {weeks.map((w) => (
           <li key={w.weekStart}>
             <button

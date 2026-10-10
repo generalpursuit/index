@@ -2,7 +2,7 @@
 
 This project was created with [Better-T-Stack](https://github.com/AmanVarshney01/create-better-t-stack), a modern TypeScript stack that combines React, TanStack Router, Hono, ORPC, and more.
 
-The production web app implements the weekly link library, profiles, activity, and messaging. See [frontend architecture and browser tests](docs/frontend.md), [desktop integration](docs/desktop.md), and the [native SwiftUI app](apps/ios/README.md).
+The production web app implements the weekly link library, profiles, activity, and messaging. See [frontend architecture and browser tests](docs/frontend.md), [desktop integration](docs/desktop.md), [device appearance](docs/themes.md), and the [native SwiftUI app](apps/ios/README.md).
 
 ## Features
 

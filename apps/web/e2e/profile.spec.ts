@@ -60,7 +60,7 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await page.locator(".week-tick").nth(1).click();
   await expect.poll(headingOffset(older)).toBe(0);
   await expect(page.locator(".week-tick").nth(1)).toHaveAttribute("data-active", "true");
-  // scrollHeight/clientHeight are integers; scrollTop retains subpixel precision.
+  // Chromium can leave a fractional CSS pixel after smooth scrolling settles.
   await expect
     .poll(() =>
       scroller.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),

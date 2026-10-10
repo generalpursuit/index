@@ -124,7 +124,7 @@ export function VerificationForm({
     void action.run(refresh);
   }, []);
   return (
-    <div className="form-stack">
+    <div className="form-stack flex flex-col gap-4.5">
       <h2 className="text-xl font-medium">Verify your email</h2>
       <p>
         Enter the six-digit code sent to{" "}
@@ -132,7 +132,7 @@ export function VerificationForm({
       </p>
       <DeliveryMessage status={status} />
       <form
-        className="form-stack"
+        className="form-stack flex flex-col gap-4.5"
         onSubmit={(e) => {
           e.preventDefault();
           void action.run(async () => {
@@ -172,7 +172,7 @@ export function VerificationForm({
       </Button>
       {correcting && (
         <form
-          className="form-stack"
+          className="form-stack flex flex-col gap-4.5"
           onSubmit={(e) => {
             e.preventDefault();
             void action.run(async () => {
@@ -232,7 +232,7 @@ export function RecoveryForm({ onBack }: { onBack: () => void }) {
   const [requested, setRequested] = useState(false),
     [done, setDone] = useState(false);
   return (
-    <div className="form-stack">
+    <div className="form-stack flex flex-col gap-4.5">
       <h2 className="text-xl font-medium">Reset your password</h2>
       {done ? (
         <p role="status">
@@ -241,7 +241,7 @@ export function RecoveryForm({ onBack }: { onBack: () => void }) {
       ) : (
         <>
           <form
-            className="form-stack"
+            className="form-stack flex flex-col gap-4.5"
             onSubmit={(e) => {
               e.preventDefault();
               void action.run(async () => {
@@ -276,7 +276,7 @@ export function RecoveryForm({ onBack }: { onBack: () => void }) {
                 cooldown. Codes expire in 10 minutes.
               </p>
               <form
-                className="form-stack"
+                className="form-stack flex flex-col gap-4.5"
                 onSubmit={(e) => {
                   e.preventDefault();
                   void action.run(async () => {
@@ -350,7 +350,10 @@ export function AccountSecurity() {
     void action.run(refresh);
   }, []);
   return (
-    <section className="settings-box form-stack" aria-label="Account security">
+    <section
+      className="settings-box form-stack flex flex-col gap-4.5 p-[20px_22px] border border-border rounded-[18px]"
+      aria-label="Account security"
+    >
       <h2 className="text-lg font-medium">Account security</h2>
       <div className="flex flex-wrap gap-2">
         <Button
@@ -376,7 +379,7 @@ export function AccountSecurity() {
       </div>
       {mode && (
         <form
-          className="form-stack"
+          className="form-stack flex flex-col gap-4.5"
           onSubmit={(e) => {
             e.preventDefault();
             void action.run(async () => {
@@ -452,7 +455,7 @@ export function AccountSecurity() {
       )}
       {pendingEmail?.pending && (
         <form
-          className="form-stack"
+          className="form-stack flex flex-col gap-4.5"
           onSubmit={(e) => {
             e.preventDefault();
             void action.run(async () => {
