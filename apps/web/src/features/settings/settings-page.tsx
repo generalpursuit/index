@@ -1,3 +1,4 @@
+import { AccountSecurity } from "@/features/auth/security-forms";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { ChevronDown, Pencil } from "lucide-react";
@@ -84,6 +85,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
       </section>
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />
+      <AccountSecurity />
       <button
         type="button"
         className="settings-box settings-sign-out"

@@ -1,4 +1,6 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { RecoveryForm, VerificationForm } from "@/features/auth/security-forms";
 import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
@@ -8,7 +10,7 @@ import { Input } from "@index/ui/components/input";
 import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
 import wordmark from "@/assets/wordmark.svg";
 import { authClient } from "@/lib/auth-client";
-import { resetSession, safeReturn } from "@/lib/session";
+import { resetSession, safeReturn, sessionOptions } from "@/lib/session";
 export const Route = createFileRoute("/login")({
   validateSearch: z.object({ next: z.string().optional().catch(undefined) }),
   component: Login,
@@ -54,6 +56,45 @@ function authenticate(signUp: boolean, value: LoginValues) {
     : authClient.signIn.username({ username: identifier, password });
 }
 function Login() {
+  const session = useQuery(sessionOptions);
+  const [recovering, setRecovering] = useState(false);
+  const router = useRouter();
+  const { next } = Route.useSearch();
+  if (session.isPending)
+    return (
+      <main className="auth-page">
+        <p role="status">Checking your session…</p>
+      </main>
+    );
+  if (session.data && !session.data.user.emailVerified)
+    return (
+      <main className="auth-page">
+        <div className="auth-form">
+          <h1 className="auth-wordmark">
+            <img src={wordmark} alt="Index" />
+          </h1>
+          <VerificationForm
+            key={session.data.user.id}
+            email={session.data.user.email}
+            onComplete={async () => {
+              await router.invalidate();
+              router.history.replace(safeReturn(next));
+            }}
+          />
+        </div>
+      </main>
+    );
+  if (recovering)
+    return (
+      <main className="auth-page">
+        <div className="auth-form">
+          <RecoveryForm onBack={() => setRecovering(false)} />
+        </div>
+      </main>
+    );
+  return <LoginForm onRecover={() => setRecovering(true)} />;
+}
+function LoginForm({ onRecover }: { onRecover: () => void }) {
   const [signUp, setSignUp] = useState(false),
     [error, setError] = useState(""),
     router = useRouter(),
@@ -79,7 +120,7 @@ function Login() {
         }
         await resetSession();
         await router.invalidate();
-        router.history.replace(safeReturn(next));
+        if (result.data?.user.emailVerified) router.history.replace(safeReturn(next));
       } catch {
         setError("Could not connect. Please try again.");
       }
@@ -130,6 +171,11 @@ function Login() {
             )}
           </form.Subscribe>
         </form>
+        {!signUp && (
+          <Button variant="ghost" onClick={onRecover}>
+            Forgot password?
+          </Button>
+        )}
         <p className="auth-switch">
           {signUp ? "Already have an account? " : "New here? "}
           <button

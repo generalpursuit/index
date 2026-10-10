@@ -3,7 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { sessionOptions } from "@/lib/session";
 import { apiFor } from "@/utils/orpc";
 export function useViewer() {
-  return useQuery(sessionOptions).data?.user ?? null;
+  const user = useQuery(sessionOptions).data?.user;
+  return user?.emailVerified ? user : null;
 }
 export function useAPI() {
   const viewer = useViewer();
