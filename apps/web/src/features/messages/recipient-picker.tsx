@@ -11,6 +11,13 @@ import { useDebounced } from "@/hooks/use-debounced";
 import { useConnections } from "@/features/profiles/hooks/use-profiles";
 import { useConversations, useMessageActions } from "./hooks/use-messages";
 import type { SavedLink, Conversation } from "@/lib/types";
+
+// Shared by instances in this component; markers remain available to scroll hooks/tests.
+const personLabelClassName =
+  "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle";
+const recipientRowClassName =
+  "recipient-row [&>.person-label]:flex-1 [@media(hover:_hover)_and_(pointer:_fine)]:[&:hover_.recipient-select]:opacity-[1] [@media(hover:_hover)_and_(pointer:_fine)]:[&:focus-within_.recipient-select]:opacity-[1]";
+
 export function conversationName(chat: Conversation, viewerId: string) {
   return (
     chat.participants
@@ -53,7 +60,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
       title={link ? "Send link" : "New message"}
     >
       {author.data?.profileVisibility === "private" && (
-        <p className="muted">
+        <p className={"muted text-subtle-foreground"}>
           Only approved followers can view this post. Other recipients will see a link to the
           author’s profile.
         </p>
@@ -64,7 +71,11 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
-      <div className="recipient-list">
+      <div
+        className={
+          "recipient-list max-h-[35dvh] overflow-auto [&_.recipient-row]:flex [&_.recipient-row]:h-auto [&_.recipient-row]:justify-start [&_.recipient-row]:cursor-pointer [&_.recipient-row]:w-full [&_.recipient-row]:items-center [&_.recipient-row]:gap-3 [&_.recipient-row]:p-3 [&_.recipient-row]:rounded-[12px] [&_.recipient-row]:text-left"
+        }
+      >
         <QueryState
           pending={people.isPending}
           hasData={!!people.data}
@@ -75,7 +86,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
             const identity = (
               <>
                 <UserAvatar person={person} />
-                <span className="person-label">
+                <span className={personLabelClassName}>
                   <strong id={"recipient-" + person.id}>{person.name}</strong>
                   <small>@{person.username ?? person.name}</small>
                 </span>
@@ -85,7 +96,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
               return (
                 <Button
                   variant="ghost"
-                  className="recipient-row"
+                  className={recipientRowClassName}
                   key={person.id}
                   disabled={start.isPending}
                   onClick={() =>
@@ -99,10 +110,12 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                 </Button>
               );
             return (
-              <label className="recipient-row" key={person.id}>
+              <label className={recipientRowClassName} key={person.id}>
                 {identity}
                 <Checkbox
-                  className="recipient-select"
+                  className={
+                    "recipient-select rounded-[50%] [@media(hover:_hover)_and_(pointer:_fine)]:opacity-[0] [@media(hover:_hover)_and_(pointer:_fine)]:[&[data-checked]]:opacity-[1]"
+                  }
                   aria-labelledby={"recipient-" + person.id}
                   disabled={
                     start.isPending || (!selected.includes(person.id) && selected.length >= 19)
@@ -118,7 +131,13 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
             );
           })}
           {people.data?.pages[0]?.items.length === 0 && (
-            <p className="empty-state">Follow people to start a conversation.</p>
+            <p
+              className={
+                "empty-state [&[role='alert']>p]:select-text text-muted-foreground p-[32px_12px] text-center [&_p]:mb-3.5 [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-[4px]"
+              }
+            >
+              Follow people to start a conversation.
+            </p>
           )}
           <More
             hasNext={people.hasNextPage}
@@ -132,11 +151,17 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           .map((chat) => (
             <Button
               variant="ghost"
-              className="person-row"
+              className={
+                "person-row flex items-center justify-between gap-4 p-[13px_0] [&>.person-inline]:flex-1 [&_.person-label]:max-w-full [&>button]:shrink-0 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.person-label_small]:max-w-45"
+              }
               key={chat.id}
               onClick={() => open(chat.shortId)}
             >
-              <span className="avatar-stack">
+              <span
+                className={
+                  "avatar-stack relative inline-flex w-12 h-12 flex-none items-center [&_.user-avatar]:w-11 [&_.user-avatar]:h-11 [&:has(.user-avatar:nth-child(2))_.user-avatar]:w-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:h-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:absolute [&:has(.user-avatar:nth-child(2))_.user-avatar]:left-0 [&:has(.user-avatar:nth-child(2))_.user-avatar]:top-0 [&_.user-avatar:nth-child(2)]:left-4! [&_.user-avatar:nth-child(2)]:top-4.25! [&_.user-avatar:nth-child(2)]:[outline:2px_solid_var(--background)]"
+                }
+              >
                 {chat.participants
                   .filter((p) => p.id !== viewer.id)
                   .slice(0, 2)
@@ -144,7 +169,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                     <UserAvatar key={p.id} person={p} />
                   ))}
               </span>
-              <span className="person-label">{conversationName(chat, viewer.id)}</span>
+              <span className={personLabelClassName}>{conversationName(chat, viewer.id)}</span>
               <ChevronRight />
             </Button>
           ))}
@@ -154,7 +179,11 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           fetch={conversations.fetchNextPage}
         />
       </div>
-      <div className="modal-actions">
+      <div
+        className={
+          "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
+        }
+      >
         <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
           Cancel
         </Button>

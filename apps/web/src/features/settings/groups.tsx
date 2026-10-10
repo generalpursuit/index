@@ -28,11 +28,22 @@ export function GroupSettings({ userId }: { userId: string }) {
   const [creating, setCreating] = useState(false);
   const createTrigger = useRef<HTMLButtonElement>(null);
   return (
-    <section className="settings-box settings-groups" aria-labelledby="settings-groups">
-      <div className="settings-groups-heading">
+    <section
+      className={
+        "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-groups"
+      }
+      aria-labelledby="settings-groups"
+    >
+      <div
+        className={
+          "settings-groups-heading flex items-start justify-between gap-4 mb-2.5 [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:m-[-4px_-8px_0_0] [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
+        }
+      >
         <div>
           <h2 id="settings-groups">Groups</h2>
-          <p className="muted">Locked lists are only yours, whoever can see your profile.</p>
+          <p className={"muted text-subtle-foreground"}>
+            Locked lists are only yours, whoever can see your profile.
+          </p>
         </div>
         <IconButton ref={createTrigger} label="New group" onClick={() => setCreating(true)}>
           <Plus />
@@ -46,12 +57,23 @@ export function GroupSettings({ userId }: { userId: string }) {
       >
         <ul className="settings-group-list">
           {all.map((g) => (
-            <li key={g.id} className="settings-group">
-              <span className="settings-group-name">
+            <li
+              key={g.id}
+              className={
+                "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
+              }
+            >
+              <span
+                className={"settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px]"}
+              >
                 {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
                 {g.name}
               </span>
-              <span className="settings-group-count">
+              <span
+                className={
+                  "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
+                }
+              >
                 {g.linkCount === 1 ? "1 link" : g.linkCount + " links"}
               </span>
               <GroupActions group={g} />
@@ -101,7 +123,7 @@ function GroupActions({ group }: { group: Group }) {
     }
   };
   return (
-    <div className="settings-group-actions">
+    <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
       <GroupLockControl
         name={group.name}
         locked={locked}
@@ -128,7 +150,7 @@ function GroupActions({ group }: { group: Group }) {
           {error}
         </p>
       )}
-      {group.kind !== "custom" && <span className="settings-group-slot" aria-hidden="true" />}
+      {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
       {group.kind === "custom" && (
         <DropdownMenu>
           <DropdownMenuTrigger

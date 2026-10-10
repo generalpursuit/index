@@ -5,6 +5,10 @@ import { useLibraryActions } from "./hooks/use-links";
 import { domain, webURL } from "./link-row";
 import type { SavedLink } from "@/lib/types";
 
+// Shared by instances in this component; markers remain available to scroll hooks/tests.
+const categoryMarkClassName =
+  "category-mark justify-self-center w-2 h-2 rounded-[2px] bg-category-other [&[data-category='article']]:bg-category-article [&[data-category='video']]:bg-category-video [&[data-category='music']]:bg-category-music [&[data-category='podcast']]:bg-category-podcast [&[data-category='book']]:bg-category-book [&[data-category='tool']]:bg-category-tool [&[data-category='note']]:bg-category-note [&[data-empty]]:bg-transparent [&[data-empty]]:[box-shadow:inset_0_0_0_1px_var(--subtle-foreground)]";
+
 type Pending = { url: string; existing: Set<string> };
 
 /**
@@ -57,9 +61,13 @@ export function QuickAdd({
   );
   return (
     <>
-      <div className="quick-add">
+      <div
+        className={
+          "quick-add grid grid-cols-[32px_minmax(0,_1fr)] items-center gap-x-3 min-h-12 text-subtle-foreground [&_input]:min-w-0 [&_input]:h-12 [&_input]:border-0 [&_input]:[outline:none] [&_input]:bg-transparent [&_input]:text-[14px] [&_input]:text-foreground [&:hover_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&:focus-within_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&_input::placeholder]:text-subtle-foreground [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3 [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_input]:text-[16px]"
+        }
+      >
         {/* An empty marker: it takes its color once the page says what the link is. */}
-        <i className="category-mark" data-empty aria-hidden="true" />
+        <i className={categoryMarkClassName} data-empty aria-hidden="true" />
         <input
           type="url"
           inputMode="url"
@@ -94,17 +102,35 @@ export function QuickAdd({
         />
       </div>
       {hint && (
-        <p className="quick-add-hint" id={hintId}>
+        <p
+          className={"quick-add-hint m-[-4px_0_8px_44px] text-[12px] text-destructive"}
+          id={hintId}
+        >
           Enter a web link (https://…)
         </p>
       )}
       {waiting.map(({ url }, index) => (
-        <div className="link-row" key={url + index} aria-hidden="true">
-          <i className="category-mark" data-empty />
-          <span className="link-open" data-pending>
+        <div
+          className={
+            "link-row [&_small]:text-subtle-foreground [--mark-column:32px] grid grid-cols-[var(--mark-column)_minmax(0,_1fr)_auto] items-center gap-x-3 min-w-0 min-h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3"
+          }
+          key={url + index}
+          aria-hidden="true"
+        >
+          <i className={categoryMarkClassName} data-empty />
+          <span
+            className={
+              "link-open self-stretch min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-left text-[14px] text-foreground [&:hover]:underline [&:hover]:decoration-subtle-foreground [&:hover]:underline-offset-[4px] [span&]:self-center [&[data-pending]]:text-subtle-foreground [&[data-pending]]:[animation:loading-pulse_1.5s_ease-in-out_infinite] [@media(width<=700px)]:text-[13px]"
+            }
+            data-pending
+          >
             Fetching title…
           </span>
-          <span className="link-domain">
+          <span
+            className={
+              "link-domain inline-flex items-center gap-1 min-w-0 max-w-55 text-[12px] text-subtle-foreground [&_span]:overflow-hidden [&_span]:text-ellipsis [&_span]:whitespace-nowrap [&_svg]:flex-none [&_svg]:w-3 [&_svg]:h-3 [&:hover]:text-foreground [@media(width<=700px)]:max-w-30 [@media(width<=700px)]:text-[11px]"
+            }
+          >
             <span>{domain(url)}</span>
             <ArrowUpRight />
           </span>

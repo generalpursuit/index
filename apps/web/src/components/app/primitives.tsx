@@ -37,8 +37,11 @@ export function UserAvatar({
   const hue = (Array.from(person.id).reduce((n, c) => n + c.charCodeAt(0), 0) * 37) % 360;
   return (
     <Avatar
-      className={"user-avatar " + (large ? "large" : "")}
-      style={{ background: "hsl(" + hue + " 60% 33%)" }}
+      className={
+        "user-avatar flex-none w-9 h-9 text-avatar-foreground [&_[data-slot='avatar-fallback']]:bg-transparent [&_[data-slot='avatar-fallback']]:text-avatar-foreground [&_[data-slot='avatar-fallback']]:text-[12px] [&.large]:w-22 [&.large]:h-22 [&.large_[data-slot='avatar-fallback']]:text-[26px] " +
+        (large ? "large" : "")
+      }
+      style={{ background: "hsl(" + hue + " 60% var(--avatar-lightness))" }}
     >
       <AvatarImage src={person.image ?? undefined} alt="" />
       <AvatarFallback>
@@ -70,10 +73,18 @@ export function Heading({
   actions?: ReactNode;
 }) {
   return (
-    <header className="page-heading">
+    <header
+      className={
+        "page-heading flex items-center gap-3 mb-8 min-w-0 [&_h1]:flex-1 [&_h1]:min-w-0 [&_h1]:self-start [@media(width<=700px)]:mb-6.5 [@media(width<=700px)]:gap-1"
+      }
+    >
       {back && <Back />}
       <h1>{children}</h1>
-      <div className="heading-actions">{actions}</div>
+      <div
+        className={"heading-actions flex gap-1 items-center ml-auto [@media(width<=700px)]:gap-0.5"}
+      >
+        {actions}
+      </div>
     </header>
   );
 }
@@ -99,9 +110,17 @@ export function Modal({
   if (phone)
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className={"app-dialog app-sheet " + className} finalFocus={returnFocus}>
-          <DrawerTitle className="dialog-title">{title}</DrawerTitle>
-          <DrawerDescription className={description ? "muted" : "sr-only"}>
+        <DrawerContent
+          finalFocus={returnFocus}
+          className={
+            "app-dialog select-none bg-surface text-foreground border-border rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 [&_button]:cursor-pointer [&_button:disabled]:cursor-default [&_[data-slot='button']]:rounded-full [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 [&_[data-slot='button']:disabled]:opacity-[0.4] [&_input:not([type='radio'])]:min-h-11 [&_input:not([type='radio'])]:p-[10px_14px] [&_input:not([type='radio'])]:bg-muted [&_input:not([type='radio'])]:border-input [&_input:not([type='radio'])]:rounded-[10px] [&_input:not([type='radio'])]:text-[15px] [&_textarea]:min-h-11 [&_textarea]:p-[10px_14px] [&_textarea]:bg-muted [&_textarea]:border-input [&_textarea]:rounded-[10px] [&_textarea]:text-[15px] [@media(width<=700px)]:[&:not(.app-sheet)]:p-6.25 [@media(width<=700px)]:[&:not(.app-sheet)]:max-w-[calc(100vw_-_24px)] app-sheet [--bleed:3rem] relative flex flex-col w-full max-h-[calc(92dvh_+_var(--bleed))] mb-[calc(-1_*_var(--bleed))] p-[10px_20px_calc(20px_+_env(safe-area-inset-bottom,_0px)_+_var(--bleed))] border-0 border-t border-t-border rounded-[22px_22px_0_0] [outline:0] overflow-hidden [transform:translateY(var(--drawer-swipe-movement-y))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] will-change-transform [&_[data-slot='drawer-body']]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:overflow-y-auto [&_[data-slot='drawer-body']]:overscroll-contain [&[data-starting-style]]:[transform:translateY(calc(100%_-_var(--bleed)_+_2px))] [&[data-ending-style]]:[transform:translateY(calc(100%_-_var(--bleed)_+_2px))] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot='drawer-close']]:top-7.5 [&_[data-slot='drawer-close']]:right-3.5 [&_.modal-cancel]:hidden [&_.modal-actions_[data-slot='button']]:flex-1 [&_.modal-actions_[data-slot='button']]:min-h-11.5 [&.post-dialog]:h-[calc(94dvh_+_var(--bleed))] [&.post-dialog]:max-h-[calc(94dvh_+_var(--bleed))] " +
+            className
+          }
+        >
+          <DrawerTitle className={"dialog-title font-semibold tracking-[-0.035em] leading-[1.1]"}>
+            {title}
+          </DrawerTitle>
+          <DrawerDescription className={description ? "muted text-subtle-foreground" : "sr-only"}>
             {description ?? title}
           </DrawerDescription>
           {children}
@@ -110,9 +129,17 @@ export function Modal({
     );
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={"app-dialog " + className} finalFocus={returnFocus}>
-        <DialogTitle className="dialog-title">{title}</DialogTitle>
-        <DialogDescription className={description ? "muted" : "sr-only"}>
+      <DialogContent
+        finalFocus={returnFocus}
+        className={
+          "app-dialog select-none bg-surface text-foreground border-border rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 [&_button]:cursor-pointer [&_button:disabled]:cursor-default [&_[data-slot='button']]:rounded-full [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 [&_[data-slot='button']:disabled]:opacity-[0.4] [&_input:not([type='radio'])]:min-h-11 [&_input:not([type='radio'])]:p-[10px_14px] [&_input:not([type='radio'])]:bg-muted [&_input:not([type='radio'])]:border-input [&_input:not([type='radio'])]:rounded-[10px] [&_input:not([type='radio'])]:text-[15px] [&_textarea]:min-h-11 [&_textarea]:p-[10px_14px] [&_textarea]:bg-muted [&_textarea]:border-input [&_textarea]:rounded-[10px] [&_textarea]:text-[15px] [@media(width<=700px)]:[&:not(.app-sheet)]:p-6.25 [@media(width<=700px)]:[&:not(.app-sheet)]:max-w-[calc(100vw_-_24px)] " +
+          className
+        }
+      >
+        <DialogTitle className={"dialog-title font-semibold tracking-[-0.035em] leading-[1.1]"}>
+          {title}
+        </DialogTitle>
+        <DialogDescription className={description ? "muted text-subtle-foreground" : "sr-only"}>
           {description ?? title}
         </DialogDescription>
         {children}
@@ -135,7 +162,13 @@ export function QueryState({
 }) {
   if (pending && !hasData)
     return (
-      <div className="loading-state" role="status" aria-label="Loading">
+      <div
+        className={
+          "loading-state grid gap-4 p-[24px_0] w-full [&>div]:h-12 [&>div]:bg-surface [&>div]:rounded-[12px] [&>div]:[animation:loading-pulse_1.5s_ease-in-out_infinite]"
+        }
+        role="status"
+        aria-label="Loading"
+      >
         <div />
         <div />
         <div />
@@ -145,7 +178,7 @@ export function QueryState({
     return (
       <>
         {children}
-        <p className="muted" role="status">
+        <p className={"muted text-subtle-foreground"} role="status">
           Couldn’t refresh. Showing saved content.{" "}
           {retry && (
             <button type="button" onClick={retry}>
@@ -157,7 +190,12 @@ export function QueryState({
     );
   if (error)
     return (
-      <div className="empty-state" role="alert">
+      <div
+        className={
+          "empty-state [&[role='alert']>p]:select-text text-muted-foreground p-[32px_12px] text-center [&_p]:mb-3.5 [&_a]:text-foreground [&_a]:underline [&_a]:underline-offset-[4px]"
+        }
+        role="alert"
+      >
         <p>{error.message || "Something went wrong."}</p>
         {retry && (
           <Button variant="outline" onClick={retry}>
@@ -180,7 +218,7 @@ export function More({
   return hasNext ? (
     <Button
       variant="ghost"
-      className="load-more"
+      className={"load-more m-[8px_auto] flex"}
       disabled={isFetching}
       onClick={() => void fetch()}
     >
@@ -210,10 +248,22 @@ export function Confirmation({
 }) {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent className="app-dialog">
-        <AlertDialogTitle className="dialog-title">{title}</AlertDialogTitle>
+      <AlertDialogContent
+        className={
+          "app-dialog select-none bg-surface text-foreground border-border rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 [&_button]:cursor-pointer [&_button:disabled]:cursor-default [&_[data-slot='button']]:rounded-full [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 [&_[data-slot='button']:disabled]:opacity-[0.4] [&_input:not([type='radio'])]:min-h-11 [&_input:not([type='radio'])]:p-[10px_14px] [&_input:not([type='radio'])]:bg-muted [&_input:not([type='radio'])]:border-input [&_input:not([type='radio'])]:rounded-[10px] [&_input:not([type='radio'])]:text-[15px] [&_textarea]:min-h-11 [&_textarea]:p-[10px_14px] [&_textarea]:bg-muted [&_textarea]:border-input [&_textarea]:rounded-[10px] [&_textarea]:text-[15px] [@media(width<=700px)]:[&:not(.app-sheet)]:p-6.25 [@media(width<=700px)]:[&:not(.app-sheet)]:max-w-[calc(100vw_-_24px)]"
+        }
+      >
+        <AlertDialogTitle
+          className={"dialog-title font-semibold tracking-[-0.035em] leading-[1.1]"}
+        >
+          {title}
+        </AlertDialogTitle>
         <AlertDialogDescription>{description}</AlertDialogDescription>
-        <div className="action-pair">
+        <div
+          className={
+            "action-pair flex items-center justify-end gap-2.5 mt-1 [&_button]:min-h-9.5 [&_button]:p-[0_18px] [&_button]:rounded-full"
+          }
+        >
           <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             variant={destructive ? "destructive" : "default"}

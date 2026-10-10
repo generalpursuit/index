@@ -32,11 +32,20 @@ export function WeekPager({
   };
   return (
     <>
-      <div ref={viewport} className="week-pager" role="region" aria-label={label}>
+      <div
+        ref={viewport}
+        className={
+          "week-pager relative h-full overflow-y-hidden overscroll-y-contain [scroll-snap-type:y_mandatory] [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        }
+        role="region"
+        aria-label={label}
+      >
         {pages.map((date) => (
           <section
             key={date}
-            className="week-page"
+            className={
+              "week-page h-full pb-10 [scroll-snap-align:start] [scroll-snap-stop:always] [@media(width<=700px)]:pb-10 [@media(width<=700px)_and_(height<=740px)]:pb-9"
+            }
             data-week={date}
             data-active={date === week}
             inert={date !== week}

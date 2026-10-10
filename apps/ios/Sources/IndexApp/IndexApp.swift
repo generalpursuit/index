@@ -4,9 +4,11 @@ import SwiftUI
 @main
 struct IndexApp: App {
   @State private var app = AppModel()
+  @AppStorage(ThemePreference.storageKey) private var storedTheme = ThemePreference.system.rawValue
   var body: some Scene {
     WindowGroup {
-      RootView().environment(app).preferredColorScheme(.dark).tint(.white)
+      RootView().environment(app).preferredColorScheme(ThemePreference(storedValue: storedTheme).colorScheme)
+        .tint(IndexPalette.foreground)
         .onOpenURL { app.open($0) }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
           if let url = activity.webpageURL { app.open(url) }
@@ -195,7 +197,7 @@ struct RootView: View {
             case .group(let group): GroupEditorView(group: group)
             }
           }
-          .background(Color.black)
+          .background(IndexPalette.background)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
           if app.showsTabs {
@@ -211,19 +213,19 @@ struct RootView: View {
                 } label: {
                   Image(systemName: tab.symbol).font(.system(size: 22)).frame(maxWidth: .infinity)
                     .frame(height: 52)
-                    .foregroundStyle(app.tab == tab ? .white : .gray)
+                    .foregroundStyle(app.tab == tab ? IndexPalette.foreground : IndexPalette.mutedForeground)
                     .overlay(alignment: .topTrailing) {
                       if (tab == .activity && app.unreadActivity > 0)
                         || (tab == .messages && app.unreadMessages > 0)
                       {
-                        Circle().fill(.white).frame(width: 5, height: 5).padding(.trailing, 19)
+                        Circle().fill(IndexPalette.foreground).frame(width: 5, height: 5).padding(.trailing, 19)
                           .padding(.top, 8)
                       }
                     }
                 }.buttonStyle(.plain).accessibilityLabel(tab.title).accessibilityAddTraits(
                   app.tab == tab ? .isSelected : [])
               }
-            }.padding(.horizontal, 12).background(.black)
+            }.padding(.horizontal, 12).background(IndexPalette.background)
           }
         }
         .task(id: scenePhase) {
@@ -235,7 +237,7 @@ struct RootView: View {
         }
       }
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity).background(.black)
+    .frame(maxWidth: .infinity, maxHeight: .infinity).background(IndexPalette.background)
     .onChange(of: app.userID + ":" + String(app.revision), initial: true) { _, _ in
       app.resumeReadableURL()
     }
