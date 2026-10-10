@@ -56,8 +56,14 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(page.getByRole("button", { name: "Showing Research", exact: true })).toBeVisible();
   // Groups are managed in Settings; the profile only shows and filters them.
   await page.goto("/settings");
-  await page.getByRole("button", { name: "Lock Research", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Unlock Research", exact: true })).toBeVisible();
+  const lock = page.getByRole("button", { name: "Lock Research", exact: true });
+  await expect(lock).toHaveAttribute("aria-pressed", "false");
+  await lock.click();
+  const confirmation = page.getByRole("alertdialog", { name: "Lock group?" });
+  await expect(confirmation).toContainText("Only you can see this group and its links.");
+  await confirmation.getByRole("button", { name: "Lock group", exact: true }).click();
+  await expect(confirmation).toHaveCount(0);
+  await expect(lock).toHaveAttribute("aria-pressed", "true");
   await page.goto("/?edit=" + data.links[0]!.id);
   await page.getByRole("radio", { name: "Research", exact: true }).click();
   await expect(page.getByText("Only you will see this link.")).toBeVisible();

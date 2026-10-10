@@ -9,7 +9,7 @@ One Alchemy stack deploys the API Worker, Vite web Worker, Neon project, and pri
 
 ## GitHub Actions
 
-`.github/workflows/ci.yml` runs formatting, lint, API/server/infra tests, type checks, a web build, and Chromium tests against the built web app and disposable database. It runs on pull requests and is reused by deployment. It needs no provider credentials.
+`.github/workflows/ci.yml` runs formatting, lint, API/server/infra tests, type checks, a web build, and Chromium tests against the built web app and disposable database. The browser suite uses full headed Chromium under Xvfb so notification permission grants work; the headless shell reports notification permission as denied even with an automation grant. It runs on pull requests and is reused by deployment. It needs no provider credentials.
 
 `.github/workflows/deploy.yml` runs on pushes to `main` and `staging`, and supports manual dispatch from those branches. Checks must pass first. The deploy job uses the matching GitHub environment. Each branch has its own concurrency group; an in-progress deploy is never cancelled by a newer push. Manual dispatch from other branches is skipped.
 

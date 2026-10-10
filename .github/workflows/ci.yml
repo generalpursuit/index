@@ -40,7 +40,9 @@ jobs:
         working-directory: apps/web
         env:
           E2E_PRODUCTION: "1"
-        run: bun run test:e2e
+        # The headless shell reports notification permission as denied despite
+        # a browser-context grant. Use the full browser for the real worker tests.
+        run: xvfb-run --auto-servernum bun run test:e2e --headed
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
