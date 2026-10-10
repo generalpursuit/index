@@ -125,3 +125,5 @@ index/
 - `cd apps/web && bun run desktop:build`: Build Tauri desktop app
 
 Email verification, password recovery, delivery configuration, and remaining launch checks: [authentication](docs/authentication.md).
+
+Native Share → Index, reusable save/destination contracts, and platform packaging checks: [link sharing](docs/sharing.md).

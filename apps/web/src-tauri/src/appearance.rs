@@ -36,7 +36,9 @@ pub fn set_appearance(
         .as_ref()
         .window()
         .set_background_color(Some(color))
-        .map_err(|_| "Could not update window background.".to_string())
+        .map_err(|_| "Could not update window background.".to_string())?;
+    crate::session::share_appearance(&preference);
+    Ok(())
 }
 
 #[cfg(test)]

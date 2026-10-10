@@ -1,4 +1,5 @@
 import { requireVerifiedSession } from "../../procedures";
+import { shareLink } from "./sharing";
 import { listByOwner, libraryWeeks } from "./service";
 import { implement } from "@orpc/server";
 
@@ -10,6 +11,11 @@ import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup }
 const api = implement(linksContract).$context<Context>().use(requireVerifiedSession);
 
 export const linksRouter = api.router({
+  share: api.share
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await shareLink(context.db, context.actorId, input, context.fetchPage)),
+    ),
   weeks: api.weeks.handler(async ({ context, input }) =>
     unwrapResult(await libraryWeeks(context.db, context.session?.user.id ?? null, input)),
   ),

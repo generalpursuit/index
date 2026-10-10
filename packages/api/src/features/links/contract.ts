@@ -1,5 +1,6 @@
 import { listOwnerLinksSchema, libraryWeeksInputSchema, libraryWeeksSchema } from "./schemas";
 import { optionalAuth } from "../../shared/schemas";
+import { shareLinkInput, shareLinkOutput } from "./sharing-schemas";
 import { baseContract, idInputSchema, successSchema } from "../../shared/schemas";
 
 import {
@@ -14,6 +15,15 @@ import {
 } from "./schemas";
 
 export const linksContract = {
+  share: baseContract
+    .route({
+      method: "POST",
+      path: "/links/share",
+      tags: ["Links"],
+      summary: "Save into this week with duplicate detection and safe retries",
+    })
+    .input(shareLinkInput)
+    .output(shareLinkOutput),
   weeks: baseContract
     .route({ method: "GET", path: "/profiles/{userId}/weeks", tags: ["Links"], spec: optionalAuth })
     .input(libraryWeeksInputSchema)

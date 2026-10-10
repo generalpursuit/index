@@ -1,3 +1,5 @@
+mod sharing_build;
+
 fn main() {
     println!("cargo:rerun-if-env-changed=VITE_SERVER_URL");
     let server =
@@ -6,5 +8,6 @@ fn main() {
         "cargo:rustc-env=INDEX_API_SERVER={}",
         server.trim_end_matches('/')
     );
+    sharing_build::build();
     tauri_build::build()
 }

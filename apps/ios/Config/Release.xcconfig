@@ -1,4 +1,5 @@
 // Set real HTTPS endpoints in Local.xcconfig or with xcodebuild build settings.
 INDEX_API_URL =
 INDEX_WEB_URL =
+INDEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)com.generalpursuit.index.shared
 #include? "Local.xcconfig"

@@ -60,6 +60,6 @@ try {
 } finally {
   clearTestCredential();
   // Restore the normal app bundle so a test-only executable cannot be mistaken for the app.
-  run("bun", ["run", "desktop:build", "--local", "--bundles", "app"]);
+  run("bun", ["run", "desktop:build", "--local", "--without-share-extension", "--bundles", "app"]);
 }
 console.log(`Native smoke passed. Logs: ${logs}`);

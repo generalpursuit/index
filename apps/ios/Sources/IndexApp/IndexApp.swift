@@ -1,4 +1,5 @@
 import IndexCore
+import IndexUI
 import SwiftUI
 
 @main
@@ -9,6 +10,11 @@ struct IndexApp: App {
     WindowGroup {
       RootView().environment(app).preferredColorScheme(ThemePreference(storedValue: storedTheme).colorScheme)
         .tint(IndexPalette.foreground)
+        .task(id: storedTheme) {
+          if let group = Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String {
+            try? KeychainAppearance(accessGroup: group).write(ThemePreference(storedValue: storedTheme))
+          }
+        }
         .onOpenURL { app.open($0) }
         .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
           if let url = activity.webpageURL { app.open(url) }
@@ -102,7 +108,7 @@ final class AppModel {
       guard let url = URL(string: address), !address.contains("$(") else {
         throw APIError.invalidServer
       }
-      api = try APIClient(baseURL: url, credentials: KeychainCredentials(server: url))
+      api = try APIClient(baseURL: url, credentials: KeychainCredentials(server: url, accessGroup: Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String))
     } catch { configurationError = error.localizedDescription }
   }
   func restore() async {

@@ -1,0 +1,86 @@
+[
+  {
+    "input": "https://API.example.com:443/",
+    "output": "https://api.example.com"
+  },
+  {
+    "input": "https://api.example.com/root///",
+    "output": "https://api.example.com/root"
+  },
+  {
+    "input": "https://api.example.com:8443/API/v1/",
+    "output": "https://api.example.com:8443/API/v1"
+  },
+  {
+    "input": "https://api.example.com/a%20b/",
+    "output": "https://api.example.com/a%20b"
+  },
+  {
+    "input": "http://localhost:80/",
+    "output": "http://localhost"
+  },
+  {
+    "input": "http://127.0.0.1:3702/",
+    "output": "http://127.0.0.1:3702"
+  },
+  {
+    "input": "http://[::1]:3702/",
+    "output": "http://[::1]:3702"
+  },
+  {
+    "input": "https://api.example.com/root//child",
+    "output": "https://api.example.com/root//child"
+  },
+  {
+    "input": "http://api.example.com/",
+    "output": null
+  },
+  {
+    "input": "https://user:pass@api.example.com/",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/?tenant=other",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/#other",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/a/../other",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/%2e%2e/other",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/a%2fb",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com:0/",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com:65536/",
+    "output": null
+  },
+  {
+    "input": " https://api.example.com",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com\\other",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/%zz",
+    "output": null
+  },
+  {
+    "input": "https://api.example.com/%FF",
+    "output": null
+  }
+]

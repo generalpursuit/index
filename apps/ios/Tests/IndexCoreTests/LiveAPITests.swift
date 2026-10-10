@@ -34,6 +34,19 @@ struct LiveAPITests {
     #expect(!Set(first.own.items.map(\.id)).intersection(more.items.map(\.id)).isEmpty == false)
     let group: LinkGroup = try await alice.request(
       "/groups", method: "POST", body: ["name": .string("Native test")])
+    // Sharing uses the same native bearer transport through a read-only extension client.
+    let shareClient = try APIClient(baseURL: base, credentials: ReadOnlyCredentials(aliceStore), externallyManagedSession: true)
+    var shareDraft = ShareDraft(url: "https://pages.test/native-shared")
+    shareDraft.groupID = group.id
+    let shareBody = try shareDraft.body(accountID: me.id)
+    let shared: ShareResult = try await shareClient.request("/links/share", method: "POST", body: shareBody)
+    let retried: ShareResult = try await shareClient.request("/links/share", method: "POST", body: shareBody)
+    #expect(shared.status == "saved" && retried.link.id == shared.link.id)
+    var secondDraft = ShareDraft(url: shareDraft.url)
+    let duplicate: ShareResult = try await shareClient.request("/links/share", method: "POST", body: secondDraft.body(accountID: me.id))
+    #expect(duplicate.status == "existing" && duplicate.link.id == shared.link.id)
+    let again: ShareResult = try await shareClient.request("/links/share", method: "POST", body: secondDraft.body(accountID: me.id, saveAgain: true))
+    #expect(again.status == "saved" && again.link.id != shared.link.id)
     let link: SavedLink = try await alice.request(
       "/links", method: "POST",
       body: [

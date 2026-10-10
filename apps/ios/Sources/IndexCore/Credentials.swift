@@ -7,14 +7,27 @@ public protocol CredentialStore: Sendable {
 }
 public struct KeychainCredentials: CredentialStore {
   private let service: String
-  public init(server: URL) { service = "com.generalpursuit.index.session.\(server.absoluteString)" }
+  private let accessGroup: String?
+  private let valid: Bool
+  public init(server: URL, accessGroup: String? = nil) {
+    let scope = try? APIScope.normalize(server.absoluteString)
+    service = "com.generalpursuit.index.session.\(scope ?? "invalid")"
+    self.accessGroup = accessGroup
+    valid = scope != nil && (accessGroup == nil || (!accessGroup!.isEmpty && !accessGroup!.contains("$(")))
+  }
   private var query: [String: Any] {
-    [
+    var query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service,
       kSecAttrAccount as String: "session",
     ]
+    if let accessGroup { query[kSecAttrAccessGroup as String] = accessGroup }
+    #if os(macOS)
+      if accessGroup != nil { query[kSecUseDataProtectionKeychain as String] = true }
+    #endif
+    return query
   }
   public func read() throws -> String? {
+    guard valid else { throw APIError.invalidServer }
     var query = query
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -27,6 +40,7 @@ public struct KeychainCredentials: CredentialStore {
     return token
   }
   public func write(_ token: String?) throws {
+    guard valid else { throw APIError.invalidServer }
     guard let token else {
       let status = SecItemDelete(query as CFDictionary)
       guard status == errSecSuccess || status == errSecItemNotFound else {
@@ -53,4 +67,12 @@ public struct CredentialError: LocalizedError {
   public var errorDescription: String? {
     "Could not access your secure session (\(status)). Unlock the device and try again."
   }
+}
+
+/// The extension may read the current credential but cannot rotate, clear, or resurrect it.
+public struct ReadOnlyCredentials: CredentialStore {
+  private let source: any CredentialStore
+  public init(_ source: any CredentialStore) { self.source = source }
+  public func read() throws -> String? { try source.read() }
+  public func write(_ token: String?) throws {}
 }

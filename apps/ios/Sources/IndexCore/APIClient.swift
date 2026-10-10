@@ -38,14 +38,12 @@ public actor APIClient {
   private let credentials: any CredentialStore
   private let session: URLSession
   private var token: String?
+  private let externallyManagedSession: Bool
   private var generation = 0
   private let responses = ResponseCache()
-  public init(baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil) throws {
-    guard baseURL.host != nil, baseURL.user == nil, baseURL.password == nil,
-      baseURL.scheme == "https"
-        || (baseURL.scheme == "http" && ["localhost", "127.0.0.1", "::1"].contains(baseURL.host!))
-    else { throw APIError.invalidServer }
-    self.baseURL = baseURL
+  public init(baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil, externallyManagedSession: Bool = false) throws {
+    self.baseURL = URL(string: try APIScope.normalize(baseURL.absoluteString))!
+    self.externallyManagedSession = externallyManagedSession
     self.credentials = credentials
     self.token = try credentials.read()
     let config = URLSessionConfiguration.ephemeral
@@ -84,6 +82,7 @@ public actor APIClient {
       }
       try Task.checkCancellation()
       guard version == generation else { throw CancellationError() }
+      try checkExternalSession()
       do { return try JSONDecoder().decode(T.self, from: data) } catch {
         await responses.remove(key)
         throw APIError.invalidResponse
@@ -96,6 +95,7 @@ public actor APIClient {
     do {
       let value: T = try await perform("/api/v1" + path, method: method, query: query, body: body)
       if !receipt { await responses.clear() }
+      try checkExternalSession()
       return value
     } catch {
       if !receipt { await responses.clear() }
@@ -193,16 +193,18 @@ public actor APIClient {
     token = nil
     await responses.clear()
     guard generation == version else { throw CancellationError() }
-    try credentials.write(nil)
+    if !externallyManagedSession { try credentials.write(nil) }
   }
   /// A bounded in-memory snapshot only; refresh still checks server permissions.
   public func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) async
     -> T?
   {
     let version = generation
+    if externallyManagedSession && (try? credentials.read()) != token { return nil }
     guard let data = await responses.snapshot(responseKey(path, query: query)),
       version == generation
     else { return nil }
+    if externallyManagedSession && (try? credentials.read()) != token { return nil }
     return try? JSONDecoder().decode(T.self, from: data)
   }
   private func responseKey(_ path: String, query: [String: String]) -> String {
@@ -220,8 +222,14 @@ public actor APIClient {
     let version = generation
     let data = try await performData(path, method: method, query: query, body: body)
     guard generation == version else { throw CancellationError() }
+    try checkExternalSession()
     do { return try JSONDecoder().decode(T.self, from: data) } catch {
       throw APIError.invalidResponse
+    }
+  }
+  private func checkExternalSession() throws {
+    if externallyManagedSession {
+      guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
     }
   }
   private func performData(
@@ -229,6 +237,11 @@ public actor APIClient {
     body: [String: JSONValue]? = nil
   ) async throws -> Data {
     let startGeneration = generation
+    // An extension instance is pinned to the credential it started with. Signing in to a
+    // different account requires a new client and a fresh explicit destination selection.
+    if externallyManagedSession {
+      guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
+    }
     var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
     components.path =
       components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
@@ -248,6 +261,9 @@ public actor APIClient {
     }
     let (data, response) = try await session.data(for: request)
     try Task.checkCancellation()
+    if externallyManagedSession {
+      guard try credentials.read() == token else { throw APIError.unauthenticated }
+    }
     guard generation == startGeneration else { throw CancellationError() }
     guard let response = response as? HTTPURLResponse else { throw APIError.invalidResponse }
     guard (200..<300).contains(response.statusCode) else {
@@ -268,7 +284,7 @@ public actor APIClient {
         ?? "Request failed (\(response.statusCode)). Please try again."
       throw APIError.server(response.statusCode, message)
     }
-    if let signed = response.value(forHTTPHeaderField: "set-auth-token"), !signed.isEmpty {
+    if !externallyManagedSession, let signed = response.value(forHTTPHeaderField: "set-auth-token"), !signed.isEmpty {
       try credentials.write(signed)
       token = signed
     }

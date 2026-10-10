@@ -38,6 +38,24 @@ struct APIClientTests {
       baseURL: URL(string: "https://api.example.com")!, credentials: credentials,
       session: URLSession(configuration: config))
   }
+  @Test func extensionRejectsAccountChangeAndNeverRotatesOrDeletesHostToken() async throws {
+    let credentials = MemoryCredentials("alice.signed")
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HTTPStub.self]
+    let client = try APIClient(baseURL: URL(string: "https://api.example.com")!, credentials: ReadOnlyCredentials(credentials), session: URLSession(configuration: config), externallyManagedSession: true)
+    HTTPStub.handler = { _ in (200, ["set-auth-token": "rotated.signed"], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/test")
+    #expect(try credentials.read() == "alice.signed")
+    HTTPStub.handler = { _ in
+      try credentials.write("bob.signed")
+      return (200, ["set-auth-token": "stale.signed"], Data(#"{"success":true}"#.utf8))
+    }
+    await #expect(throws: APIError.self) { let _: Success = try await client.request("/test") }
+    #expect(try credentials.read() == "bob.signed")
+    HTTPStub.handler = { _ in Issue.record("Should reject before network"); return (401, [:], Data()) }
+    await #expect(throws: APIError.self) { let _: Success = try await client.request("/test", method: "POST", body: [:]) }
+    #expect(try credentials.read() == "bob.signed")
+  }
   @Test func snapshotsAreAccountScopedAndWritesInvalidateThem() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }

@@ -51,3 +51,7 @@ For the repeatable macOS native integration check, start `bun e2e/server.mjs` in
 `cargo test system_credential_round_trip -- --ignored --nocapture` additionally exercises the Rust credential store with a dummy entry. It requires an unlocked OS credential store, so it is excluded from ordinary unit runs.
 
 Unsigned development binaries can trigger a Keychain access prompt after a rebuild because their code signature changes. The smoke runner clears only its own isolated test credential before rebuilding; it never deletes normal app sessions. Distribution must use a stable signing identity. Keyboard/accessibility review and Windows/Linux builds still need their respective environments.
+
+## Native Share extension
+
+Normal macOS packaging now builds and embeds the real IndexShareMac extension and requires the configured shared Keychain group, signing identity and provisioning profiles. See [sharing packaging and Mac checks](sharing.md#tauri-macos-packaging). Existing host-only smoke checks use their separate credential namespace and do not verify sharing.

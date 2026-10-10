@@ -1,4 +1,5 @@
 import IndexCore
+import IndexUI
 import SwiftUI
 
 struct GroupSettingsView: View {

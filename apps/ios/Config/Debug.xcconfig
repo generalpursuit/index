@@ -1,4 +1,5 @@
 // Override endpoints and signing in the ignored Local.xcconfig.
 INDEX_API_URL = http:/$()/localhost:3002
 INDEX_WEB_URL = http:/$()/localhost:4173
+INDEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)com.generalpursuit.index.shared
 #include? "Local.xcconfig"

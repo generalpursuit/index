@@ -22,7 +22,7 @@ The Xcode project is checked in. After adding/removing app source files, reprodu
 - `Sources/IndexCore`: Codable API contracts, UTC week handling, URLSession transport, and Keychain storage.
 - `Sources/IndexApp/Features`: feed, profiles/library, link editing/comments, discovery, activity, and conversations.
 - `Sources/IndexApp/Components.swift`: shared visual components and asynchronous actions.
-- `Sources/IndexApp/Theme.swift`: semantic `IndexPalette` and Settings appearance control; `IndexCore.ThemePreference` stores System/Light/Dark under device-local `index.theme`. The app defaults to System and keeps this preference through sign-out.
+- `Sources/IndexUI/Theme.swift`: shared semantic `IndexPalette`; `Sources/IndexApp/Theme.swift` retains the Settings appearance control; `IndexCore.ThemePreference` stores System/Light/Dark under device-local `index.theme`. The app defaults to System and keeps this preference through sign-out.
 - `Sources/IndexApp/IndexApp.swift`: authenticated root, navigation, tabs, app session and in-memory conversation drafts.
 
 Navigation uses `NavigationStack`, including native back gestures. The feed uses native vertical paging: content moves with the gesture and settles on one week, with own links above a horizontally scrolling carousel. Empty weeks show a compact invitation to add a link, plus discovery guidance when the user follows nobody. Longer link collections have independent scroll/pagination; explicit week arrows remain available when inner scrolling or large accessibility text makes a vertical week gesture ambiguous. Forms and chat composers follow the keyboard safe area. System share sheets and native menus retain platform behavior while cards, typography, colors, and spacing follow the web design.
@@ -65,3 +65,7 @@ Profiles, collections, post sharing and inbound links use the shared [readable r
 ## Group management
 
 Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group callback contract and Mac verification checklist](../../docs/groups.md). The new native group source/tests are unverified on this Linux VM; earlier Mac checks above do not cover them.
+
+## Share extension
+
+`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. Shared picker/group creation lives in `IndexSharing`/`IndexUI`. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md). The new Swift, Objective-C and Rust source has not been compiled or launched on this Linux VM.

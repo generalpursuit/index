@@ -3,3 +3,7 @@ INDEX_WEB_URL = https:/$()/index.example.com
 DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID
 // Optional comma-separated alias origins; no production domain is assumed.
 INDEX_WEB_ALIASES =
+
+// Host and Share extension must use the same provisioned Keychain access group.
+// AppIdentifierPrefix includes the trailing dot and may differ from DEVELOPMENT_TEAM.
+INDEX_KEYCHAIN_GROUP = $(AppIdentifierPrefix)com.generalpursuit.index.shared
