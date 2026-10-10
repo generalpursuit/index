@@ -1,3 +1,4 @@
+import { requireVerifiedSession } from "../../procedures";
 import { listByOwner, libraryWeeks } from "./service";
 import { implement } from "@orpc/server";
 
@@ -6,7 +7,7 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { linksContract } from "./contract";
 import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup } from "./service";
 
-const api = implement(linksContract).$context<Context>();
+const api = implement(linksContract).$context<Context>().use(requireVerifiedSession);
 
 export const linksRouter = api.router({
   weeks: api.weeks.handler(async ({ context, input }) =>

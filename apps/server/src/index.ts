@@ -1,3 +1,4 @@
+import { trustedWebOrigins } from "@index/auth/origins";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
@@ -14,7 +15,7 @@ app.use(logger());
 app.use(
   "/*",
   cors({
-    origin: [ENV.CORS_ORIGIN, ...desktopOrigins],
+    origin: [...trustedWebOrigins(ENV.CORS_ORIGIN, ENV.AUTH_TRUSTED_ORIGINS), ...desktopOrigins],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
     exposeHeaders: ["set-auth-token"],
@@ -22,7 +23,9 @@ app.use(
   }),
 );
 
-app.on(["POST", "GET"], "/api/auth/*", async (c) => (await createAuth()).handler(c.req.raw));
+app.on(["POST", "GET"], "/api/auth/*", async (c) =>
+  (await createAuth(undefined, (task) => c.executionCtx.waitUntil(task))).handler(c.req.raw),
+);
 
 // Profile photos, straight from the bucket.
 app.get("/media/*", async (c) => {

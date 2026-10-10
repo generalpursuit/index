@@ -1,10 +1,11 @@
+import { requireVerifiedSession } from "../../procedures";
 import { implement } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { profilesContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(profilesContract).$context<Context>();
+const api = implement(profilesContract).$context<Context>().use(requireVerifiedSession);
 export const profilesRouter = api.router({
   me: api.me
     .use(requireAuth)

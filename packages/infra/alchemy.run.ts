@@ -61,6 +61,11 @@ export const server = Cloudflare.Worker(
         ...databaseBindings,
         CORS_ORIGIN: release?.webURL ?? Config.String("CORS_ORIGIN"),
         BETTER_AUTH_SECRET: authSecret,
+        AUTH_TRUSTED_ORIGINS: Config.String("AUTH_TRUSTED_ORIGINS").pipe(Config.withDefault("")),
+        AUTH_EMAIL_FROM: Config.String("AUTH_EMAIL_FROM").pipe(Config.withDefault("")),
+        RESEND_API_KEY: Config.Redacted("RESEND_API_KEY").pipe(
+          Config.withDefault(Redacted.make("")),
+        ),
         BETTER_AUTH_URL: Cloudflare.Worker.URL,
         MEDIA: media,
       },

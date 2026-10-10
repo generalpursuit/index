@@ -1,10 +1,11 @@
+import { requireVerifiedSession } from "../../procedures";
 import { implement, ORPCError } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { groupsContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(groupsContract).$context<Context>();
+const api = implement(groupsContract).$context<Context>().use(requireVerifiedSession);
 export const groupsRouter = api.router({
   create: api.create
     .use(requireAuth)

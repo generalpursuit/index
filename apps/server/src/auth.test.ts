@@ -16,6 +16,7 @@ describe("native and browser authentication", () => {
     await fixture?.close();
   });
 
+  const codes = new Map<string, string>();
   const auth = () =>
     createAuth(
       {
@@ -24,6 +25,12 @@ describe("native and browser authentication", () => {
         CORS_ORIGIN: "https://web.example.com",
       },
       fixture.db,
+      [],
+      {
+        sendEmail: async ({ to, code }) => {
+          codes.set(to, code);
+        },
+      },
     );
   const post = (path: string, body: unknown, headers?: HeadersInit) =>
     new Request(`https://api.example.com/api/auth${path}`, {
@@ -40,6 +47,14 @@ describe("native and browser authentication", () => {
     );
     assert.equal(registered.status, 200, await registered.clone().text());
     assert.match(registered.headers.get("set-cookie") ?? "", /HttpOnly/i);
+    const verification = await authentication.handler(
+      post(
+        "/security/verify-email",
+        { code: codes.get(credentials.email) },
+        { Authorization: `Bearer ${registered.headers.get("set-auth-token")}` },
+      ),
+    );
+    assert.equal(verification.status, 200);
     const signedIn = await authentication.handler(post("/sign-in/email", credentials));
     assert.equal(signedIn.status, 200);
     const token = signedIn.headers.get("set-auth-token");
@@ -143,7 +158,7 @@ describe("native and browser authentication", () => {
     const changed = await authentication.handler(
       post("/update-user", { image: "https://x.test/a.png" }, { Authorization: `Bearer ${token}` }),
     );
-    assert.equal(changed.status, 400);
+    assert.equal(changed.status, 403);
   });
 
   it("publishes the authentication OpenAPI contract for native clients", async () => {

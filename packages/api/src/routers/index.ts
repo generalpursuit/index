@@ -1,3 +1,4 @@
+import { requireVerifiedSession } from "../procedures";
 import { activityRouter } from "../features/activity/router";
 import { messagesRouter } from "../features/messages/router";
 import { favoritesRouter } from "../features/favorites/router";
@@ -15,7 +16,7 @@ import { feedRouter } from "../features/feed/router";
 import { discoveryRouter } from "../features/discovery/router";
 import { requireAuth } from "../procedures";
 
-const api = implement(appContract).$context<Context>();
+const api = implement(appContract).$context<Context>().use(requireVerifiedSession);
 
 export const appRouter = api.router({
   healthCheck: api.healthCheck.handler(() => {

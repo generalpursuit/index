@@ -1,10 +1,11 @@
+import { requireVerifiedSession } from "../../procedures";
 import { implement } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { commentsContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(commentsContract).$context<Context>();
+const api = implement(commentsContract).$context<Context>().use(requireVerifiedSession);
 export const commentsRouter = api.router({
   create: api.create
     .use(requireAuth)

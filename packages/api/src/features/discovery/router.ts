@@ -1,10 +1,11 @@
+import { requireVerifiedSession } from "../../procedures";
 import { implement } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { discoveryContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(discoveryContract).$context<Context>();
+const api = implement(discoveryContract).$context<Context>().use(requireVerifiedSession);
 export const discoveryRouter = api.router({
   searchUsers: api.searchUsers.handler(async ({ context, input }) =>
     unwrapResult(await service.searchUsers(context.db, context.session?.user.id ?? null, input)),
