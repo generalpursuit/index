@@ -1,4 +1,27 @@
 /* Application layouts stay separate from the reusable shadcn primitives. */
+/* Interface text behaves like app chrome; content and editing remain selectable.
+   Dialogs are portaled outside the app shell, and the desktop webview uses WebKit. */
+.index-app,
+.app-dialog,
+.auth-page,
+.route-error {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable]:not([contenteditable="false"]),
+.post-detail h1,
+.post-meta > a,
+.post-description,
+.comment-body p,
+.message-bubble > p,
+.empty-state[role="alert"] > p,
+.field-error,
+.route-error p {
+  -webkit-user-select: text;
+  user-select: text;
+}
 .index-app,
 .auth-page,
 .route-error {
