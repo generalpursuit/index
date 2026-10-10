@@ -9,6 +9,7 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: webURL,
+    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

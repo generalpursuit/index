@@ -1,3 +1,4 @@
+import { accountMutationOptions } from "@/lib/account-boundary";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { sessionOptions } from "@/lib/session";
@@ -24,30 +25,44 @@ export function useProfileActions() {
   };
   return {
     update: useMutation(
-      api.profiles.update.mutationOptions({
-        onSuccess: async () => {
-          await Promise.all([
-            refresh(),
-            cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
-          ]);
-        },
-      }),
+      accountMutationOptions(
+        api.profiles.update.mutationOptions({
+          onSuccess: async () => {
+            await Promise.all([
+              refresh(),
+              cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
+            ]);
+          },
+        }),
+      ),
     ),
     uploadImage: useMutation(
-      api.profiles.uploadImage.mutationOptions({
-        onSuccess: async () => {
-          await Promise.all([
-            refresh(),
-            cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
-          ]);
-        },
-      }),
+      accountMutationOptions(
+        api.profiles.uploadImage.mutationOptions({
+          onSuccess: async () => {
+            await Promise.all([
+              refresh(),
+              cache.invalidateQueries({ queryKey: sessionOptions.queryKey }),
+            ]);
+          },
+        }),
+      ),
     ),
-    follow: useMutation(api.follows.follow.mutationOptions({ onSuccess: refresh })),
-    unfollow: useMutation(api.follows.unfollow.mutationOptions({ onSuccess: refresh })),
-    removeFollower: useMutation(api.follows.removeFollower.mutationOptions({ onSuccess: refresh })),
-    accept: useMutation(api.follows.accept.mutationOptions({ onSuccess: refresh })),
-    reject: useMutation(api.follows.reject.mutationOptions({ onSuccess: refresh })),
+    follow: useMutation(
+      accountMutationOptions(api.follows.follow.mutationOptions({ onSuccess: refresh })),
+    ),
+    unfollow: useMutation(
+      accountMutationOptions(api.follows.unfollow.mutationOptions({ onSuccess: refresh })),
+    ),
+    removeFollower: useMutation(
+      accountMutationOptions(api.follows.removeFollower.mutationOptions({ onSuccess: refresh })),
+    ),
+    accept: useMutation(
+      accountMutationOptions(api.follows.accept.mutationOptions({ onSuccess: refresh })),
+    ),
+    reject: useMutation(
+      accountMutationOptions(api.follows.reject.mutationOptions({ onSuccess: refresh })),
+    ),
   };
 }
 export function useConnections(userId: string, kind: "followers" | "following", query?: string) {

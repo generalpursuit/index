@@ -1,7 +1,7 @@
 import Foundation
 
 public enum APIError: LocalizedError, Sendable {
-  case invalidServer, invalidResponse, unauthenticated
+  case invalidServer, invalidResponse, unauthenticated, emailNotVerified
   case server(Int, String)
   case missingToken
   public var errorDescription: String? {
@@ -9,6 +9,7 @@ public enum APIError: LocalizedError, Sendable {
     case .invalidServer:
       "Configure a valid HTTPS API server. Local development may use HTTP on localhost."
     case .invalidResponse: "The server returned an unexpected response."
+    case .emailNotVerified: "Verify your email to continue."
     case .unauthenticated: "Your session expired. Please sign in again."
     case .server(_, let message): message
     case .missingToken: "The server did not return a signed session token."
@@ -128,7 +129,45 @@ public actor APIClient {
     guard token != nil else { return nil }
     let result: AuthSession? = try await perform("/api/auth/get-session")
     if result == nil { try await clearSession() }
+    else if result?.user.emailVerified == false {
+      generation += 1
+      await responses.clear()
+    }
     return result
+  }
+  public func securityStatus() async throws -> AccountSecurityStatus {
+    try await perform("/api/auth/security/status")
+  }
+  public func sendVerification() async throws -> CodeRequestResult {
+    try await perform("/api/auth/security/send-verification", method: "POST", body: [:])
+  }
+  public func correctEmail(_ email: String, password: String) async throws -> CodeRequestResult {
+    try await perform("/api/auth/security/correct-email", method: "POST", body: ["email": .string(email), "password": .string(password)])
+  }
+  public func verifyEmail(code: String) async throws {
+    let _: Success = try await perform("/api/auth/security/verify-email", method: "POST", body: ["code": .string(code)])
+    generation += 1
+    await responses.clear()
+  }
+  public func requestPasswordReset(email: String) async throws -> CodeRequestResult {
+    try await perform("/api/auth/security/request-reset", method: "POST", body: ["email": .string(email)])
+  }
+  public func resetPassword(email: String, code: String, newPassword: String) async throws {
+    let _: Success = try await perform("/api/auth/security/reset-password", method: "POST", body: ["email": .string(email), "code": .string(code), "newPassword": .string(newPassword)])
+    try await clearSession()
+  }
+  public func changePassword(currentPassword: String, newPassword: String) async throws {
+    let _: Success = try await perform("/api/auth/security/change-password", method: "POST", body: ["currentPassword": .string(currentPassword), "newPassword": .string(newPassword)])
+    generation += 1
+    await responses.clear()
+  }
+  public func requestEmailChange(email: String, password: String) async throws -> CodeRequestResult {
+    try await perform("/api/auth/security/request-email-change", method: "POST", body: ["email": .string(email), "password": .string(password)])
+  }
+  public func confirmEmailChange(code: String) async throws {
+    let _: Success = try await perform("/api/auth/security/confirm-email-change", method: "POST", body: ["code": .string(code)])
+    generation += 1
+    await responses.clear()
   }
   public func signOut() async throws {
     // Always erase locally, and surface a Keychain failure rather than hiding it.
@@ -203,8 +242,16 @@ public actor APIClient {
         try await clearSession()
         throw APIError.unauthenticated
       }
+      let errorBody = try? JSONDecoder().decode(ErrorBody.self, from: data)
+      if response.statusCode == 403,
+        errorBody?.code == "EMAIL_NOT_VERIFIED" || errorBody?.data?.code == "EMAIL_NOT_VERIFIED" {
+        generation += 1
+        await responses.clear()
+        // Retain the signed credential only for verification/resume/sign-out.
+        throw APIError.emailNotVerified
+      }
       let message =
-        (try? JSONDecoder().decode(ErrorBody.self, from: data).message)
+        errorBody?.message
         ?? "Request failed (\(response.statusCode)). Please try again."
       throw APIError.server(response.statusCode, message)
     }
@@ -216,7 +263,12 @@ public actor APIClient {
   }
 }
 
-private struct ErrorBody: Decodable { let message: String? }
+private struct ErrorBody: Decodable {
+  let message: String?
+  let code: String?
+  let data: ErrorData?
+}
+private struct ErrorData: Decodable { let code: String? }
 
 private final class NoRedirects: NSObject, URLSessionTaskDelegate, Sendable {
   func urlSession(

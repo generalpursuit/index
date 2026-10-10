@@ -49,6 +49,10 @@ struct MessageDraft {
 final class AppModel {
   var api: APIClient?
   var profile: Profile?
+  var verificationUser: AuthUser?
+  // Routing resumes deferred external URLs when this changes, including a verified
+  // transition for the SAME account. No private destination resolves while restricted.
+  var verifiedSessionRevision = 0
   var restoring = true
   var error: String?
   var configurationError: String?
@@ -96,22 +100,43 @@ final class AppModel {
     defer { restoring = false }
     guard let api else { return }
     do {
-      if try await api.restore() != nil { profile = try await api.request("/me/profile") }
+      if let session = try await api.restore() { try await acceptSession(session) } else { clearAccount() }
     } catch APIError.unauthenticated { clearAccount() } catch {
       self.error = error.localizedDescription
     }
   }
   func signIn(identifier: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
-    let _ = try await api.signIn(identifier: identifier, password: password)
-    profile = try await api.request("/me/profile")
-    revision += 1
+    let session = try await api.signIn(identifier: identifier, password: password)
+    try await acceptSession(session)
   }
   func signUp(name: String, username: String, email: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
-    let _ = try await api.signUp(name: name, username: username, email: email, password: password)
-    profile = try await api.request("/me/profile")
+    let session = try await api.signUp(name: name, username: username, email: email, password: password)
+    try await acceptSession(session)
+  }
+  private func acceptSession(_ session: AuthSession) async throws {
+    guard let api else { throw APIError.invalidServer }
+    // Verification and account switches must drop all previous private UI state.
+    profile = nil
+    drafts = [:]
+    path = []
+    openingLink = nil
+    openingConversation = nil
+    unreadMessages = 0
+    unreadActivity = 0
+    verificationUser = session.user.emailVerified ? nil : session.user
+    if session.user.emailVerified {
+      profile = try await api.request("/me/profile")
+      verifiedSessionRevision += 1
+    }
     revision += 1
+  }
+  func verifyEmail(code: String) async throws {
+    guard let api else { throw APIError.invalidServer }
+    try await api.verifyEmail(code: code)
+    guard let session = try await api.restore() else { throw APIError.unauthenticated }
+    try await acceptSession(session)
   }
   func signOut() async {
     guard let api else { return }
@@ -120,6 +145,7 @@ final class AppModel {
   }
   func clearAccount() {
     profile = nil
+    verificationUser = nil
     drafts = [:]
     openingLink = nil
     openingConversation = nil
@@ -132,6 +158,14 @@ final class AppModel {
   func handle(_ error: Error) {
     if error is CancellationError { return }
     if case APIError.unauthenticated = error { clearAccount() }
+    if case APIError.emailNotVerified = error {
+      profile = nil
+      drafts = [:]
+      path = []
+      openingLink = nil
+      openingConversation = nil
+      Task { await restore() }
+    }
     self.error = error.localizedDescription
   }
   func changed() { revision += 1 }
@@ -149,7 +183,7 @@ final class AppModel {
       async let activity: ActivityPage = api.request("/me/activity", query: ["limit": "1"])
       unreadMessages = try await messages.unreadCount
       unreadActivity = try await activity.unreadCount
-    } catch { if case APIError.unauthenticated = error { handle(error) } }
+    } catch { if case APIError.unauthenticated = error { handle(error) }; if case APIError.emailNotVerified = error { handle(error) } }
   }
 }
 
@@ -164,6 +198,8 @@ struct RootView: View {
           "Configuration needed", systemImage: "gear", description: Text(message))
       } else if app.restoring {
         ProgressView().task { await app.restore() }
+      } else if let pending = app.verificationUser {
+        VerificationView(email: pending.email)
       } else if app.profile == nil {
         LoginView()
       } else {

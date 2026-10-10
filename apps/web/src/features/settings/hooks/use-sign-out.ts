@@ -11,9 +11,10 @@ export function useSignOut() {
       if (result.error) throw new Error(result.error.message || "Could not sign out. Try again.");
     },
     onSuccess: async () => {
-      await resetSession();
-      await router.invalidate();
+      // A successful sign-out remains signed out even if revalidation is offline.
+      await resetSession().catch(() => {});
       await router.navigate({ to: "/login", replace: true });
+      await router.invalidate();
     },
   });
 }

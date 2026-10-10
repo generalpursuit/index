@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 
+import { mountAuthentication } from "./authentication";
 import { createContext } from "./context";
 import { mediaCacheControl } from "./media";
 import { desktopOrigins, ENV } from "./env.server";
@@ -23,9 +24,7 @@ app.use(
   }),
 );
 
-app.on(["POST", "GET"], "/api/auth/*", async (c) =>
-  (await createAuth(undefined, (task) => c.executionCtx.waitUntil(task))).handler(c.req.raw),
-);
+mountAuthentication(app, (backgroundTask) => createAuth(undefined, backgroundTask));
 
 // Profile photos, straight from the bucket.
 app.get("/media/*", async (c) => {

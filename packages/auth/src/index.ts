@@ -85,6 +85,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
           throw new APIError("BAD_REQUEST", { message: "Edit your profile in Settings." });
         }
         if (ctx.method === "POST" && ctx.path !== "/sign-out") {
+          await security.maintain();
           // CF supplies this header at its edge. Never trust arbitrary X-Forwarded-For.
           const ip = ctx.request?.headers.get("cf-connecting-ip") ?? "local";
           await security.throttle(`ip:${ip}`, 120, 600);

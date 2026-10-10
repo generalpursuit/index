@@ -9,6 +9,7 @@ struct LoginView: View {
   @State private var password = ""
   @State private var name = ""
   @State private var signUp = false
+  @State private var recovering = false
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
@@ -54,11 +55,14 @@ struct LoginView: View {
             || (signUp
               ? !email.contains("@") || trimmed(username).count < 3 || trimmed(name).isEmpty
               : trimmed(identifier).isEmpty))
+        if !signUp { Button("Forgot password?") { recovering = true } }
         Button(signUp ? "Already have an account? Sign in" : "New here? Create an account") {
           signUp.toggle()
         }.font(.subheadline).frame(maxWidth: .infinity)
       }.frame(maxWidth: 420).padding(28).frame(maxWidth: .infinity)
     }.scrollDismissesKeyboard(.interactively)
+      .sheet(isPresented: $recovering) { PasswordRecoveryView() }
+      .onDisappear { password = "" }
   }
   private func trimmed(_ text: String) -> String { text.trimmingCharacters(in: .whitespaces) }
 }

@@ -9,7 +9,11 @@ import { ENV } from "../env.public";
 
 export function createQueryClient() {
   return new QueryClient({
-    mutationCache: new MutationCache({ onError: (error) => toast.error(error.message) }),
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        if (error.name !== "AbortError") toast.error(error.message);
+      },
+    }),
     defaultOptions: {
       queries: {
         staleTime: 30_000,

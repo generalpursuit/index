@@ -158,7 +158,18 @@ export function securityService(db: DB, secret: string, options: SecurityOptions
     if (result?.result !== "ok") throw invalidCode();
     return { success: true };
   }
-  return { digest, throttle, issue, status, consume };
+  async function maintain() {
+    if (!(await limit("maintenance", 1, 300))) return;
+    const cleanup = db
+      .select({ count: sql<number>`index_auth_cleanup()` })
+      .from(sql`(select 1) as auth_op`)
+      .then(() => {});
+    // Housekeeping never changes an auth response, but waitUntil retains the task.
+    const safeCleanup = cleanup.catch(() => {});
+    if (options.backgroundTask) options.backgroundTask(safeCleanup);
+    else await safeCleanup;
+  }
+  return { digest, throttle, issue, status, consume, maintain };
 }
 
 export function securityPlugin(db: DB, security: ReturnType<typeof securityService>) {

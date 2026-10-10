@@ -71,7 +71,7 @@ BEGIN
   SELECT user_id INTO uid FROM auth_challenge WHERE key=p_key;
   IF uid IS NOT NULL THEN SELECT * INTO u FROM "user" WHERE id=uid FOR UPDATE; END IF;
   SELECT * INTO c FROM auth_challenge WHERE key=p_key FOR UPDATE;
-  IF NOT FOUND OR c.consumed OR c.expires_at<=now() OR c.attempts>=5 OR c.delivery='failed' THEN RETURN 'invalid'; END IF;
+  IF NOT FOUND OR c.user_id IS DISTINCT FROM uid OR c.consumed OR c.expires_at<=now() OR c.attempts>=5 OR c.delivery='failed' THEN RETURN 'invalid'; END IF;
   -- A different session must neither consume nor exhaust the original signup attempt.
   IF c.purpose<>'reset' AND (c.session_id IS DISTINCT FROM p_session OR NOT EXISTS(
     SELECT 1 FROM "session" WHERE id=p_session AND user_id=c.user_id AND expires_at>now())) THEN RETURN 'invalid'; END IF;
@@ -110,3 +110,20 @@ BEGIN
   UPDATE auth_challenge SET consumed=true WHERE user_id=p_user;
   RETURN true;
 END $$;
+--> statement-breakpoint
+-- Opportunistic bounded retention, shared across Worker instances. Skip live locks;
+-- an active auth request must never wait behind housekeeping. No code survives 24h
+-- past expiry once auth traffic resumes (batches continue every five minutes).
+CREATE FUNCTION index_auth_cleanup() RETURNS integer LANGUAGE sql AS $$
+  WITH codes AS (
+    DELETE FROM auth_challenge WHERE key IN (
+      SELECT key FROM auth_challenge WHERE expires_at < now()-interval '1 day'
+      ORDER BY expires_at LIMIT 1000 FOR UPDATE SKIP LOCKED
+    ) RETURNING key
+  ), limits AS (
+    DELETE FROM auth_throttle WHERE key IN (
+      SELECT key FROM auth_throttle WHERE expires_at < now()-interval '1 day'
+      ORDER BY expires_at LIMIT 1000 FOR UPDATE SKIP LOCKED
+    ) RETURNING key
+  ) SELECT ((SELECT count(*) FROM codes)+(SELECT count(*) FROM limits))::integer
+$$;

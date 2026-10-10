@@ -3,7 +3,7 @@ import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Field, FieldLabel } from "@index/ui/components/field";
 import { authClient } from "@/lib/auth-client";
-import { resetSession } from "@/lib/session";
+import { refreshSession, resetSession } from "@/lib/session";
 import {
   SecurityError,
   securityRequest,
@@ -390,7 +390,7 @@ export function AccountSecurity() {
                 setConfirm("");
                 setMode(null);
                 setMessage("Password changed. Other sessions have been signed out.");
-                await resetSession();
+                await refreshSession();
               } else {
                 await securityRequest("request-email-change", { email: email.trim(), password });
                 await refresh();
@@ -461,7 +461,7 @@ export function AccountSecurity() {
               setMode(null);
               setMessage("Email changed. Other sessions have been signed out.");
               await refresh();
-              await resetSession();
+              await refreshSession();
             });
           }}
         >

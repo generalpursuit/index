@@ -161,6 +161,22 @@ public struct AuthUser: Codable, Sendable {
   public let id: String
   public let name: String
   public let email: String
+  public let emailVerified: Bool
+}
+public struct AuthChallengeStatus: Codable, Sendable {
+  public let email: String
+  public let pending: Bool
+  public let delivery: String
+  public let retryAfter: Int
+  public let expiresAt: String?
+}
+public struct AccountSecurityStatus: Codable, Sendable {
+  public let verification: AuthChallengeStatus
+  public let emailChange: AuthChallengeStatus
+}
+public struct CodeRequestResult: Codable, Sendable {
+  public let success: Bool
+  public let retryAfter: Int
 }
 public struct AuthSession: Codable, Sendable { public let user: AuthUser }
 

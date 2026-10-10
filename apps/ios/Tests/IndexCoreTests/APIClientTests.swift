@@ -87,7 +87,7 @@ struct APIClientTests {
       return (
         200, ["set-auth-token": "signed-token.signature"],
         Data(
-          #"{"token":"unsigned-do-not-use","user":{"id":"alice","name":"Alice","email":"alice@example.com"}}"#
+          #"{"token":"unsigned-do-not-use","user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#
             .utf8)
       )
     }
@@ -131,7 +131,7 @@ struct APIClientTests {
       return (
         200, ["set-auth-token": "signed-token.signature"],
         Data(
-          #"{"token":"unsigned","user":{"id":"alice","name":"Alice","email":"alice@example.com"}}"#
+          #"{"token":"unsigned","user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#
             .utf8)
       )
     }
@@ -161,7 +161,7 @@ struct APIClientTests {
       (
         200, [:],
         Data(
-          #"{"token":"unsigned","user":{"id":"alice","name":"Alice","email":"alice@example.com"}}"#
+          #"{"token":"unsigned","user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#
             .utf8)
       )
     }
@@ -177,6 +177,69 @@ struct APIClientTests {
       return (200, [:], Data(#"{"success":true}"#.utf8))
     }
     let _: Success = try await client.request("/discovery/users", query: ["query": "a&b+? /é"])
+  }
+  @Test func restrictedSessionRestoresWithoutLosingSignedCredential() async throws {
+    let credentials = MemoryCredentials("restricted.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/get-session")
+      return (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"mistake@example.com","emailVerified":false}}"#.utf8))
+    }
+    let restored = try await client.restore()
+    #expect(restored?.user.emailVerified == false)
+    #expect(try credentials.read() == "restricted.signature")
+  }
+  @Test func unverifiedAPIErrorClearsContentButRetainsVerificationCredential() async throws {
+    let credentials = MemoryCredentials("restricted.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/private")
+    HTTPStub.handler = { _ in (403, [:], Data(#"{"code":"FORBIDDEN","message":"Verify your email to continue.","data":{"code":"EMAIL_NOT_VERIFIED"}}"#.utf8)) }
+    do {
+      let _: Success = try await client.request("/private")
+      Issue.record("Restricted session unexpectedly reached app API")
+    } catch APIError.emailNotVerified {}
+    let cached: Success? = await client.cached("/private")
+    #expect(cached == nil)
+    #expect(try credentials.read() == "restricted.signature")
+  }
+  @Test func verificationAndCorrectionUseSignedSessionWithoutPasswordlessLogin() async throws {
+    let credentials = MemoryCredentials("restricted.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/security/correct-email")
+      #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer restricted.signature")
+      return (200, [:], Data(#"{"success":true,"retryAfter":60}"#.utf8))
+    }
+    let response = try await client.correctEmail("correct@example.com", password: "signup-password")
+    #expect(response.retryAfter == 60)
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/security/verify-email")
+      return (200, [:], Data(#"{"success":true}"#.utf8))
+    }
+    try await client.verifyEmail(code: "123456")
+    #expect(try credentials.read() == "restricted.signature")
+  }
+  @Test func resetErasesExistingCredentialAndCacheWithoutCreatingASession() async throws {
+    let credentials = MemoryCredentials("old.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/private")
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/security/reset-password")
+      return (200, [:], Data(#"{"success":true}"#.utf8))
+    }
+    try await client.resetPassword(email: "alice@example.com", code: "123456", newPassword: "new-password")
+    #expect(try credentials.read() == nil)
+    let cached: Success? = await client.cached("/private")
+    #expect(cached == nil)
+  }
+  @Test func failedCodePreservesInterruptedVerificationSession() async throws {
+    let credentials = MemoryCredentials("restricted.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { _ in (400, [:], Data(#"{"message":"That code is incorrect or expired."}"#.utf8)) }
+    await #expect(throws: APIError.self) { try await client.verifyEmail(code: "000000") }
+    #expect(try credentials.read() == "restricted.signature")
   }
   @Test func UTCWeeksCrossYearBoundary() {
     #expect(Week.monday(Week.date("2026-01-01")) == "2025-12-29")

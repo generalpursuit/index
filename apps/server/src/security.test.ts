@@ -1,3 +1,5 @@
+import { Hono } from "hono";
+import { mountAuthentication } from "./authentication";
 import { createAuth } from "@index/auth";
 import type { SecurityEmail } from "@index/auth/delivery";
 import { createTestDatabase } from "@index/api/testing/database";
@@ -399,6 +401,166 @@ describe("verification and account security", () => {
     assert.equal(
       (await auth.handler(new Request(`${origin}/api/auth/verify-email?token=fake`))).status,
       404,
+    );
+  });
+  it("runs recovery delivery through the production Worker route's waitUntil without delaying or exposing its outcome", async () => {
+    const { user } = await signup();
+    let release!: () => void;
+    let delivered = false;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const tasks: Promise<unknown>[] = [];
+    const worker = new Hono();
+    mountAuthentication(worker, async (backgroundTask) =>
+      createAuth(config, fixture.db, [], {
+        backgroundTask,
+        sendEmail: async () => {
+          await pending;
+          delivered = true;
+          throw new Error("simulated provider outage");
+        },
+      }),
+    );
+    const context = {
+      waitUntil: (task: Promise<unknown>) => {
+        tasks.push(task);
+      },
+      passThroughOnException() {},
+      props: {},
+    };
+    try {
+      const response = await worker.fetch(
+        new Request(`${origin}/api/auth/security/request-reset`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: user.email }),
+        }),
+        {},
+        context,
+      );
+      assert.equal(response.status, 200);
+      assert.deepEqual(await response.json(), { success: true, retryAfter: 60 });
+      assert.equal(delivered, false);
+      assert.ok(tasks.length > 0, "delivery must be registered on Worker execution context");
+    } finally {
+      release();
+      await Promise.all(tasks);
+    }
+    assert.equal(delivered, true);
+    const result = await fixture.client.query<{ delivery: string }>(
+      "select delivery from auth_challenge where purpose='reset'",
+    );
+    assert.equal(result.rows[0]?.delivery, "failed");
+  });
+  it("cleans expired unknown-email challenges and throttles in bounded batches without deleting active codes", async () => {
+    const { token } = await signup();
+    await post("/security/request-reset", { email: "unknown@example.test" });
+    await Promise.all(background);
+    await fixture.client.exec(
+      "UPDATE auth_challenge SET expires_at=now()-interval '2 days' WHERE user_id IS NULL; UPDATE auth_throttle SET expires_at=now()-interval '2 days'",
+    );
+    await post("/security/request-reset", { email: "another@example.test" });
+    await Promise.all(background);
+    const expired = await fixture.client.query<{ count: number }>(
+      "select count(*)::integer as count from auth_challenge where expires_at<now()-interval '1 day'",
+    );
+    assert.equal(expired.rows[0]?.count, 0);
+    const limits = await fixture.client.query<{ count: number }>(
+      "select count(*)::integer as count from auth_throttle where expires_at<now()-interval '1 day'",
+    );
+    assert.equal(limits.rows[0]?.count, 0);
+    await verify(token);
+  });
+
+  it("keeps old usernames reserved through Better Auth signup and availability checks, including concurrent registrations", async () => {
+    const { user } = await signup();
+    await fixture.client.query('UPDATE "user" SET username=$1 WHERE id=$2', [
+      "reader_new",
+      user.id,
+    ]);
+    const available = await post("/is-username-available", { username: "READER" });
+    assert.deepEqual(await available.json(), { available: false });
+    const reserved = await post("/sign-up/email", {
+      name: "Other",
+      username: "reader",
+      email: "other@example.test",
+      password,
+    });
+    assert.equal(reserved.status, 400);
+    const results = await Promise.all(
+      ["first", "second"].map((name) =>
+        post("/sign-up/email", {
+          name,
+          username: "one_winner",
+          email: `${name}@example.test`,
+          password,
+        }),
+      ),
+    );
+    assert.equal(results.filter((response) => response.status === 200).length, 1);
+    assert.ok(
+      results
+        .filter((response) => response.status !== 200)
+        .every((response) => [400, 422].includes(response.status)),
+    );
+    assert.equal(
+      (
+        await fixture.client.query(
+          "select user_id from username_aliases where username='one_winner'",
+        )
+      ).rows.length,
+      1,
+    );
+  });
+  it("does not replace another account's email and invalidates an in-flight change after password reset", async () => {
+    const first = await signup();
+    await verify(first.token);
+    const other = await signup("another");
+    await verify(other.token, other.user.email);
+    assert.equal(
+      (
+        await post(
+          "/security/request-email-change",
+          { email: other.user.email, password },
+          first.token,
+        )
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await post("/security/confirm-email-change", { code: mail.at(-1)!.code }, first.token))
+        .status,
+      409,
+    );
+    assert.equal((await session(first.token))?.user.email, first.user.email);
+    await elapse();
+    assert.equal(
+      (
+        await post(
+          "/security/request-email-change",
+          { email: "free@example.test", password },
+          first.token,
+        )
+      ).status,
+      200,
+    );
+    const changeCode = mail.at(-1)!.code;
+    await post("/security/request-reset", { email: first.user.email });
+    await Promise.all(background);
+    assert.equal(
+      (
+        await post("/security/reset-password", {
+          email: first.user.email,
+          code: mail.at(-1)!.code,
+          newPassword: "updated-password",
+        })
+      ).status,
+      200,
+    );
+    assert.equal(
+      (await post("/security/confirm-email-change", { code: changeCode }, first.token)).status,
+      401,
     );
   });
 });

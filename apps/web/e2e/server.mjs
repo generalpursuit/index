@@ -6,6 +6,9 @@ import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
 const database = await createTestDatabase();
+const emails = [];
+const deliveries = [];
+let failEmails = false;
 const auth = createAuth(
   {
     BETTER_AUTH_URL: apiURL,
@@ -14,7 +17,37 @@ const auth = createAuth(
   },
   database.db,
   ["tauri://localhost", "http://tauri.localhost"],
+  {
+    sendEmail: async (message) => {
+      if (failEmails) throw new Error("Fixture delivery unavailable");
+      emails.push(message);
+    },
+    backgroundTask: (task) => deliveries.push(task),
+  },
 );
+async function registerFixture({ body }) {
+  const response = await auth.handler(
+    new Request(apiURL + "/api/auth/sign-up/email", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  );
+  if (!response.ok) throw new Error("Fixture signup failed");
+  const result = await response.json();
+  const verified = await auth.handler(
+    new Request(apiURL + "/api/auth/security/verify-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${response.headers.get("set-auth-token")}`,
+      },
+      body: JSON.stringify({ code: emails.findLast((message) => message.to === body.email)?.code }),
+    }),
+  );
+  if (!verified.ok) throw new Error("Fixture verification failed");
+  return result;
+}
 let fixture;
 // Pages on the reserved .test domain are served from fixtures so tests never need the internet.
 // Set E2E_LIVE_PAGES=1 to read real pages while clicking through the app by hand.
@@ -35,10 +68,16 @@ async function fetchPage(url, init) {
   throw new TypeError("Offline: only fixture pages are available.");
 }
 async function seed() {
-  await database.client.exec('TRUNCATE TABLE "user", conversations, short_routes CASCADE');
+  await Promise.all(deliveries);
+  deliveries.length = 0;
+  emails.length = 0;
+  failEmails = false;
+  await database.client.exec(
+    'TRUNCATE TABLE "user", auth_challenge, auth_throttle, conversations, short_routes CASCADE',
+  );
   const people = {};
   for (const name of ["Alice", "Bob", "Lena", "Amir", "Iris", "Mia", "Noah"]) {
-    const result = await auth.api.signUpEmail({
+    const result = await registerFixture({
       body: {
         name,
         username: name.toLowerCase(),
@@ -329,7 +368,7 @@ async function seedMore(people, week, reading) {
   const ids = Object.fromEntries(Object.entries(people).map(([n, id]) => [n.toLowerCase(), id]));
   const hidden = new Set(["alice", "iris", "mia"]);
   for (const [username, name, visibility] of samplePeople) {
-    const result = await auth.api.signUpEmail({
+    const result = await registerFixture({
       body: { name, username, email: username + "@test.example", password: "test-password-123" },
     });
     ids[username] = result.user.id;
@@ -436,7 +475,20 @@ Bun.serve({
     if (request.method === "OPTIONS") response = new Response(null, { status: 204 });
     else if (url.pathname === "/_test/reset" && request.method === "POST")
       response = Response.json(await seed());
-    else if (url.pathname === "/_test/fixture") response = Response.json(fixture);
+    else if (url.pathname === "/_test/mail") {
+      await Promise.all(deliveries);
+      response = Response.json(
+        emails.filter((message) => message.to === url.searchParams.get("email")),
+      );
+    } else if (url.pathname === "/_test/auth-clock" && request.method === "POST") {
+      await database.client.exec(
+        "UPDATE auth_challenge SET sent_at=now()-interval '61 seconds'; UPDATE auth_throttle SET expires_at=now()-interval '1 second'",
+      );
+      response = Response.json({ success: true });
+    } else if (url.pathname === "/_test/email-failure" && request.method === "POST") {
+      failEmails = (await request.json()).enabled === true;
+      response = Response.json({ success: true });
+    } else if (url.pathname === "/_test/fixture") response = Response.json(fixture);
     else if (url.pathname === "/health") response = new Response("ready");
     else if (url.pathname.startsWith("/media/")) {
       const object = media.get(url.pathname.slice("/media/".length));

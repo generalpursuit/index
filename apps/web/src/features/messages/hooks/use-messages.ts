@@ -1,3 +1,4 @@
+import { accountMutationOptions } from "@/lib/account-boundary";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { conversationsOptions, conversationOptions, messagesOptions } from "../queries";
@@ -15,42 +16,50 @@ export function useMessageActions() {
     cache = useQueryClient();
   const refresh = () => cache.invalidateQueries({ queryKey: api.messages.key() });
   return {
-    start: useMutation(api.messages.createConversation.mutationOptions({ onSuccess: refresh })),
+    start: useMutation(
+      accountMutationOptions(
+        api.messages.createConversation.mutationOptions({ onSuccess: refresh }),
+      ),
+    ),
     send: useMutation(
-      api.messages.send.mutationOptions({
-        onMutate: (input) =>
-          cache.cancelQueries({
-            queryKey: messagesOptions(api, input.conversationId).queryKey,
-            exact: true,
-          }),
-        onSuccess: (message, input) => {
-          cache.setQueryData(
-            messagesOptions(api, input.conversationId).queryKey,
-            (current) =>
-              current && {
-                ...current,
-                pages: current.pages.map((page, index) => ({
-                  ...page,
-                  items: current.pages.some((p) => p.items.some((item) => item.id === message.id))
-                    ? page.items.map((item) => (item.id === message.id ? message : item))
-                    : index === 0
-                      ? [message, ...page.items]
-                      : page.items,
-                })),
-              },
-          );
-          void cache.invalidateQueries({ queryKey: api.messages.conversations.key() });
-          void cache.invalidateQueries({ queryKey: api.messages.conversation.key() });
-        },
-      }),
+      accountMutationOptions(
+        api.messages.send.mutationOptions({
+          onMutate: (input) =>
+            cache.cancelQueries({
+              queryKey: messagesOptions(api, input.conversationId).queryKey,
+              exact: true,
+            }),
+          onSuccess: (message, input) => {
+            cache.setQueryData(
+              messagesOptions(api, input.conversationId).queryKey,
+              (current) =>
+                current && {
+                  ...current,
+                  pages: current.pages.map((page, index) => ({
+                    ...page,
+                    items: current.pages.some((p) => p.items.some((item) => item.id === message.id))
+                      ? page.items.map((item) => (item.id === message.id ? message : item))
+                      : index === 0
+                        ? [message, ...page.items]
+                        : page.items,
+                  })),
+                },
+            );
+            void cache.invalidateQueries({ queryKey: api.messages.conversations.key() });
+            void cache.invalidateQueries({ queryKey: api.messages.conversation.key() });
+          },
+        }),
+      ),
     ),
     read: useMutation(
-      api.messages.markRead.mutationOptions({
-        onSuccess: () => {
-          void cache.invalidateQueries({ queryKey: api.messages.unread.key() });
-          void cache.invalidateQueries({ queryKey: api.messages.conversations.key() });
-        },
-      }),
+      accountMutationOptions(
+        api.messages.markRead.mutationOptions({
+          onSuccess: () => {
+            void cache.invalidateQueries({ queryKey: api.messages.unread.key() });
+            void cache.invalidateQueries({ queryKey: api.messages.conversations.key() });
+          },
+        }),
+      ),
     ),
   };
 }

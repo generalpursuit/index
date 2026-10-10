@@ -2,6 +2,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
+import { clearAccountState } from "./lib/account-boundary";
+import { resetSession } from "./lib/session";
 import { installDesktopLinks } from "./lib/desktop";
 import { toast } from "sonner";
 
@@ -30,8 +32,14 @@ declare module "@tanstack/react-router" {
 
 installDesktopLinks((message) => toast.error(message));
 window.addEventListener("index:session-expired", () => {
-  queryClient.setQueryData(["session"], null);
+  void clearAccountState(queryClient);
   void router.invalidate();
+});
+
+window.addEventListener("index:verification-required", () => {
+  void resetSession()
+    .catch(() => {})
+    .finally(() => router.invalidate());
 });
 
 const rootElement = document.getElementById("app");

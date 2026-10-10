@@ -38,12 +38,13 @@ export function createNativeSessionFetch(
         throw error;
       });
     await loaded;
-    if (/\/api\/auth\/sign-(in|up)\/email$/.test(url.pathname)) {
-      generation++;
+    let version = generation;
+    if (/\/api\/auth\/sign-(in\/(email|username)|up\/email)$/.test(url.pathname)) {
+      version = ++generation;
       token = null;
       await persist(null);
+      if (version !== generation) throw new DOMException("Session changed", "AbortError");
     }
-    const version = generation;
     const hadToken = token !== null;
     const headers = new Headers(request.headers);
     if (token) headers.set("Authorization", "Bearer " + token);
@@ -54,28 +55,30 @@ export function createNativeSessionFetch(
       if (version !== generation) throw new DOMException("Session changed", "AbortError");
       if (response.status === 401) {
         token = null;
-        generation++;
+        const expiredVersion = ++generation;
         await persist(null);
-        if (hadToken) expired();
+        if (hadToken && expiredVersion === generation) expired();
       } else if (response.ok && !logout) {
         const next = response.headers.get("set-auth-token");
         // A null session is how Better Auth reports an expired bearer token.
         const emptySession =
           url.pathname.endsWith("/api/auth/get-session") &&
           (await response.clone().json()) === null;
+        if (version !== generation) throw new DOMException("Session changed", "AbortError");
         if (emptySession && hadToken) {
           token = null;
-          generation++;
+          const expiredVersion = ++generation;
           await persist(null);
-          expired();
+          if (expiredVersion === generation) expired();
         } else if (next) {
           await persist(next);
+          if (version !== generation) throw new DOMException("Session changed", "AbortError");
           token = next;
         }
       }
       return response;
     } finally {
-      if (logout) {
+      if (logout && version === generation) {
         generation++;
         token = null;
         await persist(null);

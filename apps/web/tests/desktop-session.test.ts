@@ -74,4 +74,124 @@ describe("desktop bearer transport", () => {
     await transport("https://api.example.com/api/auth/get-session");
     assert.equal(token, null);
   });
+  test("username login clears the prior credential and ignores its late private responses", async () => {
+    let token: string | null = "alice.signed";
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const transport = createNativeSessionFetch(
+      "https://api.example.com",
+      {
+        read: async () => token,
+        write: async (next) => {
+          token = next;
+        },
+      },
+      (async (input, init) => {
+        if (new Request(input).url.endsWith("/sign-in/username")) {
+          assert.equal(new Headers(init?.headers).get("Authorization"), null);
+          return new Response("{}", { headers: { "set-auth-token": "bob.signed" } });
+        }
+        await pending;
+        return new Response("{}");
+      }) as typeof fetch,
+    );
+    const old = transport("https://api.example.com/api/v1/me/profile");
+    // Start the old request before changing accounts, without waiting on its network.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await transport("https://api.example.com/api/auth/sign-in/username", { method: "POST" });
+    release();
+    await assert.rejects(old, /Session changed/);
+    assert.equal(token, "bob.signed");
+  });
+});
+
+test("an old null-session body cannot erase the newer signed credential", async () => {
+  let token: string | null = "alice.signed";
+  let finish!: () => void;
+  let started!: () => void;
+  const headersReady = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const body = new ReadableStream({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode("nu"));
+      finish = () => {
+        controller.enqueue(new TextEncoder().encode("ll"));
+        controller.close();
+      };
+    },
+  });
+  let expired = 0;
+  const transport = createNativeSessionFetch(
+    "https://api.example.com",
+    {
+      read: async () => token,
+      write: async (next) => {
+        token = next;
+      },
+    },
+    (async (input) => {
+      if (new Request(input).url.endsWith("/get-session")) {
+        started();
+        return new Response(body);
+      }
+      return new Response("{}", { headers: { "set-auth-token": "bob.signed" } });
+    }) as typeof fetch,
+    () => {
+      expired++;
+    },
+  );
+  const old = transport("https://api.example.com/api/auth/get-session");
+  await headersReady;
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  await transport("https://api.example.com/api/auth/sign-in/username", { method: "POST" });
+  finish();
+  await assert.rejects(old, /Session changed/);
+  assert.equal(token, "bob.signed");
+  assert.equal(expired, 0);
+});
+
+test("a delayed serialized credential write cannot restore an old in-memory token", async () => {
+  let token: string | null = "alice.signed";
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let started!: () => void;
+  const writing = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const writes: (string | null)[] = [];
+  const transport = createNativeSessionFetch(
+    "https://api.example.com",
+    {
+      read: async () => token,
+      write: async (next) => {
+        if (next === "old.rotation") {
+          started();
+          await held;
+        }
+        token = next;
+        writes.push(next);
+      },
+    },
+    (async (input, init) => {
+      const login = new Request(input).url.endsWith("/sign-in/username");
+      if (login) assert.equal(new Headers(init?.headers).get("Authorization"), null);
+      return new Response("{}", {
+        headers: { "set-auth-token": login ? "bob.signed" : "old.rotation" },
+      });
+    }) as typeof fetch,
+  );
+  const old = transport("https://api.example.com/rpc/v1/profiles/me").catch((error) => error);
+  await writing;
+  const login = transport("https://api.example.com/api/auth/sign-in/username", { method: "POST" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  release();
+  await login;
+  assert.match((await old).message, /Session changed/);
+  assert.deepEqual(writes, ["old.rotation", null, "bob.signed"]);
+  assert.equal(token, "bob.signed");
 });

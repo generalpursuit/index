@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
+import { clearAccountState } from "./account-boundary";
 import { authClient } from "./auth-client";
 import { queryClient } from "@/utils/orpc";
 
@@ -8,6 +9,18 @@ export const sessionOptions = queryOptions({
   queryFn: async () => {
     const result = await authClient.getSession();
     if (result.error) throw new Error(result.error.message || "Could not check your session.");
+    const previous = queryClient.getQueryData<{ user: { id: string; emailVerified: boolean } }>([
+      "session",
+    ]);
+    if (
+      previous &&
+      (previous.user.id !== result.data?.user.id ||
+        (previous.user.emailVerified && !result.data?.user.emailVerified))
+    ) {
+      // An expired/replaced cookie in another tab is an account boundary too. Do not
+      // cancel this very request: its new identity must still reach its observers.
+      await clearAccountState(queryClient, true);
+    }
     return result.data;
   },
   staleTime: 15_000,
@@ -32,7 +45,12 @@ export function safeReturn(value: unknown) {
     : "/";
 }
 export async function resetSession() {
-  await queryClient.cancelQueries();
-  queryClient.clear();
-  await queryClient.fetchQuery(sessionOptions);
+  await clearAccountState(queryClient);
+  await queryClient.fetchQuery({ ...sessionOptions, staleTime: 0 });
+}
+
+/** Refresh the same account after a security change without briefly signing the UI out. */
+export async function refreshSession() {
+  await queryClient.fetchQuery({ ...sessionOptions, staleTime: 0 });
+  await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "session" });
 }

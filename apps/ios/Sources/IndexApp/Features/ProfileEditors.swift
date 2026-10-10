@@ -28,6 +28,7 @@ struct SettingsView: View {
         }.buttonStyle(PillStyle(selected: true)).disabled(
           name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         Divider().padding(.vertical)
+        AccountSecurityView()
         AsyncButton {
           await app.signOut()
         } label: {

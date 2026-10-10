@@ -1,3 +1,4 @@
+import { accountMutationOptions } from "@/lib/account-boundary";
 import { activityOptions } from "../queries";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
@@ -6,9 +7,11 @@ export function useActivity(type?: "comment" | "request" | "mention" | "follow")
     cache = useQueryClient();
   const list = useInfiniteQuery(activityOptions(api, type));
   const read = useMutation(
-    api.activity.markRead.mutationOptions({
-      onSuccess: () => cache.invalidateQueries({ queryKey: api.activity.key() }),
-    }),
+    accountMutationOptions(
+      api.activity.markRead.mutationOptions({
+        onSuccess: () => cache.invalidateQueries({ queryKey: api.activity.key() }),
+      }),
+    ),
   );
   return { list, read };
 }

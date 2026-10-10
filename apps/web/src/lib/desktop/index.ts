@@ -1,3 +1,4 @@
+import { createSessionEventFetch } from "../session-events";
 import { ENV } from "@/env.public";
 import { createNativeSessionFetch } from "./session-fetch";
 
@@ -13,7 +14,7 @@ async function invoke<T>(command: string, args?: Record<string, unknown>): Promi
   if (!window.__TAURI__) throw new Error("The desktop bridge is unavailable.");
   return window.__TAURI__.core.invoke<T>(command, args);
 }
-export const apiFetch: typeof fetch = isDesktop
+const sessionFetch: typeof fetch = isDesktop
   ? createNativeSessionFetch(
       ENV.VITE_SERVER_URL,
       {
@@ -24,6 +25,11 @@ export const apiFetch: typeof fetch = isDesktop
       () => window.dispatchEvent(new Event("index:session-expired")),
     )
   : (input, init) => fetch(input, { ...init, credentials: "include" });
+
+/** Restricted sessions retain their native credential, but must drop all app content. */
+export const apiFetch = createSessionEventFetch(sessionFetch, (event) => {
+  window.dispatchEvent(new Event(event));
+});
 
 export function installDesktopLinks(reportError: (message: string) => void) {
   if (!isDesktop) return () => {};
