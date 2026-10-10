@@ -49,7 +49,7 @@ import Testing
   system.locked = false
   #expect(system.visibility == .private)
   #expect(system.validationError == nil)
-  #expect(system.body["name"] == nil)
+  #expect(!system.body.keys.contains("name"))
   #expect(starred.linkCount == nil)
   #expect(GroupDraft.saveError(APIError.server(409, "conflict")).contains("already reserved"))
 }

@@ -64,7 +64,9 @@ export function GroupSettings({ userId }: { userId: string }) {
               }
             >
               <span
-                className={"settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px]"}
+                className={
+                  "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
+                }
               >
                 {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
                 {g.name}
@@ -105,6 +107,7 @@ function GroupActions({ group }: { group: Group }) {
     [error, setError] = useState<string>(),
     locked = group.kind === "starred" || group.visibility === "private";
   const submitting = useRef(false);
+  const editTrigger = useRef<HTMLButtonElement>(null);
   const busy = actions.updateGroup.isPending || actions.deleteGroup.isPending;
   const changePrivacy = async () => {
     if (submitting.current || privacy === undefined || group.kind === "starred") return;
@@ -123,109 +126,119 @@ function GroupActions({ group }: { group: Group }) {
     }
   };
   return (
-    <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
-      <GroupLockControl
-        name={group.name}
-        locked={locked}
-        alwaysPrivate={group.kind === "starred"}
-        disabled={busy}
-        onChange={(next) => {
-          setError(undefined);
-          setPrivacy(next);
-        }}
-      />
-      <Confirmation
-        open={privacy !== undefined}
-        onOpenChange={(open) => {
-          if (!open && !busy) setPrivacy(undefined);
-        }}
-        title={privacy ? "Lock group?" : "Unlock group?"}
-        description={groupPrivacyDescription(privacy ?? locked)}
-        label={privacy ? "Lock group" : "Unlock group"}
-        pending={busy}
-        onConfirm={() => void changePrivacy()}
-      />
+    <>
+      <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
+        <GroupLockControl
+          name={group.name}
+          locked={locked}
+          alwaysPrivate={group.kind === "starred"}
+          disabled={busy}
+          onChange={(next) => {
+            setError(undefined);
+            setPrivacy(next);
+          }}
+        />
+        <Confirmation
+          open={privacy !== undefined}
+          onOpenChange={(open) => {
+            if (!open && !busy) setPrivacy(undefined);
+          }}
+          title={privacy ? "Lock group?" : "Unlock group?"}
+          description={groupPrivacyDescription(privacy ?? locked)}
+          label={privacy ? "Lock group" : "Unlock group"}
+          pending={busy}
+          onConfirm={() => void changePrivacy()}
+        />
+        {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
+        {group.kind === "custom" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  ref={editTrigger}
+                  variant="ghost"
+                  size="icon"
+                  aria-label={"Actions for " + group.name}
+                />
+              }
+            >
+              <EllipsisVertical />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEdit(true);
+                }}
+              >
+                <Pencil />
+                Edit group
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  setError(undefined);
+                  setRemove(true);
+                }}
+              >
+                <Trash />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {edit && (
+          <Modal
+            open
+            onOpenChange={(open) => {
+              if (!open && !busy) setEdit(false);
+            }}
+            title="Edit group"
+            returnFocus={editTrigger}
+          >
+            <GroupForm
+              group={group}
+              pending={actions.updateGroup.isPending}
+              onClose={() => setEdit(false)}
+              onSave={async (value) => {
+                await actions.updateGroup.mutateAsync({ id: group.id, ...value });
+                setEdit(false);
+              }}
+            />
+          </Modal>
+        )}
+        <Confirmation
+          open={remove}
+          onOpenChange={(open) => {
+            if (!busy) setRemove(open);
+          }}
+          title="Delete group?"
+          description={
+            group.visibility === "private"
+              ? "Its links stay on your profile without a group. They will no longer be locked, so anyone who can see your profile will see them."
+              : "Its links stay on your profile without a group."
+          }
+          destructive
+          label="Delete group"
+          pending={actions.deleteGroup.isPending}
+          onConfirm={async () => {
+            if (submitting.current) return;
+            submitting.current = true;
+            try {
+              await actions.deleteGroup.mutateAsync({ id: group.id, deleteLinks: false });
+            } catch (cause) {
+              setError(groupSaveError(cause));
+            } finally {
+              submitting.current = false;
+              setRemove(false);
+            }
+          }}
+        />
+      </div>
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="col-span-3 min-w-0 text-sm text-destructive wrap-anywhere" role="alert">
           {error}
         </p>
       )}
-      {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
-      {group.kind === "custom" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon" aria-label={"Actions for " + group.name} />}
-          >
-            <EllipsisVertical />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                setEdit(true);
-              }}
-            >
-              <Pencil />
-              Edit group
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              variant="destructive"
-              onClick={() => {
-                setError(undefined);
-                setRemove(true);
-              }}
-            >
-              <Trash />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      {edit && (
-        <Modal
-          open
-          onOpenChange={(open) => {
-            if (!open && !busy) setEdit(false);
-          }}
-          title="Edit group"
-        >
-          <GroupForm
-            group={group}
-            pending={actions.updateGroup.isPending}
-            onClose={() => setEdit(false)}
-            onSave={async (value) => {
-              await actions.updateGroup.mutateAsync({ id: group.id, ...value });
-              setEdit(false);
-            }}
-          />
-        </Modal>
-      )}
-      <Confirmation
-        open={remove}
-        onOpenChange={(open) => {
-          if (!busy) setRemove(open);
-        }}
-        title="Delete group?"
-        description={
-          group.visibility === "private"
-            ? "Its links stay on your profile without a group. They will no longer be locked, so anyone who can see your profile will see them."
-            : "Its links stay on your profile without a group."
-        }
-        destructive
-        label="Delete group"
-        pending={actions.deleteGroup.isPending}
-        onConfirm={async () => {
-          if (submitting.current) return;
-          submitting.current = true;
-          try {
-            await actions.deleteGroup.mutateAsync({ id: group.id, deleteLinks: false });
-          } catch (cause) {
-            setError(groupSaveError(cause));
-          } finally {
-            submitting.current = false;
-            setRemove(false);
-          }
-        }}
-      />
-    </div>
+    </>
   );
 }

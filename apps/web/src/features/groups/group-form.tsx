@@ -92,7 +92,7 @@ export function GroupForm({
                     ref={input}
                     id={id}
                     autoFocus
-                    className="min-w-0 flex-1 text-base"
+                    className="min-w-0 flex-1 text-base!"
                     placeholder="Reading, Wishlist, …"
                     value={field.state.value}
                     disabled={pending}
@@ -128,7 +128,12 @@ export function GroupForm({
             );
           }}
         </form.Field>
-        <div className="mt-2 flex items-center justify-end gap-2">
+        {pending && (
+          <p className="sr-only" role="status">
+            {group ? "Saving group…" : "Creating group…"}
+          </p>
+        )}
+        <div className="mt-2 flex items-center justify-end gap-2 [&_button]:min-h-11 [&_button]:px-5">
           <Button type="button" variant="ghost" disabled={pending} onClick={onClose}>
             Cancel
           </Button>

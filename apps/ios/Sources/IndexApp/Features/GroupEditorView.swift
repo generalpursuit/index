@@ -101,7 +101,7 @@ struct GroupEditorView: View {
     guard !pending, !confirmingPrivacy else { return }
     attempted = true
     error = nil
-    guard draft.validationError == nil else { nameFocused = true; return }
+    guard draft.validationError == nil else { nameFocused = true; errorFocused = true; return }
     if draft.changesPrivacy { confirmingPrivacy = true } else { save() }
   }
   private func save() {

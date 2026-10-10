@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
 import { Modal } from "@/components/app/primitives";
 import { useLibraryActions } from "@/features/links/hooks/use-links";
 import type { Group } from "@/lib/types";
@@ -11,17 +11,27 @@ export type CreateGroupProps = {
 };
 
 /** Use inside a caller-owned save/share surface. The caller closes it after onCreated. */
-export function CreateGroupForm({ onClose, onCreated }: CreateGroupProps) {
-  const [created, setCreated] = useState(false);
-  const { createGroup } = useLibraryActions();
+export function CreateGroupForm({
+  onClose,
+  onCreated,
+  onPendingChange,
+}: CreateGroupProps & {
+  /** Lets the host block dismissal while the write is pending. */
+  onPendingChange?: (pending: boolean) => void;
+}) {
+  const { pending, create } = useGroupCreation(onCreated);
+
   return (
     <GroupForm
-      pending={created || createGroup.isPending}
+      pending={pending}
       onClose={onClose}
       onSave={async (value) => {
-        const group = await createGroup.mutateAsync(value);
-        setCreated(true);
-        onCreated(group);
+        onPendingChange?.(true);
+        try {
+          await create(value);
+        } finally {
+          onPendingChange?.(false);
+        }
       }}
     />
   );
@@ -33,26 +43,39 @@ export function CreateGroup({
   onCreated,
   returnFocus,
 }: CreateGroupProps & { returnFocus?: RefObject<HTMLElement | null> }) {
-  const { createGroup } = useLibraryActions();
-  const [created, setCreated] = useState(false);
+  const { pending, create } = useGroupCreation(onCreated);
   return (
     <Modal
       open
       onOpenChange={(open) => {
-        if (!open && !createGroup.isPending) onClose();
+        if (!open && !pending) onClose();
       }}
       title="New group"
       returnFocus={returnFocus}
     >
-      <GroupForm
-        pending={created || createGroup.isPending}
-        onClose={onClose}
-        onSave={async (value) => {
-          const group = await createGroup.mutateAsync(value);
-          setCreated(true);
-          onCreated(group);
-        }}
-      />
+      <GroupForm pending={pending} onClose={onClose} onSave={create} />
     </Modal>
   );
+}
+
+function useGroupCreation(onCreated: CreateGroupProps["onCreated"]) {
+  const { createGroup } = useLibraryActions();
+  const [created, setCreated] = useState(false);
+  const active = useRef(false);
+  useEffect(() => {
+    active.current = true;
+    return () => {
+      active.current = false;
+    };
+  }, []);
+  return {
+    pending: created || createGroup.isPending,
+    create: async (value: Parameters<typeof createGroup.mutateAsync>[0]) => {
+      const group = await createGroup.mutateAsync(value);
+      // Account changes/navigation can unmount the caller while a request completes.
+      if (!active.current) return;
+      setCreated(true);
+      onCreated(group);
+    },
+  };
 }

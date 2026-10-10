@@ -120,6 +120,7 @@ function ProfileContent({
     navigate = useNavigate();
   const [connections, setConnections] = useState<"followers" | "following" | null>(null),
     [newGroup, setNewGroup] = useState(false);
+  const groupReturnFocus = useRef<HTMLButtonElement>(null);
   const hidden = !profile.canViewContent;
   return (
     <div className="profile-page">
@@ -222,7 +223,10 @@ function ProfileContent({
           username={profile.username!}
           own={own}
           filter={filter}
-          onNewGroup={() => setNewGroup(true)}
+          onNewGroup={(trigger) => {
+            groupReturnFocus.current = trigger ?? null;
+            setNewGroup(true);
+          }}
         />
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
@@ -246,6 +250,7 @@ function ProfileContent({
       )}
       {newGroup && (
         <CreateGroup
+          returnFocus={groupReturnFocus}
           onClose={() => setNewGroup(false)}
           onCreated={(group) => {
             setNewGroup(false);
@@ -274,7 +279,7 @@ function ProfileLinks({
   userId: string;
   own: boolean;
   filter: string;
-  onNewGroup: () => void;
+  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
   username: string;
 }) {
   const groups = useGroups(userId),
@@ -548,8 +553,9 @@ function ListFilter({
   filter: string;
   own: boolean;
   onSelect: (value: string) => void;
-  onNewGroup: () => void;
+  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
   // Favorites first, then the person's groups, like Settings.
   const lists = groups
       .filter((g) => g.kind !== "starred")
@@ -566,6 +572,7 @@ function ListFilter({
             className={
               "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
             }
+            ref={trigger}
             aria-label={"Showing " + name}
           />
         }
@@ -596,7 +603,7 @@ function ListFilter({
         {own && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onNewGroup}>
+            <DropdownMenuItem onClick={() => onNewGroup(trigger.current)}>
               <Plus />
               New group
             </DropdownMenuItem>

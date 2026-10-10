@@ -73,6 +73,7 @@ private struct ManagedGroupLock: View {
   @State private var confirming = false
   @State private var pending = false
   @State private var error: String?
+  @AccessibilityFocusState private var errorFocused: Bool
   private var locked: Bool { group.kind == "starred" || group.visibility == .private }
   var body: some View {
     VStack(alignment: .trailing, spacing: 4) {
@@ -80,7 +81,7 @@ private struct ManagedGroupLock: View {
         error = nil
         confirming = true
       }
-      if let error { Text(error).font(.caption).foregroundStyle(IndexPalette.destructive) }
+      if let error { Text(error).font(.caption).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
       if pending { ProgressView().accessibilityLabel("Saving group") }
     }
     .alert(locked ? "Unlock group?" : "Lock group?", isPresented: $confirming) {
@@ -102,6 +103,7 @@ private struct ManagedGroupLock: View {
       } catch is CancellationError { return } catch {
         guard account == app.userID else { return }
         self.error = GroupDraft.saveError(error)
+        errorFocused = true
         if case APIError.unauthenticated = error { app.handle(error) }
       }
     }

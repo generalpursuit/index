@@ -5,7 +5,7 @@ Groups are personal link collections, separate from conversations. New groups de
 Web and Tauri share `features/groups/create-group.tsx`:
 
 - `CreateGroup({onClose, onCreated, returnFocus?})` opens the existing responsive Modal (desktop dialog / phone sheet). Mount to open, unmount in `onClose`/`onCreated`. Pass a ref to the initiating button as `returnFocus` when opening without a Base UI trigger. Modal forwards this optional ref to both DialogContent and DrawerContent `finalFocus`.
-- `CreateGroupForm({onClose, onCreated})` embeds the same form in a caller-owned save/share surface. The caller owns that surface's focus restoration and pending dismissal policy.
+- `CreateGroupForm({onClose, onCreated, onPendingChange?})` embeds the same form in a caller-owned save/share surface. The caller owns that surface's focus restoration; use `onPendingChange(boolean)` to block dismissal during the write. Both components use the authenticated application's Query/Router contexts.
 - `onCreated(group: Group): void` receives the full successful server response, including `id`, `name`, `slug`, `visibility` and `ownerId`, once. Assign `group.id` to the saved link's group selection immediately; do not refetch by ID. The profile uses `group.slug` to navigate to the new collection. Cancellation and failures do not call this callback.
 
 Both forms preserve input after validation/request failures, show inline feedback, and prevent concurrent submissions. Standalone modal dismissal is blocked during a write. Existing privacy changes require confirmation; changing a draft lock alone does not write. Names are validated with the API input schema; case-insensitive duplicates, slug collisions and historical reservations remain authoritative server checks and produce inline conflict feedback. No URL preview, custom icon or color control is added. Settings paginates the owner's group list.
@@ -14,7 +14,9 @@ Native `GroupEditorView(group: LinkGroup? = nil, onCreated: ((LinkGroup) -> Void
 
 ## Integration and verification
 
-Keep Modal's optional `returnFocus` prop when integrating theme primitive changes, and keep `LinkGroup.linkCount` when composing auth/routing model edits. Group UI uses semantic theme tokens and does not own application theme setup or route lifecycle.
+The exact approved full themes commit `c12d2490ca9505846007f8e5ae0217e3938b3fb9` was integrated at `a6139467153e8495169c246ace7f00948593e8ae`, preserving canonical routes, the pending native route lifecycle and Starred protection.
+
+Keep Modal's optional `returnFocus` prop when integrating theme primitive changes, and keep `LinkGroup.linkCount` when composing auth/routing model edits. Settings create/edit and profile create pass stable launch-button refs so Cancel/Escape returns focus on desktop and phone. Group UI uses semantic theme tokens and does not own application theme setup or route lifecycle.
 
 Run the disposable browser suite with the assigned ports 3602/4773 using:
 
@@ -23,12 +25,14 @@ python3 /home/ono/index/.git/t3-feature-rollout/run-browser-tests.py --feature g
 bun test packages/api/src/features/groups packages/api/src/features/routes packages/api/src/data-access/visibility.test.ts
 ```
 
+VM verification on 2026-10-10: 111 Bun API/server/web unit tests passed; 18 headed browser cases passed (8 group tests plus Settings, profile, readable-route and desktop-bridge regressions). Group interactions passed in Light and Dark at both 1440px and 390px; mobile overflow checks compare actual document widths. Web `check-types` (API TypeScript build, Vite production build and web types), UI types, scoped Oxlint and `git diff --check` passed. The runner successfully launched and cleaned the disposable API, Vite and owned Xvfb/Chromium sessions. Native Info.plist parsed and the regenerated Xcode project includes the new sources; native binaries were not built or launched.
+
 The browser tests cover validation, case-insensitive/slug/history collisions, preserved failed input, pending/double-submit behavior, cancellation and focus restoration, mobile sheet/desktop dialog bounds, create/edit privacy confirmation, Favorites, Starred and profile automatic selection. The API tests cover owner-only writes and private-profile restrictions before/after lock changes. Browser fixtures use a disposable PGlite database; no live accounts or production credentials are needed.
 
 Native source and tests are provided but Swift/Xcode, signing, simulators and devices are unavailable on this Linux VM. On the Mac:
 
 1. Run `cd apps/ios && swift test` (includes `GroupDraftTests`).
-2. Start a dedicated disposable fixture API on 3602 and run `INDEX_NATIVE_INTEGRATION=1 INDEX_NATIVE_TEST_PORT=3602 swift test`. Do not run browser tests on that fixture simultaneously. The serialized live suite includes returned-group selection and collision/history recovery.
+2. From `apps/web`, start `E2E_API_PORT=3602 E2E_WEB_PORT=4773 bun e2e/server.mjs`. In `apps/ios`, run `INDEX_NATIVE_INTEGRATION=1 INDEX_NATIVE_TEST_PORT=3602 swift test`. Do not run browser tests on that fixture simultaneously. The serialized live suite includes returned-group selection and collision/history recovery.
 3. Open `Index.xcodeproj`, build the Index scheme for an iPhone simulator and iPad, then repeat in Light/Dark/System with large Dynamic Type, VoiceOver, keyboard submit, cancellation, nested Settings sheets and gesture dismissal. Verify focus and that one Create action stays reachable above the keyboard; verify no duplicate requests from repeated taps.
 4. Exercise Settings create, case-only duplicate, reserved name, long compatibility-normalized name, failed request/retry, edit with privacy-confirmation cancellation, deletion with locked-link warning, Favorites lock/unlock and Starred always private. Verify the profile selects a newly created group and saving a link uses its returned ID.
 5. Build/run the Tauri macOS app against a dedicated disposable API and repeat the web group flows in WKWebView, including focus return and both schemes. No native execution or packaging result from earlier work validates these changes.
