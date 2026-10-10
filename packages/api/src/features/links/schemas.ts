@@ -47,6 +47,7 @@ export const listGroupLinksInputSchema = z.strictObject({
 
 export const linkSchema = z.object({
   id: z.uuid(),
+  shortId: z.string().regex(/^[A-Za-z0-9_-]{16}$/),
   ownerId: z.string().min(1),
   groupId: z.uuid().nullable(),
   url: z.url({ protocol: /^https?$/ }),

@@ -24,11 +24,17 @@ export async function createTestDatabase() {
 
   async function reset() {
     await client.exec(
-      'TRUNCATE TABLE "user", conversations, auth_throttle, auth_challenge CASCADE',
+      'TRUNCATE TABLE "user", conversations, short_routes, auth_throttle, auth_challenge CASCADE',
     );
     await db.insert(user).values([
-      { id: "alice", name: "Alice", email: "alice@example.com", emailVerified: true },
-      { id: "bob", name: "Bob", email: "bob@example.com", emailVerified: true },
+      {
+        id: "alice",
+        name: "Alice",
+        username: "alice",
+        email: "alice@example.com",
+        emailVerified: true,
+      },
+      { id: "bob", name: "Bob", username: "bob", email: "bob@example.com", emailVerified: true },
     ]);
   }
 

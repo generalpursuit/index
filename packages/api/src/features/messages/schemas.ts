@@ -23,6 +23,7 @@ export const messageSchema = z.object({
 });
 export const conversationSchema = z.object({
   id: z.uuid(),
+  shortId: z.string().regex(/^[A-Za-z0-9_-]{16}$/),
   participants: z.array(publicUserSchema),
   canSend: z.boolean(),
   unreadCount: z.number().int().nonnegative(),

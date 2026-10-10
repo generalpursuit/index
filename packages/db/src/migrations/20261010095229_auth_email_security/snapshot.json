@@ -3,7 +3,7 @@
   "dialect": "postgres",
   "id": "534ebfbe-e31f-413f-ae91-b61b1809dd6d",
   "prevIds": [
-    "156c8b40-21bf-4ca3-a158-4665a5ba3da3"
+    "ce2b10e1-8e37-49a7-9e59-9d3e1df2ea79"
   ],
   "ddl": [
     {
@@ -44,6 +44,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "group_aliases",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "groups",
       "entityType": "tables",
       "schema": "public"
@@ -57,6 +63,12 @@
     {
       "isRlsEnabled": false,
       "name": "messages",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "short_routes",
       "entityType": "tables",
       "schema": "public"
     },
@@ -86,19 +98,13 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "username_aliases",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "verification",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "auth_challenge",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "auth_throttle",
       "entityType": "tables",
       "schema": "public"
     },
@@ -367,6 +373,19 @@
       "typeSchema": null,
       "notNull": true,
       "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "short_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "conversations"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
@@ -506,6 +525,45 @@
       "table": "follows"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "owner_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "group_aliases"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "slug",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "group_aliases"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "group_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "group_aliases"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -540,6 +598,19 @@
       "generated": null,
       "identity": null,
       "name": "name",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "groups"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "slug",
       "entityType": "columns",
       "schema": "public",
       "table": "groups"
@@ -605,6 +676,19 @@
       "generated": null,
       "identity": null,
       "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "links"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "short_id",
       "entityType": "columns",
       "schema": "public",
       "table": "links"
@@ -829,6 +913,45 @@
       "entityType": "columns",
       "schema": "public",
       "table": "messages"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "short_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "short_routes"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "short_routes"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "target_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "short_routes"
     },
     {
       "type": "uuid",
@@ -1267,6 +1390,32 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "username",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "username_aliases"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "username_aliases"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "id",
       "entityType": "columns",
       "schema": "public",
@@ -1336,214 +1485,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "verification"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "session_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "purpose",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "email",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "original_email",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "nonce",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "code_hash",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "0",
-      "generated": null,
-      "identity": null,
-      "name": "attempts",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "consumed",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "'pending'",
-      "generated": null,
-      "identity": null,
-      "name": "delivery",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "expires_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "now()",
-      "generated": null,
-      "identity": null,
-      "name": "sent_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "key",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_throttle"
-    },
-    {
-      "type": "integer",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "count",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_throttle"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "expires_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "auth_throttle"
     },
     {
       "nameExplicit": true,
@@ -1789,6 +1730,34 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "follows"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "owner_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "index_group_name_key(\"name\")",
+          "isExpression": true,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "groups_owner_name_unique",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "groups"
     },
     {
       "nameExplicit": true,
@@ -2092,48 +2061,6 @@
       "table": "verification"
     },
     {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "expires_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "auth_challenge_expiry_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "auth_challenge"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "expires_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "auth_throttle_expiry_idx",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "auth_throttle"
-    },
-    {
       "nameExplicit": false,
       "columns": [
         "recipient_id"
@@ -2351,6 +2278,40 @@
       ],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "group_aliases_owner_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "group_aliases"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "group_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "groups",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "group_aliases_group_id_groups_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "group_aliases"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "owner_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "groups_owner_id_user_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -2541,11 +2502,11 @@
         "id"
       ],
       "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "auth_challenge_user_id_user_id_fkey",
+      "onDelete": "SET NULL",
+      "name": "username_aliases_user_id_user_id_fkey",
       "entityType": "fks",
       "schema": "public",
-      "table": "auth_challenge"
+      "table": "username_aliases"
     },
     {
       "columns": [
@@ -2579,6 +2540,17 @@
       "entityType": "pks",
       "schema": "public",
       "table": "follows"
+    },
+    {
+      "columns": [
+        "owner_id",
+        "slug"
+      ],
+      "nameExplicit": false,
+      "name": "group_aliases_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "group_aliases"
     },
     {
       "columns": [
@@ -2653,6 +2625,16 @@
     },
     {
       "columns": [
+        "short_id"
+      ],
+      "nameExplicit": false,
+      "name": "short_routes_pkey",
+      "schema": "public",
+      "table": "short_routes",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -2683,6 +2665,16 @@
     },
     {
       "columns": [
+        "username"
+      ],
+      "nameExplicit": false,
+      "name": "username_aliases_pkey",
+      "schema": "public",
+      "table": "username_aliases",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
         "id"
       ],
       "nameExplicit": false,
@@ -2692,24 +2684,16 @@
       "entityType": "pks"
     },
     {
+      "nameExplicit": true,
       "columns": [
-        "key"
+        "owner_id",
+        "slug"
       ],
-      "nameExplicit": false,
-      "name": "auth_challenge_pkey",
+      "nullsNotDistinct": false,
+      "name": "groups_owner_slug_unique",
+      "entityType": "uniques",
       "schema": "public",
-      "table": "auth_challenge",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "key"
-      ],
-      "nameExplicit": false,
-      "name": "auth_throttle_pkey",
-      "schema": "public",
-      "table": "auth_throttle",
-      "entityType": "pks"
+      "table": "groups"
     },
     {
       "nameExplicit": true,
@@ -2748,6 +2732,29 @@
       "table": "messages"
     },
     {
+      "nameExplicit": true,
+      "columns": [
+        "kind",
+        "target_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "short_routes_target_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "short_routes"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "short_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "conversations_short_id_key",
+      "schema": "public",
+      "table": "conversations",
+      "entityType": "uniques"
+    },
+    {
       "nameExplicit": false,
       "columns": [
         "member_key"
@@ -2756,6 +2763,17 @@
       "name": "conversations_member_key_key",
       "schema": "public",
       "table": "conversations",
+      "entityType": "uniques"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "short_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "links_short_id_key",
+      "schema": "public",
+      "table": "links",
       "entityType": "uniques"
     },
     {
@@ -2895,6 +2913,305 @@
       "entityType": "checks",
       "schema": "public",
       "table": "user"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "auth_challenge",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "auth_throttle",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "purpose",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "original_email",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "nonce",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "code_hash",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "attempts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "consumed",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'pending'",
+      "generated": null,
+      "identity": null,
+      "name": "delivery",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "key",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_throttle"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "count",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_throttle"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "expires_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "auth_throttle"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "expires_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "auth_challenge_expiry_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "expires_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "auth_throttle_expiry_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "auth_throttle"
+    },
+    {
+      "nameExplicit": false,
+      "columns": [
+        "user_id"
+      ],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "auth_challenge_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "auth_challenge"
+    },
+    {
+      "columns": [
+        "key"
+      ],
+      "nameExplicit": false,
+      "name": "auth_challenge_pkey",
+      "schema": "public",
+      "table": "auth_challenge",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "key"
+      ],
+      "nameExplicit": false,
+      "name": "auth_throttle_pkey",
+      "schema": "public",
+      "table": "auth_throttle",
+      "entityType": "pks"
     }
   ],
   "renames": []

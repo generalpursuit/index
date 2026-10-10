@@ -5,7 +5,7 @@ import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
 import { groupVisible, linkVisible } from "../../data-access/visibility";
 import { collectionContainsLink } from "../links/repository";
-import { databaseError } from "../../errors";
+import { databaseError, type ApplicationError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import type { CreateGroupInput, UpdateGroupInput } from "./schemas";
 
@@ -13,6 +13,7 @@ export const groupSelection = {
   id: groups.id,
   ownerId: groups.ownerId,
   name: groups.name,
+  slug: groups.slug,
   kind: groups.kind,
   visibility: groups.visibility,
   createdAt: timestamp(groups.createdAt),
@@ -26,7 +27,7 @@ export function insertGroup(db: QueryDatabase, ownerId: string, input: CreateGro
       .values({ ...input, ownerId, kind: "custom" })
       .returning(groupSelection)
       .then((rows) => rows[0]),
-    databaseError,
+    groupWriteError,
   );
 }
 
@@ -118,7 +119,7 @@ export function updateGroup(
       )
       .returning(groupSelection)
       .then((rows) => rows[0]),
-    databaseError,
+    groupWriteError,
   );
 }
 
@@ -150,4 +151,14 @@ export function deleteGroup(db: QueryDatabase, ownerId: string, id: string, dele
       .then((rows) => rows[0]),
     databaseError,
   );
+}
+
+function groupWriteError(cause: unknown): ApplicationError {
+  const error = cause && typeof cause === "object" && "cause" in cause ? cause.cause : cause;
+  if (error && typeof error === "object" && "code" in error && error.code === "23505")
+    return {
+      code: "CONFLICT",
+      message: "That group name or address is already reserved. Choose another name.",
+    };
+  return databaseError(cause);
 }

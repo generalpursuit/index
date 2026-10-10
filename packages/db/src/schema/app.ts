@@ -31,6 +31,7 @@ export const groups = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    slug: text("slug").notNull().default(""),
     kind: text("kind", { enum: groupKinds }).default("custom").notNull(),
     visibility: text("visibility", { enum: groupVisibilities }).default("public").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -40,6 +41,11 @@ export const groups = pgTable(
       .notNull(),
   },
   (table) => [
+    unique("groups_owner_slug_unique").on(table.ownerId, table.slug),
+    uniqueIndex("groups_owner_name_unique").on(
+      table.ownerId,
+      sql`index_group_name_key(${table.name})`,
+    ),
     unique("groups_owner_id_id_unique").on(table.ownerId, table.id),
     uniqueIndex("groups_one_starred_per_owner")
       .on(table.ownerId)
@@ -57,6 +63,7 @@ export const links = pgTable(
   "links",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    shortId: text("short_id").notNull().default("").unique(),
     ownerId: text("owner_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -237,6 +244,7 @@ export const conversations = pgTable(
   "conversations",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    shortId: text("short_id").notNull().default("").unique(),
     // Canonical sorted member IDs, not a user-provided name.
     memberKey: text("member_key").notNull().unique(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
@@ -356,4 +364,26 @@ export const appRelations = defineRelationsPart(
       author: r.one.user({ from: r.comments.authorId, to: r.user.id, optional: false }),
     },
   }),
+);
+
+// Tombstones survive record deletion: a shared route can never change identity.
+export const groupAliases = pgTable(
+  "group_aliases",
+  {
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    slug: text("slug").notNull(),
+    groupId: uuid("group_id").references(() => groups.id, { onDelete: "set null" }),
+  },
+  (t) => [primaryKey({ columns: [t.ownerId, t.slug] })],
+);
+export const shortRoutes = pgTable(
+  "short_routes",
+  {
+    shortId: text("short_id").primaryKey(),
+    kind: text("kind").notNull(),
+    targetId: uuid("target_id").notNull(),
+  },
+  (t) => [unique("short_routes_target_unique").on(t.kind, t.targetId)],
 );

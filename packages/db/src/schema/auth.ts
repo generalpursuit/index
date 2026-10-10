@@ -113,3 +113,8 @@ export const authRelations = defineRelationsPart({ user, session, account, verif
     }),
   },
 }));
+
+export const usernameAliases = pgTable("username_aliases", {
+  username: text("username").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+});

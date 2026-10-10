@@ -8,6 +8,7 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { securityPlugin, securityService, type SecurityOptions } from "./security";
 import { resendTransport } from "./delivery";
 import { trustedWebOrigins } from "./origins";
+import { isUsernameAvailable } from "./namespace";
 import { usernameSchema } from "./username";
 
 export type AuthConfig = {
@@ -98,6 +99,21 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
         }
         if (ctx.path === "/sign-up/email" && typeof ctx.body?.username !== "string") {
           throw new APIError("BAD_REQUEST", { message: "Choose a username." });
+        }
+        if (
+          ["/sign-up/email", "/update-user", "/is-username-available"].includes(ctx.path) &&
+          typeof ctx.body?.username === "string" &&
+          usernameSchema.safeParse(ctx.body.username).success
+        ) {
+          const actorId =
+            ctx.path === "/update-user" ? (await getSessionFromCtx(ctx))?.user.id : undefined;
+          const available = await isUsernameAvailable(database, ctx.body.username, actorId);
+          if (ctx.path === "/is-username-available") return ctx.json({ available });
+          if (!available)
+            throw new APIError("BAD_REQUEST", {
+              code: "USERNAME_IS_ALREADY_TAKEN",
+              message: "That username is already reserved.",
+            });
         }
         // Photos are only ever uploaded through the app's API, never set as an address.
         if (
