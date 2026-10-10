@@ -139,7 +139,7 @@ Read state is a monotonic message watermark. Marking an older message read canno
 
 ## Database
 
-`packages/db/src/migrations` holds a single initial migration generated from the schema. The app has not shipped, so schema changes may regenerate it instead of adding upgrade steps; reset development databases when that happens.
+`packages/db/src/migrations` contains the checked-in migration history shared by development, staging, and production. The initial migration has been deployed: never rewrite, rename, or consolidate applied migrations. Generate a new migration for each schema change and promote the same files through staging to production. Replacing migration names makes an existing database treat the replacement as unapplied and try to create tables that already exist.
 
 ## Verification
 

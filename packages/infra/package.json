@@ -6,7 +6,9 @@
     "check-types": "tsc --noEmit",
     "dev": "alchemy dev",
     "deploy": "alchemy deploy",
-    "destroy": "alchemy destroy"
+    "destroy": "alchemy destroy",
+    "test": "bun test deployment.test.ts",
+    "smoke": "bun smoke.ts"
   },
   "dependencies": {
     "zod": "catalog:"
