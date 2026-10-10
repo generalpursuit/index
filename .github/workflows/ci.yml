@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Format and lint
+        run: |
+          bun run oxfmt --check
+          bun run oxlint
+      - name: API, server, and deployment tests
+        run: |
+          bun run --cwd packages/api test
+          bun run --cwd apps/server test
+          bun run --cwd packages/infra test
+      - name: Build and typecheck
+        env:
+          VITE_SERVER_URL: http://localhost:3002
+        run: |
+          bun run --cwd apps/web check-types
+          bun run --cwd apps/server check-types
+          bun run --cwd packages/infra check-types
+      - name: Install Chromium
+        working-directory: apps/web
+        run: bun run playwright install --with-deps chromium
+      - name: Browser tests against the production bundle
+        working-directory: apps/web
+        env:
+          E2E_PRODUCTION: "1"
+        run: bun run test:e2e
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-failures
+          path: apps/web/test-results
+          if-no-files-found: ignore
+          retention-days: 7

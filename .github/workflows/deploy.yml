@@ -1,0 +1,50 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: index-deploy-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    uses: ./.github/workflows/ci.yml
+  deploy:
+    needs: checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    env:
+      DEPLOY_STAGE: ${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Deploy API, web, database migrations, and photos
+        working-directory: packages/infra
+        env:
+          NODE_ENV: production
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+          WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+        run: bun run deploy --stage "$DEPLOY_STAGE" --yes
+      - name: Verify the deployed application
+        working-directory: packages/infra
+        env:
+          WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+          WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+        run: bun run smoke -- "$DEPLOY_STAGE"

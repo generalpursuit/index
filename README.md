@@ -83,25 +83,13 @@ Run standalone Node/Bun tools that use Varlock from the owning app directory so 
 
 ## Deployment
 
-### Alchemy
+The API, web app, Neon database, and photo bucket deploy together through Alchemy.
 
-- Target: web on Cloudflare + server on Cloudflare
-- Configure provider accounts: `cd packages/infra && bunx alchemy profile edit`
-- Dev: bun run dev
-- Deploy: bun run deploy
-- Destroy: bun run destroy
+- Pushes to `staging` deploy the `staging` stage.
+- Pushes to `main` deploy the `production` stage.
+- Pull requests run checks without cloud credentials.
 
-`alchemy profile edit` stores the selected Axiom, Cloudflare, Neon, PlanetScale, and/or Prisma provider profiles under `~/.alchemy`; no provider-specific setup command is required by this scaffold.
-
-Deploys are staged and default to a personal `dev_<username>` stage. For production, run the deploy with an explicit stage from `packages/infra`:
-
-```bash
-cd packages/infra && bunx alchemy deploy --stage production
-```
-
-### Production origins
-
-- Required after the first deploy: set `CORS_ORIGIN` in `apps/server/.env` to the exact deployed web origin, such as `https://app.example.com`, then deploy the server again.
+See [deployment setup, environment configuration, and recovery](docs/deployment.md).
 
 ## Git Hooks and Formatting
 

@@ -8,6 +8,7 @@
     "deploy": "alchemy deploy",
     "destroy": "alchemy destroy",
     "test": "bun test deployment.test.ts",
+    "setup:github": "bun setup-github.ts",
     "smoke": "bun smoke.ts"
   },
   "dependencies": {
