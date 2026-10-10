@@ -25,6 +25,69 @@ async function code(request: APIRequestContext, email: string, purpose = "verify
 test.beforeEach(async ({ request }) => {
   await request.post(apiURL + "/_test/reset");
 });
+test("an existing unverified account receives a code on password sign-in", async ({
+  page,
+  request,
+}) => {
+  // The account exists before this browser session and has never received a code.
+  await request.post(apiURL + "/_test/email-failure", { data: { enabled: true } });
+  const created = await request.post(apiURL + "/api/auth/sign-up/email", {
+    data: {
+      name: "Existing reader",
+      username: "existing_reader",
+      email: "existing@example.test",
+      password,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  await request.post(apiURL + "/_test/email-failure", { data: { enabled: false } });
+  await request.post(apiURL + "/_test/auth-clock");
+  await page.goto("/login?next=%2Fsettings");
+  await page.getByLabel("Email or username", { exact: true }).fill("existing@example.test");
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  await expect(page.getByText(/Enter the six-digit code sent to/)).toBeVisible();
+  const sent = await code(request, "existing@example.test");
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  const mail = await (
+    await request.get(apiURL + "/_test/mail?email=existing%40example.test")
+  ).json();
+  expect(mail).toHaveLength(1);
+  await page.getByLabel("Verification code").fill(sent);
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(page).toHaveURL(/settings/);
+});
+test("a restricted session without a challenge offers Send code without claiming delivery", async ({
+  page,
+  request,
+}) => {
+  const created = await request.post(apiURL + "/api/auth/sign-up/email", {
+    data: {
+      name: "Returning reader",
+      username: "returning_reader",
+      email: "returning@example.test",
+      password,
+    },
+  });
+  expect(created.ok()).toBe(true);
+  // A new login during the signup send cooldown cannot reuse its session-bound code.
+  await page.goto("/login");
+  await page.getByLabel("Email or username", { exact: true }).fill("returning_reader");
+  await page.getByLabel("Password", { exact: true }).fill(password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByText("Request a code to verify this address.")).toBeVisible();
+  await expect(page.getByText(/Enter the six-digit code sent to/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Send code", exact: true })).toBeVisible();
+  await request.post(apiURL + "/_test/auth-clock");
+  await page.reload();
+  await page.getByRole("button", { name: "Send code", exact: true }).click();
+  await expect(page.getByText(/Enter the six-digit code sent to/)).toBeVisible();
+  await page.getByLabel("Verification code").fill(await code(request, "returning@example.test"));
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+});
 test("signup stays restricted through reload, verifies, and changes password and email", async ({
   page,
   request,

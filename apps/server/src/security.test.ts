@@ -133,6 +133,65 @@ describe("verification and account security", () => {
       404,
     );
   });
+  for (const method of ["email", "username"] as const) {
+    it(`sends verification on unverified ${method} sign-in, bound to the new session`, async () => {
+      const original = await signup();
+      await fixture.client.exec("TRUNCATE auth_challenge, auth_throttle");
+      mail.length = 0;
+      const identifier = method === "email" ? original.user.email : "reader";
+      assert.equal(
+        (await post(`/sign-in/${method}`, { [method]: identifier, password: "wrong-password" }))
+          .status,
+        401,
+      );
+      assert.equal(mail.length, 0);
+      const login = await post(`/sign-in/${method}`, { [method]: identifier, password });
+      assert.equal(login.status, 200);
+      const token = login.headers.get("set-auth-token")!;
+      assert.ok(token);
+      assert.equal(mail.length, 1);
+      assert.equal(mail[0]!.to, original.user.email);
+      assert.equal(mail[0]!.purpose, "verify");
+      assert.equal((await app(token)).status, 403);
+      assert.equal(
+        (await post("/security/verify-email", { code: mail[0]!.code }, original.token)).status,
+        400,
+      );
+      await verify(token);
+      assert.equal((await app(token)).status, 200);
+      assert.equal(
+        (await post(`/sign-in/${method}`, { [method]: identifier, password })).status,
+        200,
+      );
+      assert.equal(mail.length, 1, "Verified sign-in must not send another verification code");
+    });
+  }
+  it("retains restricted sign-in and resend limits when automatic verification delivery fails", async () => {
+    const original = await signup();
+    await fixture.client.exec("TRUNCATE auth_challenge, auth_throttle");
+    mail.length = 0;
+    failDelivery = true;
+    const login = await post("/sign-in/email", { email: original.user.email, password });
+    assert.equal(login.status, 200);
+    const token = login.headers.get("set-auth-token")!;
+    assert.ok(token);
+    assert.equal((await app(token)).status, 403);
+    const status = await auth.handler(
+      new Request(`${origin}/api/auth/security/status`, { headers: headers(token) }),
+    );
+    assert.equal(
+      ((await status.json()) as { verification: { delivery: string } }).verification.delivery,
+      "failed",
+    );
+    assert.equal((await post("/security/send-verification", {}, token)).status, 429);
+    failDelivery = false;
+    const retry = await post("/sign-in/email", { email: original.user.email, password });
+    assert.equal(retry.status, 200, "A send cooldown must not discard a valid restricted session");
+    assert.equal(mail.length, 0, "Repeated sign-in must not bypass the send cooldown");
+    await elapse();
+    assert.equal((await post("/security/send-verification", {}, token)).status, 200);
+    await verify(token);
+  });
   it("gates preexisting accounts and stale cookie/bearer sessions with fresh verification state, including RPC", async () => {
     const { token, user } = await signup();
     await verify(token);

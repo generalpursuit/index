@@ -94,11 +94,13 @@ function Feedback({ error, children }: { error: string; children?: ReactNode }) 
 function DeliveryMessage({ status }: { status?: ChallengeStatus }) {
   return (
     <p role="status" className="text-sm text-muted-foreground">
-      {status?.delivery === "failed"
-        ? "We couldn’t send the email. Try resending after the cooldown."
-        : status?.delivery === "none"
-          ? "Request a code to verify this address."
-          : "Check your inbox and spam folder. Delivery may take a few minutes. Only the latest code works, for 10 minutes."}
+      {!status
+        ? "Checking verification status…"
+        : status.delivery === "failed"
+          ? "We couldn’t send the email. Try resending after the cooldown."
+          : status?.delivery === "none"
+            ? "Request a code to verify this address."
+            : "Check your inbox and spam folder. Delivery may take a few minutes. Only the latest code works, for 10 minutes."}
     </p>
   );
 }
@@ -127,7 +129,9 @@ export function VerificationForm({
     <div className="form-stack flex flex-col gap-4.5">
       <h2 className="text-xl font-medium">Verify your email</h2>
       <p>
-        Enter the six-digit code sent to{" "}
+        {status?.delivery === "sent"
+          ? "Enter the six-digit code sent to "
+          : "Verify your email address: "}
         <strong className="break-all">{status?.email ?? email}</strong>.
       </p>
       <DeliveryMessage status={status} />
@@ -165,7 +169,11 @@ export function VerificationForm({
           })
         }
       >
-        {action.remaining ? `Resend in ${action.remaining}s` : "Resend code"}
+        {action.remaining
+          ? `Resend in ${action.remaining}s`
+          : status?.delivery === "none"
+            ? "Send code"
+            : "Resend code"}
       </Button>
       <Button variant="ghost" onClick={() => setCorrecting(!correcting)}>
         Correct email address

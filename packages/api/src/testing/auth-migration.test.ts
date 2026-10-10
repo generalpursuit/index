@@ -74,7 +74,9 @@ it("upgrades legacy unverified password accounts without verifying them or losin
       ((await login.json()) as { user: { emailVerified: boolean } }).user.emailVerified,
       false,
     );
-    assert.equal((await post("/security/send-verification", {}, token)).status, 200);
+    // A legacy account has never received a signup code. Password sign-in must
+    // initiate verification instead of presenting an empty verification screen.
+    assert.match(code, /^\d{6}$/);
     assert.equal((await post("/security/verify-email", { code }, token)).status, 200);
   } finally {
     await client.close();

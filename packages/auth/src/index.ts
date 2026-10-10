@@ -147,6 +147,12 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
             await ctx.context.internalAdapter.deleteSession(created.session.token);
             throw new APIError("UNAUTHORIZED", { message: "Credentials changed. Sign in again." });
           }
+          if (!created.user.emailVerified) {
+            // Legacy accounts never received a signup code. Initiate verification
+            // only after password authentication; keep the restricted session on
+            // provider failure or cooldown so status/resend remain available.
+            await security.issue("verify", created.user.email, created).catch(() => {});
+          }
         }
       }),
     },
