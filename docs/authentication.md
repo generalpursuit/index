@@ -68,3 +68,24 @@ E2E_API_PORT=3502 E2E_WEB_PORT=4673 bun --cwd apps/web run test:e2e security.spe
 On this Linux VM, headed Chromium with a fresh owned Xvfb display is required. The rollout's finite runner uses the assigned ports and cleans only its own display/processes. A mocked Tauri bridge exercises real bearer signup/verification/reload/revocation through the fixture backend; it does not validate macOS Keychain or a packaged Tauri app.
 
 On the user's Mac, run `swift test` and `swift build` in `apps/ios`, then the simulator build in its README and the disposable native integration tests. Verify interrupted signup, corrected address, wrong/expired code, resend cooldown, recovery, current-password/email changes, offline sign-out, old-session rejection, and pending deep links across same-ID verification and account switches. Check iPhone/iPad keyboard/one-time-code autofill, VoiceOver, Dynamic Type and System/Light/Dark; launch the signed Tauri build and check Keychain restore/erase there too. Swift/Xcode, signing, simulator/device checks and real delivery were **not run on this Linux VM**. Earlier native validation recorded elsewhere was on another Mac and does not validate these changes.
+
+For native verification with this feature's isolated ports, start `E2E_API_PORT=3502 bun e2e/server.mjs` from `apps/web` in a separate terminal, with no browser runner using that fixture. On the Mac:
+
+```sh
+cd apps/ios
+swift test
+swift build
+INDEX_NATIVE_INTEGRATION=1 INDEX_NATIVE_TEST_PORT=3502 swift test
+xcodebuild -project Index.xcodeproj -scheme Index \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO \
+  INDEX_API_URL=http://localhost:3502 INDEX_WEB_URL=http://localhost:4673 build
+cd ../web
+VITE_SERVER_URL=http://localhost:3502 bun run desktop:build --local --bundles app
+open -n src-tauri/target/release/bundle/macos/Index.app
+```
+
+### Recorded verification for this feature (Linux, 2026-10-10)
+
+The combined branch passed 134 server/API/web unit tests, three additional Resend transport tests, and three infrastructure configuration tests. The focused production browser run passed all 27 auth/desktop/routes/Settings/theme/bootstrap cases (58.3s), followed by the existing registration/return-destination case (1/1). The earlier dev-mode run passed 22 cases but incorrectly included five production-only pre-app CSS checks; those five passed on the built production bundle without a product workaround.
+
+Web and server production builds, server/web/shared-UI/infrastructure types, and scoped auth lint passed. Checked-in migrations apply from empty and seeded legacy databases; Drizzle reports no schema changes. The snapshot chain is initial → readable routes → auth email security, preserving both migrations' custom functions/triggers. Xcode project generation is reproducible and Info.plist parses; these structural checks are not native compilation or execution. No production deployment, real database/account, provider credential or sending domain was used.
