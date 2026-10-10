@@ -120,18 +120,25 @@ public actor APIClient {
       ])
   }
   private func authenticate(_ path: String, body: [String: JSONValue]) async throws -> AuthSession {
+    let version = generation + 1
     try await clearSession()
+    guard generation == version else { throw CancellationError() }
     let result: AuthSession = try await perform(path, method: "POST", body: body)
+    guard generation == version else { throw CancellationError() }
     guard token != nil else { throw APIError.missingToken }
     return result
   }
   public func restore() async throws -> AuthSession? {
     guard token != nil else { return nil }
+    let version = generation
     let result: AuthSession? = try await perform("/api/auth/get-session")
+    guard generation == version else { throw CancellationError() }
     if result == nil { try await clearSession() }
     else if result?.user.emailVerified == false {
       generation += 1
+      let restrictedVersion = generation
       await responses.clear()
+      guard generation == restrictedVersion else { throw CancellationError() }
     }
     return result
   }
@@ -171,17 +178,21 @@ public actor APIClient {
   }
   public func signOut() async throws {
     // Always erase locally, and surface a Keychain failure rather than hiding it.
+    let version = generation
     var requestError: Error?
     do {
       let _: Success = try await perform("/api/auth/sign-out", method: "POST", body: [:])
     } catch { requestError = error }
+    guard generation == version else { throw requestError ?? CancellationError() }
     try await clearSession()
     if let requestError { throw requestError }
   }
   public func clearSession() async throws {
     generation += 1
+    let version = generation
     token = nil
     await responses.clear()
+    guard generation == version else { throw CancellationError() }
     try credentials.write(nil)
   }
   /// A bounded in-memory snapshot only; refresh still checks server permissions.
@@ -206,7 +217,9 @@ public actor APIClient {
     _ path: String, method: String = "GET", query: [String: String] = [:],
     body: [String: JSONValue]? = nil
   ) async throws -> T {
+    let version = generation
     let data = try await performData(path, method: method, query: query, body: body)
+    guard generation == version else { throw CancellationError() }
     do { return try JSONDecoder().decode(T.self, from: data) } catch {
       throw APIError.invalidResponse
     }

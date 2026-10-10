@@ -127,6 +127,7 @@ test("320px layout, edge swipe, and keyboard-accessible post dialog", async ({ p
 });
 test("registration uses real authentication and preserves the requested destination", async ({
   page,
+  request,
 }) => {
   await page.goto("/login?next=%2Fdiscover");
   await page.getByRole("button", { name: "Create an account", exact: true }).click();
@@ -135,6 +136,14 @@ test("registration uses real authentication and preserves the requested destinat
   await page.getByLabel("Email", { exact: true }).fill("new-reader@test.example");
   await page.getByLabel("Password", { exact: true }).fill("new-reader-password");
   await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  const messages = await (
+    await request.get(apiURL + "/_test/mail?email=new-reader%40test.example")
+  ).json();
+  await page
+    .getByLabel("Verification code")
+    .fill(messages.findLast((m: { purpose: string }) => m.purpose === "verify").code);
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
   await expect(page).toHaveURL(/discover$/);
   await page.getByRole("link", { name: "Your profile" }).click();
   await expect(page.locator(".profile-heading h1")).toHaveText("New Reader");

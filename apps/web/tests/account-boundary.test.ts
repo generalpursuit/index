@@ -148,3 +148,21 @@ test("a held restricted-session response body cannot reset a newer browser accou
   assert.deepEqual(client.getQueryData(["session"]), bob);
   client.clear();
 });
+
+test("both oRPC envelopes and REST errors signal current-session verification", async () => {
+  const { createSessionEventFetch } = await import("../src/lib/session-events");
+  for (const body of [
+    { data: { code: "EMAIL_NOT_VERIFIED" } },
+    { json: { data: { code: "EMAIL_NOT_VERIFIED" } } },
+  ]) {
+    const events: string[] = [];
+    const transport = createSessionEventFetch(
+      (async () => Response.json(body, { status: 403 })) as typeof fetch,
+      (event) => {
+        events.push(event);
+      },
+    );
+    await transport("https://api.example.com/rpc/v1/routes/resolve");
+    assert.deepEqual(events, ["index:verification-required"]);
+  }
+});

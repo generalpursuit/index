@@ -32,7 +32,7 @@ The original signup session owns a correction: supplying an address, user ID or 
 
 Codes are unbiased random six digits, valid for ten minutes, stored only as secret-keyed SHA-256 HMACs bound to their purpose, subject and random nonce. A challenge permits five guesses; the subject has at most 25 guesses/hour, one send/minute, five sends/hour and ten deliveries/hour per recipient. Current-password confirmation permits ten attempts/hour/account. Login permits twenty attempts/ten minutes/identifier. Mutating auth requests also have shared database IP limits (120/ten minutes, and 30 signup/reset deliveries/hour); the production Worker trusts only Cloudflare's edge-supplied IP header. The database limits work across Worker instances. No plaintext code is returned by production endpoints or logged.
 
-Expired rows can be purged with `DELETE FROM auth_challenge WHERE expires_at < now() - interval '1 day'` and the corresponding query on `auth_throttle`. Retain current windows when scheduling operational cleanup. Cleanup is not required for expiry enforcement.
+Auth traffic schedules `index_auth_cleanup()` at most once every five minutes through a shared SQL maintenance throttle and Worker `waitUntil`. Each pass deletes up to 1,000 challenges and 1,000 throttle keys whose expiry is more than one day old, using `SKIP LOCKED`; active codes/windows are preserved. Unknown-email reset challenges are included. Repeated traffic drains any backlog without unbounded work per request; an idle service creates no new rows. For unusually high sustained traffic, operations may schedule additional calls to the same bounded function. Expiry enforcement never depends on cleanup.
 
 ## Delivery and configuration
 
@@ -43,3 +43,28 @@ Recovery delivery runs in Worker `waitUntil` after an identical response for rea
 `CORS_ORIGIN` is the canonical web origin. `AUTH_TRUSTED_ORIGINS` accepts comma-separated additional explicit HTTPS origins, without wildcard hosts or paths. Loopback HTTP is permitted for development. Both auth and server CORS share this allowlist. Packaged Tauri origins remain explicit. Configure the likely canonical `https://i.generalpursuit.dev` and alias `https://index.generalpursuit.dev` only after their hosting is ready; a future dedicated domain uses the same configuration. No domain or credential is embedded as a production default.
 
 Before launch, provision the Resend account, verified sending DNS/SPF/DKIM/DMARC, sending API key, sender, canonical/alias URLs and trusted origins. Exercise actual delivery, spam placement, bounced/delayed messages and provider outage behavior against isolated launch-test accounts. Production email delivery is not verified on this Linux VM.
+
+## Clients and account isolation
+
+Web and Tauri show the same verification screen at `/login`: address, six-digit code, resend cooldown, and password-confirmed correction. Signup stays on that observed session query until verified. Reload/force quit resumes through the signed restricted session and `security/status`; codes and passwords are never persisted in browser storage. Recovery is a separate email/code/new-password flow and finishes at password sign-in. Settings provides current-password change and pending email-change verification.
+
+An account transition synchronously replaces cached session data with null while retaining the active query/observer, cancels account queries, and clears the mutation cache. Application mutations and browser/native transport responses carry account generations, including checks after asynchronous response-body parsing and secure-token writes. Old success/rollback callbacks cannot repopulate another account's cache. Drafts are keyed by viewer identity and are discarded at transitions. A successful sign-out still navigates to login when session revalidation fails. Same-account `refreshSession` preserves identity during security updates. Device theme preference is independent of these caches.
+
+SwiftUI has a restricted root with verification/correction and a recover-password sheet. APIClient keeps signed credentials in the existing API-scoped Keychain; a verification-required error clears content but preserves the restricted credential. Reset revokes and erases it. `verifiedSessionRevision` advances on each verified session acceptance; the root observes it to resume pending readable URLs, including false-to-true verification for the same ID. A pending URL binds to the account that accepts it and is discarded on sign-out/account switch. Anonymous incoming links survive initial restoration and subsequent signup. Private route resolution always checks a fresh verified session.
+
+## Local verification and remaining launch checks
+
+All automated data is disposable PGlite/fixture data. Server tests use real Better Auth handlers, signed cookies and signed bearer tokens, the checked-in SQL migrations, REST and RPC handlers, and the production Hono authentication mounting function with an execution-context `waitUntil` spy. They cover the full verification/recovery/change lifecycle, restricted/legacy/stale sessions, resolver gates, atomic guesses/consumption, correction ownership, namespace reservations, delivery failure, reset enumeration/revocation, and bounded cleanup. This tests the actual Worker delivery wiring, but does not claim a deployed Cloudflare Worker or real Resend delivery was exercised.
+
+Run from the repository root with the declared Bun version:
+
+```sh
+bun test apps/server/src packages/api/src apps/web/tests
+(cd apps/server && bun run check-types && bun run build)
+(cd apps/web && bun run check-types)
+E2E_API_PORT=3502 E2E_WEB_PORT=4673 bun --cwd apps/web run test:e2e security.spec.ts desktop.spec.ts readable-routes.spec.ts
+```
+
+On this Linux VM, headed Chromium with a fresh owned Xvfb display is required. The rollout's finite runner uses the assigned ports and cleans only its own display/processes. A mocked Tauri bridge exercises real bearer signup/verification/reload/revocation through the fixture backend; it does not validate macOS Keychain or a packaged Tauri app.
+
+On the user's Mac, run `swift test` and `swift build` in `apps/ios`, then the simulator build in its README and the disposable native integration tests. Verify interrupted signup, corrected address, wrong/expired code, resend cooldown, recovery, current-password/email changes, offline sign-out, old-session rejection, and pending deep links across same-ID verification and account switches. Check iPhone/iPad keyboard/one-time-code autofill, VoiceOver, Dynamic Type and System/Light/Dark; launch the signed Tauri build and check Keychain restore/erase there too. Swift/Xcode, signing, simulator/device checks and real delivery were **not run on this Linux VM**. Earlier native validation recorded elsewhere was on another Mac and does not validate these changes.

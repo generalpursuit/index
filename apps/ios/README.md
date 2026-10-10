@@ -38,6 +38,8 @@ Mutations discard snapshots and restart overlapping reads against the new state;
 
 Only Better Auth's signed `set-auth-token` header is retained. Native requests do not use cookies, and tokens are never stored in UserDefaults. Keychain entries are scoped to the API URL and use `WhenUnlockedThisDeviceOnly`. Session expiry/sign-out erase credentials and account state. The transport rejects remote HTTP and redirects; it accepts HTTP only for loopback development. The backend remains responsible for all content permissions.
 
+Restricted sessions show email verification instead of application content, including old unverified accounts. Passwords remain required for login; recovery codes never log in. See [email security](../../docs/authentication.md) for API contracts, delivery configuration, pending-link behavior and the Mac verification checklist. The new security source/tests have not been compiled or run on this Linux VM.
+
 ## Checks
 
 ```sh
@@ -49,7 +51,7 @@ INDEX_NATIVE_INTEGRATION=1 swift test
 
 The integration test resets **only the disposable fixture API** and checks real signed login/restoration, weekly pagination, Favorites, comments, private forwarding, send retries, replies, follow requests, group locking, and logout. It does not use production credentials or databases. Do not run it concurrently with browser tests that use that fixture server.
 
-On this Mac's command-line-only installation, source compilation succeeded against the installed macOS 26.5 SDK. Tests require explicitly loading the installed Testing plugin/runtime; `Scripts/check-local.sh` captures that workaround. The latest run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
+Historical validation on another Mac's command-line-only installation (before email security/readable-route/theme changes): source compilation succeeded against the installed macOS 26.5 SDK. Tests require explicitly loading the installed Testing plugin/runtime; `Scripts/check-local.sh` captures that workaround. The latest run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
 
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
 

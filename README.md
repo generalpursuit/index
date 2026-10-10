@@ -123,3 +123,5 @@ index/
 - `bun run check`: Run Oxlint and Oxfmt
 - `cd apps/web && bun run desktop:dev`: Open Tauri against the running root `bun run dev` stack
 - `cd apps/web && bun run desktop:build`: Build Tauri desktop app
+
+Email verification, password recovery, delivery configuration, and remaining launch checks: [authentication](docs/authentication.md).

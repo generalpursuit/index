@@ -166,6 +166,47 @@ describe("verification and account security", () => {
     assert.equal((await post("/sign-out", {}, token)).status, 200);
     assert.equal(await session(token), null);
   });
+  it("keeps resolver reads public for anonymous callers but rejects restricted cookie and bearer identities", async () => {
+    const { token } = await signup();
+    const path = "/u/reader";
+    const publicRead = await apiHandler.handle(
+      new Request(`${origin}/api/v1/routes/resolve?path=${encodeURIComponent(path)}`),
+      {
+        prefix: "/api/v1",
+        context: fixture.context(null),
+      },
+    );
+    assert.ok(publicRead.matched);
+    assert.equal(publicRead.response.status, 200);
+    for (const cookie of [false, true]) {
+      assert.equal(
+        (await app(token, `/routes/resolve?path=${encodeURIComponent(path)}`, cookie)).status,
+        403,
+      );
+      const rpc = await rpcHandler.handle(
+        new Request(`${origin}/rpc/v1/routes/resolve`, {
+          method: "POST",
+          headers: { ...headers(token, cookie), "Content-Type": "application/json" },
+          body: JSON.stringify({ json: { path } }),
+        }),
+        {
+          prefix: "/rpc/v1",
+          context: { ...fixture.context(null), session: await session(token, cookie) },
+        },
+      );
+      assert.ok(rpc.matched);
+      assert.equal(rpc.response.status, 403);
+      assert.equal(
+        ((await rpc.response.json()) as { json: { data: { code: string } } }).json.data.code,
+        "EMAIL_NOT_VERIFIED",
+      );
+    }
+    await verify(token);
+    assert.equal(
+      (await app(token, `/routes/resolve?path=${encodeURIComponent(path)}`)).status,
+      200,
+    );
+  });
   it("binds email correction to its signed signup session and password, retaining the old address until proof", async () => {
     const original = await signup();
     const attacker = await signup("attacker");

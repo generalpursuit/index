@@ -220,6 +220,29 @@ struct APIClientTests {
     try await client.verifyEmail(code: "123456")
     #expect(try credentials.read() == "restricted.signature")
   }
+  @Test func sameAccountVerificationRestoresReadinessForThePendingURL() async throws {
+    let credentials = MemoryCredentials("restricted.signature")
+    let client = try make(credentials)
+    let pending = ReadableRouteRequest(url: URL(string: "index://u/alice/reading")!, webOrigins: [])!
+    HTTPStub.handler = { _ in
+      (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":false}}"#.utf8))
+    }
+    let restricted = try await client.restore()
+    #expect(!ReadableRouteReadiness.canResolve(userID: restricted?.user.id, emailVerified: restricted?.user.emailVerified == true))
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/security/verify-email")
+      return (200, [:], Data(#"{"success":true}"#.utf8))
+    }
+    try await client.verifyEmail(code: "123456")
+    HTTPStub.handler = { _ in
+      (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#.utf8))
+    }
+    let verified = try await client.restore()
+    #expect(verified?.user.id == restricted?.user.id)
+    #expect(ReadableRouteReadiness.canResolve(userID: verified?.user.id, emailVerified: verified?.user.emailVerified == true))
+    #expect(pending.path == "/u/alice/reading")
+    #expect(try credentials.read() == "restricted.signature")
+  }
   @Test func resetErasesExistingCredentialAndCacheWithoutCreatingASession() async throws {
     let credentials = MemoryCredentials("old.signature")
     let client = try make(credentials)

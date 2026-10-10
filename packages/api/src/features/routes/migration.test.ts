@@ -3,7 +3,6 @@ import assert from "node:assert/strict";
 import { it } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
 import { readFile } from "node:fs/promises";
-import { URL } from "node:url";
 import { groupSchema } from "../groups/schemas";
 import { groupSlug, normalizeGroupName } from "../../routes";
 const initial = new URL(

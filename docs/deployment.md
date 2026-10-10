@@ -67,3 +67,7 @@ Production's Neon project and R2 bucket use Alchemy's `retain` removal policy. T
 Neon history retention remains at the existing six-hour setting. A longer production recovery window should be chosen within the account's plan before relying on this for customer data. Retention does not replace testing a restore or arranging an independent backup when needed.
 
 Bootstrap staging first, verify its smoke checks, then deploy production. Do not seed production with end-to-end fixtures. Cloudflare Worker logs are enabled by Alchemy; an external alerting service is not configured by this setup.
+
+## Email verification launch configuration
+
+See [authentication](authentication.md) before launching these changes. Provision a Resend account, sender DNS and a server-only `RESEND_API_KEY`; configure `AUTH_EMAIL_FROM` and `AUTH_TRUSTED_ORIGINS` for the chosen canonical/alias origins. Proposed addresses/domains are not provisioned defaults. The application issues restricted sessions to all unverified accounts, including legacy users, and requires email proof before app access; deploy only when delivery is configured and tested. The auth migration must follow `20261010095101_readable_routes` and applies without marking old accounts verified.

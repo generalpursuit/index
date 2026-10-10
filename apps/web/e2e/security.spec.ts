@@ -133,7 +133,7 @@ test("switching accounts discards a draft and a pending old mutation response", 
   await page.goto("/login");
   await signIn(page);
   await page.getByRole("link", { name: "Messages", exact: true }).click();
-  await page.locator(`a[href$="${fixture.conversationId}"]`).first().click();
+  await page.locator(`a[href$="${fixture.conversationShortId}"]`).first().click();
   await page.getByLabel("Message", { exact: true }).fill("Alice private unsent draft");
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   let release!: () => void;
@@ -163,7 +163,7 @@ test("switching accounts discards a draft and a pending old mutation response", 
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page.locator(".settings-identity strong")).toHaveText("Bob");
   await page.getByRole("link", { name: "Messages", exact: true }).click();
-  await page.locator(`a[href$="${fixture.conversationId}"]`).first().click();
+  await page.locator(`a[href$="${fixture.conversationShortId}"]`).first().click();
   await expect(page.getByLabel("Message", { exact: true })).toHaveValue("");
   await expect(page.getByText("Alice private unsent draft")).toHaveCount(0);
 });

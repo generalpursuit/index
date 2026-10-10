@@ -15,7 +15,8 @@ export function createSessionEventFetch(
         .json()
         .catch(() => null);
       assertCurrentAccount(generation);
-      if (body?.code === "EMAIL_NOT_VERIFIED" || body?.data?.code === "EMAIL_NOT_VERIFIED") {
+      const error = body?.json ?? body; // oRPC envelopes errors; REST/Better Auth do not.
+      if (error?.code === "EMAIL_NOT_VERIFIED" || error?.data?.code === "EMAIL_NOT_VERIFIED") {
         notify("index:verification-required");
       }
     } else if (response.status === 401) {

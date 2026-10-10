@@ -56,3 +56,78 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   await page.reload();
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });
+
+test("desktop restricted bearer survives interruption, verifies, and is erased after recovery revocation", async ({
+  page,
+  request,
+  context,
+}) => {
+  await request.post(apiURL + "/_test/reset");
+  let token: string | null = null;
+  await page.exposeBinding(
+    "nativeCommand",
+    async (_source, command: string, args?: { token?: string | null }) => {
+      if (command === "session_read") return token;
+      if (command === "session_write") {
+        token = args?.token ?? null;
+        return;
+      }
+      throw new Error("Unexpected native command " + command);
+    },
+  );
+  await page.addInitScript(() => {
+    Object.assign(window, {
+      __TAURI_INTERNALS__: {},
+      __TAURI__: {
+        core: {
+          invoke: (command: string, args: unknown) => (window as any).nativeCommand(command, args),
+        },
+      },
+    });
+  });
+  await page.goto("/login?next=%2Fu%2Fbearer_reader");
+  await page.getByRole("button", { name: "Create an account", exact: true }).click();
+  await page.getByLabel("Name", { exact: true }).fill("New bearer reader");
+  await page.getByLabel("Username", { exact: true }).fill("bearer_reader");
+  await page.getByLabel("Email", { exact: true }).fill("bearer_reader@example.test");
+  await page.getByLabel("Password", { exact: true }).fill("bearer-reader-password");
+  await page.getByRole("button", { name: "Create account", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  expect(token).toContain(".");
+  const restricted = token;
+  expect(await context.cookies(apiURL)).toHaveLength(0);
+  await page.reload();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  expect(token).toBe(restricted);
+  const mail = async (purpose: string) => {
+    let code: string | undefined;
+    await expect
+      .poll(async () => {
+        const messages = await (
+          await request.get(apiURL + "/_test/mail?email=bearer_reader%40example.test")
+        ).json();
+        code = messages.findLast((m: { purpose: string }) => m.purpose === purpose)?.code;
+        return !!code;
+      })
+      .toBe(true);
+    return code!;
+  };
+  await page.getByLabel("Verification code").fill(await mail("verify"));
+  await page.getByRole("button", { name: "Verify email", exact: true }).click();
+  await expect(page).toHaveURL(/\/u\/bearer_reader$/);
+  await expect(page.locator(".profile-heading h1")).toHaveText("New bearer reader");
+  await request.post(apiURL + "/api/auth/security/request-reset", {
+    data: { email: "bearer_reader@example.test" },
+  });
+  await request.post(apiURL + "/api/auth/security/reset-password", {
+    data: {
+      email: "bearer_reader@example.test",
+      code: await mail("reset"),
+      newPassword: "recovered-bearer-password",
+    },
+  });
+  await page.getByRole("link", { name: "Settings", exact: true }).first().click();
+  await expect(page).toHaveURL(/login/);
+  await expect.poll(() => token).toBeNull();
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+});
