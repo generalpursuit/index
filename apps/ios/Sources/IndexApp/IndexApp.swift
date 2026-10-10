@@ -13,6 +13,7 @@ struct IndexApp: App {
     WindowGroup {
       RootView().environment(app).preferredColorScheme(ThemePreference(storedValue: storedTheme).colorScheme)
         .tint(IndexPalette.foreground)
+        .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
         .task(id: storedTheme) {
           if let group = Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String {
             try? KeychainAppearance(accessGroup: group).write(ThemePreference(storedValue: storedTheme))
@@ -26,7 +27,7 @@ struct IndexApp: App {
   }
 }
 
-enum Destination: Hashable {
+enum Destination: Hashable, Identifiable {
   case profile(String)
   case collection(String, String)
   case link(String)
@@ -37,20 +38,11 @@ enum Destination: Hashable {
   case recipients(SavedLink?)
   case settings
   case group(LinkGroup?)
+  var id: Self { self }
 }
 enum AppTab: String, CaseIterable {
-  case feed, discover, add, activity, messages, profile
-  var symbol: String {
-    switch self {
-    case .feed: "house"
-    case .discover: "magnifyingglass"
-    case .add: "plus"
-    case .activity: "bell"
-    case .messages: "bubble.right"
-    case .profile: "person"
-    }
-  }
-  var title: String { self == .feed ? "Home" : rawValue.capitalized }
+  case feed, discover, activity, messages, profile
+  var title: String { self == .feed ? "Home" : self == .profile ? "Your profile" : rawValue.capitalized }
 }
 struct MessageDraft {
   var body = ""
@@ -72,16 +64,25 @@ final class AppModel {
   var error: String?
   var configurationError: String?
   var path: [Destination] = []
+  var sheet: Destination?
+  // Errors are presented by the frontmost sheet, including local/nested sheets.
+  var sheetPresentations: [UUID] = []
   var tab = AppTab.feed
   var revision = 0
   var unreadMessages = 0
   var unreadActivity = 0
   var drafts: [String: MessageDraft] = [:]
+  var undoLink: SavedLink?
   var openingLink: SavedLink?
   var openingConversation: Conversation?
   func openLink(_ link: SavedLink) {
     openingLink = link
-    path.append(.link(link.id))
+    present(.link(link.id))
+  }
+  func present(_ destination: Destination) { sheet = destination }
+  func navigate(_ destination: Destination) {
+    sheet = nil
+    path.append(destination)
   }
   var pendingRouteURL: URL?
   var pendingRouteAccountID: String?
@@ -90,8 +91,16 @@ final class AppModel {
   var showsTabs: Bool {
     guard let destination = path.last else { return true }
     switch destination {
-    case .profile, .messages, .connections: return true
+    case .profile, .collection, .messages, .connections: return true
     default: return false
+    }
+  }
+  var activeTab: AppTab? {
+    guard let destination = path.last else { return tab }
+    switch destination {
+    case .profile(let id), .collection(let id, _): return id == userID ? .profile : nil
+    case .messages: return .messages
+    default: return nil
     }
   }
   var userID: String { profile?.id ?? "" }
@@ -144,7 +153,9 @@ final class AppModel {
     // Verification and account switches must drop all previous private UI state.
     profile = nil
     drafts = [:]
+    undoLink = nil
     path = []
+    sheet = nil
     openingLink = nil
     openingConversation = nil
     unreadMessages = 0
@@ -178,9 +189,11 @@ final class AppModel {
     profile = nil
     verificationUser = nil
     drafts = [:]
+    undoLink = nil
     openingLink = nil
     openingConversation = nil
     path = []
+    sheet = nil
     tab = .feed
     unreadMessages = 0
     unreadActivity = 0
@@ -193,7 +206,9 @@ final class AppModel {
       NotificationController.shared.clearAccount()
       profile = nil
       drafts = [:]
+      undoLink = nil
       path = []
+      sheet = nil
       openingLink = nil
       openingConversation = nil
       Task { await restore() }
@@ -232,58 +247,48 @@ struct RootView: View {
         NavigationStack(path: $app.path) {
           Group {
             switch app.tab {
-            case .feed, .add: FeedView()
+            case .feed: FeedView()
             case .discover: DiscoverView()
             case .activity: ActivityView()
             case .messages: MessagesView()
             case .profile: ProfileView(userID: app.userID)
             }
           }
+          .hideNativeNavigation()
           .navigationDestination(for: Destination.self) { destination in
-            switch destination {
-            case .profile(let id): ProfileView(userID: id)
-            case .collection(let id, let group): ProfileView(userID: id, groupID: group)
-            case .link(let id): LinkDetailView(linkID: id)
-            case .messages: MessagesView()
-            case .conversation(let id): ConversationView(conversationID: id)
-            case .connections(let initial): ConnectionsView(initial: initial)
-            case .add(let week, let group, let edit):
-              AddLinkView(week: week, groupID: group, editing: edit)
-            case .recipients(let link): RecipientView(attachment: link)
-            case .settings: SettingsView()
-            case .group(let group): GroupEditorView(group: group)
-            }
+            destinationView(destination).hideNativeNavigation()
           }
           .background(IndexPalette.background)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
           if app.showsTabs {
-            HStack {
+            HStack(spacing: 0) {
               ForEach(AppTab.allCases, id: \.self) { tab in
                 Button {
-                  if tab == .add {
-                    app.path.append(.add(Week.monday(), nil, nil))
-                  } else {
-                    app.path = []
-                    app.tab = tab
-                  }
+                  app.path = []
+                  app.tab = tab
                 } label: {
-                  Image(systemName: tab.symbol).font(.system(size: 22)).frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .foregroundStyle(app.tab == tab ? IndexPalette.foreground : IndexPalette.mutedForeground)
+                  NavigationIcon(tab: tab).frame(width: 44, height: 44)
+                    .foregroundStyle(app.activeTab == tab ? IndexPalette.foreground : IndexPalette.subtleForeground)
                     .overlay(alignment: .topTrailing) {
                       if (tab == .activity && app.unreadActivity > 0)
                         || (tab == .messages && app.unreadMessages > 0)
                       {
-                        Circle().fill(IndexPalette.foreground).frame(width: 5, height: 5).padding(.trailing, 19)
-                          .padding(.top, 8)
+                        Circle().fill(IndexPalette.foreground).frame(width: 6, height: 6)
+                          .overlay(Circle().stroke(IndexPalette.background, lineWidth: 3))
+                          .padding(.trailing, 7).padding(.top, 7)
                       }
                     }
+                    .frame(maxWidth: .infinity).contentShape(Rectangle())
                 }.buttonStyle(.plain).accessibilityLabel(tab.title).accessibilityAddTraits(
-                  app.tab == tab ? .isSelected : [])
+                  app.activeTab == tab ? .isSelected : [])
               }
-            }.padding(.horizontal, 12).background(IndexPalette.background)
+            }.padding(.horizontal, 8).frame(height: 66).background(IndexPalette.background)
           }
+        }
+        .sheet(item: $app.sheet) { destination in
+          destinationView(destination).id(destination).indexSheetStyle()
+            .presentationDetents(sheetDetents(destination))
         }
         .task(id: scenePhase) {
           guard scenePhase == .active else { return }
@@ -296,6 +301,7 @@ struct RootView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(IndexPalette.background)
+    .overlay(alignment: .bottom) { SavedLinkToast().padding(.bottom, 80) }
     .onAppear { NotificationController.shared.attach(app) }
     .onChange(of: app.restoring) { _, restoring in
       if !restoring { NotificationController.shared.attach(app) }
@@ -315,13 +321,27 @@ struct RootView: View {
         await NotificationController.shared.setActive(app: app, foreground: phase == .active)
       }
     }
-    .alert(
-      "Couldn’t complete that",
-      isPresented: Binding(get: { app.error != nil }, set: { if !$0 { app.error = nil } })
-    ) {
-      Button("OK") { app.error = nil }
-    } message: {
-      Text(app.error ?? "")
+    .modifier(AppErrorPresentation())
+  }
+  @ViewBuilder private func destinationView(_ destination: Destination) -> some View {
+    switch destination {
+    case .profile(let id): ProfileView(userID: id)
+    case .collection(let id, let group): ProfileView(userID: id, groupID: group)
+    case .link(let id): LinkDetailView(linkID: id)
+    case .messages: MessagesView()
+    case .conversation(let id): ConversationView(conversationID: id)
+    case .connections(let initial): ConnectionsView(initial: initial)
+    case .add(let week, let group, let edit): AddLinkView(week: week, groupID: group, editing: edit)
+    case .recipients(let link): RecipientView(attachment: link)
+    case .settings: SettingsView()
+    case .group(let group): GroupEditorView(group: group)
+    }
+  }
+  private func sheetDetents(_ destination: Destination) -> Set<PresentationDetent> {
+    switch destination {
+    case .group: [.height(360), .large]
+    case .connections, .recipients: [.medium, .large]
+    default: [.large]
     }
   }
 }

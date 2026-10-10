@@ -28,7 +28,7 @@ private struct CodeDelivery: View {
     Text(status?.delivery == "failed"
       ? "We couldn’t send the email. Try resending after the cooldown."
       : "Check your inbox and spam folder. Delivery may take a few minutes. Only the latest code works, for 10 minutes.")
-      .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+      .font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
   }
 }
 private struct CooldownAction: View {
@@ -55,7 +55,7 @@ struct VerificationView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("Verify your email").font(.title2)
+        Text("Verify your email").font(IndexFont.serif(32)).accessibilityAddTraits(.isHeader)
         Text("Enter the six-digit code sent to \(status?.email ?? email).")
         CodeDelivery(status: status)
         CodeInput(value: $code)
@@ -74,7 +74,7 @@ struct VerificationView: View {
         Button("Correct email address") { correcting.toggle(); newEmail = status?.email ?? email }
         if correcting {
           Text("Confirm your signup password. The original address stays unchanged until you verify the corrected address.")
-            .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+            .font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
           EmailInput(title: "Correct email", value: $newEmail)
           SecureField("Signup password", text: $password).textContentType(.password).ghostInput()
           CooldownAction(title: "Send to corrected address", retryAt: retryAt) {
@@ -111,7 +111,7 @@ struct PasswordRecoveryView: View {
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("Reset your password").font(.title2)
+        PageHeading(title: "Reset your password")
         if completed {
           Text("Password reset. Sign in with your new password. Your other sessions have been signed out.")
         } else {
@@ -124,7 +124,7 @@ struct PasswordRecoveryView: View {
           }
           if requested {
             Text("If an account uses this address, a code is on its way. Check spam or retry after the cooldown. Codes expire in 10 minutes.")
-              .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+              .font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
             CodeInput(value: $code)
             SecureField("New password", text: $password).textContentType(.newPassword).ghostInput()
             SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword).ghostInput()
@@ -165,7 +165,7 @@ struct AccountSecurityView: View {
         }.pickerStyle(.segmented)
         SecureField("Current password", text: $password).textContentType(.password).ghostInput()
         if changingEmail {
-          Text("Your current email stays active until you verify the new address.").font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+          Text("Your current email stays active until you verify the new address.").font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
           EmailInput(title: "New email", value: $email)
           CooldownAction(title: "Send email change code", retryAt: retryAt) {
             guard let api = app.api else { throw APIError.invalidServer }

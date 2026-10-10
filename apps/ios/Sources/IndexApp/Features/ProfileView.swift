@@ -14,7 +14,6 @@ struct ProfileView: View {
   @State private var filter = "all"
   @State private var weeks: [LibraryWeek] = []
   @State private var nextBefore: String?
-  @State private var privacy: IndexCore.Visibility?
   @State private var error: String?
   @State private var loading = true
   var own: Bool { userID == app.userID }
@@ -22,180 +21,174 @@ struct ProfileView: View {
   // Starred holds other people's links, so it is a section of its own rather than a filter.
   private var starredGroup: LinkGroup? { groups.first { $0.kind == "starred" } }
   private var starredSection: Bool { filter == "starred" || selected?.kind == "starred" }
+  @State private var pickingWeek = false
+  @State private var readingWeek = Week.monday()
+  @State private var listTop: CGFloat = 160
+  private var canAdd: Bool { own && !starredSection && (filter == "all" || selected?.kind == "custom") }
   var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 22) {
-        LoadingError(error: error, loading: loading, retry: { await load() })
-        if let profile {
-          HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-              HStack(spacing: 10) {
-                Text(profile.username ?? profile.name).font(
-                  .system(size: 36, weight: .semibold, design: .serif)
-                ).minimumScaleFactor(0.6)
-                Image(
-                  systemName: profile.profileVisibility == .private ? "lock" : "globe.europe.africa"
-                )
-                .font(.system(size: 14)).foregroundStyle(.secondary)
-                .accessibilityLabel(
-                  profile.profileVisibility == .private ? "Private profile" : "Public profile")
+    GeometryReader { geometry in
+      ScrollViewReader { proxy in
+        ScrollView {
+          LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            LoadingError(error: error, loading: loading, retry: { await load() })
+            if let profile {
+              profileHeader(profile).padding(.bottom, 32)
+              if !own && profile.followedBy.total > 0 {
+                Text(socialText(profile.followedBy)).font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
+                  .padding(.bottom, 28)
               }
-              Text(profile.name).foregroundStyle(.secondary)
-            }
-            Spacer()
-            PersonAvatar(person: profile.person, size: 64)
-          }.padding(.top, 18)
-          HStack(spacing: 15) {
-            if let count = profile.linkCount { Label("\(count) links", systemImage: "link") }
-            if own {
-              Button("\(profile.followerCount ?? 0) followers") {
-                app.path.append(.connections("followers"))
-              }
-              Button("\(profile.followingCount ?? 0) following") {
-                app.path.append(.connections("following"))
-              }
-            }
-          }.font(.caption)
-          if !own && profile.followedBy.total > 0 {
-            Text(socialText(profile.followedBy)).font(.caption).foregroundStyle(.secondary)
-          }
-          if own {
-            HStack {
-              if let username = profile.username,
-                let url = app.webURL?.appendingPathComponent(selected.map { ReadableRoutes.group(username, $0.slug ?? $0.kind) } ?? ReadableRoutes.profile(username)) {
-                ShareLink(item: url) {
-                  Label("Share", systemImage: "square.on.square").frame(maxWidth: .infinity)
-                }.buttonStyle(PillStyle())
-              }
-              Menu {
-                Button("Public") { if profile.profileVisibility != .public { privacy = .public } }
-                Button("Private") {
-                  if profile.profileVisibility != .private { privacy = .private }
+              if !profile.canViewContent {
+                VStack(spacing: 16) {
+                  Divider()
+                  Image(systemName: "lock").font(.system(size: 32)).padding(.top, 48)
+                  Text("Private profile").font(IndexFont.sans(18, weight: .medium))
+                  Text("Only \(profile.name)’s followers can view their posts.")
+                    .foregroundStyle(IndexPalette.subtleForeground).multilineTextAlignment(.center)
+                  FollowButton(profile: profile)
+                }.frame(maxWidth: .infinity)
+              } else {
+                ForEach(weekIDs, id: \.self) { week in
+                  Section {
+                    ProfileWeekView(userID: userID, week: week, filter: filter, canAdd: canAdd,
+                                    lockedGroups: Set(groups.filter { $0.visibility == .private }.map(\.id)))
+                      .id("\(week)-\(filter)").padding(.bottom, 20)
+                  } header: {
+                    weekHeader(week).background {
+                      GeometryReader { position in
+                        Color.clear.preference(key: ProfileWeekPositions.self,
+                          value: [week: position.frame(in: .named("profile-scroll")).minY])
+                      }
+                    }
+                  }.id(week)
                 }
-              } label: {
-                Label(profile.profileVisibility.rawValue.capitalized, systemImage: "chevron.down")
-                  .font(.caption)
-              }.buttonStyle(PillStyle())
-              Button {
-                app.path.append(.settings)
-              } label: {
-                Image(systemName: "gearshape").frame(width: 32, height: 44)
-              }.accessibilityLabel("Settings")
-            }
-          } else if profile.canViewContent {
-            FollowButton(profile: profile)
-          }
-          if !profile.canViewContent {
-            VStack(spacing: 18) {
-              Image(systemName: "lock").font(.largeTitle)
-              Text("Private profile").font(.headline)
-              Text("Only \(profile.name)’s followers can view their posts.").foregroundStyle(
-                .secondary
-              ).multilineTextAlignment(.center)
-              FollowButton(profile: profile)
-            }.frame(maxWidth: .infinity).padding(.vertical, 60)
-          } else {
-            Divider()
-            Picker(
-              "Section",
-              selection: Binding(
-                get: { starredSection },
-                set: { starred in filter = starred ? (starredGroup?.id ?? "starred") : "all" })
-            ) {
-              Text("Links").tag(false)
-              Text("Starred").tag(true)
-            }.pickerStyle(.segmented)
-            if !starredSection {
-              ScrollView(.horizontal) {
-                HStack(spacing: 8) {
-                  filterButton("All", id: "all")
-                  ForEach(groups.filter { $0.kind != "starred" }) { group in
-                    filterButton(
-                      group.name, id: group.id,
-                      symbol: group.kind == "favorites"
-                        ? "heart" : group.visibility == .private ? "lock" : nil)
-                  }
-                  if own {
-                    Button {
-                      creatingGroup = true
-                    } label: {
-                      Image(systemName: "plus").frame(width: 38, height: 38)
-                    }.accessibilityLabel("Create group")
-                  }
+                if weekIDs.isEmpty {
+                  HStack { Spacer(); filterMenu }.frame(height: 52)
+                  Text(starredSection ? "No starred links yet" : "No links yet")
+                    .foregroundStyle(IndexPalette.subtleForeground).frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
                 }
-              }.scrollIndicators(.hidden)
-            }
-            ForEach(weekIDs, id: \.self) { week in
-              VStack(alignment: .leading, spacing: 10) {
-                Text(Week.label(week)).font(.headline)
-                ProfileWeekView(
-                  userID: userID, week: week, filter: filter,
-                  canAdd: own && (selected == nil || selected?.kind == "custom")
-                )
-                .id("\(week)-\(filter)-\(app.revision)")
+                PageEnd(cursor: nextBefore) { try await loadWeeks(more: true) }
+                // Let the last heading reach the top when selected from the week picker.
+                if let last = weekIDs.last {
+                  let rows = weeks.first { $0.weekStart == last }?.count ?? 0
+                  Color.clear.frame(height: max(0, geometry.size.height - 52 - CGFloat(rows) * 46
+                    - (canAdd && last == Week.monday() ? 48 : 0)))
+                }
               }
             }
-            if weekIDs.isEmpty {
-              Text("No links yet.").foregroundStyle(.secondary).padding(.vertical, 40)
-            }
-            LoadMore(hasMore: nextBefore != nil) { try await loadWeeks(more: true) }
+          }.padding(.top, 40).padding(.leading, 20).padding(.trailing, 36)
+        }.coordinateSpace(name: "profile-scroll").scrollIndicators(.hidden)
+          .refreshable { await load() }
+          .onPreferenceChange(ProfileWeekPositions.self) { positions in
+            if let nearest = positions.min(by: { abs($0.value) < abs($1.value) }) { readingWeek = nearest.key }
+            listTop = max(52, (positions[weekIDs.first ?? ""] ?? -52) + 52)
           }
-        }
-      }.padding(.bottom, 30)
-    }.indexPage().refreshable { await load() }
+          .overlay(alignment: .topTrailing) {
+            if profile?.canViewContent == true {
+              WeekScrubber(weeks: weekIDs, selected: readingWeek) { week in
+                withAnimation { proxy.scrollTo(week, anchor: .top) }
+              }.frame(height: max(0, geometry.size.height - listTop - 24), alignment: .top)
+                .padding(.top, listTop).padding(.trailing, 4)
+            }
+          }
+          .overlay(alignment: .topTrailing) {
+            if profile?.canViewContent == true && !weekIDs.isEmpty {
+              filterMenu.frame(maxWidth: 120, alignment: .trailing)
+                .padding(.trailing, 36).offset(y: max(0, listTop - 52) + 4)
+            }
+          }
+          .sheet(isPresented: $pickingWeek) {
+            WeekPicker(weeks: weekIDs, selected: readingWeek) { week in
+              withAnimation { proxy.scrollTo(week, anchor: .top) }
+            }
+          }
+      }
+    }.background(IndexPalette.background)
       .task(id: "\(userID)-\(app.revision)") { await load() }
       .sheet(isPresented: $creatingGroup) {
         GroupEditorView { group in
           groups.append(group)
           filter = group.id
-        }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+        }.indexSheetStyle().presentationDetents([.height(360), .large])
       }
       .task(id: filter) {
         guard profile?.canViewContent == true else { return }
         do { try await loadWeeks() } catch { app.handle(error) }
       }
-      .alert(
-        privacy == .private ? "Make profile private?" : "Make profile public?",
-        isPresented: Binding(get: { privacy != nil }, set: { if !$0 { privacy = nil } })
-      ) {
-        Button("Cancel", role: .cancel) { privacy = nil }
-        Button("Confirm") {
-          guard let privacy else { return }
-          Task {
-            do {
-              let updated: Profile? = try await app.api?.request(
-                "/me/profile", method: "PATCH",
-                body: ["profileVisibility": .string(privacy.rawValue)])
-              app.profile = updated
-              self.privacy = nil
-              app.changed()
-            } catch { app.handle(error) }
+  }
+  private func profileHeader(_ profile: Profile) -> some View {
+    VStack(alignment: .leading, spacing: 12) {
+      if !app.path.isEmpty { BackButton().padding(.leading, -12) }
+      HStack(spacing: 20) {
+        PersonAvatar(person: profile.person, size: 64)
+        VStack(alignment: .leading, spacing: 10) {
+          HStack(spacing: 10) {
+            Text(profile.name).font(IndexFont.serif(40, weight: .semibold)).tracking(-0.6)
+              .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+            Image(systemName: profile.profileVisibility == .private ? "lock" : "globe")
+              .font(.system(size: 16)).foregroundStyle(IndexPalette.subtleForeground)
+              .accessibilityLabel(profile.profileVisibility == .private ? "Private profile" : "Public profile")
           }
-        }
-      } message: {
-        Text(
-          privacy == .private
-            ? "Only approved followers can see your links. Existing followers keep access. Locked groups stay only yours."
-            : "Anyone can see your links. Pending requests will be accepted. Locked groups stay only yours."
-        )
+          ProfileMetaLayout(spacing: 4) {
+            if let username = profile.username { Text(username).padding(.trailing, 10) }
+            if let count = profile.linkCount { Text("\(count) \(count == 1 ? "link" : "links")").padding(.trailing, 10) }
+            if own {
+              Button("\(profile.followerCount ?? 0) followers") { app.present(.connections("followers")) }
+                .buttonStyle(.plain).padding(.trailing, 10)
+              Button("\(profile.followingCount ?? 0) following") { app.present(.connections("following")) }
+                .buttonStyle(.plain)
+            }
+          }.font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
+        }.frame(maxWidth: .infinity, alignment: .leading)
+        if own {
+          Button { app.present(.settings) } label: {
+            IndexSymbol("NavSettings").frame(width: 25, height: 25).frame(width: 44, height: 44)
+          }.buttonStyle(.plain).accessibilityLabel("Settings")
+        } else if profile.canViewContent { FollowButton(profile: profile) }
       }
+    }
+  }
+  private func weekHeader(_ week: String) -> some View {
+    HStack(spacing: 8) {
+      Button { pickingWeek = true } label: {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+          Text(Week.label(week)).font(IndexFont.serif(24)).tracking(-0.36)
+          Text(weekRange(week).uppercased()).font(IndexFont.mono(12)).tracking(0.72)
+            .foregroundStyle(IndexPalette.subtleForeground).lineLimit(1)
+        }.frame(minHeight: 52, alignment: .leading)
+      }.buttonStyle(.plain).accessibilityLabel("Jump to a week, now \(Week.label(week))")
+        .accessibilityAddTraits(.isHeader)
+      Spacer(minLength: 68)
+    }.frame(minHeight: 52).background(IndexPalette.background)
+  }
+  private var filterMenu: some View {
+    Menu {
+      Button("All") { filter = "all" }
+      ForEach(groups.filter { $0.kind != "starred" }.sorted { $0.kind == "favorites" && $1.kind != "favorites" }) { group in
+        Button { filter = group.id } label: {
+          Label(group.name, systemImage: group.visibility == .private ? "lock" : group.kind == "favorites" ? "heart" : "folder")
+        }
+      }
+      if own {
+        Divider()
+        Button("Starred", systemImage: "star") { filter = starredGroup?.id ?? "starred" }
+        Divider()
+        Button("New group", systemImage: "plus") { creatingGroup = true }
+      }
+    } label: {
+      HStack(spacing: 6) {
+        if selected?.visibility == .private { Image(systemName: "lock").font(.system(size: 12)) }
+        Text(starredSection ? "Starred" : selected?.name ?? "All").lineLimit(1)
+        Image(systemName: "chevron.down").font(.system(size: 12)).foregroundStyle(IndexPalette.subtleForeground)
+      }.font(IndexFont.sans(14, weight: .medium)).frame(minHeight: 44)
+    }.accessibilityLabel("Showing \(starredSection ? "Starred" : selected?.name ?? "All")")
   }
   private var weekIDs: [String] {
     Array(
       Set(
         weeks.map(\.weekStart)
-          + (own && (selected == nil || selected?.kind == "custom") ? [Week.monday()] : []))
+          + (canAdd ? [Week.monday()] : []))
     ).sorted(by: >)
-  }
-  private func filterButton(_ title: String, id: String, symbol: String? = nil) -> some View {
-    Button {
-      filter = id
-    } label: {
-      HStack(spacing: 5) {
-        if let symbol { Image(systemName: symbol) }
-        Text(title)
-      }
-    }.buttonStyle(PillStyle(selected: filter == id))
   }
   private func load() async {
     if profile == nil { profile = await app.api?.cached("/profiles/\(userID)") }
@@ -230,6 +223,7 @@ struct ProfileView: View {
     loading = false
   }
   private func loadWeeks(more: Bool = false) async throws {
+    let requestedFilter = filter
     // Starred without a group yet has nothing to list.
     if filter == "starred" {
       weeks = []
@@ -242,6 +236,7 @@ struct ProfileView: View {
     if !more, weeks.isEmpty,
       let cached: LibraryWeeks = await app.api?.cached("/profiles/\(userID)/weeks", query: query)
     {
+      guard requestedFilter == filter else { return }
       weeks = cached.items
       nextBefore = cached.nextBefore
     }
@@ -249,6 +244,7 @@ struct ProfileView: View {
       "/profiles/\(userID)/weeks", query: query)
     {
       try Task.checkCancellation()
+      guard requestedFilter == filter else { return }
       weeks = more ? weeks + page.items : page.items
       nextBefore = page.nextBefore
     }
@@ -259,26 +255,20 @@ struct ProfileWeekView: View {
   let week: String
   let filter: String
   let canAdd: Bool
+  var lockedGroups: Set<String> = []
   @Environment(AppModel.self) private var app
   @State private var links: [SavedLink] = []
   @State private var cursor: String?
   @State private var error: String?
   var body: some View {
-    VStack(spacing: 0) {
-      if canAdd && week == Week.monday() {
-        Button {
-          app.path.append(.add(week, filter == "all" ? nil : filter, nil))
-        } label: {
-          Image(systemName: "plus").frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
-        }.accessibilityLabel("Add link to \(Week.label(week))")
-      }
+    LazyVStack(spacing: 0) {
+      if canAdd && week == Week.monday() { QuickAddView(groupID: filter == "all" ? nil : filter) }
       ForEach(links) { link in
-        LinkRow(link: link)
-        if link.id != links.last?.id { Divider() }
+        LinkRow(link: link, locked: link.groupId.map { lockedGroups.contains($0) } ?? false)
       }
       LoadingError(error: error, loading: false, retry: { await load() })
       LoadMore(hasMore: cursor != nil) { await load(more: true) }
-    }.outlineCard().task { await load() }
+    }.task(id: app.revision) { await load() }
   }
   private func load(more: Bool = false) async {
     var query = ["weekStart": week, "limit": "30"]

@@ -7,6 +7,7 @@ public struct Person: Codable, Identifiable, Hashable, Sendable {
   public var username: String?
   public var image: String?
   public var profileVisibility: Visibility
+  public var followingStatus: String? = nil
   public var label: String { username ?? name }
   public var initials: String {
     name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined()

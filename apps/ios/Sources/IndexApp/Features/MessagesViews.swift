@@ -11,38 +11,37 @@ struct MessagesView: View {
   @State private var loading = false
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
+      LazyVStack(alignment: .leading, spacing: 0) {
         HStack {
           PageHeading(title: "Messages")
           Button {
-            app.path.append(.recipients(nil))
+            app.present(.recipients(nil))
           } label: {
             Image(systemName: "square.and.pencil").font(.title2).frame(width: 44, height: 44)
           }.accessibilityLabel("New message")
         }
-        TextField("Search", text: $query).padding(14).background(
-          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
+        SearchField(placeholder: "Search conversations", text: $query).padding(.top, 26).padding(.bottom, 20)
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(conversations) { conversation in
           Button {
             app.openingConversation = conversation
-            app.path.append(.conversation(conversation.id))
+            app.navigate(.conversation(conversation.id))
           } label: {
-            HStack(spacing: 14) {
+            HStack(spacing: 16) {
               ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
-              VStack(alignment: .leading, spacing: 7) {
-                Text(conversation.title(viewerId: app.userID)).font(.subheadline).bold().lineLimit(
+              VStack(alignment: .leading, spacing: 1) {
+                Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(14)).bold().lineLimit(
                   1)
-                Text(preview(conversation)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                Text(preview(conversation)).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground).lineLimit(1)
               }
               Spacer(minLength: 0)
               if conversation.unreadCount > 0 { Circle().frame(width: 7, height: 7) }
-              Text(relativeTime(conversation.updatedAt)).font(.caption2).foregroundStyle(.secondary)
-            }.padding(.vertical, 14).contentShape(Rectangle())
+              Text(relativeTime(conversation.updatedAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+            }.padding(.vertical, 18).contentShape(Rectangle())
           }.buttonStyle(.plain)
         }
         if conversations.isEmpty && !loading && error == nil {
-          Text("Good finds start conversations.").foregroundStyle(.secondary).padding(.vertical, 30)
+          Text("Good finds start conversations.").foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: cursor != nil) { await load(more: true) }
       }
@@ -100,7 +99,7 @@ struct ParticipantAvatars: View {
   let people: [Person]
   var body: some View {
     if people.count == 1, let person = people.first {
-      PersonAvatar(person: person, size: 44)
+      PersonAvatar(person: person, size: 36)
     } else {
       ZStack {
         ForEach(Array(people.prefix(3).enumerated()), id: \.element.id) { index, person in
@@ -137,8 +136,7 @@ struct RecipientView: View {
             }
           }
         }
-        TextField("Search people you follow", text: $query).padding(14).background(
-          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
+        SearchField(placeholder: "Search people you follow", text: $query)
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(people) { person in
           Button {
@@ -158,7 +156,7 @@ struct RecipientView: View {
           }.buttonStyle(.plain)
         }
         if people.isEmpty && !loading && error == nil {
-          Text("Follow someone to start a conversation.").foregroundStyle(.secondary).padding()
+          Text("Follow someone to start a conversation.").foregroundStyle(IndexPalette.subtleForeground).padding()
         }
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
@@ -180,9 +178,9 @@ struct RecipientView: View {
             draft.attachment = attachment
             app.drafts[conversation.id] = draft
           }
-          app.path.removeLast()
+          if app.sheet == nil && !app.path.isEmpty { app.path.removeLast() }
           app.openingConversation = conversation
-          app.path.append(.conversation(conversation.id))
+          app.navigate(.conversation(conversation.id))
         } label: {
           Text("Continue\(selected.isEmpty ? "" : " · \(selected.count)")").frame(
             maxWidth: .infinity)
@@ -245,17 +243,18 @@ struct ConversationView: View {
     VStack(spacing: 0) {
       if let conversation {
         HStack(spacing: 12) {
+          BackButton()
           ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
           VStack(alignment: .leading, spacing: 3) {
-            Text(conversation.title(viewerId: app.userID)).font(.headline).lineLimit(2)
+            Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
             Menu("Participants") {
               ForEach(conversation.participants.filter { $0.id != app.userID }) { person in
-                Button(person.name) { app.path.append(.profile(person.id)) }
+                Button(person.name) { app.navigate(.profile(person.id)) }
               }
-            }.font(.caption).foregroundStyle(.secondary)
+            }.font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
           }
           Spacer()
-        }.padding(.vertical, 8)
+        }.padding(.vertical, 8).padding(.bottom, 20)
       }
       ScrollViewReader { proxy in
         ScrollView {
@@ -298,8 +297,8 @@ struct ConversationView: View {
         HStack {
           Image(systemName: attachment.category.symbol)
           VStack(alignment: .leading, spacing: 4) {
-            Text(attachment.title).font(.subheadline).lineLimit(1)
-            Text(attachment.domain).font(.caption).foregroundStyle(.secondary)
+            Text(attachment.title).font(IndexFont.sans(14)).lineLimit(1)
+            Text(attachment.domain).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
           }
           Spacer()
           if draft.attemptedBody == nil {
@@ -312,12 +311,13 @@ struct ConversationView: View {
         }.padding(14).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 14))
       }
       if draft.attemptedBody != nil && !sending {
-        Text("Send not confirmed. Retry to check or complete this same message.").font(.caption)
-          .foregroundStyle(.secondary)
+        Text("Send not confirmed. Retry to check or complete this same message.").font(IndexFont.sans(12))
+          .foregroundStyle(IndexPalette.subtleForeground)
       }
       HStack {
         TextField("Message", text: text, axis: .vertical).lineLimit(1...5).focused($focused)
-          .padding(12).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 22))
+          .font(IndexFont.sans(16)).padding(.horizontal, 14).padding(.vertical, 10)
+          .overlay(Capsule().stroke(IndexPalette.border, lineWidth: 1))
           .disabled(draft.attemptedBody != nil)
         AsyncButton(action: send) {
           Image(systemName: draft.attemptedBody == nil ? "arrow.up" : "arrow.clockwise").frame(
@@ -331,7 +331,7 @@ struct ConversationView: View {
         )
         .accessibilityLabel(draft.attemptedBody == nil ? "Send message" : "Retry message")
       }
-    }.padding(16).background(IndexPalette.background)
+    }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.background)
   }
   private func send() async throws {
     var value = draft
@@ -430,46 +430,51 @@ struct MessageBubble: View {
   var own: Bool { message.senderId == app.userID }
   var body: some View {
     HStack {
-      if own { Spacer(minLength: 45) }
+      if own { Spacer(minLength: 42) }
       VStack(alignment: own ? .trailing : .leading, spacing: 6) {
         if !own && participants.count > 2 {
-          Text(participants.first(where: { $0.id == message.senderId })?.label ?? "").font(.caption)
-            .foregroundStyle(.secondary)
+          Text(participants.first(where: { $0.id == message.senderId })?.name ?? "Former participant")
+            .font(IndexFont.sans(10)).foregroundStyle(IndexPalette.subtleForeground)
         }
-        VStack(alignment: .leading, spacing: 10) {
-          if let attachment = message.attachment {
-            Button {
-              app.path.append(.link(attachment.id))
-            } label: {
-              HStack {
-                Image(systemName: attachment.category.symbol)
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(attachment.title).font(.subheadline)
-                  Text(attachment.domain).font(.caption).opacity(0.65)
-                }
-                Image(systemName: "chevron.right").font(.caption)
-              }
-            }.buttonStyle(.plain)
-          } else if let author = message.restrictedAuthor {
-            Button {
-              app.path.append(.profile(author.id))
-            } label: {
-              VStack(alignment: .leading, spacing: 6) {
-                Label("Private post", systemImage: "lock")
-                Text("Follow \(author.name) to view this post.").font(.caption)
-                Text("View profile →").font(.caption).bold()
-              }
-            }.buttonStyle(.plain)
-          } else if message.hasAttachment {
-            Label("Post unavailable", systemImage: "link.badge.plus").font(.subheadline)
+        VStack(alignment: .leading, spacing: 0) {
+          attachment
+          if !message.body.isEmpty {
+            Text(message.body).font(IndexFont.sans(13)).textSelection(.enabled)
+              .padding(.horizontal, 14).padding(.vertical, 11)
           }
-          if !message.body.isEmpty { Text(message.body).font(.subheadline).textSelection(.enabled) }
-        }.padding(14).background(
-          own ? IndexPalette.primary : IndexPalette.muted, in: RoundedRectangle(cornerRadius: 20)
-        ).foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
-        Text(relativeTime(message.createdAt)).font(.caption2).foregroundStyle(.secondary)
+        }.background(own ? IndexPalette.primary : IndexPalette.muted)
+          .foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
+          .clipShape(UnevenRoundedRectangle(topLeadingRadius: 19, bottomLeadingRadius: own ? 19 : 5,
+            bottomTrailingRadius: own ? 5 : 19, topTrailingRadius: 19))
+        Text(relativeTime(message.createdAt)).font(IndexFont.sans(10))
+          .foregroundStyle(IndexPalette.subtleForeground).padding(.horizontal, 4)
       }.frame(maxWidth: 420, alignment: own ? .trailing : .leading)
-      if !own { Spacer(minLength: 45) }
+      if !own { Spacer(minLength: 42) }
+    }
+  }
+  @ViewBuilder private var attachment: some View {
+    if let attachment = message.attachment {
+      Button { app.openLink(attachment) } label: {
+        HStack(spacing: 12) {
+          Image(systemName: "link").font(.system(size: 20))
+          VStack(alignment: .leading, spacing: 4) {
+            Text(attachment.title).font(IndexFont.sans(13, weight: .medium))
+            Text(attachment.domain).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+          }.frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.horizontal, 16).padding(.vertical, 18)
+          .background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
+      }.buttonStyle(.plain)
+    } else if let author = message.restrictedAuthor {
+      Button { app.navigate(.profile(author.id)) } label: {
+        VStack(alignment: .leading, spacing: 6) {
+          Label("Private post from @\(author.label)", systemImage: "lock").font(IndexFont.sans(13, weight: .medium))
+          Text("Only approved followers can view this post.").font(IndexFont.sans(11))
+          Text("View profile").font(IndexFont.sans(12)).underline()
+        }.padding(16).background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
+      }.buttonStyle(.plain)
+    } else if message.hasAttachment {
+      Label("Post unavailable", systemImage: "lock").font(IndexFont.sans(13))
+        .padding(16).background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
     }
   }
 }

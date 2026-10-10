@@ -16,16 +16,19 @@ struct AddLinkView: View {
   @FocusState private var focused: Bool
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 14) {
+      VStack(alignment: .leading, spacing: 24) {
         PageHeading(title: editing == nil ? "Add link" : "Edit link")
-        Text(Week.label(week)).font(.caption).foregroundStyle(.secondary)
+        FormLabel(title: "Link")
         TextField("URL", text: $url).ghostInput().focused($focused)
           #if os(iOS)
             .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
           #endif
-        TextField("Title", text: $title).font(.title2).ghostInput()
-        TextField("Description (optional)", text: $description, axis: .vertical).lineLimit(4...8)
+        FormLabel(title: "Title")
+        TextField("Title", text: $title).ghostInput()
+        FormLabel(title: "Note")
+        TextField("Why it caught your eye (optional)", text: $description, axis: .vertical).lineLimit(1...8)
           .ghostInput()
+        FormLabel(title: "Group")
         HStack {
           Picker("Group", selection: $selectedGroup) {
             Text("No group").tag("")
@@ -37,7 +40,7 @@ struct AddLinkView: View {
           selectedGroup.isEmpty
             ? "Visible to everyone who can see your profile."
             : "Visibility follows the selected group and your profile."
-        ).font(.caption).foregroundStyle(.secondary)
+        ).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
         AsyncButton(action: save) {
           Text(editing == nil ? "Add" : "Save changes").frame(maxWidth: .infinity)
         }
@@ -108,47 +111,56 @@ struct LinkDetailView: View {
   @State private var loading = true
   @State private var deleting: Comment?
   @FocusState private var focus: Bool
+  @Environment(\.indexSheet) private var isSheet
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 22) {
         LoadingError(error: error, loading: loading, retry: { await load() })
         if let link {
-          if let author {
-            Button {
-              app.path.append(.profile(author.id))
-            } label: {
-              PersonRow(person: author.person)
-            }.buttonStyle(.plain)
-          }
-          Text(link.title).font(.system(size: 34, weight: .semibold, design: .serif))
+          HStack(spacing: 12) {
+            if !isSheet { BackButton() }
+            if let author {
+              Button { app.navigate(.profile(author.id)) } label: {
+                HStack(spacing: 12) {
+                  PersonAvatar(person: author.person, size: 30)
+                  Text(author.username ?? author.name).font(IndexFont.sans(13, weight: .medium))
+                }
+              }.buttonStyle(.plain)
+            }
+            Text(relativeTime(link.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+            Spacer(minLength: 0)
+            if isSheet { SheetCloseButton() }
+          }.padding(.bottom, 8)
+          Text(link.title).font(IndexFont.sans(32, weight: .semibold, relativeTo: .title))
+            .tracking(-1.12).textSelection(.enabled).accessibilityAddTraits(.isHeader)
           HStack {
             if let url = URL(string: link.url) {
               Link(destination: url) { Label(link.domain, systemImage: "arrow.up.right") }
-                .foregroundStyle(.secondary)
+                .foregroundStyle(IndexPalette.subtleForeground)
             }
             Spacer()
-            LinkMenu(link: link)
+            LinkActions(link: link)
           }
           if let description = link.description, !description.isEmpty {
-            Text(description).foregroundStyle(.secondary)
+            Text(description).foregroundStyle(IndexPalette.subtleForeground)
           }
           Divider()
-          Text("Comments").font(.headline)
+          Text("Comments").font(IndexFont.sans(16, weight: .medium))
           ForEach(comments) { comment in
             HStack(alignment: .top, spacing: 10) {
               if let person = comment.author {
                 Button {
-                  app.path.append(.profile(person.id))
+                  app.navigate(.profile(person.id))
                 } label: {
                   PersonAvatar(person: person, size: 32)
                 }.buttonStyle(.plain)
               }
               VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                  Text(comment.author?.label ?? "You").font(.caption).bold()
-                  Text(relativeTime(comment.createdAt)).font(.caption2).foregroundStyle(.secondary)
+                  Text(comment.author?.label ?? "You").font(IndexFont.sans(12)).bold()
+                  Text(relativeTime(comment.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
                 }
-                Text(comment.body).font(.subheadline)
+                Text(comment.body).font(IndexFont.sans(14))
               }.frame(maxWidth: .infinity, alignment: .leading)
               Menu {
                 Button("Respond", systemImage: "arrowshape.turn.up.left") {
@@ -163,7 +175,7 @@ struct LinkDetailView: View {
               }.menuStyle(.borderlessButton).fixedSize()
             }
           }
-          if comments.isEmpty { Text("Start the conversation.").foregroundStyle(.secondary) }
+          if comments.isEmpty { Text("Start the conversation.").foregroundStyle(IndexPalette.subtleForeground) }
           LoadMore(hasMore: cursor != nil) { try await loadComments(more: true) }
         }
       }.padding(.bottom, 20)
@@ -173,7 +185,7 @@ struct LinkDetailView: View {
           VStack(alignment: .leading, spacing: 8) {
             if let replying {
               HStack {
-                Text("Responding to @\(replying.label)").font(.caption).foregroundStyle(.secondary)
+                Text("Responding to @\(replying.label)").font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
                 Spacer()
                 Button("Cancel") { self.replying = nil }
               }
@@ -181,7 +193,8 @@ struct LinkDetailView: View {
             HStack {
               TextField("Comment", text: $bodyText, axis: .vertical).lineLimit(1...5).focused(
                 $focus
-              ).padding(12).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 22))
+              ).font(IndexFont.sans(16)).padding(.horizontal, 14).padding(.vertical, 10)
+                .overlay(Capsule().stroke(IndexPalette.border, lineWidth: 1))
               AsyncButton {
                 let text = (replying.map { "@\($0.label) " } ?? "") + bodyText
                 let _: Comment? = try await app.api?.request(
@@ -197,7 +210,7 @@ struct LinkDetailView: View {
               .disabled(bodyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
               .accessibilityLabel("Send comment")
             }
-          }.padding(16).background(IndexPalette.background)
+          }.padding(20).background(isSheet ? IndexPalette.surface : IndexPalette.background)
         }
       }
       .confirmationDialog(
@@ -278,8 +291,17 @@ struct LinkDetailView: View {
 func relativeTime(_ value: String) -> String {
   let formatter = ISO8601DateFormatter()
   formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-  guard let date = formatter.date(from: value) else { return "" }
-  let relative = RelativeDateTimeFormatter()
-  relative.unitsStyle = .abbreviated
-  return relative.localizedString(for: date, relativeTo: Date())
+  var date = formatter.date(from: value)
+  if date == nil { formatter.formatOptions = [.withInternetDateTime]; date = formatter.date(from: value) }
+  guard let date else { return "" }
+  let minutes = max(0, Int(Date().timeIntervalSince(date) / 60))
+  return minutes < 1 ? "Now" : minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d"
+}
+
+private struct FormLabel: View {
+  let title: String
+  var body: some View {
+    Text(title.uppercased()).font(IndexFont.mono(11)).tracking(0.66)
+      .foregroundStyle(IndexPalette.subtleForeground).padding(.bottom, -14)
+  }
 }

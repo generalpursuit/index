@@ -1,6 +1,27 @@
 import IndexCore
 import SwiftUI
 
+private struct DiscoveryFollowButton: View {
+  let person: Person
+  @Environment(AppModel.self) private var app
+  @State private var status: String?
+  var body: some View {
+    AsyncButton {
+      if status != nil {
+        let _: Success? = try await app.api?.request("/profiles/\(person.id)/follow", method: "DELETE")
+        status = nil
+      } else {
+        let state: FollowState? = try await app.api?.request("/profiles/\(person.id)/follow", method: "POST", body: [:])
+        status = state?.status
+      }
+      app.changed()
+    } label: {
+      Text(status == "accepted" ? "Following" : status == "pending" ? "Requested" : person.profileVisibility == .private ? "Request" : "Follow")
+        .fixedSize()
+    }.buttonStyle(PillStyle()).task(id: person.followingStatus) { status = person.followingStatus }
+  }
+}
+
 struct DiscoverView: View {
   @Environment(AppModel.self) private var app
   @State private var query = ""
@@ -10,27 +31,26 @@ struct DiscoverView: View {
   @State private var error: String?
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 18) {
-        PageHeading(title: "Discover", messages: true)
-        TextField("Search people", text: $query).padding(14).background(
-          IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
+      LazyVStack(alignment: .leading, spacing: 0) {
+        PageHeading(title: "Discover").padding(.bottom, 26)
+        SearchField(placeholder: "Search people", text: $query).padding(.bottom, 20)
         LoadingError(error: error, loading: loading, retry: { await load() })
-        ForEach(people) { person in
+        ForEach(people.filter { $0.id != app.userID }) { person in
           HStack {
             Button {
-              app.path.append(.profile(person.id))
+              app.navigate(.profile(person.id))
             } label: {
               PersonRow(person: person)
             }.buttonStyle(.plain)
             if person.profileVisibility == .private {
-              Image(systemName: "lock").foregroundStyle(.secondary).font(.caption)
+              Image(systemName: "lock").foregroundStyle(IndexPalette.subtleForeground).font(IndexFont.sans(12))
             }
-            Image(systemName: "chevron.right").foregroundStyle(.secondary)
-          }
+            DiscoveryFollowButton(person: person)
+          }.padding(.vertical, 5)
         }
         if !loading && people.isEmpty && error == nil {
           Text(query.isEmpty ? "Find your people with a search." : "No people found.")
-            .foregroundStyle(.secondary).padding(.vertical, 30)
+            .foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
@@ -81,60 +101,60 @@ struct ActivityView: View {
   @State private var loading = false
   var body: some View {
     ScrollView {
-      VStack(alignment: .leading, spacing: 20) {
-        PageHeading(title: "Activity")
+      LazyVStack(alignment: .leading, spacing: 0) {
+        PageHeading(title: "Activity").padding(.bottom, 26)
         ScrollView(.horizontal) {
-          HStack {
+          HStack(spacing: 8) {
             ForEach(
               [
                 ("all", "All"), ("comment", "Comments"), ("request", "Requests"),
                 ("mention", "Mentions"), ("follow", "Follows"),
               ], id: \.0
             ) { item in
-              Button(item.1) { filter = item.0 }.buttonStyle(PillStyle(selected: filter == item.0))
+              Button(item.1) { filter = item.0 }.buttonStyle(PillStyle(selected: filter == item.0, compact: true))
             }
           }
-        }.scrollIndicators(.hidden)
+        }.scrollIndicators(.hidden).padding(.bottom, 24)
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(items) { activity in
           HStack(alignment: .center, spacing: 10) {
             Button {
-              app.path.append(.profile(activity.actor.id))
+              app.navigate(.profile(activity.actor.id))
             } label: {
               PersonAvatar(person: activity.actor, size: 34)
             }.buttonStyle(.plain)
             VStack(alignment: .leading, spacing: 5) {
               HStack(spacing: 6) {
-                Text(activity.actor.label).font(.caption).bold()
-                Text(relativeTime(activity.createdAt)).font(.caption2).foregroundStyle(.secondary)
+                Text(activity.actor.label).font(IndexFont.sans(12)).bold()
+                Text(relativeTime(activity.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
               }
-              Text(activityText(activity)).font(.caption).foregroundStyle(.secondary)
+              Text(activityText(activity)).font(IndexFont.sans(12))
             }.frame(maxWidth: .infinity, alignment: .leading)
             if activity.type == "request" && activity.requestStatus == "pending" {
               HStack(spacing: 5) {
                 AsyncButton {
                   try await resolve(activity, accept: true)
                 } label: {
-                  Text("Accept").font(.caption2)
+                  Text("Accept").font(IndexFont.sans(11))
                 }.buttonStyle(PillStyle(selected: true))
                 AsyncButton {
                   try await resolve(activity, accept: false)
                 } label: {
-                  Image(systemName: "xmark").font(.caption)
+                  Text("Decline")
                 }.buttonStyle(PillStyle()).accessibilityLabel(
                   "Decline \(activity.actor.name)’s request")
               }
             } else if let id = activity.linkId {
               Button {
-                app.path.append(.link(id))
+                app.present(.link(id))
               } label: {
                 Image(systemName: "chevron.right").frame(width: 32, height: 44)
               }.accessibilityLabel("Open post")
             }
-          }.padding(.vertical, 7)
+          }.padding(.vertical, 14)
         }
         if !loading && items.isEmpty && error == nil {
-          Text("You’re all caught up.").foregroundStyle(.secondary).padding(.vertical, 30)
+          Text("You’re all caught up.").foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: cursor != nil) { await load(more: true) }
       }

@@ -72,6 +72,14 @@ extension AppModel {
       guard !Task.isCancelled, userID == account else { return }
       openingLink = nil
       openingConversation = nil
+      sheet = nil
+      if let last = destinations.last {
+        switch last {
+        case .link, .add, .settings:
+          sheet = destinations.removeLast()
+        default: break
+        }
+      }
       path = destinations
       if pendingRouteURL == url { pendingRouteURL = nil; pendingRouteAccountID = nil }
     } catch {

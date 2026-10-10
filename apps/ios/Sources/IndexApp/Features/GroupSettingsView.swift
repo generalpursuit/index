@@ -12,21 +12,21 @@ struct GroupSettingsView: View {
   var body: some View {
     VStack(alignment: .leading, spacing: 14) {
       HStack {
-        Text("Groups").font(.headline)
+        Text("Groups").font(IndexFont.sans(16, weight: .medium))
         Spacer()
         Button { creating = true } label: {
           Image(systemName: "plus").frame(width: 44, height: 44)
         }.accessibilityLabel("New group")
       }
       Text("Locked lists are only yours, whoever can see your profile.")
-        .font(.caption).foregroundStyle(IndexPalette.mutedForeground)
+        .font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
       LoadingError(error: error, loading: loading, retry: { await load() })
       ForEach(groups) { group in
         HStack {
           VStack(alignment: .leading, spacing: 3) {
             Text(group.name)
             if let count = group.linkCount {
-              Text(count == 1 ? "1 link" : "\(count) links").font(.caption)
+              Text(count == 1 ? "1 link" : "\(count) links").font(IndexFont.sans(12))
                 .foregroundStyle(IndexPalette.mutedForeground)
             }
           }
@@ -43,10 +43,10 @@ struct GroupSettingsView: View {
     .foregroundStyle(IndexPalette.foreground)
     .task(id: "\(app.userID)-\(app.revision)") { await load() }
     .sheet(isPresented: $creating) {
-      GroupEditorView().presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+      GroupEditorView().indexSheetStyle().presentationDetents([.height(360), .large])
     }
     .sheet(item: $editing) { group in
-      GroupEditorView(group: group).presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+      GroupEditorView(group: group).indexSheetStyle().presentationDetents([.height(360), .large])
     }
   }
   private func load() async {
@@ -83,7 +83,7 @@ private struct ManagedGroupLock: View {
         error = nil
         confirming = true
       }
-      if let error { Text(error).font(.caption).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
+      if let error { Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
       if pending { ProgressView().accessibilityLabel("Saving group") }
     }
     .alert(locked ? "Unlock group?" : "Lock group?", isPresented: $confirming) {

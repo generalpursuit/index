@@ -33,7 +33,7 @@ struct GroupEditorView: View {
         VStack(alignment: .leading, spacing: 20) {
           PageHeading(title: draft.original == nil ? "New group" : "Edit group")
           VStack(alignment: .leading, spacing: 8) {
-            Text("Name").font(.caption).foregroundStyle(IndexPalette.mutedForeground)
+            Text("Name").font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
             HStack(spacing: 8) {
               TextField("Group name", text: $draft.name).ghostInput()
                 .focused($nameFocused).disabled(pending || !draft.isCustom)
@@ -44,23 +44,21 @@ struct GroupEditorView: View {
               }
             }
             Text(GroupDraft.privacyDescription(locked: draft.visibility == .private))
-              .font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+              .font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
             if draft.alwaysPrivate {
-              Text("Always private").font(.caption).foregroundStyle(IndexPalette.mutedForeground)
+              Text("Always private").font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
             }
             if let feedback {
-              Text(feedback).font(.subheadline).foregroundStyle(IndexPalette.destructive)
+              Text(feedback).font(IndexFont.sans(14)).foregroundStyle(IndexPalette.destructive)
                 .accessibilityFocused($errorFocused)
             }
           }
           HStack {
-            Button("Cancel") { dismiss() }.disabled(pending)
-            Spacer()
             Button(action: submit) {
               HStack {
                 if pending { ProgressView().tint(IndexPalette.primaryForeground) }
                 Text(pending ? "Saving…" : draft.original == nil ? "Create" : "Save")
-              }.padding(.horizontal, 18).padding(.vertical, 12)
+              }.font(IndexFont.sans(14, weight: .medium)).frame(maxWidth: .infinity, minHeight: 46)
                 .background(IndexPalette.primary, in: Capsule()).foregroundStyle(IndexPalette.primaryForeground)
             }.buttonStyle(.plain).disabled(pending)
           }
@@ -69,7 +67,7 @@ struct GroupEditorView: View {
           }
         }.padding(20)
       }
-      .background(IndexPalette.background).foregroundStyle(IndexPalette.foreground)
+      .background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
       .interactiveDismissDisabled(pending)
       .task { nameFocused = draft.isCustom }
       .alert(draft.locked ? "Lock group?" : "Unlock group?", isPresented: $confirmingPrivacy) {

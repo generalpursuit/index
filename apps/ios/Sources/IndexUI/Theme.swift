@@ -24,6 +24,8 @@ public enum IndexPalette {
   public static let card = adaptive(light: 0xffffff, dark: 0x111111)
   public static let muted = adaptive(light: 0xebebeb, dark: 0x222222)
   public static let mutedForeground = adaptive(light: 0x626262, dark: 0xa3a3a3)
+  public static let subtleForeground = adaptive(light: 0x6b6b6b, dark: 0x929292)
+  public static let input = adaptive(light: 0xb8b8b8, dark: 0x454545)
   public static let border = adaptive(light: 0xd4d4d4, dark: 0x303030)
   public static let primary = foreground
   public static let primaryForeground = background
@@ -32,9 +34,22 @@ public enum IndexPalette {
   public static let avatarForeground = Color.white
 
   public static func avatarBackground(for id: String) -> Color {
-    let colors: [UInt32] = [0x4338ca, 0x0f766e, 0x7e22ce, 0x9a3412, 0x9d174d, 0x166534]
-    let hex = colors[id.utf8.reduce(0) { ($0 + Int($1)) % colors.count }]
-    return adaptive(light: hex, dark: hex)
+    // Web: hsl((sum of UTF-16 character codes * 37) % 360, 60%, 30%).
+    let hue = Double((id.utf16.reduce(0) { $0 + Int($1) } * 37) % 360) / 360
+    return Color(hue: hue, saturation: 0.75, brightness: 0.48)
+  }
+
+  public static func category(_ category: Category) -> Color {
+    switch category {
+    case .article: adaptive(light: 0x315cb5, dark: 0x7aa2ff)
+    case .video: adaptive(light: 0xb23b3b, dark: 0xff7a7a)
+    case .music: adaptive(light: 0x237744, dark: 0x5fd39a)
+    case .podcast: adaptive(light: 0x7c4bbc, dark: 0xb794ff)
+    case .book: adaptive(light: 0x966218, dark: 0xf0b45a)
+    case .tool: adaptive(light: 0x237577, dark: 0x5ccfe6)
+    case .note: adaptive(light: 0xa33679, dark: 0xff9ad5)
+    case .uncategorized: adaptive(light: 0x737373, dark: 0x929292)
+    }
   }
 
   private static func adaptive(light: UInt32, dark: UInt32) -> Color {

@@ -21,22 +21,31 @@ public struct GroupCreationForm: View {
   public var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 20) {
-        Text("Create group").font(.title2.bold())
         HStack {
-          TextField("Group name", text: $draft.name).textFieldStyle(.roundedBorder).focused($focused).disabled(pending)
+          Text("Create group").font(IndexTypography.serif(26)).accessibilityAddTraits(.isHeader)
+          Spacer()
+          Button(action: onCancel) {
+            Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44)
+          }.buttonStyle(.plain).disabled(pending).accessibilityLabel("Close")
+        }
+        HStack {
+          TextField("Group name", text: $draft.name).textFieldStyle(.plain).font(IndexTypography.sans(16))
+            .padding(.horizontal, 14).padding(.vertical, 11)
+            .background(IndexPalette.muted, in: RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).stroke(IndexPalette.input))
+            .focused($focused).disabled(pending)
             .onSubmit { save() }
           GroupLockControl(locked: draft.locked, disabled: pending) { draft.locked = $0 }
         }
-        Text(GroupDraft.privacyDescription(locked: draft.locked)).font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
+        Text(GroupDraft.privacyDescription(locked: draft.locked)).font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.subtleForeground)
         if let error { Text(error).foregroundStyle(IndexPalette.destructive).accessibilityAddTraits(.isStaticText) }
-        HStack {
-          Button("Cancel", action: onCancel).disabled(pending)
-          Spacer()
-          Button(pending ? "Creating…" : "Create", action: save).disabled(pending)
-            .buttonStyle(.borderedProminent).tint(IndexPalette.primary).foregroundStyle(IndexPalette.primaryForeground)
-        }
+        Button(action: save) {
+          Text(pending ? "Creating…" : "Create").font(IndexTypography.sans(14, weight: .medium))
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(IndexPalette.primary, in: Capsule()).foregroundStyle(IndexPalette.primaryForeground)
+        }.buttonStyle(.plain).disabled(pending).opacity(pending ? 0.4 : 1)
       }.padding(20)
-    }.background(IndexPalette.background).foregroundStyle(IndexPalette.foreground)
+    }.background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
       .interactiveDismissDisabled(pending).task { focused = true }
       .onDisappear { operation?.cancel(); operation = nil }
   }
