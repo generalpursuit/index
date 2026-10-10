@@ -1,3 +1,5 @@
+import { groupPath, profilePath } from "@index/api/routes";
+import { client } from "@/utils/orpc";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
@@ -188,6 +190,7 @@ function ProfileContent({
         <ProfileLinks
           key={filter}
           userId={profile.id}
+          username={profile.username!}
           own={own}
           filter={filter}
           onNewGroup={() => setNewGroup(true)}
@@ -215,9 +218,13 @@ function ProfileContent({
       {newGroup && (
         <NewGroup
           onClose={() => setNewGroup(false)}
-          onCreated={(id) => {
+          onCreated={async (id) => {
             setNewGroup(false);
-            void navigate({ to: ".", search: (old) => ({ ...old, group: id }) });
+            const group = await client.groups.get({ id });
+            void navigate({
+              to: groupPath(profile.username!, group.slug),
+              search: (old) => ({ ...old, group: undefined }),
+            });
           }}
         />
       )}
@@ -231,6 +238,7 @@ function ProfileContent({
  */
 function ProfileLinks({
   userId,
+  username,
   own,
   filter,
   onNewGroup,
@@ -239,6 +247,7 @@ function ProfileLinks({
   own: boolean;
   filter: string;
   onNewGroup: () => void;
+  username: string;
 }) {
   const groups = useGroups(userId),
     allGroups = groups.data?.pages.flatMap((p) => p.items) ?? [],
@@ -272,8 +281,11 @@ function ProfileLinks({
   const navigate = useNavigate();
   const select = (group?: string) =>
     void navigate({
-      to: ".",
-      search: (old) => ({ ...old, group: group === "all" ? undefined : group }),
+      to:
+        !group || group === "all"
+          ? profilePath(username)
+          : groupPath(username, allGroups.find((g) => g.id === group)?.slug ?? group),
+      search: (old) => ({ ...old, group: undefined }),
     });
   const jump = (week: string) =>
     document.querySelector(`.profile-week[data-week="${week}"]`)?.scrollIntoView({

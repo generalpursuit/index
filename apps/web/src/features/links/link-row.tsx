@@ -76,7 +76,7 @@ export function LinkRow({
         onTouchStart={prepare}
         onClick={() => {
           prepare();
-          void navigate({ to: ".", search: (old) => ({ ...old, post: link.id }) });
+          void navigate({ to: ".", search: (old) => ({ ...old, post: link.shortId }) });
         }}
       >
         {link.title}
@@ -157,7 +157,10 @@ export function LinkActions({ link }: { link: SavedLink }) {
               <DropdownMenuItem
                 render={
                   // Editing replaces the open post rather than stacking a second modal.
-                  <Link to="." search={(old) => ({ ...old, post: undefined, edit: link.id })} />
+                  <Link
+                    to="."
+                    search={(old) => ({ ...old, post: undefined, edit: link.shortId })}
+                  />
                 }
               >
                 <Pencil />
@@ -186,16 +189,16 @@ export function LinkActions({ link }: { link: SavedLink }) {
             {
               onSuccess: () => {
                 setRemove(false);
-                if (search.post === link.id)
+                if (search.post === link.shortId || search.post === link.id)
                   void navigate({
                     to: ".",
                     search: (old) => ({ ...old, post: undefined }),
                     replace: true,
                   });
-                else if (path === "/links/" + link.id)
+                else if (path === "/links/" + link.id || path === "/l/" + link.shortId)
                   void navigate({
-                    to: "/people/$userId",
-                    params: { userId: link.ownerId },
+                    to: "/u/$username",
+                    params: { username: viewer!.username! },
                     replace: true,
                   });
               },

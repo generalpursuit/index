@@ -1,3 +1,4 @@
+import { routesContract } from "./features/routes/contract";
 import { activityContract } from "./features/activity/contract";
 import { messagesContract } from "./features/messages/contract";
 import { favoritesContract } from "./features/favorites/contract";
@@ -36,6 +37,7 @@ export const appContract = {
         }),
       }),
     ),
+  routes: routesContract,
   links: linksContract,
   groups: groupsContract,
   profiles: profilesContract,

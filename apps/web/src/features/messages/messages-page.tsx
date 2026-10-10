@@ -70,7 +70,7 @@ export function MessagesPage() {
               <Link
                 className="conversation-row"
                 to="/messages/$conversationId"
-                params={{ conversationId: chat.id }}
+                params={{ conversationId: chat.shortId }}
                 key={chat.id}
               >
                 <ChatAvatars chat={chat} viewerId={viewer.id} />
@@ -199,8 +199,8 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             <Back fallback="/messages" />
             {recipient ? (
               <Link
-                to="/people/$userId"
-                params={{ userId: recipient.id }}
+                to="/u/$username"
+                params={{ username: recipient.username! }}
                 aria-label={"View " + recipient.name + "’s profile"}
               >
                 <ChatAvatars chat={detail.data} viewerId={viewer.id} />
@@ -211,7 +211,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             <div className="person-label">
               <strong>
                 {recipient ? (
-                  <Link to="/people/$userId" params={{ userId: recipient.id }}>
+                  <Link to="/u/$username" params={{ username: recipient.username! }}>
                     {recipient.name}
                   </Link>
                 ) : (
@@ -224,7 +224,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                   .map((p, i) => (
                     <span key={p.id}>
                       {i > 0 ? ", " : ""}
-                      <Link to="/people/$userId" params={{ userId: p.id }}>
+                      <Link to="/u/$username" params={{ username: p.username! }}>
                         @{p.username ?? p.name}
                       </Link>
                     </span>
@@ -351,7 +351,10 @@ function SharedPost({ message }: { message: Message }) {
         variant="ghost"
         className="shared-post"
         onClick={() =>
-          void navigate({ to: ".", search: (old) => ({ ...old, post: message.attachment!.id }) })
+          void navigate({
+            to: ".",
+            search: (old) => ({ ...old, post: message.attachment!.shortId }),
+          })
         }
       >
         <Link2 />
@@ -365,8 +368,8 @@ function SharedPost({ message }: { message: Message }) {
     return (
       <Link
         className="shared-post restricted"
-        to="/people/$userId"
-        params={{ userId: message.restrictedAuthor.id }}
+        to="/u/$username"
+        params={{ username: message.restrictedAuthor.username! }}
       >
         <LockKeyhole />
         <span>

@@ -182,6 +182,9 @@ struct LinkMenu: View {
       } label: {
         Label("Open website", systemImage: "arrow.up.right")
       }
+      if let shortID = link.shortId, let url = app.webURL?.appendingPathComponent(ReadableRoutes.link(shortID)) {
+        ShareLink(item: url) { Label("Share post", systemImage: "square.and.arrow.up") }
+      }
       if own {
         Button {
           app.path.append(.add(Week.monday(Week.date(link.savedOn)), link.groupId, link))

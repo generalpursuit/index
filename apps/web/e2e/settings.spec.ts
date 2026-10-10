@@ -161,6 +161,6 @@ test("settings is private and opens on its own in a fresh tab", async ({
   await expect(fresh.locator(".settings-identity strong")).toHaveText("Alice");
   await expect(fresh.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
   await fresh.getByRole("link", { name: "Your profile", exact: true }).click();
-  await expect(fresh).toHaveURL(new RegExp("/people/" + fixture.people.Alice));
+  await expect(fresh).toHaveURL(/\/u\/alice/);
   await fresh.close();
 });

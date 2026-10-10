@@ -80,8 +80,14 @@ function GroupActions({ group }: { group: Group }) {
   return (
     <div className="settings-group-actions">
       <IconButton
-        label={locked ? "Unlock " + group.name : "Lock " + group.name}
-        disabled={actions.updateGroup.isPending}
+        label={
+          group.kind === "starred"
+            ? "Starred is always private"
+            : locked
+              ? "Unlock " + group.name
+              : "Lock " + group.name
+        }
+        disabled={group.kind === "starred" || actions.updateGroup.isPending}
         onClick={() =>
           actions.updateGroup.mutate({ id: group.id, visibility: locked ? "public" : "private" })
         }

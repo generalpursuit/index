@@ -41,7 +41,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
     void navigate({
       to: "/messages/$conversationId",
       params: { conversationId: id },
-      search: { attach: link?.id },
+      search: { attach: link?.shortId },
     });
   };
   return (
@@ -91,7 +91,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                   onClick={() =>
                     start.mutate(
                       { recipientIds: [person.id] },
-                      { onSuccess: (chat) => open(chat.id) },
+                      { onSuccess: (chat) => open(chat.shortId) },
                     )
                   }
                 >
@@ -134,7 +134,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
               variant="ghost"
               className="person-row"
               key={chat.id}
-              onClick={() => open(chat.id)}
+              onClick={() => open(chat.shortId)}
             >
               <span className="avatar-stack">
                 {chat.participants
@@ -162,7 +162,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           <Button
             disabled={!selected.length || start.isPending || selected.length > 19}
             onClick={() =>
-              start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.id) })
+              start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.shortId) })
             }
           >
             {start.isPending

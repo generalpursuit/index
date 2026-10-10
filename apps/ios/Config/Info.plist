@@ -10,6 +10,7 @@
 <key>CFBundleVersion</key><string>1</string>
 <key>IndexAPIURL</key><string>$(INDEX_API_URL)</string>
 <key>IndexWebURL</key><string>$(INDEX_WEB_URL)</string>
+<key>IndexWebAliases</key><string>$(INDEX_WEB_ALIASES)</string>
 <key>LSRequiresIPhoneOS</key><true/>
 <key>UIApplicationSceneManifest</key><dict><key>UIApplicationSupportsMultipleScenes</key><false/></dict>
 <key>UILaunchScreen</key><dict/>

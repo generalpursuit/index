@@ -1,3 +1,4 @@
+import { useRouter } from "@tanstack/react-router";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import type { SavedLink } from "@/lib/types";
@@ -31,6 +32,7 @@ export function useLibraryWeeks(userId: string, groupId?: string, enabled = true
   return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
 }
 export function useLibraryActions() {
+  const router = useRouter();
   const api = useAPI(),
     cache = useQueryClient();
   const refresh = async () => {
@@ -67,7 +69,11 @@ export function useLibraryActions() {
   );
   const createGroup = useMutation(api.groups.create.mutationOptions({ onSuccess: refresh }));
   const refreshGroups = () =>
-    Promise.all([refresh(), cache.invalidateQueries({ queryKey: api.links.get.key() })]);
+    Promise.all([
+      refresh(),
+      router.invalidate(),
+      cache.invalidateQueries({ queryKey: api.links.get.key() }),
+    ]);
   const updateGroup = useMutation(api.groups.update.mutationOptions({ onSuccess: refreshGroups }));
   const deleteGroup = useMutation(api.groups.delete.mutationOptions({ onSuccess: refreshGroups }));
   const collect = useMutation({

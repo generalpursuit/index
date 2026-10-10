@@ -29,6 +29,9 @@ export function listActivity(
         createdAt: timestamp(activities.createdAt),
         readAt: timestamp(activities.readAt),
         linkId: activities.linkId,
+        linkShortId: sql<
+          string | null
+        >`(select short_id from links where links.id=${activities.linkId})`,
         commentId: activities.commentId,
         body: comments.body,
         requestStatus: activities.requestStatus,

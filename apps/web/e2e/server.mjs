@@ -158,6 +158,7 @@ async function seed() {
     notes,
     locked,
     conversationId: chat.id,
+    conversationShortId: chat.shortId,
   };
   return fixture;
 }

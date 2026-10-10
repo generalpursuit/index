@@ -44,7 +44,11 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
             ?.filter((p) => p.id !== viewer?.id)
             .map((p) => (
               <div className="person-row" key={p.id}>
-                <Link to="/people/$userId" params={{ userId: p.id }} className="person-inline">
+                <Link
+                  to="/u/$username"
+                  params={{ username: p.username! }}
+                  className="person-inline"
+                >
                   <UserAvatar person={p} />
                   <span className="person-label">
                     <strong>

@@ -1,3 +1,4 @@
+import { routesRouter } from "../features/routes/router";
 import { activityRouter } from "../features/activity/router";
 import { messagesRouter } from "../features/messages/router";
 import { favoritesRouter } from "../features/favorites/router";
@@ -36,6 +37,7 @@ export const appRouter = api.router({
       },
     };
   }),
+  routes: routesRouter,
   links: linksRouter,
   groups: groupsRouter,
   profiles: profilesRouter,

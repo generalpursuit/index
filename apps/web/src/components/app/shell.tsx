@@ -10,8 +10,7 @@ import {
 import { Search, Bell, User, MessageCircle, Settings } from "lucide-react";
 import { Modal, QueryState } from "./primitives";
 import brandSymbol from "@/assets/brand-symbol.svg";
-import { LinkDetail } from "@/features/links/link-detail";
-import { LinkEditor } from "@/features/links/link-editor";
+import { LinkReference } from "@/features/routes/link-reference";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
 import { useBack, useEdgeBack } from "@/hooks/use-back";
@@ -40,7 +39,11 @@ export function AppShell() {
       }
     }
   }, [viewer?.id, router]);
-  const protectedPage = !path.startsWith("/people/") && !path.startsWith("/links/");
+  const protectedPage =
+    !path.startsWith("/people/") &&
+    !path.startsWith("/links/") &&
+    !path.startsWith("/u/") &&
+    !path.startsWith("/l/");
   useEffect(() => {
     if (!viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
@@ -76,8 +79,8 @@ export function AppShell() {
           </Link>
           {viewer ? (
             <Link
-              to="/people/$userId"
-              params={{ userId: viewer.id }}
+              to="/u/$username"
+              params={{ username: viewer.username! }}
               className="nav-item"
               aria-label="Your profile"
             >
@@ -120,7 +123,11 @@ export function AppShell() {
               });
           }}
         >
-          {search.post ? <LinkDetail key={search.post} id={search.post} /> : <QueryState pending />}
+          {search.post ? (
+            <LinkReference key={search.post} value={search.post} mode="post" onDone={() => {}} />
+          ) : (
+            <QueryState pending />
+          )}
         </Modal>
         <Modal
           open={!!search.edit}
@@ -130,7 +137,9 @@ export function AppShell() {
             if (!v) closeEditor();
           }}
         >
-          {search.edit && <LinkEditor key={search.edit} id={search.edit} onDone={closeEditor} />}
+          {search.edit && (
+            <LinkReference key={search.edit} value={search.edit} mode="edit" onDone={closeEditor} />
+          )}
         </Modal>
       </div>
     </DraftProvider>

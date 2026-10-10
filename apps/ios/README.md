@@ -52,3 +52,7 @@ The integration test resets **only the disposable fixture API** and checks real 
 On this Mac's command-line-only installation, source compilation succeeded against the installed macOS 26.5 SDK. Tests require explicitly loading the installed Testing plugin/runtime; `Scripts/check-local.sh` captures that workaround. The latest run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
 
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
+
+## Readable links
+
+Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. New native route parser/readiness tests and AppModel navigation changes have not been compiled or run on this Linux VM; run the documented Swift/Xcode checks on a Mac before distribution.
