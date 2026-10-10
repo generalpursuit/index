@@ -1,3 +1,6 @@
 {
-  "ignorePatterns": []
+  "ignorePatterns": [
+    "apps/ios/Resources/Assets.xcassets/**/Contents.json",
+    "packages/db/src/migrations/**/snapshot.json"
+  ]
 }
