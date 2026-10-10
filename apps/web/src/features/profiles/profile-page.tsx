@@ -1,5 +1,4 @@
 import { groupPath, profilePath } from "@index/api/routes";
-import { client } from "@/utils/orpc";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
@@ -20,7 +19,7 @@ import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
 import { WeekLinks } from "@/features/feed/feed-page";
-import { NewGroup } from "@/features/settings/groups";
+import { CreateGroup } from "@/features/groups/create-group";
 import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrubber";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
@@ -121,6 +120,7 @@ function ProfileContent({
     navigate = useNavigate();
   const [connections, setConnections] = useState<"followers" | "following" | null>(null),
     [newGroup, setNewGroup] = useState(false);
+  const groupReturnFocus = useRef<HTMLButtonElement>(null);
   const hidden = !profile.canViewContent;
   return (
     <div className="profile-page">
@@ -223,7 +223,10 @@ function ProfileContent({
           username={profile.username!}
           own={own}
           filter={filter}
-          onNewGroup={() => setNewGroup(true)}
+          onNewGroup={(trigger) => {
+            groupReturnFocus.current = trigger ?? null;
+            setNewGroup(true);
+          }}
         />
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
@@ -246,11 +249,11 @@ function ProfileContent({
         </Modal>
       )}
       {newGroup && (
-        <NewGroup
+        <CreateGroup
+          returnFocus={groupReturnFocus}
           onClose={() => setNewGroup(false)}
-          onCreated={async (id) => {
+          onCreated={(group) => {
             setNewGroup(false);
-            const group = await client.groups.get({ id });
             void navigate({
               to: groupPath(profile.username!, group.slug),
               search: (old) => ({ ...old, group: undefined }),
@@ -276,7 +279,7 @@ function ProfileLinks({
   userId: string;
   own: boolean;
   filter: string;
-  onNewGroup: () => void;
+  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
   username: string;
 }) {
   const groups = useGroups(userId),
@@ -550,8 +553,9 @@ function ListFilter({
   filter: string;
   own: boolean;
   onSelect: (value: string) => void;
-  onNewGroup: () => void;
+  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
 }) {
+  const trigger = useRef<HTMLButtonElement>(null);
   // Favorites first, then the person's groups, like Settings.
   const lists = groups
       .filter((g) => g.kind !== "starred")
@@ -568,6 +572,7 @@ function ListFilter({
             className={
               "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
             }
+            ref={trigger}
             aria-label={"Showing " + name}
           />
         }
@@ -598,7 +603,7 @@ function ListFilter({
         {own && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onNewGroup}>
+            <DropdownMenuItem onClick={() => onNewGroup(trigger.current)}>
               <Plus />
               New group
             </DropdownMenuItem>

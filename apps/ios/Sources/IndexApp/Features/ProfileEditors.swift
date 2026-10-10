@@ -29,6 +29,8 @@ struct SettingsView: View {
         }.buttonStyle(PillStyle(selected: true)).disabled(
           name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         Divider().padding(.vertical)
+        GroupSettingsView()
+        Divider().padding(.vertical)
         AccountSecurityView()
         AsyncButton {
           await app.signOut()
@@ -41,69 +43,6 @@ struct SettingsView: View {
       name = profile.name
       username = profile.username ?? ""
       initialized = true
-    }
-  }
-}
-struct GroupEditorView: View {
-  let group: LinkGroup?
-  @Environment(AppModel.self) private var app
-  @Environment(\.dismiss) private var dismiss
-  @State private var name = ""
-  @State private var locked = false
-  @State private var deleting = false
-  @State private var initialized = false
-  var body: some View {
-    VStack(alignment: .leading, spacing: 24) {
-      PageHeading(title: group == nil ? "New group" : "Edit group")
-      HStack(spacing: 8) {
-        TextField("Group name", text: $name).ghostInput()
-        Button {
-          locked.toggle()
-        } label: {
-          Image(systemName: locked ? "lock" : "lock.open").frame(width: 44, height: 44)
-        }.buttonStyle(.plain)
-          .accessibilityLabel(locked ? "Unlock group" : "Lock group")
-          .accessibilityValue(locked ? "Locked" : "Unlocked")
-      }
-      AsyncButton {
-        let _: LinkGroup? = try await app.api?.request(
-          group.map { "/groups/\($0.id)" } ?? "/groups", method: group == nil ? "POST" : "PATCH",
-          body: ["name": .string(name), "visibility": .string(locked ? "private" : "public")])
-        app.changed()
-        dismiss()
-      } label: {
-        Text(group == nil ? "Create" : "Save changes").frame(maxWidth: .infinity)
-      }.buttonStyle(PillStyle(selected: true)).disabled(
-        name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-      if group != nil {
-        Button("Delete group", role: .destructive) { deleting = true }.buttonStyle(PillStyle())
-      }
-      Spacer()
-    }.indexPage().task {
-      if !initialized {
-        name = group?.name ?? ""
-        locked = group?.visibility == .private
-        initialized = true
-      }
-    }
-    .confirmationDialog(
-      group?.visibility == .private
-        ? "Delete group? Its links stay on your profile but will no longer be locked."
-        : "Delete group? Its links stay on your profile without a group.",
-      isPresented: $deleting,
-      titleVisibility: .visible
-    ) {
-      Button("Delete group", role: .destructive) {
-        guard let group else { return }
-        Task {
-          do {
-            let _: Success? = try await app.api?.request(
-              "/groups/\(group.id)", method: "DELETE", body: ["deleteLinks": .bool(false)])
-            app.changed()
-            dismiss()
-          } catch { app.handle(error) }
-        }
-      }
     }
   }
 }

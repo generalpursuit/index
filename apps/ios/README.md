@@ -61,3 +61,7 @@ Before distribution, verify at small and large iPhone sizes and iPad, with the s
 ## Readable links
 
 Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. New native route parser/readiness tests and AppModel navigation changes have not been compiled or run on this Linux VM; run the documented Swift/Xcode checks on a Mac before distribution.
+
+## Group management
+
+Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group callback contract and Mac verification checklist](../../docs/groups.md). The new native group source/tests are unverified on this Linux VM; earlier Mac checks above do not cover them.

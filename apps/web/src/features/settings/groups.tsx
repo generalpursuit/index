@@ -1,31 +1,21 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@index/ui/components/button";
-import { Input } from "@index/ui/components/input";
-import {
-  LockKeyhole,
-  LockKeyholeOpen,
-  Pencil,
-  Plus,
-  Star,
-  EllipsisVertical,
-  Trash,
-} from "lucide-react";
+import { Pencil, Plus, Star, EllipsisVertical, Trash } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@index/ui/components/dropdown-menu";
-import { Confirmation, Modal, IconButton, QueryState } from "@/components/app/primitives";
+import { Confirmation, Modal, IconButton, QueryState, More } from "@/components/app/primitives";
 import { useGroups, useLibraryActions } from "@/features/links/hooks/use-links";
+import { CreateGroup } from "@/features/groups/create-group";
+import { GroupForm, groupSaveError } from "@/features/groups/group-form";
+import { GroupLockControl, groupPrivacyDescription } from "@/features/groups/group-lock-control";
 import type { Group } from "@/lib/types";
 
-// Shared by instances in this component; markers remain available to scroll hooks/tests.
-const modalActionsClassName =
-  "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full";
-
 /**
- * Your lists in one place: create groups, lock any list (Favorites and Starred too), and
+ * Your lists in one place: create groups, lock custom groups and Favorites (Starred is always private), and
  * rename or delete your own groups. The profile only shows and filters them.
  */
 export function GroupSettings({ userId }: { userId: string }) {
@@ -36,6 +26,7 @@ export function GroupSettings({ userId }: { userId: string }) {
       (a, b) => order[a.kind] - order[b.kind],
     );
   const [creating, setCreating] = useState(false);
+  const createTrigger = useRef<HTMLButtonElement>(null);
   return (
     <section
       className={
@@ -54,7 +45,7 @@ export function GroupSettings({ userId }: { userId: string }) {
             Locked lists are only yours, whoever can see your profile.
           </p>
         </div>
-        <IconButton label="New group" onClick={() => setCreating(true)}>
+        <IconButton ref={createTrigger} label="New group" onClick={() => setCreating(true)}>
           <Plus />
         </IconButton>
       </div>
@@ -73,7 +64,9 @@ export function GroupSettings({ userId }: { userId: string }) {
               }
             >
               <span
-                className={"settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px]"}
+                className={
+                  "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
+                }
               >
                 {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
                 {g.name}
@@ -89,218 +82,163 @@ export function GroupSettings({ userId }: { userId: string }) {
             </li>
           ))}
         </ul>
+        <More
+          hasNext={groups.hasNextPage}
+          isFetching={groups.isFetchingNextPage}
+          fetch={groups.fetchNextPage}
+        />
       </QueryState>
       {creating && (
-        <NewGroup onClose={() => setCreating(false)} onCreated={() => setCreating(false)} />
+        <CreateGroup
+          returnFocus={createTrigger}
+          onClose={() => setCreating(false)}
+          onCreated={() => setCreating(false)}
+        />
       )}
     </section>
   );
 }
-// Lock applies to every list of yours; only your own groups can be renamed or deleted.
+// Only custom groups can be renamed/deleted. Starred never offers an unlock action.
 function GroupActions({ group }: { group: Group }) {
   const actions = useLibraryActions(),
     [edit, setEdit] = useState(false),
-    [name, setName] = useState(group.name),
     [remove, setRemove] = useState(false),
-    locked = group.visibility === "private";
+    [privacy, setPrivacy] = useState<boolean>(),
+    [error, setError] = useState<string>(),
+    locked = group.kind === "starred" || group.visibility === "private";
+  const submitting = useRef(false);
+  const editTrigger = useRef<HTMLButtonElement>(null);
+  const busy = actions.updateGroup.isPending || actions.deleteGroup.isPending;
+  const changePrivacy = async () => {
+    if (submitting.current || privacy === undefined || group.kind === "starred") return;
+    submitting.current = true;
+    setError(undefined);
+    try {
+      await actions.updateGroup.mutateAsync({
+        id: group.id,
+        visibility: privacy ? "private" : "public",
+      });
+    } catch (cause) {
+      setError(groupSaveError(cause));
+    } finally {
+      submitting.current = false;
+      setPrivacy(undefined);
+    }
+  };
   return (
-    <div
-      className={
-        "settings-group-actions flex items-center gap-0.5 mr-[-8px] [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
-      }
-    >
-      <IconButton
-        label={
-          group.kind === "starred"
-            ? "Starred is always private"
-            : locked
-              ? "Unlock " + group.name
-              : "Lock " + group.name
-        }
-        disabled={group.kind === "starred" || actions.updateGroup.isPending}
-        onClick={() =>
-          actions.updateGroup.mutate({ id: group.id, visibility: locked ? "public" : "private" })
-        }
-      >
-        {locked ? <LockKeyhole /> : <LockKeyholeOpen />}
-      </IconButton>
-      {group.kind !== "custom" && <span className={"settings-group-slot w-8"} aria-hidden="true" />}
-      {group.kind === "custom" && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="icon" aria-label={"Actions for " + group.name} />}
-          >
-            <EllipsisVertical />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              onClick={() => {
-                setName(group.name);
-                setEdit(true);
-              }}
-            >
-              <Pencil />
-              Rename
-            </DropdownMenuItem>
-            <DropdownMenuItem variant="destructive" onClick={() => setRemove(true)}>
-              <Trash />
-              Delete
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      <Modal open={edit} onOpenChange={setEdit} title="Rename group">
-        <form
-          className={"form-stack flex flex-col gap-4.5"}
-          onSubmit={(e) => {
-            e.preventDefault();
-            actions.updateGroup.mutate({ id: group.id, name }, { onSuccess: () => setEdit(false) });
+    <>
+      <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
+        <GroupLockControl
+          name={group.name}
+          locked={locked}
+          alwaysPrivate={group.kind === "starred"}
+          disabled={busy}
+          onChange={(next) => {
+            setError(undefined);
+            setPrivacy(next);
           }}
-        >
-          <label className={"modal-field flex flex-col gap-2"}>
-            <span
-              className={
-                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+        />
+        <Confirmation
+          open={privacy !== undefined}
+          onOpenChange={(open) => {
+            if (!open && !busy) setPrivacy(undefined);
+          }}
+          title={privacy ? "Lock group?" : "Unlock group?"}
+          description={groupPrivacyDescription(privacy ?? locked)}
+          label={privacy ? "Lock group" : "Unlock group"}
+          pending={busy}
+          onConfirm={() => void changePrivacy()}
+        />
+        {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
+        {group.kind === "custom" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  ref={editTrigger}
+                  variant="ghost"
+                  size="icon"
+                  aria-label={"Actions for " + group.name}
+                />
               }
             >
-              Name
-            </span>
-            <Input autoFocus value={name} onChange={(e) => setName(e.target.value)} />
-          </label>
-          <div className={modalActionsClassName}>
-            <Button
-              type="button"
-              variant="ghost"
-              className="modal-cancel"
-              onClick={() => setEdit(false)}
-            >
-              Cancel
-            </Button>
-            <Button type="submit" disabled={!name.trim() || actions.updateGroup.isPending}>
-              Save
-            </Button>
-          </div>
-        </form>
-      </Modal>
-      <Confirmation
-        open={remove}
-        onOpenChange={setRemove}
-        title="Delete group?"
-        description={
-          group.visibility === "private"
-            ? "Its links stay on your profile without a group. They will no longer be locked, so anyone who can see your profile will see them."
-            : "Its links stay on your profile without a group."
-        }
-        destructive
-        label="Delete group"
-        pending={actions.deleteGroup.isPending}
-        onConfirm={() =>
-          actions.deleteGroup.mutate(
-            { id: group.id, deleteLinks: false },
-            {
-              onSuccess: () => setRemove(false),
-            },
-          )
-        }
-      />
-    </div>
-  );
-}
-export function NewGroup({
-  onClose,
-  onCreated,
-}: {
-  onClose: () => void;
-  onCreated: (id: string) => void;
-}) {
-  const [name, setName] = useState(""),
-    [locked, setLocked] = useState(false),
-    actions = useLibraryActions();
-  return (
-    <Modal
-      open
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-      title="New group"
-    >
-      <form
-        className={"form-stack flex flex-col gap-4.5"}
-        onSubmit={(e) => {
-          e.preventDefault();
-          actions.createGroup.mutate(
-            { name, visibility: locked ? "private" : "public" },
-            { onSuccess: (g) => onCreated(g.id) },
-          );
-        }}
-      >
-        <label className={"modal-field flex flex-col gap-2"}>
-          <span
-            className={
-              "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
-            }
+              <EllipsisVertical />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEdit(true);
+                }}
+              >
+                <Pencil />
+                Edit group
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  setError(undefined);
+                  setRemove(true);
+                }}
+              >
+                <Trash />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {edit && (
+          <Modal
+            open
+            onOpenChange={(open) => {
+              if (!open && !busy) setEdit(false);
+            }}
+            title="Edit group"
+            returnFocus={editTrigger}
           >
-            Name
-          </span>
-          <Input
-            autoFocus
-            placeholder="Reading, Wishlist, …"
-            maxLength={100}
-            required
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <div className={"link-form-group flex flex-col gap-2.5 [&_.muted]:text-[13px]"}>
-          <span
-            className={
-              "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
+            <GroupForm
+              group={group}
+              pending={actions.updateGroup.isPending}
+              onClose={() => setEdit(false)}
+              onSave={async (value) => {
+                await actions.updateGroup.mutateAsync({ id: group.id, ...value });
+                setEdit(false);
+              }}
+            />
+          </Modal>
+        )}
+        <Confirmation
+          open={remove}
+          onOpenChange={(open) => {
+            if (!busy) setRemove(open);
+          }}
+          title="Delete group?"
+          description={
+            group.visibility === "private"
+              ? "Its links stay on your profile without a group. They will no longer be locked, so anyone who can see your profile will see them."
+              : "Its links stay on your profile without a group."
+          }
+          destructive
+          label="Delete group"
+          pending={actions.deleteGroup.isPending}
+          onConfirm={async () => {
+            if (submitting.current) return;
+            submitting.current = true;
+            try {
+              await actions.deleteGroup.mutateAsync({ id: group.id, deleteLinks: false });
+            } catch (cause) {
+              setError(groupSaveError(cause));
+            } finally {
+              submitting.current = false;
+              setRemove(false);
             }
-            id="new-group-visibility"
-          >
-            Visibility
-          </span>
-          <div
-            className={
-              "link-group-choices flex flex-wrap items-center gap-[6px_22px] [&_[role='radio']]:inline-flex [&_[role='radio']]:items-center [&_[role='radio']]:gap-1.5 [&_[role='radio']]:h-8 [&_[role='radio']]:[border-bottom:2px_solid_transparent] [&_[role='radio']]:text-[14px] [&_[role='radio']]:text-subtle-foreground [&_[role='radio']:hover]:text-foreground [&_[aria-checked='true']]:border-b-foreground [&_[aria-checked='true']]:text-foreground"
-            }
-            role="radiogroup"
-            aria-labelledby="new-group-visibility"
-          >
-            <button
-              type="button"
-              role="radio"
-              aria-checked={!locked}
-              onClick={() => setLocked(false)}
-            >
-              <LockKeyholeOpen size={12} aria-hidden="true" />
-              Unlocked
-            </button>
-            <button
-              type="button"
-              role="radio"
-              aria-checked={locked}
-              onClick={() => setLocked(true)}
-            >
-              <LockKeyhole size={12} aria-hidden="true" />
-              Locked
-            </button>
-          </div>
-          <p className={"muted text-subtle-foreground"}>
-            {locked
-              ? "Only you will see links in this group."
-              : "Visible to everyone who can see your profile."}
-          </p>
-        </div>
-        <div className={modalActionsClassName}>
-          <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="submit" disabled={!name.trim() || actions.createGroup.isPending}>
-            Create
-          </Button>
-        </div>
-      </form>
-    </Modal>
+          }}
+        />
+      </div>
+      {error && (
+        <p className="col-span-3 min-w-0 text-sm text-destructive wrap-anywhere" role="alert">
+          {error}
+        </p>
+      )}
+    </>
   );
 }

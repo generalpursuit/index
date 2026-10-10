@@ -75,6 +75,7 @@ public struct LinkGroup: Codable, Identifiable, Hashable, Sendable {
   public var name: String
   public let kind: String
   public var visibility: Visibility
+  public var linkCount: Int? = nil
 }
 public struct Page<Item: Codable & Sendable>: Codable, Sendable {
   public var items: [Item]

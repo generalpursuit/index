@@ -10,6 +10,7 @@ struct ProfileView: View {
   @Environment(AppModel.self) private var app
   @State private var profile: Profile?
   @State private var groups: [LinkGroup] = []
+  @State private var creatingGroup = false
   @State private var filter = "all"
   @State private var weeks: [LibraryWeek] = []
   @State private var nextBefore: String?
@@ -116,34 +117,13 @@ struct ProfileView: View {
                   }
                   if own {
                     Button {
-                      app.path.append(.group(nil))
+                      creatingGroup = true
                     } label: {
                       Image(systemName: "plus").frame(width: 38, height: 38)
                     }.accessibilityLabel("Create group")
                   }
                 }
               }.scrollIndicators(.hidden)
-            }
-            if own, let selected {
-              HStack {
-                AsyncButton {
-                  let _: LinkGroup? = try await app.api?.request(
-                    "/groups/\(selected.id)", method: "PATCH",
-                    body: [
-                      "visibility": .string(selected.visibility == .private ? "public" : "private")
-                    ])
-                  app.changed()
-                } label: {
-                  Label(
-                    selected.kind == "starred" ? "Always private" : selected.visibility == .private ? "Locked" : "Unlocked",
-                    systemImage: selected.visibility == .private ? "lock" : "lock.open")
-                }.disabled(selected.kind == "starred")
-                  .accessibilityHint(selected.kind == "starred" ? "Starred is always private" : "")
-                Spacer()
-                if selected.kind == "custom" {
-                  Button("Edit group") { app.path.append(.group(selected)) }
-                }
-              }.font(.caption).foregroundStyle(.secondary)
             }
             ForEach(weekIDs, id: \.self) { week in
               VStack(alignment: .leading, spacing: 10) {
@@ -164,6 +144,12 @@ struct ProfileView: View {
       }.padding(.bottom, 30)
     }.indexPage().refreshable { await load() }
       .task(id: "\(userID)-\(app.revision)") { await load() }
+      .sheet(isPresented: $creatingGroup) {
+        GroupEditorView { group in
+          groups.append(group)
+          filter = group.id
+        }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+      }
       .task(id: filter) {
         guard profile?.canViewContent == true else { return }
         do { try await loadWeeks() } catch { app.handle(error) }

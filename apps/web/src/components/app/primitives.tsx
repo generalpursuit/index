@@ -14,7 +14,7 @@ import { ChevronLeft } from "lucide-react";
 import { useBack } from "@/hooks/use-back";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import type { Person } from "@/lib/types";
-import type { ReactNode, ComponentProps } from "react";
+import type { ReactNode, ComponentProps, RefObject } from "react";
 
 export function IconButton({
   label,
@@ -95,6 +95,7 @@ export function Modal({
   description,
   children,
   className = "",
+  returnFocus,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -102,6 +103,7 @@ export function Modal({
   description?: string;
   children: ReactNode;
   className?: string;
+  returnFocus?: RefObject<HTMLElement | null>;
 }) {
   // Phones get a bottom sheet that can be swiped away; larger screens a centered dialog.
   const phone = useMediaQuery("(max-width: 700px)");
@@ -109,6 +111,7 @@ export function Modal({
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent
+          finalFocus={returnFocus}
           className={
             "app-dialog select-none bg-surface text-foreground border-border rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 [&_button]:cursor-pointer [&_button:disabled]:cursor-default [&_[data-slot='button']]:rounded-full [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 [&_[data-slot='button']:disabled]:opacity-[0.4] [&_input:not([type='radio'])]:min-h-11 [&_input:not([type='radio'])]:p-[10px_14px] [&_input:not([type='radio'])]:bg-muted [&_input:not([type='radio'])]:border-input [&_input:not([type='radio'])]:rounded-[10px] [&_input:not([type='radio'])]:text-[15px] [&_textarea]:min-h-11 [&_textarea]:p-[10px_14px] [&_textarea]:bg-muted [&_textarea]:border-input [&_textarea]:rounded-[10px] [&_textarea]:text-[15px] [@media(width<=700px)]:[&:not(.app-sheet)]:p-6.25 [@media(width<=700px)]:[&:not(.app-sheet)]:max-w-[calc(100vw_-_24px)] app-sheet [--bleed:3rem] relative flex flex-col w-full max-h-[calc(92dvh_+_var(--bleed))] mb-[calc(-1_*_var(--bleed))] p-[10px_20px_calc(20px_+_env(safe-area-inset-bottom,_0px)_+_var(--bleed))] border-0 border-t border-t-border rounded-[22px_22px_0_0] [outline:0] overflow-hidden [transform:translateY(var(--drawer-swipe-movement-y))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] will-change-transform [&_[data-slot='drawer-body']]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:overflow-y-auto [&_[data-slot='drawer-body']]:overscroll-contain [&[data-starting-style]]:[transform:translateY(calc(100%_-_var(--bleed)_+_2px))] [&[data-ending-style]]:[transform:translateY(calc(100%_-_var(--bleed)_+_2px))] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot='drawer-close']]:top-7.5 [&_[data-slot='drawer-close']]:right-3.5 [&_.modal-cancel]:hidden [&_.modal-actions_[data-slot='button']]:flex-1 [&_.modal-actions_[data-slot='button']]:min-h-11.5 [&.post-dialog]:h-[calc(94dvh_+_var(--bleed))] [&.post-dialog]:max-h-[calc(94dvh_+_var(--bleed))] " +
             className
@@ -127,6 +130,7 @@ export function Modal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
+        finalFocus={returnFocus}
         className={
           "app-dialog select-none bg-surface text-foreground border-border rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 [&_button]:cursor-pointer [&_button:disabled]:cursor-default [&_[data-slot='button']]:rounded-full [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 [&_[data-slot='button']:disabled]:opacity-[0.4] [&_input:not([type='radio'])]:min-h-11 [&_input:not([type='radio'])]:p-[10px_14px] [&_input:not([type='radio'])]:bg-muted [&_input:not([type='radio'])]:border-input [&_input:not([type='radio'])]:rounded-[10px] [&_input:not([type='radio'])]:text-[15px] [&_textarea]:min-h-11 [&_textarea]:p-[10px_14px] [&_textarea]:bg-muted [&_textarea]:border-input [&_textarea]:rounded-[10px] [&_textarea]:text-[15px] [@media(width<=700px)]:[&:not(.app-sheet)]:p-6.25 [@media(width<=700px)]:[&:not(.app-sheet)]:max-w-[calc(100vw_-_24px)] " +
           className
