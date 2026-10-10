@@ -1,3 +1,4 @@
+import { themeBootstrap } from "./theme-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
 import react from "@vitejs/plugin-react";
@@ -11,6 +12,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
+    themeBootstrap(),
     tailwindcss(),
     tanstackRouter({
       target: "react",
