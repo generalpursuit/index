@@ -37,6 +37,7 @@ Each GitHub environment contains:
 - Secrets: `CLOUDFLARE_API_TOKEN`, `NEON_API_KEY`.
 - Variables: `CLOUDFLARE_ACCOUNT_ID`, `WORKERS_SUBDOMAIN`.
 - Optional variables: `WEB_DOMAIN`, `API_DOMAIN` (hostnames without a scheme or path).
+- Authentication email: secret `RESEND_API_KEY`, variable `AUTH_EMAIL_FROM`, and optional variable `AUTH_TRUSTED_ORIGINS`. The deployment workflow passes these to Alchemy, which installs the sending key as a server-only Worker secret.
 
 The existing Neon organization API key is used for project provisioning. GitHub environment separation controls which deployment job receives it; it is not a project-scoped key.
 
@@ -69,5 +70,9 @@ Neon history retention remains at the existing six-hour setting. A longer produc
 Bootstrap staging first, verify its smoke checks, then deploy production. Do not seed production with end-to-end fixtures. Cloudflare Worker logs are enabled by Alchemy; an external alerting service is not configured by this setup.
 
 ## Email verification launch configuration
+
+For local Alchemy development, put `RESEND_API_KEY` and `AUTH_EMAIL_FROM` in the Git-ignored `packages/infra/.env.local`, then restart the development process. A repository-root `.env.local` is not loaded by this package: Bun's automatic env loading is disabled, and Varlock loads the owning package's schema and env files. A local env file also does not update an already deployed Worker.
+
+For a first inbox test, use `AUTH_EMAIL_FROM="Index <onboarding@resend.dev>"` and the email address associated with your Resend account as the recipient. Resend's shared test domain cannot send to arbitrary recipients; see its [testing restriction](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain). For staging or production, configure the corresponding GitHub environment's secret and sender variable, then deploy that environment. Verify a domain you own before testing other recipients.
 
 See [authentication](authentication.md) before launching these changes. Provision a Resend account, sender DNS and a server-only `RESEND_API_KEY`; configure `AUTH_EMAIL_FROM` and `AUTH_TRUSTED_ORIGINS` for the chosen canonical/alias origins. Proposed addresses/domains are not provisioned defaults. The application issues restricted sessions to all unverified accounts, including legacy users, and requires email proof before app access; deploy only when delivery is configured and tested. The auth migration must follow `20261010095101_readable_routes` and applies without marking old accounts verified.

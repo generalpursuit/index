@@ -40,6 +40,9 @@ jobs:
           WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
           API_DOMAIN: ${{ vars.API_DOMAIN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
+          AUTH_TRUSTED_ORIGINS: ${{ vars.AUTH_TRUSTED_ORIGINS }}
         run: bun run deploy --stage "$DEPLOY_STAGE" --yes
       - name: Verify the deployed application
         working-directory: packages/infra
