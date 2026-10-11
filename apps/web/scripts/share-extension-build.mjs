@@ -97,10 +97,10 @@ export function prepareShareExtension({
     join(output, "DerivedData"),
     `ARCHS=${archs}`,
     "ONLY_ACTIVE_ARCH=NO",
-    `DEVELOPMENT_TEAM=${team}`,
-    `CODE_SIGN_IDENTITY=${identity}`,
-    // Only IndexShareMac maps these custom settings to its bundle ID and profile.
+    // Only IndexShareMac maps these custom settings to its signing identity and bundle ID.
     // Global overrides also reach Swift package resource bundles, which cannot be provisioned.
+    `INDEX_APPLE_TEAM_ID=${team}`,
+    `INDEX_MAC_CODE_SIGN_IDENTITY=${identity}`,
     `INDEX_SHARE_EXTENSION_ID=${process.env.INDEX_SHARE_EXTENSION_ID || `${configurationFile.identifier}.share-mac`}`,
     `INDEX_SHARE_DISPLAY_NAME=${process.env.INDEX_SHARE_DISPLAY_NAME || configurationFile.productName}`,
     ...(process.env.INDEX_MAC_EXTENSION_PROFILE_SPECIFIER

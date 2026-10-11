@@ -1,6 +1,8 @@
 INDEX_API_URL = https:/$()/api.example.com
 INDEX_WEB_URL = https:/$()/index.example.com
 DEVELOPMENT_TEAM = YOUR_APPLE_TEAM_ID
+// Team for direct Xcode builds of the macOS Share extension.
+INDEX_APPLE_TEAM_ID = YOUR_APPLE_TEAM_ID
 // Optional comma-separated alias origins; no production domain is assumed.
 INDEX_WEB_ALIASES =
 

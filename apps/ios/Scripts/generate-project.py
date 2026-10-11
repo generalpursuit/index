@@ -34,6 +34,7 @@ for target, platform in [('share-ios', 'iOS'), ('share-mac', 'macOS')]:
         else:
             # Command-line provisioning overrides would also reach Swift package resource bundles.
             values.update({'SDKROOT': 'macosx', 'SUPPORTED_PLATFORMS': 'macosx', 'MACOSX_DEPLOYMENT_TARGET': '14.0', 'INDEX_SHARE_DISPLAY_NAME': 'Index', 'INDEX_SHARE_EXTENSION_ID': 'com.generalpursuit.index.share-mac', 'PRODUCT_BUNDLE_IDENTIFIER': '$(INDEX_SHARE_EXTENSION_ID)', 'INDEX_MAC_CODE_SIGN_STYLE': 'Automatic', 'CODE_SIGN_STYLE': '$(INDEX_MAC_CODE_SIGN_STYLE)', 'PROVISIONING_PROFILE_SPECIFIER': '$(INDEX_MAC_EXTENSION_PROFILE_SPECIFIER)'})
+            values.update({'DEVELOPMENT_TEAM': '$(INDEX_APPLE_TEAM_ID)', 'INDEX_MAC_CODE_SIGN_IDENTITY': 'Apple Development', 'CODE_SIGN_IDENTITY': '$(INDEX_MAC_CODE_SIGN_IDENTITY)'})
         add(target+'-'+mode, '{ isa = XCBuildConfiguration; baseConfigurationReference = '+configs[mode]+'; buildSettings = '+settings(values)+f'; name = {mode}; }}')
 for kind in ['project', 'app', 'share-ios', 'share-mac']:
     add(kind + '-config-list', '{ isa = XCConfigurationList; buildConfigurations = (' + ','.join(ref(kind+'-'+m) for m in ['Debug','Release']) + ',); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; }')

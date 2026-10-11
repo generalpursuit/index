@@ -64,12 +64,16 @@ describe("macOS Share extension build", () => {
           "INDEX_SHARE_EXTENSION_ID=com.generalpursuit.index.staging.share-mac",
         );
         expect(build).toContain(`INDEX_MAC_CODE_SIGN_STYLE=${manual ? "Manual" : "Automatic"}`);
+        expect(build).toContain("INDEX_APPLE_TEAM_ID=ABCDE12345");
+        expect(build).toContain(
+          "INDEX_MAC_CODE_SIGN_IDENTITY=Developer ID Application: Test (ABCDE12345)",
+        );
         if (manual)
           expect(build).toContain("INDEX_MAC_EXTENSION_PROFILE_SPECIFIER=test-extension-profile");
         // Xcode command-line settings apply to every dependency, not just the selected scheme.
         expect(
           build.filter((arg) =>
-            /^(PROVISIONING_PROFILE(?:_SPECIFIER)?|CODE_SIGN_STYLE|PRODUCT_BUNDLE_IDENTIFIER)=/.test(
+            /^(PROVISIONING_PROFILE(?:_SPECIFIER)?|CODE_SIGN_STYLE|CODE_SIGN_IDENTITY|DEVELOPMENT_TEAM|PRODUCT_BUNDLE_IDENTIFIER)=/.test(
               arg,
             ),
           ),
