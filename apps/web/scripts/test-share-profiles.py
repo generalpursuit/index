@@ -66,9 +66,11 @@ class ProfileValidation(unittest.TestCase):
         with self.assertRaises(RuntimeError): self.validate(profile)
 
     def test_debugging_requires_profile_authorization(self):
-        signed = deepcopy(SIGNED); signed['get-task-allow'] = True
-        with self.assertRaisesRegex(RuntimeError, 'debugging'): self.validate(signed=signed)
-        profile = deepcopy(PROFILE); profile['Entitlements']['get-task-allow'] = True
-        self.validate(profile, signed)
+        for key in ('get-task-allow', 'com.apple.security.get-task-allow'):
+            with self.subTest(key=key):
+                signed = deepcopy(SIGNED); signed[key] = True
+                with self.assertRaisesRegex(RuntimeError, 'debugging'): self.validate(signed=signed)
+                profile = deepcopy(PROFILE); profile['Entitlements'][key] = True
+                self.validate(profile, signed)
 
 if __name__ == '__main__': unittest.main()

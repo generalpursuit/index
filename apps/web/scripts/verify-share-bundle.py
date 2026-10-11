@@ -45,7 +45,8 @@ def validate_profile(profile, signed, bundle_id, group, now=None):
     require(isinstance(actual_groups, list) and group in actual_groups, 'Signature lacks the configured shared Keychain group.')
     allowed_groups = permissions.get('keychain-access-groups', [])
     require(isinstance(allowed_groups, list) and all(isinstance(value, str) and authorized(value, allowed_groups) for value in actual_groups), 'Keychain access group is not authorized by the profile.')
-    require(not signed.get('get-task-allow') or permissions.get('get-task-allow') is True, 'Signature enables debugging without profile authorization.')
+    for key in ('get-task-allow', 'com.apple.security.get-task-allow'):
+        require(not signed.get(key) or permissions.get(key) is True, 'Signature enables debugging without profile authorization.')
 
 
 def entitlements(path):
