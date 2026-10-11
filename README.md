@@ -44,4 +44,6 @@ Your profile is public or private. A private profile shows your links only to fo
 
 Index is a Bun and Turborepo monorepo: a React web app, a Hono server on Cloudflare Workers, and a SwiftUI iOS app. Start with the [docs](docs/).
 
+Run `bun run check-types` for the JavaScript workspaces. On a Mac with full Xcode and an available iPhone simulator, `bun run check:ios` compiles device and simulator builds with the Share extension, then runs Swift unit tests.
+
 For feature setup and verification, see [authentication](docs/authentication.md), [link sharing](docs/sharing.md), [macOS menu bar](docs/menu-bar.md), [device appearance](docs/themes.md), and [notification delivery](docs/notifications.md).

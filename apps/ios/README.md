@@ -47,6 +47,33 @@ Restricted sessions show email verification instead of application content, incl
 
 ## Checks
 
+From the repository root, run the same native checks as CI:
+
+```sh
+bun run check:ios
+# Without Bun:
+sh apps/ios/Scripts/check-local.sh
+```
+
+This requires full Xcode selected under Xcode > Settings > Locations > Command Line Tools,
+an installed iOS Simulator runtime, and an available iPhone simulator. It compiles
+the Debug app and embedded Share extension for both a generic iOS device and a
+concrete iPhone simulator with signing disabled, then runs the Swift package tests
+on macOS (also compiling `IndexPreview`). No Apple account, connected device,
+booted simulator, or backend is needed. The script fails if either build or the
+tests fail; it does not silently skip the simulator or use standalone Command Line Tools.
+
+Debug builds use `ONLY_ACTIVE_ARCH = YES`, matching Swift Package Manager's
+selected-destination behavior. Without it, the app/extension can request both
+arm64 and x86_64 simulator modules while their packages only provide the current
+Mac's architecture. Release builds keep `ONLY_ACTIVE_ARCH = NO`. CI selects an
+actual available simulator and does not override this setting, so it catches that
+mismatch. The release endpoint validation script intentionally runs every build.
+
+The **iOS build and tests** job in `.github/workflows/ci.yml` runs this script on `macos-26` for every pull request and in the reusable checks required before deployment. Add this check to GitHub branch protection alongside the existing web/backend checks to require it before merging. Device launch, signing, layout, real push delivery, and the opt-in API integration tests remain separate checks.
+
+For focused Swift package checks, run from `apps/ios`:
+
 ```sh
 swift test
 # With the disposable API running on localhost:3002:
@@ -58,7 +85,7 @@ The integration test resets **only the disposable fixture API** and checks real 
 
 The mobile web parity changes passed Swift syntax parsing and the four Linux-capable packaging/security checks in `Scripts/check-sharing-source.py`. Bundled fonts were checked for valid PostScript names, static weights, licenses, and deterministic regeneration. Read-only checks against the disposable API confirmed the feed-week, pagination, group, and discovery contracts. These are not an iOS build or a native visual test: this Linux environment lacks Apple SDKs, and T3 device access is disabled. Run the Xcode build above and compare the iPhone feed, profile, post/editor sheets, settings, discovery, activity, and messaging screens against mobile web at the same viewport and with the same account. Also follow the [appearance Mac checklist](../../docs/themes.md#remaining-mac-verification), including live OS changes and relaunch. The following results describe an earlier build.
 
-On the earlier Mac's command-line-only installation, source compilation succeeded against the installed macOS 26.5 SDK. Tests require explicitly loading the installed Testing plugin/runtime; `Scripts/check-local.sh` captures that workaround. The latest run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
+On the earlier Mac's command-line-only installation, source compilation succeeded against the installed macOS 26.5 SDK with a Testing plugin/runtime workaround. That earlier run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. The current check script requires full Xcode and replaces that partial workflow. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
 
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
 

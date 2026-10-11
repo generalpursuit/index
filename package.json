@@ -33,6 +33,7 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "check-types": "turbo run check-types",
+    "check:ios": "sh apps/ios/Scripts/check-local.sh",
     "test": "turbo run test",
     "dev:web": "turbo run dev:bare -F web --",
     "dev:server": "turbo run dev:bare -F hono --",

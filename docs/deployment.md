@@ -11,9 +11,11 @@ One Alchemy stack deploys the API Worker, Vite web Worker, Neon project, and pri
 
 `.github/workflows/ci.yml` runs formatting, lint, API/server/infra tests, type checks, a web build, and Chromium tests against the built web app and disposable database. The browser suite uses full headed Chromium under Xvfb so notification permission grants work; the headless shell reports notification permission as denied even with an automation grant. It runs on pull requests and is reused by deployment. It needs no provider credentials.
 
+Its **iOS build and tests** job runs on `macos-26`. It compiles the iOS app and embedded Share extension for both a generic device and a concrete iPhone simulator without signing, then runs the Swift package's unit tests on macOS. Run the same checks locally with `bun run check:ios` on a Mac with full Xcode, an installed iOS Simulator runtime, and an available iPhone simulator. This job needs no Apple account or backend; API integration tests and device/signing checks are separate.
+
 `.github/workflows/deploy.yml` runs on pushes to `main` and `staging`, and supports manual dispatch from those branches. Checks must pass first. The deploy job uses the matching GitHub environment. Each branch has its own concurrency group; an in-progress deploy is never cancelled by a newer push. Manual dispatch from other branches is skipped.
 
-The environment's deployment branch policy permits only `main` for production and `staging` for staging. Branch protection is separate; if the repository's GitHub plan supports it, require the CI checks and PR review on `main`.
+The environment's deployment branch policy permits only `main` for production and `staging` for staging. Branch protection is separate; if the repository's GitHub plan supports it, require both `checks` and `iOS build and tests`, plus PR review, on `main`.
 
 After deploying, read-only smoke checks verify the web page, JavaScript assets, SPA routing, a database-backed API read, exact CORS origin, and the anonymous auth session endpoint. URLs are recorded in the run summary. Browser test failures upload screenshots/traces for seven days.
 

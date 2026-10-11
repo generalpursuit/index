@@ -113,7 +113,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
       let _: NotificationRegistration = try await api.request("/me/notifications/devices", method: "POST", body: body)
       guard version == generation, app.userID == binding.accountID else { return }
       registered = true
-    } catch { if version == generation { error = "Could not register this device. Try again." } }
+    } catch { if version == generation { self.error = "Could not register this device. Try again." } }
   }
   func registrationFailed() { registered = false; error = "Apple could not register this device for push. Try again." }
   private func deviceBody() -> [String: JSONValue] {

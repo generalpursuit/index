@@ -39,7 +39,7 @@ public enum IndexPalette {
     return Color(hue: hue, saturation: 0.75, brightness: 0.48)
   }
 
-  public static func category(_ category: Category) -> Color {
+  public static func category(_ category: IndexCore.Category) -> Color {
     switch category {
     case .article: adaptive(light: 0x315cb5, dark: 0x7aa2ff)
     case .video: adaptive(light: 0xb23b3b, dark: 0xff7a7a)

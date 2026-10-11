@@ -100,7 +100,7 @@ struct NavigationIcon: View {
 }
 
 struct CategoryMark: View {
-  let category: Category
+  let category: IndexCore.Category
   var body: some View {
     RoundedRectangle(cornerRadius: 2).fill(IndexPalette.category(category))
       .frame(width: 8, height: 8).accessibilityHidden(true)

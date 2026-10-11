@@ -8,6 +8,15 @@ permissions:
   contents: read
 
 jobs:
+  ios:
+    name: iOS build and tests
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile device and simulator apps with Share extension, then run Swift tests
+        run: sh apps/ios/Scripts/check-local.sh
+
   checks:
     runs-on: ubuntu-latest
     timeout-minutes: 20
