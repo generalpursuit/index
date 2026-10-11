@@ -32,6 +32,43 @@
   };
   try {
     await invoke("smoke_progress", { message: "JavaScript bridge ready" });
+    if (window.__SMOKE_PHASE__.startsWith("icons")) {
+      const restored = await invoke("app_icon_status");
+      assert(restored.supported, "macOS icon selection unavailable");
+      if (window.__SMOKE_PHASE__ === "icons-restore") {
+        assert(restored.icon === "paper", "App icon preference did not survive process restart");
+        assert(
+          await invoke("smoke_icon_matches", { paper: true }),
+          "Saved icon was not restored to AppKit at launch",
+        );
+        await invoke("set_app_icon", { icon: "ink" });
+        assert(await invoke("smoke_icon_matches", { paper: false }), "Default icon did not return");
+      } else {
+        await invoke("set_app_icon", { icon: "ink" });
+        assert(
+          await invoke("smoke_icon_matches", { paper: false }),
+          "Ink was not applied to AppKit",
+        );
+        let rejected = false;
+        try {
+          await invoke("set_app_icon", { icon: "unknown" });
+        } catch {
+          rejected = true;
+        }
+        assert(rejected, "Native bridge accepted an unsupported icon");
+        assert(
+          (await invoke("app_icon_status")).icon === "ink",
+          "Rejected icon changed the preference",
+        );
+        await invoke("set_app_icon", { icon: "paper" });
+        assert(
+          await invoke("smoke_icon_matches", { paper: true }),
+          "Paper was not applied to AppKit",
+        );
+      }
+      await invoke("smoke_complete", { error: null });
+      return;
+    }
     // The fixture URL is enforced at compile time by Rust, never configurable to production.
     assert((await fetch("http://localhost:3002/_test/fixture")).ok, "Fixture backend unavailable");
     await invoke("smoke_progress", { message: "Fixture API reachable" });

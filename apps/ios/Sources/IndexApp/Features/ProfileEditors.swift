@@ -22,6 +22,9 @@ struct SettingsView: View {
             }.buttonStyle(.plain).accessibilityLabel("Edit profile")
           }.settingsBox()
           AppearanceSettings().settingsBox()
+          #if os(iOS)
+            AppIconSettings().settingsBox()
+          #endif
           ProfileVisibilitySettings(profile: profile).settingsBox()
         }
         GroupSettingsView().settingsBox()

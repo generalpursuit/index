@@ -19,6 +19,9 @@ export class DesktopHarness {
   loginState = "off";
   loginSupported = true;
   loginError = false;
+  appIcon = "ink";
+  appIconSupported = true;
+  appIconError = false;
   quits = 0;
   hidden: string[] = [];
   pending: { id: number; path: string; recipientId: string | null } | null = null;
@@ -84,6 +87,15 @@ export class DesktopHarness {
         if (command === "set_appearance") {
           this.appearances.push({ label, ...args });
           return;
+        }
+        if (command === "app_icon_status")
+          return { supported: this.appIconSupported, icon: this.appIcon };
+        if (command === "set_app_icon") {
+          if (this.appIconError) throw new Error("OS denied icon change");
+          if (!this.appIconSupported || !["ink", "paper"].includes(args.icon))
+            throw new Error("Unsupported icon");
+          this.appIcon = args.icon;
+          return { supported: true, icon: this.appIcon };
         }
         if (command === "desktop_window") return label;
         if (command === "desktop_changed") {

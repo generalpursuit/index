@@ -12,6 +12,9 @@ const env = {
   VITE_SERVER_URL: "http://localhost:3002",
 };
 const logs = mkdtempSync(join(tmpdir(), "index-native-smoke-"));
+const phases = process.argv.includes("--icons-only")
+  ? ["icons", "icons-restore"]
+  : ["login", "restore", "signed-out", "icons", "icons-restore"];
 const bundle = resolve("src-tauri/target/release/bundle/macos/Index.app");
 const run = (command, args) => {
   const result = spawnSync(command, args, { env, stdio: "inherit" });
@@ -37,7 +40,7 @@ const clearTestCredential = () => {
 run("bun", ["run", "desktop:build", "--local", "--features", "native-smoke", "--bundles", "app"]);
 clearTestCredential();
 try {
-  for (const phase of ["login", "restore", "signed-out"]) {
+  for (const phase of phases) {
     const stdout = join(logs, `${phase}.log`);
     const stderr = join(logs, `${phase}.errors.log`);
     run("open", [

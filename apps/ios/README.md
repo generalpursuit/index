@@ -2,6 +2,19 @@
 
 Native SwiftUI implementation of the approved mobile design, using the same REST API and permissions as the web client. Requires iOS 17+, Swift 6, and full Xcode for iOS builds. There are no third-party Swift dependencies.
 
+## Branding and app icon
+
+The login wordmark, Home tab symbol, and app icon use the supplied Index artwork.
+Settings → App icon offers Ink (default) and Paper. iOS owns and persists the Home
+Screen icon choice, independently of the appearance preference and signed-in account.
+A failed change keeps the existing icon and shows an error.
+
+Original assets and the regeneration command live in [assets/brand](../../assets/brand/README.md).
+Both icon sets are included for iPhone and iPad through the asset catalog compiler;
+keep `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in the generated project.
+The shared SwiftUI artwork is bundled with `IndexUI`, including the macOS preview.
+The preview does not offer an iOS-only Home Screen icon setting.
+
 ## Run
 
 1. Open `Index.xcodeproj` in Xcode and select the `Index` scheme and an iPhone simulator.
@@ -46,6 +59,15 @@ Only Better Auth's signed `set-auth-token` header is retained. Native requests d
 Restricted sessions show email verification instead of application content, including old unverified accounts. Passwords remain required for login; recovery codes never log in. See [email security](../../docs/authentication.md) for API contracts, delivery configuration, pending-link behavior and the Mac verification checklist. The new security source/tests have not been compiled or run on this Linux VM.
 
 ## Checks
+
+The local device and simulator app/Share extension builds and 42 Swift package
+tests passed. A normally signed simulator build also launched successfully on
+iPhone 18 Pro / iOS 27, with the supplied wordmark visible on the sign-in screen.
+The shared artwork uses a compiled asset catalog for SwiftUI's named-image lookup.
+Both iPhone/iPad alternate-icon declarations are included, and both 1024 px icon
+sources have no alpha channel. Home Screen icon switching and the full iPhone/iPad
+interaction review remain device checks. Historical VM notes below are not
+evidence of runtime verification.
 
 From the repository root, run the same native checks as CI:
 

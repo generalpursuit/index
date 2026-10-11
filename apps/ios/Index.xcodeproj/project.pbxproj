@@ -346,6 +346,7 @@
 			baseConfigurationReference = 9882A92773D30044B11D426B /* Config/Debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconPaper;
 				CODE_SIGN_ENTITLEMENTS = Config/Index.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = D55C473H4K;
@@ -478,6 +479,7 @@
 			baseConfigurationReference = D54CD24B6FF762B07EB694A9 /* Config/Release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = AppIconPaper;
 				CODE_SIGN_ENTITLEMENTS = Config/Index.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = D55C473H4K;

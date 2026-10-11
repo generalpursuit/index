@@ -2,6 +2,7 @@ mod notifications;
 mod menu_bar;
 mod session_revision;
 mod appearance;
+mod app_icon;
 mod session;
 #[cfg(feature = "native-smoke")]
 mod smoke;
@@ -78,8 +79,11 @@ pub fn run() {
         session::session_write,
         open_website,
         appearance::set_appearance,
+        app_icon::app_icon_status,
+        app_icon::set_app_icon,
         smoke::smoke_complete,
         smoke::smoke_resize,
+        smoke::smoke_icon_matches,
         smoke::smoke_progress
     ]);
     #[cfg(not(feature = "native-smoke"))]
@@ -106,13 +110,16 @@ pub fn run() {
         session::session_read,
         session::session_write,
         open_website,
-        appearance::set_appearance
+        appearance::set_appearance,
+        app_icon::app_icon_status,
+        app_icon::set_app_icon
     ]);
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             session::init(app.handle().clone());
             if !menu_bar::init(app.handle())? { app.handle().exit(0); return Ok(()); }
+            app_icon::restore();
             notifications::init();
             if cfg!(debug_assertions) {
                 app.handle().plugin(

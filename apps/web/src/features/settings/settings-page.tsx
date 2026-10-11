@@ -30,6 +30,7 @@ import { squarePhoto } from "@/lib/photo";
 import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
+import { AppIconSettings } from "./app-icon";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const settingsPhotoClassName =
@@ -119,6 +120,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
       >
         <ThemeControl />
       </section>
+      <AppIconSettings />
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />
       <NotificationSettings />

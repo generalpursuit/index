@@ -6,9 +6,36 @@ The existing Tauri wrapper hosts the same production React application. Native c
 
 The macOS host now provides a compact menu-bar window with this week's own links, the shared quick-add/destination picker, Open Index, Quit and optional OS-managed Launch at login. Closing main hides it while the native notification runtime continues. Both windows share revision-guarded secure sessions and content-free cache invalidation. See [menu-bar behavior, commands, VM tests and required Mac checks](menu-bar.md).
 
+## Branding and app icon
+
+The supplied Index Ink artwork is the bundled launcher icon. Settings → App icon
+offers Ink and Paper on macOS. The native `app_icon` module applies the selection
+through AppKit and saves it in device-local preferences only after a successful
+change. It restores the choice before the main window opens. Signing out and
+changing appearance do not reset it. Finder and the downloaded app keep the bundled
+Ink icon; the signed bundle is never modified. Browsers and other desktop platforms
+do not offer the macOS Dock preference.
+
+Source artwork and regeneration: [assets/brand](../assets/brand/README.md).
+`app_icon_status` reports support and the saved icon; `set_app_icon` accepts only
+`ink` or `paper` and returns the applied selection. The frontend waits for that
+result and retains its previous selection on error.
+
+The focused native check is `bun run desktop:test --icons-only` from `apps/web`,
+with the disposable fixture API running as described below. It verifies the actual
+AppKit image, rejects invalid choices, and checks restoration in a second process.
+It uses a separate test preference key and rebuilds the normal host-only app after
+completion. Browser tests in `e2e/app-icon.spec.ts` cover saved selection, failure
+feedback and unsupported platforms.
+
 ## Integration status
 
-The verification below describes an earlier Mac build. The current appearance and menu-bar changes have browser/bridge coverage on Linux, but Rust/Objective-C compilation, packaged WKWebView and macOS window/login-item behavior remain unverified. Follow the [appearance Mac checklist](themes.md#remaining-mac-verification).
+The branding update was verified on macOS with a packaged build: Ink/Paper reached
+AppKit, invalid choices were rejected, and Paper was restored after a process
+restart. Rust tests, web build/types and three focused browser tests also passed.
+This verifies native compilation and icon behavior; menu-bar/login-item behavior
+and the broader [appearance Mac checklist](themes.md#remaining-mac-verification)
+remain separate checks. The session verification below describes an earlier Mac build.
 
 The macOS app compiles and packages with `keyring` 4.2 (OS credential store) and `tauri-plugin-opener` 2; resolved dependencies are recorded in Cargo.lock. Native verification passed in the packaged WKWebView: UI login against the real fixture backend, Keychain persistence across separate app processes, logout and a signed-out restart, external-browser dispatch, rejection of non-web URLs, resizing between 390×844 and 1200×860, and animated week scrolling that snaps and loads the correct week’s data. The web build/types, transport tests, and Playwright desktop-bridge test also passed.
 
@@ -50,7 +77,7 @@ cd apps/web && bun run test:e2e
 cd src-tauri && cargo test
 ```
 
-For the repeatable macOS native integration check, start `bun e2e/server.mjs` in `apps/web`, then run `bun run desktop:test` there. The runner builds with the opt-in `native-smoke` feature, launches three separate native processes, checks their results, and rebuilds the normal app without test hooks. Test credentials use a separate Keychain service and are removed on completion. The fixture server must not be reset by another test suite during this check.
+For the repeatable macOS native integration check, start `bun e2e/server.mjs` in `apps/web`, then run `bun run desktop:test` there. The runner builds with the opt-in `native-smoke` feature, launches separate native processes for session and icon restoration, checks their results, and rebuilds the normal app without test hooks. Test credentials use a separate Keychain service and are removed on completion. The fixture server must not be reset by another test suite during this check.
 
 `cargo test system_credential_round_trip -- --ignored --nocapture` additionally exercises the Rust credential store with a dummy entry. It requires an unlocked OS credential store, so it is excluded from ordinary unit runs.
 
