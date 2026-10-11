@@ -20,7 +20,11 @@ const plist = (dict) =>
     .join("")}</dict></plist>`;
 
 /** Build the actual appex before Tauri copies/signs the containing bundle. No local credentials. */
-export function prepareShareExtension({ local, args }) {
+export function prepareShareExtension({
+  local,
+  args,
+  configurationFile = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")),
+}) {
   const team = process.env.INDEX_APPLE_TEAM_ID;
   const group = process.env.INDEX_KEYCHAIN_GROUP;
   const identity = process.env.APPLE_SIGNING_IDENTITY;
@@ -55,7 +59,6 @@ export function prepareShareExtension({ local, args }) {
       ))
   )
     throw new Error("INDEX_WEB_URL must be a valid HTTPS origin (loopback HTTP with --local).");
-  const configurationFile = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
   const targetIndex = args.findIndex((arg) => ["--target", "-t"].includes(arg));
   const target =
     targetIndex >= 0
@@ -96,6 +99,8 @@ export function prepareShareExtension({ local, args }) {
     "ONLY_ACTIVE_ARCH=NO",
     `DEVELOPMENT_TEAM=${team}`,
     `CODE_SIGN_IDENTITY=${identity}`,
+    `PRODUCT_BUNDLE_IDENTIFIER=${process.env.INDEX_SHARE_EXTENSION_ID || `${configurationFile.identifier}.share-mac`}`,
+    `INDEX_SHARE_DISPLAY_NAME=${process.env.INDEX_SHARE_DISPLAY_NAME || configurationFile.productName}`,
     ...(process.env.INDEX_MAC_EXTENSION_PROFILE_SPECIFIER
       ? [
           "CODE_SIGN_STYLE=Manual",
@@ -155,7 +160,7 @@ export function prepareShareExtension({ local, args }) {
   };
 }
 
-export function verifyShareExtension(args) {
+export function verifyShareExtension(args, productName = "Index") {
   const index = args.findIndex((arg) => ["--target", "-t"].includes(arg));
   const target =
     index >= 0 ? args[index + 1] : args.find((arg) => arg.startsWith("--target="))?.split("=")[1];
@@ -164,7 +169,7 @@ export function verifyShareExtension(args) {
     root,
     target ?? "",
     args.includes("--debug") ? "debug" : "release",
-    "bundle/macos/Index.app",
+    `bundle/macos/${productName}.app`,
   );
   run("python3", ["scripts/verify-share-bundle.py", bundle]);
 }

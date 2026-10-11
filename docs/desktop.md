@@ -54,6 +54,10 @@ The backend already permits `tauri://localhost` and `http://tauri.localhost` ori
 
 ## Packaging
 
+For production and staging installers, signing setup, and automatic updates, see
+[Desktop releases](desktop-releases.md). Release builds use `--channel production`
+or `--channel staging` to select the corresponding service and application identity.
+
 ```sh
 cd apps/web
 VITE_SERVER_URL=https://api.example.com \

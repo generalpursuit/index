@@ -32,6 +32,8 @@ jobs:
           bun run oxlint
       - name: API, server, and deployment tests
         run: |
+          bun test apps/web/tests/desktop-release.test.mjs apps/web/tests/desktop-publish.test.mjs
+          python3 apps/web/scripts/test-desktop-signing.py
           bun run --cwd packages/api test
           bun run --cwd apps/server test
           bun run --cwd packages/infra test

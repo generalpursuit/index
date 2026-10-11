@@ -43,8 +43,14 @@ int index_menu_init(const unsigned char *image, size_t imageLength) {
   if (!icon || !statusItem.button) return -1;
   icon.size = NSMakeSize(14, 18); icon.template = YES;
   statusItem.button.image = icon;
-  statusItem.button.toolTip = @"Index";
-  [statusItem.button setAccessibilityLabel:@"Index menu bar"];
+  NSString *name = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"] ?: [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"] ?: @"Index";
+  statusItem.button.toolTip = name;
+  [statusItem.button setAccessibilityLabel:[name stringByAppendingString:@" menu bar"]];
+  if ([bundle hasSuffix:@".staging"]) {
+    statusItem.length = NSVariableStatusItemLength;
+    statusItem.button.title = @"S";
+    statusItem.button.imagePosition = NSImageLeft;
+  }
   menuTarget = [IndexMenuTarget new];
   statusItem.button.target = menuTarget; statusItem.button.action = @selector(toggle:);
   return 1;

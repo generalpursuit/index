@@ -27,6 +27,7 @@ tauri-plugin-log = "2"
 
 keyring = "4.2"
 tauri-plugin-opener = "2"
+tauri-plugin-updater = "2"
 
 [features]
 # Opt-in native integration runner; never enabled in distributed builds.

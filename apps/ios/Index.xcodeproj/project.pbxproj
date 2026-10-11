@@ -437,6 +437,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
+				INDEX_SHARE_DISPLAY_NAME = Index;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.generalpursuit.index.share-mac";
 				PRODUCT_NAME = IndexShareMac;
 				SDKROOT = macosx;
@@ -514,6 +515,7 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0.0;
+				INDEX_SHARE_DISPLAY_NAME = Index;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.generalpursuit.index.share-mac";
 				PRODUCT_NAME = IndexShareMac;
 				SDKROOT = macosx;

@@ -1,6 +1,7 @@
 import { NotificationLifecycle } from "@/features/notifications/lifecycle";
 import { isMenuBar } from "@/lib/desktop";
 import { DesktopTheme } from "@/lib/desktop/theme";
+import { DesktopReleaseIdentity } from "@/lib/desktop/updates";
 import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     <>
       <HeadContent />
       <DesktopTheme />
+      <DesktopReleaseIdentity />
       {!isMenuBar && <NotificationLifecycle />}
       <Outlet />
       <Toaster

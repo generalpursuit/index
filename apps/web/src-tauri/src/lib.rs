@@ -4,6 +4,7 @@ mod session_revision;
 mod appearance;
 mod app_icon;
 mod session;
+mod updates;
 #[cfg(feature = "native-smoke")]
 mod smoke;
 
@@ -56,6 +57,9 @@ pub fn run() {
     let builder = builder.plugin(smoke::plugin());
     #[cfg(feature = "native-smoke")]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        updates::desktop_release_info,
+        updates::desktop_check_update,
+        updates::desktop_install_update,
         notifications::notification_status,
         notifications::notification_start,
         notifications::notification_stop,
@@ -88,6 +92,9 @@ pub fn run() {
     ]);
     #[cfg(not(feature = "native-smoke"))]
     let builder = builder.invoke_handler(tauri::generate_handler![
+        updates::desktop_release_info,
+        updates::desktop_check_update,
+        updates::desktop_install_update,
         notifications::notification_status,
         notifications::notification_start,
         notifications::notification_stop,
@@ -117,6 +124,9 @@ pub fn run() {
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            if app.config().plugins.0.contains_key("updater") {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().build())?;
+            }
             session::init(app.handle().clone());
             if !menu_bar::init(app.handle())? { app.handle().exit(0); return Ok(()); }
             app_icon::restore();
