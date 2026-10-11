@@ -99,14 +99,16 @@ export function prepareShareExtension({
     "ONLY_ACTIVE_ARCH=NO",
     `DEVELOPMENT_TEAM=${team}`,
     `CODE_SIGN_IDENTITY=${identity}`,
-    `PRODUCT_BUNDLE_IDENTIFIER=${process.env.INDEX_SHARE_EXTENSION_ID || `${configurationFile.identifier}.share-mac`}`,
+    // Only IndexShareMac maps these custom settings to its bundle ID and profile.
+    // Global overrides also reach Swift package resource bundles, which cannot be provisioned.
+    `INDEX_SHARE_EXTENSION_ID=${process.env.INDEX_SHARE_EXTENSION_ID || `${configurationFile.identifier}.share-mac`}`,
     `INDEX_SHARE_DISPLAY_NAME=${process.env.INDEX_SHARE_DISPLAY_NAME || configurationFile.productName}`,
     ...(process.env.INDEX_MAC_EXTENSION_PROFILE_SPECIFIER
       ? [
-          "CODE_SIGN_STYLE=Manual",
-          `PROVISIONING_PROFILE_SPECIFIER=${process.env.INDEX_MAC_EXTENSION_PROFILE_SPECIFIER}`,
+          "INDEX_MAC_CODE_SIGN_STYLE=Manual",
+          `INDEX_MAC_EXTENSION_PROFILE_SPECIFIER=${process.env.INDEX_MAC_EXTENSION_PROFILE_SPECIFIER}`,
         ]
-      : ["CODE_SIGN_STYLE=Automatic"]),
+      : ["INDEX_MAC_CODE_SIGN_STYLE=Automatic"]),
     "ENABLE_HARDENED_RUNTIME=YES",
     `INDEX_API_URL=${process.env.VITE_SERVER_URL}`,
     `INDEX_WEB_URL=${web}`,

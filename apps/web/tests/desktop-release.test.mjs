@@ -1,7 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   channels,
   channelForBranch,
@@ -10,6 +11,76 @@ import {
   releaseVersion,
 } from "../scripts/desktop-channels.mjs";
 import { collect, manifest, updaterFiles } from "../scripts/desktop-artifacts.mjs";
+
+describe("macOS Share extension build", () => {
+  for (const manual of [true, false]) {
+    test(`${manual ? "release" : "automatic"} signing does not provision Swift package resource bundles`, () => {
+      const root = mkdtempSync(join(tmpdir(), "index-share-build-"));
+      try {
+        const bin = join(root, "bin");
+        const web = join(root, "apps/web");
+        const calls = join(root, "calls.jsonl");
+        const profile = join(root, "host.provisionprofile");
+        mkdirSync(bin);
+        mkdirSync(web, { recursive: true });
+        writeFileSync(profile, "test fixture");
+        // Exercise the real build entry point, capturing its external tool invocations.
+        for (const tool of ["xcodebuild", "codesign"])
+          writeFileSync(
+            join(bin, tool),
+            `#!/usr/bin/env bun\nimport { appendFileSync } from "node:fs";\nappendFileSync(process.env.INDEX_TEST_CALLS, JSON.stringify(process.argv.slice(2)) + "\\n");\n`,
+            { mode: 0o700 },
+          );
+        const module = new URL("../scripts/share-extension-build.mjs", import.meta.url).href;
+        const result = spawnSync(
+          process.execPath,
+          [
+            "-e",
+            `import { prepareShareExtension } from ${JSON.stringify(module)};
+            prepareShareExtension({ local: false, args: ["--target", "aarch64-apple-darwin"],
+              configurationFile: { identifier: "com.generalpursuit.index.staging", productName: "Index Staging", version: "0.1.2" } });`,
+          ],
+          {
+            cwd: web,
+            encoding: "utf8",
+            env: {
+              ...process.env,
+              PATH: `${bin}:${dirname(process.execPath)}:${process.env.PATH}`,
+              INDEX_TEST_CALLS: calls,
+              INDEX_APPLE_TEAM_ID: "ABCDE12345",
+              INDEX_KEYCHAIN_GROUP: "ABCDE12345.com.generalpursuit.index.staging.shared",
+              APPLE_SIGNING_IDENTITY: "Developer ID Application: Test (ABCDE12345)",
+              INDEX_WEB_URL: "https://staging.example.com",
+              VITE_SERVER_URL: "https://api.staging.example.com",
+              INDEX_MAC_HOST_PROFILE: profile,
+              INDEX_MAC_EXTENSION_PROFILE_SPECIFIER: manual ? "test-extension-profile" : "",
+              INDEX_SHARE_EXTENSION_ID: "com.generalpursuit.index.staging.share-mac",
+            },
+          },
+        );
+        expect(result.status, result.stderr).toBe(0);
+        const [build, verify] = readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse);
+        expect(build).toContain(
+          "INDEX_SHARE_EXTENSION_ID=com.generalpursuit.index.staging.share-mac",
+        );
+        expect(build).toContain(`INDEX_MAC_CODE_SIGN_STYLE=${manual ? "Manual" : "Automatic"}`);
+        if (manual)
+          expect(build).toContain("INDEX_MAC_EXTENSION_PROFILE_SPECIFIER=test-extension-profile");
+        // Xcode command-line settings apply to every dependency, not just the selected scheme.
+        expect(
+          build.filter((arg) =>
+            /^(PROVISIONING_PROFILE(?:_SPECIFIER)?|CODE_SIGN_STYLE|PRODUCT_BUNDLE_IDENTIFIER)=/.test(
+              arg,
+            ),
+          ),
+        ).toEqual([]);
+        expect(verify.slice(0, 2)).toEqual(["--verify", "--strict"]);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+});
 
 describe("desktop release isolation", () => {
   test("branches cannot select the other release channel", () => {
