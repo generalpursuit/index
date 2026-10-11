@@ -1,4 +1,5 @@
 import { NotificationSettings } from "@/features/notifications/settings";
+import { DesktopUpdates } from "@/lib/desktop/updates";
 import { AccountSecurity } from "@/features/auth/security-forms";
 import { ThemeControl } from "@index/ui/components/theme-control";
 import { useForm } from "@tanstack/react-form";
@@ -125,6 +126,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
       <GroupSettings userId={profile.id} />
       <NotificationSettings />
       <AccountSecurity />
+      <DesktopUpdates />
       <button
         type="button"
         className={

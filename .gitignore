@@ -9,6 +9,7 @@ build
 *.tsbuildinfo
 
 # Generated files
+__pycache__/
 apps/web/src/routeTree.gen.ts
 local.db
 local.db-*
@@ -16,6 +17,13 @@ local.db-*
 # Environment variables
 .env
 .env*.local
+
+# Local release credentials belong in Keychain or GitHub environment secrets.
+*.p12
+*.p8
+*.provisionprofile
+*.mobileprovision
+desktop-artifacts/
 
 # IDEs and editors
 .vscode/*

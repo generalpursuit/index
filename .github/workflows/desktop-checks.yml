@@ -1,0 +1,62 @@
+name: Desktop native checks
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "apps/web/src-tauri/**"
+      - "apps/web/scripts/**"
+      - "apps/ios/**"
+      - ".github/workflows/desktop-*.yml"
+  pull_request:
+    paths:
+      - "apps/web/src-tauri/**"
+      - "apps/web/scripts/**"
+      - "apps/ios/**"
+      - ".github/workflows/desktop-*.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    if: github.event_name != 'pull_request'
+    uses: ./.github/workflows/ci.yml
+
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-15, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      VITE_SERVER_URL: http://localhost:3002
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/web/src-tauri -> target
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libssl-dev
+      - run: bun install --frozen-lockfile
+      - run: bun run --cwd apps/web build
+      - run: cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
+      - run: cargo build --locked --manifest-path apps/web/src-tauri/Cargo.toml
+      - name: Compile macOS Share extension without release credentials
+        if: runner.os == 'macOS'
+        run: xcodebuild -project apps/ios/Index.xcodeproj -scheme IndexShareMac -configuration Debug -destination 'generic/platform=macOS' CODE_SIGNING_ALLOWED=NO build

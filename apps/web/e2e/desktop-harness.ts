@@ -22,6 +22,12 @@ export class DesktopHarness {
   appIcon = "ink";
   appIconSupported = true;
   appIconError = false;
+  releaseChannel = "development";
+  updatesEnabled = false;
+  updateVersion: string | null = null;
+  updateError = false;
+  installError = false;
+  installWait: Promise<void> | undefined;
   quits = 0;
   hidden: string[] = [];
   pending: { id: number; path: string; recipientId: string | null } | null = null;
@@ -86,6 +92,23 @@ export class DesktopHarness {
         }
         if (command === "set_appearance") {
           this.appearances.push({ label, ...args });
+          return;
+        }
+        if (command === "desktop_release_info")
+          return {
+            channel: this.releaseChannel,
+            version: "0.1.42",
+            updatesEnabled: this.updatesEnabled,
+          };
+        if (command === "desktop_check_update") {
+          if (this.updateError)
+            throw new Error("Could not check for updates. Please try again later.");
+          return this.updateVersion ? { version: this.updateVersion } : null;
+        }
+        if (command === "desktop_install_update") {
+          await this.installWait;
+          if (this.installError || args.version !== this.updateVersion)
+            throw new Error("The update could not be verified or installed. Please try again.");
           return;
         }
         if (command === "app_icon_status")

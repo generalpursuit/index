@@ -8,7 +8,7 @@ fn entry() -> Result<Entry, String> {
     #[cfg(feature = "native-smoke")]
     let service = "com.generalpursuit.index.native-smoke";
     #[cfg(not(feature = "native-smoke"))]
-    let service = "com.generalpursuit.index";
+    let service = env!("INDEX_DESKTOP_IDENTIFIER");
     Entry::new(service, env!("INDEX_API_SERVER")).map_err(|_| {
         "Could not access the system credential store. Unlock it and try again.".into()
     })

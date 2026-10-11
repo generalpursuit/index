@@ -1,0 +1,170 @@
+name: Desktop release
+
+on:
+  push:
+    branches: [main, staging]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    uses: ./.github/workflows/ci.yml
+
+  prepare:
+    needs: checks
+    runs-on: ubuntu-22.04
+    outputs:
+      channel: ${{ steps.release.outputs.channel }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - id: release
+        name: Select branch-bound release identity
+        run: |
+          bun - <<'JS'
+          import { appendFileSync } from 'node:fs';
+          import { channelForBranch, readBaseConfig, releaseVersion } from './apps/web/scripts/desktop-channels.mjs';
+          const channel = channelForBranch(process.env.GITHUB_REF_NAME);
+          const version = releaseVersion(readBaseConfig().version, process.env.GITHUB_RUN_NUMBER);
+          appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\nversion=${version}\n`);
+          JS
+
+  build:
+    needs: prepare
+    environment: desktop-${{ needs.prepare.outputs.channel }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            platform: darwin-aarch64
+            bundles: app,dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            platform: darwin-x86_64
+            bundles: app,dmg
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x86_64
+            bundles: appimage,deb,rpm
+          - os: windows-2022
+            target: x86_64-pc-windows-msvc
+            platform: windows-x86_64
+            bundles: nsis
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      INDEX_DESKTOP_CHANNEL: ${{ needs.prepare.outputs.channel }}
+      INDEX_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+      INDEX_UPDATE_PLATFORM: ${{ matrix.platform }}
+      INDEX_RELEASE_REPOSITORY: ${{ github.repository }}
+      INDEX_UPDATER_PUBLIC_KEY: ${{ vars.INDEX_UPDATER_PUBLIC_KEY }}
+      INDEX_APPLE_TEAM_ID: ${{ vars.INDEX_APPLE_TEAM_ID }}
+      INDEX_APP_ID_PREFIX: ${{ vars.INDEX_APP_ID_PREFIX }}
+      APPLE_SIGNING_IDENTITY: ${{ vars.APPLE_SIGNING_IDENTITY }}
+      APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
+      APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/web/src-tauri -> target
+          key: release-${{ needs.prepare.outputs.channel }}-${{ matrix.target }}
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libssl-dev libfuse2 rpm
+      - run: bun install --frozen-lockfile
+      - name: Require the channel's update signing key
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          test -n "$TAURI_SIGNING_PRIVATE_KEY" || { echo 'Run the Mac desktop signing setup for both GitHub environments.'; exit 1; }
+          test -n "$INDEX_UPDATER_PUBLIC_KEY" || { echo 'Missing INDEX_UPDATER_PUBLIC_KEY.'; exit 1; }
+      - name: Install Apple identity, channel profiles, and notarization credentials
+        if: runner.os == 'macOS'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY_CONTENT }}
+          INDEX_MAC_HOST_PROFILE_BASE64: ${{ secrets.INDEX_MAC_HOST_PROFILE_BASE64 }}
+          INDEX_MAC_EXTENSION_PROFILE_BASE64: ${{ secrets.INDEX_MAC_EXTENSION_PROFILE_BASE64 }}
+        run: python3 apps/web/scripts/ci-apple-signing.py prepare
+      - name: Test native shell
+        env:
+          VITE_SERVER_URL: ${{ needs.prepare.outputs.channel == 'production' && 'https://index-production-api.generalpursuit.workers.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
+        run: cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
+      - name: Build signed update artifacts and installers
+        working-directory: apps/web
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run desktop:build --channel "$INDEX_DESKTOP_CHANNEL" --target "${{ matrix.target }}" --bundles "${{ matrix.bundles }}"
+      - name: Verify Apple notarization ticket and Gatekeeper acceptance
+        if: runner.os == 'macOS'
+        env:
+          PRODUCT_NAME: ${{ needs.prepare.outputs.channel == 'production' && 'Index' || 'Index Staging' }}
+        run: |
+          app="apps/web/src-tauri/target/${{ matrix.target }}/release/bundle/macos/$PRODUCT_NAME.app"
+          xcrun stapler validate "$app"
+          spctl --assess --type execute --verbose "$app"
+      - name: Collect release files and checksums
+        run: bun apps/web/scripts/desktop-artifacts.mjs "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ needs.prepare.outputs.channel }}-${{ matrix.platform }}
+          path: desktop-artifacts/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove Apple credentials
+        if: always() && runner.os == 'macOS'
+        run: python3 apps/web/scripts/ci-apple-signing.py cleanup
+
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    # Serialize the shared metadata branch while preserving separate channel files.
+    concurrency:
+      group: desktop-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-${{ needs.prepare.outputs.channel }}-*
+          path: desktop-artifacts
+          merge-multiple: true
+      - name: Publish the complete release and advance its update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          INDEX_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+        run: bun apps/web/scripts/publish-desktop.mjs desktop-artifacts

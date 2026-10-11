@@ -1,8 +1,38 @@
 import { apiScope } from "./api-scope.mjs";
 import { prepareShareExtension, verifyShareExtension } from "./share-extension-build.mjs";
 import { spawnSync } from "node:child_process";
+import { channels, readBaseConfig, releaseConfig } from "./desktop-channels.mjs";
 
-const local = process.argv.includes("--local");
+const argsIn = process.argv.slice(2);
+const channelIndex = argsIn.indexOf("--channel");
+const channel = channelIndex < 0 ? undefined : argsIn.splice(channelIndex, 2)[1];
+if (channelIndex >= 0 && !channels[channel])
+  throw new Error("Choose --channel staging or production.");
+const local = argsIn.includes("--local");
+if (
+  channel &&
+  (local ||
+    argsIn.includes("native-smoke") ||
+    argsIn.includes("--without-share-extension") ||
+    argsIn.some((arg) => /^(--config|-c|--debug|--no-bundle|--features)(=|$)/.test(arg)))
+)
+  throw new Error(
+    "Release channels cannot use development/test hooks or override their configuration.",
+  );
+const base = readBaseConfig();
+const release = channel ? releaseConfig(channel, base) : {};
+if (channel) {
+  const selected = channels[channel];
+  // A channel's backend is part of its identity, never inherited from a developer's .env.
+  process.env.VITE_SERVER_URL = selected.api;
+  process.env.INDEX_WEB_URL = selected.web;
+  process.env.INDEX_DESKTOP_CHANNEL = channel;
+  process.env.INDEX_DESKTOP_IDENTIFIER = selected.identifier;
+  process.env.INDEX_SHARE_EXTENSION_ID = `${selected.identifier}.share-mac`;
+  process.env.INDEX_SHARE_DISPLAY_NAME = selected.name;
+  const prefix = process.env.INDEX_APP_ID_PREFIX || process.env.INDEX_APPLE_TEAM_ID;
+  if (prefix) process.env.INDEX_KEYCHAIN_GROUP = `${prefix}.${selected.keychainSuffix}`;
+}
 for (const key of ["VITE_SERVER_URL"]) {
   const raw = process.env[key];
   let url;
@@ -23,7 +53,9 @@ for (const key of ["VITE_SERVER_URL"]) {
 }
 process.env.VITE_SERVER_URL = apiScope(process.env.VITE_SERVER_URL);
 const config = {
+  ...release,
   app: {
+    ...release.app,
     security: {
       csp: {
         "default-src": "'self'",
@@ -42,9 +74,16 @@ const config = {
 // Native smoke uses its deliberately separate legacy credential namespace and no extension.
 const sharing =
   process.platform === "darwin" &&
-  !process.argv.includes("--without-share-extension") &&
-  !process.argv.includes("native-smoke");
-if (sharing) Object.assign(config, prepareShareExtension({ local, args: process.argv.slice(2) }));
+  !argsIn.includes("--without-share-extension") &&
+  !argsIn.includes("native-smoke");
+if (sharing) {
+  const share = prepareShareExtension({
+    local,
+    args: argsIn,
+    configurationFile: { ...base, ...release },
+  });
+  config.bundle = { ...config.bundle, macOS: { ...config.bundle?.macOS, ...share.bundle.macOS } };
+}
 const args = [
   "x",
   "--no-install",
@@ -52,10 +91,9 @@ const args = [
   "build",
   "--config",
   JSON.stringify(config),
-  ...process.argv
-    .slice(2)
-    .filter((arg) => arg !== "--local" && arg !== "--without-share-extension"),
+  ...argsIn.filter((arg) => arg !== "--local" && arg !== "--without-share-extension"),
 ];
 const result = spawnSync("bun", args, { stdio: "inherit", env: process.env });
-if (result.status === 0 && sharing) verifyShareExtension(process.argv.slice(2));
+if (result.status === 0 && sharing)
+  verifyShareExtension(argsIn, config.productName || base.productName);
 process.exit(result.status ?? 1);
