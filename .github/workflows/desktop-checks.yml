@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-14]
+        os: [ubuntu-22.04, windows-2022, macos-15, macos-15-intel]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 40
     defaults:
@@ -38,6 +38,9 @@ jobs:
       VITE_SERVER_URL: http://localhost:3002
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2

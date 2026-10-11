@@ -46,7 +46,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14
+          - os: macos-15
             target: aarch64-apple-darwin
             platform: darwin-aarch64
             bundles: app,dmg
@@ -80,6 +80,9 @@ jobs:
       APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
     steps:
       - uses: actions/checkout@v4
+      - name: Select Xcode with Swift 6
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2

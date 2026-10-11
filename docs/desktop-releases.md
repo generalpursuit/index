@@ -123,6 +123,8 @@ The helper sets these values in **both** environments:
 The Desktop native checks workflow compiles and tests macOS, Windows, and Linux
 without signing secrets. It runs for relevant changes on `dev` and pull requests.
 The release workflow also runs the reusable application CI before building.
+Both Mac architectures use macOS 15 runners with Xcode 16.4 selected explicitly
+for the Share extension's Swift 6 package. The packaged app still targets macOS 14.
 
 Local focused checks:
 
