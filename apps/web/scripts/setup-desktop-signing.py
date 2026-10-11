@@ -4,6 +4,8 @@ import argparse
 import base64
 import getpass
 import json
+import os
+from datetime import datetime, timezone
 from pathlib import Path
 import plistlib
 import re
@@ -34,11 +36,11 @@ def certificate_path(value):
         if path.is_file(): return path.resolve()
     raise RuntimeError('Certificate file not found. Drag the exported .p12 file into Terminal, then press Enter.')
 
-def run(args, data=None, optional=False):
-    result = subprocess.run(args, input=data, capture_output=True)
+def run(args, data=None, optional=False, *, env=None):
+    result = subprocess.run(args, input=data, capture_output=True, env=env)
     if result.returncode:
         if optional and b'HTTP 404' in result.stderr: return None
-        # Never interpolate command arguments: some signing tools accept passwords as arguments.
+        # Tool output can contain private keys. Keep failures free of arguments and output.
         raise RuntimeError(f'{Path(args[0]).name} failed. Check authentication, file access, and the password; no secret output was printed.')
     return result.stdout
 
@@ -88,6 +90,68 @@ def certificate_identity(path, password):
     if b'PRIVATE KEY-----' not in key: raise RuntimeError('The export does not include its private key.')
     return identity[1].strip(), team[1]
 
+def generate_update_key(signer, key_path):
+    # Tauri 2.12.1 only supports an argument or interactive input for generation.
+    # Let its hidden terminal prompts collect the password instead of putting it in argv.
+    if not sys.stdin.isatty():
+        raise RuntimeError('Generating an encrypted update key requires an interactive Terminal.')
+    environment = os.environ.copy()
+    environment.pop('CI', None)
+    environment.pop('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', None)
+    progress('  At the next two hidden prompts, enter the same certificate export password.')
+    result = subprocess.run([*signer, 'signer', 'generate', '--write-keys', str(key_path)], env=environment)
+    if result.returncode:
+        raise RuntimeError('Update key generation failed; no credentials were uploaded for this channel.')
+    key_path.chmod(0o600)
+
+def check_update_key(signer, key_path, password, probe):
+    # Scope the password to this child process, never to its command line or shell history.
+    environment = {**os.environ, 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD': password}
+    run([*signer, 'signer', 'sign', '--private-key-path', str(key_path), str(probe)], env=environment)
+
+def read_profiles(directory, channel, bundle, team):
+    prefixes = set()
+    profiles = []
+    for kind, identifier in [('host', bundle), ('extension', bundle + '.share-mac')]:
+        path = directory.expanduser() / f'{channel}-{kind}.provisionprofile'
+        profile = plistlib.loads(run(['security', 'cms', '-D', '-i', str(path)]))
+        ent = profile.get('Entitlements', {})
+        app_id = ent.get('com.apple.application-identifier', ent.get('application-identifier', ''))
+        if not app_id.endswith('.' + identifier) or team not in profile.get('TeamIdentifier', []):
+            raise RuntimeError(f'The {channel} {kind} profile does not match this app and team.')
+        prefix = app_id[:-(len(identifier) + 1)]
+        if not re.fullmatch(r'[A-Z0-9]{10}', prefix):
+            raise RuntimeError(f'The {channel} {kind} profile has an invalid App ID prefix.')
+        expiry = profile.get('ExpirationDate')
+        if not isinstance(expiry, datetime) or expiry.replace(tzinfo=timezone.utc) <= datetime.now(timezone.utc):
+            raise RuntimeError(f'The {channel} {kind} profile is expired or missing its expiry date.')
+        if ent.get('get-task-allow') or ent.get('com.apple.security.get-task-allow'):
+            raise RuntimeError(f'The {channel} {kind} profile enables debugging; use a Developer ID distribution profile.')
+        groups = ent.get('keychain-access-groups', [])
+        if f'{prefix}.{bundle}.shared' not in groups and f'{prefix}.*' not in groups:
+            raise RuntimeError(f'The {channel} {kind} profile does not authorize the shared Keychain group.')
+        prefixes.add(prefix)
+        profiles.append((kind, base64.b64encode(path.read_bytes())))
+    if len(prefixes) != 1: raise RuntimeError('Host and extension App ID prefixes differ.')
+    return prefixes.pop(), profiles
+
+def upload_profiles_only(repo, directory):
+    # Validate all four profiles before modifying either environment. This path
+    # never asks for, opens, or uploads certificates, private keys, or passwords.
+    pending = []
+    for channel, (_, bundle) in CHANNELS.items():
+        environment = 'desktop-' + channel
+        team = get_variable(repo, environment, 'INDEX_APPLE_TEAM_ID')
+        if not team or not re.fullmatch(r'[A-Z0-9]{10}', team):
+            raise RuntimeError(f'Complete initial certificate setup for {channel} before uploading profiles only.')
+        prefix, profiles = read_profiles(directory, channel, bundle, team)
+        pending.append((environment, prefix, profiles))
+    for environment, prefix, profiles in pending:
+        for kind, value in profiles:
+            set_secret(repo, environment, f'INDEX_MAC_{kind.upper()}_PROFILE_BASE64', value)
+        set_variable(repo, environment, 'INDEX_APP_ID_PREFIX', prefix)
+    progress('All four profiles are uploaded. Existing certificates, private keys and passwords were not accessed or changed.')
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('certificate', nargs='?', type=Path)
@@ -96,12 +160,18 @@ def main():
     parser.add_argument('--key-id')
     parser.add_argument('--issuer')
     parser.add_argument('--profiles', type=Path, help='Folder containing production-host, production-extension, staging-host and staging-extension .provisionprofile files')
+    parser.add_argument('--profiles-only', action='store_true', help='Upload only profiles using the existing GitHub signing team; no private keys or password required')
     args = parser.parse_args()
     if sys.platform != 'darwin': raise RuntimeError('Run this script on the Mac holding the certificate.')
     if not shutil.which('gh'): raise RuntimeError('Install the GitHub CLI (brew install gh), then run gh auth login.')
     if not re.fullmatch(r'[\w.-]+/[\w.-]+', args.repo): raise RuntimeError('Invalid repository.')
+    if args.profiles_only and (not args.profiles or any((args.certificate, args.notary_key, args.key_id, args.issuer))):
+        raise RuntimeError('Use --profiles-only with --profiles and without certificate or notarization arguments.')
     progress('Checking GitHub authentication…')
     gh(['auth', 'status'])
+    if args.profiles_only:
+        upload_profiles_only(args.repo, args.profiles)
+        return
     if any((args.notary_key, args.key_id, args.issuer)) and not all((args.notary_key, args.key_id, args.issuer)):
         raise RuntimeError('Provide --notary-key, --key-id and --issuer together.')
     if not args.certificate:
@@ -132,14 +202,13 @@ def main():
             raise RuntimeError(f'Restore the original {channel} updater key backup. Replacing it would prevent installed apps from updating.')
         if not key_path.exists():
             progress(f'  Preparing the Tauri signing tool and generating the {channel} update key. The first run may download the tool; encrypted key generation can take a while.')
-            run([*signer, 'signer', 'generate', '--ci', '--write-keys', str(key_path), '--password', password])
-            key_path.chmod(0o600)
+            generate_update_key(signer, key_path)
         # Validate existing encrypted keys with the password before altering GitHub secrets.
         probe = key_dir / 'probe.txt'
         probe.write_text('Index updater signing test\n')
         try:
             progress(f'  Testing the encrypted {channel} update key…')
-            run([*signer, 'signer', 'sign', '--private-key-path', str(key_path), '--password', password, str(probe)])
+            check_update_key(signer, key_path, password, probe)
         finally:
             probe.unlink(missing_ok=True)
             probe.with_suffix('.txt.sig').unlink(missing_ok=True)
@@ -154,17 +223,9 @@ def main():
         set_variable(args.repo, environment, 'INDEX_APPLE_TEAM_ID', team)
         prefix = get_variable(args.repo, environment, 'INDEX_APP_ID_PREFIX') or team
         if args.profiles:
-            prefixes = set()
-            for kind, identifier in [('host', bundle), ('extension', bundle + '.share-mac')]:
-                path = args.profiles.expanduser() / f'{channel}-{kind}.provisionprofile'
-                profile = plistlib.loads(run(['security', 'cms', '-D', '-i', str(path)]))
-                ent = profile.get('Entitlements', {})
-                app_id = ent.get('com.apple.application-identifier', ent.get('application-identifier', ''))
-                if not app_id.endswith('.' + identifier) or team not in profile.get('TeamIdentifier', []): raise RuntimeError(f'The {channel} {kind} profile does not match this app and team.')
-                prefixes.add(app_id[:-(len(identifier) + 1)])
-                set_secret(args.repo, environment, f'INDEX_MAC_{kind.upper()}_PROFILE_BASE64', base64.b64encode(path.read_bytes()))
-            if len(prefixes) != 1: raise RuntimeError('Host and extension App ID prefixes differ.')
-            prefix = prefixes.pop()
+            prefix, profiles = read_profiles(args.profiles, channel, bundle, team)
+            for kind, value in profiles:
+                set_secret(args.repo, environment, f'INDEX_MAC_{kind.upper()}_PROFILE_BASE64', value)
         else:
             remaining.append(f'{channel}: host and Share extension Developer ID provisioning profiles')
         set_variable(args.repo, environment, 'INDEX_APP_ID_PREFIX', prefix)

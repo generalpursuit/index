@@ -73,7 +73,9 @@ python3 apps/web/scripts/setup-desktop-signing.py
 The Terminal prompts for the `.p12` path; drag the file from Finder and press
 Enter. The password prompt is hidden. This
 configures both environments and generates two independent, encrypted updater
-key pairs. Back up `~/Library/Application Support/Index Release Keys` and retain
+key pairs. When generating a new pair, Tauri asks for that same password twice
+through hidden Terminal prompts. Passwords are never passed as command-line
+arguments. Back up `~/Library/Application Support/Index Release Keys` and retain
 the export password. Future releases must use these same keys. The helper refuses
 to replace an existing public key with a different pair.
 
@@ -106,6 +108,20 @@ profile identities, expiry, distribution entitlements and Keychain groups,
 imports the certificate into a temporary keychain, and removes its local signing
 credentials afterward. It checks the packaged Share extension, notarization
 ticket, and Gatekeeper acceptance before uploading artifacts.
+
+If the certificate and notarization setup is already complete, upload profiles
+without opening or re-uploading any private key or asking for a password:
+
+```sh
+python3 apps/web/scripts/setup-desktop-signing.py \
+  --profiles-only --profiles /path/desktop-profiles
+```
+
+This mode validates all four profiles against the existing signing team before
+uploading them. It updates only the profile secrets and App ID prefix variables.
+The GitHub CLI encrypts secret values locally before uploading them to GitHub.
+Authorized release jobs can access those secrets during signing; making the
+repository public does not publish the secret values.
 
 The helper sets these values in **both** environments:
 

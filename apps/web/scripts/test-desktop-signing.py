@@ -4,6 +4,9 @@ from datetime import datetime, timezone
 import importlib.util
 import os
 from pathlib import Path
+import plistlib
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -28,6 +31,107 @@ class CertificatePaths(unittest.TestCase):
     def test_empty_missing_and_directory_paths_fail_before_password_prompt(self):
         for value in ('', '/path/that/does/not/exist.p12', tempfile.gettempdir()):
             with self.assertRaises(RuntimeError): setup.certificate_path(value)
+
+class SecretHandling(unittest.TestCase):
+    def test_signing_password_is_scoped_to_child_environment_and_not_arguments(self):
+        password = 'test-only-password-with-$-and-spaces'
+        with patch.dict(os.environ, {'TAURI_SIGNING_PRIVATE_KEY_PASSWORD': 'existing-value'}), \
+             patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0, b'', b'')) as child:
+            setup.check_update_key(['tauri'], Path('/tmp/example.key'), password, Path('/tmp/probe.txt'))
+            args, kwargs = child.call_args
+            self.assertNotIn(password, str(args))
+            self.assertNotIn('--password', args[0])
+            self.assertEqual(kwargs['env']['TAURI_SIGNING_PRIVATE_KEY_PASSWORD'], password)
+            self.assertEqual(os.environ['TAURI_SIGNING_PRIVATE_KEY_PASSWORD'], 'existing-value')
+
+    def test_generation_uses_hidden_terminal_prompts_and_cannot_inherit_ci_mode(self):
+        with tempfile.TemporaryDirectory() as directory:
+            key = Path(directory) / 'example.key'
+            key.touch()
+            with patch.dict(os.environ, {'CI': 'true', 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD': 'test-only-password'}), \
+                 patch.object(sys.stdin, 'isatty', return_value=True), \
+                 patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 0)) as child:
+                setup.generate_update_key(['tauri'], key)
+                args, kwargs = child.call_args
+                self.assertNotIn('--ci', args[0])
+                self.assertNotIn('--password', args[0])
+                self.assertNotIn('CI', kwargs['env'])
+                self.assertNotIn('TAURI_SIGNING_PRIVATE_KEY_PASSWORD', kwargs['env'])
+                self.assertEqual(key.stat().st_mode & 0o777, 0o600)
+            with patch.object(sys.stdin, 'isatty', return_value=False), patch.object(setup.subprocess, 'run') as child:
+                with self.assertRaisesRegex(RuntimeError, 'interactive Terminal'):
+                    setup.generate_update_key(['tauri'], key)
+                child.assert_not_called()
+
+    def test_subprocess_failure_does_not_print_secret_output(self):
+        with patch.object(setup.subprocess, 'run', return_value=subprocess.CompletedProcess([], 1, b'TEST_PRIVATE_KEY', b'TEST_PASSWORD')):
+            with self.assertRaises(RuntimeError) as error:
+                setup.run(['tauri', 'signer', 'sign'])
+            self.assertNotIn('TEST_PRIVATE_KEY', str(error.exception))
+            self.assertNotIn('TEST_PASSWORD', str(error.exception))
+
+class ProfileUploadOnly(unittest.TestCase):
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.addCleanup(self.directory.cleanup)
+        self.folder = Path(self.directory.name)
+        self.team = 'TEAM123456'
+        self.prefix = 'PREFIX1234'
+        for channel, (_, bundle) in setup.CHANNELS.items():
+            for kind, identifier in [('host', bundle), ('extension', bundle + '.share-mac')]:
+                profile = {
+                    'TeamIdentifier': [self.team],
+                    'ExpirationDate': datetime(2099, 1, 1),
+                    'Entitlements': {
+                        'com.apple.application-identifier': self.prefix + '.' + identifier,
+                        'keychain-access-groups': [self.prefix + '.*'],
+                    },
+                }
+                (self.folder / f'{channel}-{kind}.provisionprofile').write_bytes(plistlib.dumps(profile))
+
+    def decode(self, args, *unused, **kwargs):
+        self.assertEqual(args[:4], ['security', 'cms', '-D', '-i'])
+        path = Path(args[4])
+        self.assertEqual(path.parent, self.folder)
+        return path.read_bytes()
+
+    def test_cli_uploads_only_profiles_without_prompting_or_loading_private_keys(self):
+        with patch.object(sys, 'argv', ['setup', '--profiles-only', '--profiles', str(self.folder)]), \
+             patch.object(sys, 'platform', 'darwin'), patch.object(setup.shutil, 'which', return_value='/usr/bin/gh'), \
+             patch.object(setup, 'gh', return_value=b''), patch.object(setup, 'get_variable', return_value=self.team), \
+             patch.object(setup, 'run', side_effect=self.decode), \
+             patch.object(setup.getpass, 'getpass', side_effect=AssertionError('Must not request a password')), \
+             patch.object(setup, 'certificate_identity', side_effect=AssertionError('Must not open a private key')), \
+             patch.object(setup, 'set_secret') as secret, patch.object(setup, 'set_variable') as variable:
+            setup.main()
+            self.assertEqual(secret.call_count, 4)
+            self.assertEqual({call.args[2] for call in secret.call_args_list},
+                             {'INDEX_MAC_HOST_PROFILE_BASE64', 'INDEX_MAC_EXTENSION_PROFILE_BASE64'})
+            self.assertEqual({call.args[1] for call in secret.call_args_list}, {'desktop-production', 'desktop-staging'})
+            self.assertEqual(variable.call_count, 2)
+            self.assertTrue(all(call.args[2:] == ('INDEX_APP_ID_PREFIX', self.prefix) for call in variable.call_args_list))
+
+    def test_all_profiles_are_validated_before_any_upload(self):
+        path = self.folder / 'staging-extension.provisionprofile'
+        original = plistlib.loads(path.read_bytes())
+        for problem in ('wrong_app', 'wrong_team', 'expired', 'debug', 'wrong_keychain', 'mismatched_prefix'):
+            profile = copy.deepcopy(original)
+            ent = profile['Entitlements']
+            if problem == 'wrong_app': ent['com.apple.application-identifier'] = self.prefix + '.com.generalpursuit.index'
+            elif problem == 'wrong_team': profile['TeamIdentifier'] = ['OTHER12345']
+            elif problem == 'expired': profile['ExpirationDate'] = datetime(2000, 1, 1)
+            elif problem == 'debug': ent['com.apple.security.get-task-allow'] = True
+            elif problem == 'wrong_keychain': ent['keychain-access-groups'] = [self.prefix + '.com.generalpursuit.index.shared']
+            else:
+                ent['com.apple.application-identifier'] = 'OTHER12345.com.generalpursuit.index.staging.share-mac'
+                ent['keychain-access-groups'] = ['OTHER12345.*']
+            path.write_bytes(plistlib.dumps(profile))
+            with self.subTest(problem=problem), patch.object(setup, 'get_variable', return_value=self.team), \
+                 patch.object(setup, 'run', side_effect=self.decode), \
+                 patch.object(setup, 'set_secret') as secret, patch.object(setup, 'set_variable') as variable:
+                with self.assertRaises(RuntimeError): setup.upload_profiles_only('owner/repo', self.folder)
+                secret.assert_not_called()
+                variable.assert_not_called()
 
 class Profiles(unittest.TestCase):
     def setUp(self):
