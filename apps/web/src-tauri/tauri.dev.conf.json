@@ -1,0 +1,15 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Index Dev",
+  "identifier": "com.generalpursuit.index.dev",
+  "build": {
+    "beforeDevCommand": "bun run --cwd ../.. dev --ui=stream",
+    "runner": {
+      "cmd": "cargo",
+      "args": [
+        "--config",
+        "target.'cfg(target_os = \"macos\")'.runner = [\"bun\", \"../scripts/desktop-dev-runner.mjs\"]"
+      ]
+    }
+  }
+}

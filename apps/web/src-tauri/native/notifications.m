@@ -29,17 +29,24 @@ static NSString *pendingClick;
 }
 @end
 static IndexNotificationDelegate *delegate;
+static UNUserNotificationCenter *notificationCenter;
 void index_notifications_init(void) {
   clickLock = [NSLock new];
   deliveryLock = [NSRecursiveLock new];
+  // UserNotifications raises an exception for bare executables, even when a
+  // plist is embedded. The dev runner supplies a real .app; direct cargo runs
+  // remain usable with notifications unavailable.
+  if (![NSBundle.mainBundle.bundleURL.pathExtension isEqualToString:@"app"] || !NSBundle.mainBundle.bundleIdentifier.length) return;
+  notificationCenter = UNUserNotificationCenter.currentNotificationCenter;
   delegate = [IndexNotificationDelegate new];
-  UNUserNotificationCenter.currentNotificationCenter.delegate = delegate;
+  notificationCenter.delegate = delegate;
 }
 // Only called on a Rust blocking thread. Never wait on the AppKit main thread.
 int index_notifications_permission(bool request) {
+  if (!notificationCenter) return -1;
   dispatch_semaphore_t done = dispatch_semaphore_create(0);
   __block int result = -1;
-  UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+  UNUserNotificationCenter *center = notificationCenter;
   void (^read)(void) = ^{
     [center getNotificationSettingsWithCompletionHandler:^(UNNotificationSettings *settings) {
       switch (settings.authorizationStatus) {
@@ -61,6 +68,7 @@ int index_notifications_permission(bool request) {
 uint64_t index_notifications_epoch(void) { return atomic_load(&notificationEpoch); }
 int index_notifications_show(const char *json, uint64_t epoch) {
   @autoreleasepool {
+    if (!notificationCenter) return 0;
     if (epoch != atomic_load(&notificationEpoch)) return 0;
     NSData *data = [[NSString stringWithUTF8String:json] dataUsingEncoding:NSUTF8StringEncoding];
     NSDictionary *alert = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
@@ -71,7 +79,7 @@ int index_notifications_show(const char *json, uint64_t epoch) {
     BOOL alreadySeen = [seen containsObject:alert[@"id"]];
     [deliveryLock unlock];
     if (alreadySeen) return 1;
-    UNUserNotificationCenter *center = UNUserNotificationCenter.currentNotificationCenter;
+    UNUserNotificationCenter *center = notificationCenter;
     dispatch_semaphore_t done = dispatch_semaphore_create(0);
     __block int success = 0;
     [center getDeliveredNotificationsWithCompletionHandler:^(NSArray<UNNotification *> *delivered) {
@@ -117,8 +125,8 @@ void index_notifications_clear(bool clearClick) {
   atomic_fetch_add(&notificationEpoch, 1);
   [NSUserDefaults.standardUserDefaults removeObjectForKey:@"index.notifications.seen"];
   if (clearClick) { [clickLock lock]; pendingClick = nil; [clickLock unlock]; }
-  [UNUserNotificationCenter.currentNotificationCenter removeAllDeliveredNotifications];
-  [UNUserNotificationCenter.currentNotificationCenter removeAllPendingNotificationRequests];
+  [notificationCenter removeAllDeliveredNotifications];
+  [notificationCenter removeAllPendingNotificationRequests];
   [deliveryLock unlock];
 }
 char *index_notifications_click(const char *ack) {

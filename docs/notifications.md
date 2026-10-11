@@ -24,6 +24,12 @@ An active conversation is a 45-second per-device lease renewed every 15 seconds 
 
 `apps/web/src-tauri/src/notifications.rs` owns one runtime per application process. The Objective-C bridge in `native/notifications.m` handles UserNotifications, cookie-free/redirect-rejecting URLSession requests and a separate installation-proof Keychain item. All session reads use **`session::session_read()`**; its signature and existing API-scoped credential contract are preserved. Notification setup is an additive `notification_build.rs` hook. The native-smoke feature stubs notifications and never touches normal notification opt-in/proof state.
 
+On macOS, use the [bundled desktop development workflow](desktop.md#development)
+to exercise the real notification bridge. The bridge acquires the notification
+center only when running inside an application bundle. Bare executables report
+unsupported, decline delivery, and still perform internal lifecycle cleanup
+without calling UserNotifications. Permission-status reads never prompt.
+
 Commands exposed to the frontend now require `expectedRevision`, obtained from the window's **accepted** secure-session binding (not an opportunistic read of a newer credential). The notification adapter supplies it automatically:
 
 - `notification_status({ expectedRevision })` reads actual permission and registration, resuming a previously opted-in account without prompting.

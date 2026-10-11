@@ -43,12 +43,48 @@ The local app is `apps/web/src-tauri/target/release/bundle/macos/Index.app`. It 
 
 ## Development
 
-Start the normal web/API stack first. The native shell's development URL is `http://localhost:3000`. Supply the same API URL to Vite and Cargo so secure-storage scoping matches the running application:
+Run either development workflow from the repository root:
 
 ```sh
-cd apps/web
-VITE_SERVER_URL=http://localhost:8080 bun run desktop:dev
+bun dev          # Web and API
+bun desktop:dev  # Web, API, and desktop app
 ```
+
+Stop `bun dev` before switching to `bun desktop:dev`. The desktop command starts
+the same Alchemy development stack through Tauri's `beforeDevCommand` hook and
+waits for the frontend at `http://localhost:3000`. Alchemy supplies the local API
+URL to Vite; the native shell defaults to the same `http://localhost:8080` API.
+Use the same local environment and Alchemy account setup as `bun dev`; no extra
+terminal or manual `VITE_SERVER_URL` is needed. The command also works from
+`apps/web`.
+
+App Quit or Ctrl-C stops the servers started by the desktop command. Closing the
+main window only hides it, so the development session continues. Rust rebuilds
+restart the native app while keeping the servers running.
+
+On macOS this launches an ad hoc signed development bundle at
+`apps/web/src-tauri/target/debug/bundle/dev/Index Dev.app`. It uses
+`com.generalpursuit.index.dev`, so its notification permission, device preferences,
+and single-instance lock are separate from the installed Index app. Session
+credentials retain their existing API URL scope.
+
+`tauri.dev.conf.json` configures a macOS Cargo executable runner. After each build,
+the runner copies the executable and icon into the bundle, writes its identity
+metadata, signs it, and replaces its own process with the bundled executable.
+Tauri still owns Rust watching, rebuilds, and process shutdown. Vite still serves
+the frontend with hot reload; no production frontend build is needed. Other
+desktop platforms keep Cargo's normal launch behavior.
+
+Additional Tauri options can follow `bun run desktop:dev` from either directory,
+including `--no-watch` or `--config` overrides. To attach to servers you have
+already started, use
+`bun desktop:dev --config '{"build":{"beforeDevCommand":""}}'`. The runner uses the executable path supplied by Cargo,
+including custom target directories and profiles. This development bundle is
+host-only; testing the Share extension still requires the packaging workflow below.
+
+Direct `tauri dev` or `cargo run` on macOS starts an unbundled executable. Native
+notifications report unavailable there: UserNotifications requires a real app
+bundle and throws an exception when initialized from a bare executable.
 
 The backend already permits `tauri://localhost` and `http://tauri.localhost` origins and exposes Better Auth's `set-auth-token` header. Desktop uses that signed header as a bearer token; it does not depend on cross-site WebView cookies. The credential store is scoped by API URL. Token reads/writes run off the UI thread. Logout clears the local credential even if the network request fails. No token is written to browser storage or logged.
 
@@ -73,9 +109,23 @@ That local build is a test artifact and is not suitable for distribution. Use th
 
 ```sh
 bun test apps/web/tests/desktop-session.test.ts
+bun test apps/web/tests/desktop-dev.test.ts
 cd apps/web && bun run test:e2e
 cd src-tauri && cargo test
 ```
+
+The desktop development tests run on macOS with Xcode command-line tools and the
+repository's Bun version. They compile the real Objective-C notification bridge
+and exercise bundled startup, permission-status reads, unbundled fallback,
+argument/environment/exit-code forwarding, signing, and process termination. They
+do not request permission or send notifications. These checks do not use the
+`native-smoke` stubs.
+
+For development-loop verification, run `desktop:dev`, edit a frontend component
+and confirm hot reload, then edit Rust and confirm the old app exits before the
+new one starts. Check both app Quit and Ctrl-C for cleanup. A macOS WKWebView
+fixture verified these paths together with native notification status on
+2026-10-11; notification opt-in and actual delivery remain separate checks.
 
 For the repeatable macOS native integration check, start `bun e2e/server.mjs` in `apps/web`, then run `bun run desktop:test` there. The runner builds with the opt-in `native-smoke` feature, launches separate native processes for session and icon restoration, checks their results, and rebuilds the normal app without test hooks. Test credentials use a separate Keychain service and are removed on completion. The fixture server must not be reset by another test suite during this check.
 

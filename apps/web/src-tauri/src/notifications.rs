@@ -132,7 +132,7 @@ pub async fn notification_status(app: tauri::AppHandle, expected_revision: u64) 
     }
     crate::session::check_revision(expected_revision)?;
     let registered = runtime().lock().unwrap().binding.is_some() && allowed >= 2;
-    Ok(DeviceStatus { permission: match allowed { 0 => "default", 1 => "denied", 2 | 3 => "granted", _ => "unsupported" }, registered, supported: cfg!(all(target_os = "macos", not(feature = "native-smoke"))) })
+    Ok(DeviceStatus { permission: match allowed { 0 => "default", 1 => "denied", 2 | 3 => "granted", _ => "unsupported" }, registered, supported: allowed >= 0 })
 }
 #[tauri::command]
 pub async fn notification_start(app: tauri::AppHandle, user_id: String, expected_revision: u64) -> Result<(), String> { start(app, user_id, true, expected_revision).await }
