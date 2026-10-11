@@ -70,7 +70,8 @@ checkout containing these changes:
 python3 apps/web/scripts/setup-desktop-signing.py
 ```
 
-A macOS file picker selects the `.p12`; the password prompt is hidden. This
+The Terminal prompts for the `.p12` path; drag the file from Finder and press
+Enter. The password prompt is hidden. This
 configures both environments and generates two independent, encrypted updater
 key pairs. Back up `~/Library/Application Support/Index Release Keys` and retain
 the export password. Future releases must use these same keys. The helper refuses

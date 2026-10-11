@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import plistlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,23 @@ CHANNELS = {'production': ('main', 'com.generalpursuit.index'), 'staging': ('sta
 
 def progress(message):
     print(message, flush=True)
+
+def certificate_path(value):
+    value = value.strip()
+    if not value:
+        raise RuntimeError('Enter the path to your exported .p12 certificate.')
+    path = Path(value).expanduser()
+    if path.is_file(): return path.resolve()
+    # Finder escapes spaces when a file is dragged into Terminal. Parse quoting
+    # without running a shell or evaluating any characters in the filename.
+    try:
+        parts = shlex.split(value)
+    except ValueError:
+        parts = []
+    if len(parts) == 1:
+        path = Path(parts[0]).expanduser()
+        if path.is_file(): return path.resolve()
+    raise RuntimeError('Certificate file not found. Drag the exported .p12 file into Terminal, then press Enter.')
 
 def run(args, data=None, optional=False):
     result = subprocess.run(args, input=data, capture_output=True)
@@ -87,10 +105,9 @@ def main():
     if any((args.notary_key, args.key_id, args.issuer)) and not all((args.notary_key, args.key_id, args.issuer)):
         raise RuntimeError('Provide --notary-key, --key-id and --issuer together.')
     if not args.certificate:
-        progress('Opening the .p12 file picker on your Mac. Check behind other windows if it is not visible.')
-        selected = run(['osascript', '-e', 'POSIX path of (choose file with prompt "Select your exported Developer ID .p12 file")'])
-        args.certificate = Path(selected.decode().strip())
-    certificate = args.certificate.expanduser().resolve()
+        certificate = certificate_path(input('Drag your exported .p12 file into this Terminal, then press Enter: '))
+    else:
+        certificate = certificate_path(str(args.certificate))
     password = getpass.getpass('Certificate export password (hidden): ')
     if not password or '\n' in password: raise RuntimeError('A nonempty, single-line export password is required.')
     progress('Checking the certificate and its private key…')
