@@ -13,6 +13,22 @@ with patch.dict(os.environ, {'RUNNER_TEMP': tempfile.gettempdir()}):
     signing = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(signing)
 
+spec = importlib.util.spec_from_file_location('setup', Path(__file__).with_name('setup-desktop-signing.py'))
+setup = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(setup)
+
+class CertificatePaths(unittest.TestCase):
+    def test_terminal_paths_with_spaces_quotes_and_shell_characters(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'Developer ID $(do-not-run).p12'
+            path.touch()
+            for value in (str(path), str(path).replace(' ', '\\ '), "'" + str(path) + "'", '"' + str(path) + '"'):
+                self.assertEqual(setup.certificate_path(value), path.resolve())
+
+    def test_empty_missing_and_directory_paths_fail_before_password_prompt(self):
+        for value in ('', '/path/that/does/not/exist.p12', tempfile.gettempdir()):
+            with self.assertRaises(RuntimeError): setup.certificate_path(value)
+
 class Profiles(unittest.TestCase):
     def setUp(self):
         self.bundle = 'com.generalpursuit.index.staging'
