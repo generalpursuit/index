@@ -13,6 +13,9 @@ import sys
 
 CHANNELS = {'production': ('main', 'com.generalpursuit.index'), 'staging': ('staging', 'com.generalpursuit.index.staging')}
 
+def progress(message):
+    print(message, flush=True)
+
 def run(args, data=None, optional=False):
     result = subprocess.run(args, input=data, capture_output=True)
     if result.returncode:
@@ -27,7 +30,7 @@ def gh(args, data=None, optional=False):
 def set_secret(repo, environment, name, value):
     if isinstance(value, str): value = value.encode()
     gh(['secret', 'set', name, '--repo', repo, '--env', environment], value)
-    print(f'  Stored {name} in {environment}.')
+    progress(f'  Stored {name} in {environment}.')
 
 def set_variable(repo, environment, name, value):
     gh(['variable', 'set', name, '--repo', repo, '--env', environment, '--body', value])
@@ -79,15 +82,18 @@ def main():
     if sys.platform != 'darwin': raise RuntimeError('Run this script on the Mac holding the certificate.')
     if not shutil.which('gh'): raise RuntimeError('Install the GitHub CLI (brew install gh), then run gh auth login.')
     if not re.fullmatch(r'[\w.-]+/[\w.-]+', args.repo): raise RuntimeError('Invalid repository.')
+    progress('Checking GitHub authentication…')
     gh(['auth', 'status'])
     if any((args.notary_key, args.key_id, args.issuer)) and not all((args.notary_key, args.key_id, args.issuer)):
         raise RuntimeError('Provide --notary-key, --key-id and --issuer together.')
     if not args.certificate:
+        progress('Opening the .p12 file picker on your Mac. Check behind other windows if it is not visible.')
         selected = run(['osascript', '-e', 'POSIX path of (choose file with prompt "Select your exported Developer ID .p12 file")'])
         args.certificate = Path(selected.decode().strip())
     certificate = args.certificate.expanduser().resolve()
     password = getpass.getpass('Certificate export password (hidden): ')
     if not password or '\n' in password: raise RuntimeError('A nonempty, single-line export password is required.')
+    progress('Checking the certificate and its private key…')
     identity, team = certificate_identity(certificate, password)
     encoded = base64.b64encode(certificate.read_bytes())
     if len(encoded) > 48000: raise RuntimeError('Certificate export is too large for a GitHub secret; export only the Developer ID identity.')
@@ -99,7 +105,7 @@ def main():
     key_dir.chmod(0o700)
     remaining = []
     for channel, (branch, bundle) in CHANNELS.items():
-        print(f'Configuring {channel} for {branch}…')
+        progress(f'Configuring {channel} for {branch}…')
         environment = ensure_environment(args.repo, channel, branch)
         key_path = key_dir / f'{channel}.key'
         public_path = key_dir / f'{channel}.key.pub'
@@ -108,20 +114,24 @@ def main():
         if remote_public and (not public_path.exists() or public_path.read_text().strip() != remote_public):
             raise RuntimeError(f'Restore the original {channel} updater key backup. Replacing it would prevent installed apps from updating.')
         if not key_path.exists():
+            progress(f'  Preparing the Tauri signing tool and generating the {channel} update key. The first run may download the tool; encrypted key generation can take a while.')
             run([*signer, 'signer', 'generate', '--ci', '--write-keys', str(key_path), '--password', password])
             key_path.chmod(0o600)
         # Validate existing encrypted keys with the password before altering GitHub secrets.
         probe = key_dir / 'probe.txt'
         probe.write_text('Index updater signing test\n')
         try:
+            progress(f'  Testing the encrypted {channel} update key…')
             run([*signer, 'signer', 'sign', '--private-key-path', str(key_path), '--password', password, str(probe)])
         finally:
             probe.unlink(missing_ok=True)
             probe.with_suffix('.txt.sig').unlink(missing_ok=True)
+        progress(f'  Uploading signing secrets to {environment}…')
         set_secret(args.repo, environment, 'APPLE_CERTIFICATE', encoded)
         set_secret(args.repo, environment, 'APPLE_CERTIFICATE_PASSWORD', password)
         set_secret(args.repo, environment, 'TAURI_SIGNING_PRIVATE_KEY', key_path.read_bytes())
         set_secret(args.repo, environment, 'TAURI_SIGNING_PRIVATE_KEY_PASSWORD', password)
+        progress(f'  Saving public signing settings in {environment}…')
         set_variable(args.repo, environment, 'INDEX_UPDATER_PUBLIC_KEY', public_path.read_text().strip())
         set_variable(args.repo, environment, 'APPLE_SIGNING_IDENTITY', identity)
         set_variable(args.repo, environment, 'INDEX_APPLE_TEAM_ID', team)
@@ -142,6 +152,7 @@ def main():
             remaining.append(f'{channel}: host and Share extension Developer ID provisioning profiles')
         set_variable(args.repo, environment, 'INDEX_APP_ID_PREFIX', prefix)
         if args.notary_key:
+            progress(f'  Uploading the notarization key to {environment}…')
             set_secret(args.repo, environment, 'APPLE_API_KEY_CONTENT', args.notary_key.expanduser().read_bytes())
             set_variable(args.repo, environment, 'APPLE_API_KEY', args.key_id)
             set_variable(args.repo, environment, 'APPLE_API_ISSUER', args.issuer)
