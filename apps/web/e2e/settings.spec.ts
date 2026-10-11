@@ -77,6 +77,7 @@ for (const viewport of [
     });
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeFocused();
     const stored = new RegExp(
       apiURL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "/media/avatars/.+\\.(webp|jpg)$",
     );
@@ -94,6 +95,9 @@ for (const viewport of [
     await editor.getByRole("button", { name: "Remove photo", exact: true }).click();
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toHaveCount(0);
+    // Closing a nested sheet restores focus and can scroll its parent on a later
+    // frame. Wait for that restoration before clicking the footer's Sign out.
+    await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeFocused();
     await expect(page.locator(".settings-profile img")).toHaveCount(0);
     const profile = await (await page.request.get(apiURL + "/api/v1/me/profile")).json();
     expect(profile.name).toBe("Alice Updated");
