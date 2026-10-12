@@ -1,14 +1,16 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 struct MessagesView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.scenePhase) private var scenePhase
-  @State private var conversations: [Conversation] = []
-  @State private var cursor: String?
+  @State private var model = ConversationListModel()
   @State private var query = ""
-  @State private var error: String?
-  @State private var loading = false
+  private var conversations: [Conversation] { model.conversations }
+  private var cursor: String? { model.cursor }
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
   var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0) {
@@ -24,7 +26,7 @@ struct MessagesView: View {
         LoadingError(error: error, loading: loading, retry: { await load() })
         ForEach(conversations) { conversation in
           Button {
-            app.openingConversation = conversation
+            app.navigation.openingConversation = conversation
             app.navigate(.conversation(conversation.id))
           } label: {
             HStack(spacing: 16) {
@@ -57,7 +59,8 @@ struct MessagesView: View {
       }
   }
   private func preview(_ conversation: Conversation) -> String {
-    if let draft = app.drafts[conversation.id], !draft.body.isEmpty || draft.attachment != nil {
+    let draft = app.drafts.draft(for: conversation.id)
+    if !draft.body.isEmpty || draft.attachment != nil {
       return "Draft: " + (draft.body.isEmpty ? "Link" : draft.body)
     }
     guard let message = conversation.lastMessage else { return "Start a conversation" }
@@ -70,29 +73,9 @@ struct MessagesView: View {
     return (message.senderId == app.userID ? "You: " : "") + text
   }
   private func load(more: Bool = false) async {
-    loading = conversations.isEmpty
-    error = nil
-    var params = ["limit": "30"]
-    if !query.isEmpty { params["query"] = query }
-    if more { params["cursor"] = cursor }
-    if !more, conversations.isEmpty,
-      let cached: Page<Conversation> = await app.api?.cached("/conversations", query: params)
-    {
-      conversations = cached.items
-      cursor = cached.nextCursor
-      loading = false
-    }
-    do {
-      if let page: Page<Conversation> = try await app.api?.request("/conversations", query: params)
-      {
-        conversations = more ? conversations + page.items : page.items
-        cursor = page.nextCursor
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+    guard let api = app.api else { return }
+    do { try await model.load(api: api, query: query, more: more) }
+    catch { app.handleSessionError(error) }
   }
 }
 struct ParticipantAvatars: View {
@@ -113,12 +96,13 @@ struct ParticipantAvatars: View {
 struct RecipientView: View {
   let attachment: SavedLink?
   @Environment(AppModel.self) private var app
-  @State private var people: [Person] = []
+  @State private var model = RecipientModel()
+  private var people: [Person] { model.people }
   @State private var selected: [Person] = []
-  @State private var after: String?
+  private var after: String? { model.after }
   @State private var query = ""
-  @State private var error: String?
-  @State private var loading = false
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 16) {
@@ -163,23 +147,14 @@ struct RecipientView: View {
     }.indexPage()
       .safeAreaInset(edge: .bottom) {
         AsyncButton {
-          guard
-            let conversation: Conversation = try await app.api?.request(
-              "/conversations", method: "POST", body: ["recipientIds": .strings(selected.map(\.id))]
-            )
-          else { return }
-          if let attachment {
-            var draft = app.drafts[conversation.id] ?? MessageDraft()
-            guard draft.attemptedBody == nil else {
-              app.error =
-                "Retry the pending message in this conversation before attaching another link."
-              return
-            }
-            draft.attachment = attachment
-            app.drafts[conversation.id] = draft
-          }
-          if app.sheet == nil && !app.path.isEmpty { app.path.removeLast() }
-          app.openingConversation = conversation
+          guard let api = app.api else { return }
+          let generation = app.session.generation
+          let conversation = try await model.create(api: api, recipients: selected)
+          try Task.checkCancellation()
+          guard generation == app.session.generation else { return }
+          if let attachment { try app.drafts.attach(attachment, to: conversation.id) }
+          if app.navigation.sheet == nil && !app.navigation.path.isEmpty { app.navigation.path.removeLast() }
+          app.navigation.openingConversation = conversation
           app.navigate(.conversation(conversation.id))
         } label: {
           Text("Continue\(selected.isEmpty ? "" : " · \(selected.count)")").frame(
@@ -195,23 +170,9 @@ struct RecipientView: View {
       }
   }
   private func load(more: Bool = false) async {
-    loading = true
-    error = nil
-    var params = ["limit": "30"]
-    if !query.isEmpty { params["query"] = query }
-    if more { params["after"] = after }
-    do {
-      if let page: PeoplePage = try await app.api?.request(
-        "/profiles/\(app.userID)/following", query: params)
-      {
-        people = more ? people + page.items : page.items
-        after = page.nextAfter
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+    guard let api = app.api else { return }
+    do { try await model.load(api: api, account: app.userID, query: query, more: more) }
+    catch { app.handleSessionError(error) }
   }
 }
 
@@ -219,25 +180,19 @@ struct ConversationView: View {
   let conversationID: String
   @Environment(AppModel.self) private var app
   @Environment(\.scenePhase) private var scenePhase
-  @State private var conversation: Conversation?
-  @State private var messages: [Message] = []
-  @State private var cursor: String?
-  @State private var pageCount = 1
-  @State private var error: String?
-  @State private var loading = true
-  @State private var sending = false
+  @State private var model = ConversationModel()
+  private var conversation: Conversation? { model.conversation }
+  private var messages: [Message] { model.messages }
+  private var cursor: String? { model.cursor }
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
+  private var sending: Bool { app.drafts.isSending(conversationID) }
   @State private var nearBottom = true
   @State private var scrollAfterSend = false
   @FocusState private var focused: Bool
-  private var draft: MessageDraft { app.drafts[conversationID] ?? MessageDraft() }
+  private var draft: MessageDraft { app.drafts.draft(for: conversationID) }
   private var text: Binding<String> {
-    Binding(
-      get: { app.drafts[conversationID]?.body ?? "" },
-      set: { value in
-        var draft = app.drafts[conversationID] ?? MessageDraft()
-        draft.body = value
-        app.drafts[conversationID] = draft
-      })
+    Binding(get: { draft.body }, set: { app.drafts.edit($0, in: conversationID) })
   }
   var body: some View {
     VStack(spacing: 0) {
@@ -255,6 +210,8 @@ struct ConversationView: View {
           }
           Spacer()
         }.padding(.vertical, 8).padding(.bottom, 20)
+      } else {
+        HStack { BackButton(); Spacer() }.padding(.bottom, 20)
       }
       ScrollViewReader { proxy in
         ScrollView {
@@ -279,10 +236,9 @@ struct ConversationView: View {
           .scrollDismissesKeyboard(.interactively)
       }
     }.indexPage()
-      .safeAreaInset(edge: .bottom) { composer }
+      .safeAreaInset(edge: .bottom) { if conversation != nil { composer } }
       .task(id: scenePhase) {
         guard scenePhase == .active else { return }
-        if app.drafts[conversationID] == nil { app.drafts[conversationID] = MessageDraft() }
         await refresh()
         focused = draft.attachment != nil
         while !Task.isCancelled {
@@ -301,16 +257,16 @@ struct ConversationView: View {
             Text(attachment.domain).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
           }
           Spacer()
-          if draft.attemptedBody == nil {
+          if draft.pending == nil {
             Button {
-              app.drafts[conversationID]?.attachment = nil
+              do { try app.drafts.attach(nil, to: conversationID) } catch { app.handle(error) }
             } label: {
               Image(systemName: "xmark").frame(width: 32, height: 32)
             }.accessibilityLabel("Remove attachment")
           }
         }.padding(14).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 14))
       }
-      if draft.attemptedBody != nil && !sending {
+      if draft.pending != nil && !sending {
         Text("Send not confirmed. Retry to check or complete this same message.").font(IndexFont.sans(12))
           .foregroundStyle(IndexPalette.subtleForeground)
       }
@@ -318,9 +274,9 @@ struct ConversationView: View {
         TextField("Message", text: text, axis: .vertical).lineLimit(1...5).focused($focused)
           .font(IndexFont.sans(16)).padding(.horizontal, 14).padding(.vertical, 10)
           .overlay(Capsule().stroke(IndexPalette.border, lineWidth: 1))
-          .disabled(draft.attemptedBody != nil)
+          .disabled(draft.pending != nil)
         AsyncButton(action: send) {
-          Image(systemName: draft.attemptedBody == nil ? "arrow.up" : "arrow.clockwise").frame(
+          Image(systemName: draft.pending == nil ? "arrow.up" : "arrow.clockwise").frame(
             width: 42, height: 42
           ).background(IndexPalette.primary, in: Circle()).foregroundStyle(IndexPalette.primaryForeground)
         }
@@ -329,98 +285,27 @@ struct ConversationView: View {
             || (draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
               && draft.attachment == nil)
         )
-        .accessibilityLabel(draft.attemptedBody == nil ? "Send message" : "Retry message")
+        .accessibilityLabel(draft.pending == nil ? "Send message" : "Retry message")
       }
     }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.background)
   }
   private func send() async throws {
-    var value = draft
-    if value.attemptedBody == nil {
-      value.attemptedBody = value.body.trimmingCharacters(in: .whitespacesAndNewlines)
-      value.attemptedLinkID = value.attachment?.id
-    }
-    app.drafts[conversationID] = value
-    sending = true
-    defer { sending = false }
-    var body: [String: JSONValue] = [
-      "clientId": .string(value.clientID), "body": .string(value.attemptedBody ?? ""),
-    ]
-    if let id = value.attemptedLinkID { body["linkId"] = .string(id) }
-    do {
-      let _: Message? = try await app.api?.request(
-        "/conversations/\(conversationID)/messages", method: "POST", body: body)
-      app.drafts[conversationID] = MessageDraft()
-      scrollAfterSend = true
-      focused = true
-      await refresh()
-    } catch {
-      // Definite validation failures were not sent, so the draft can be corrected.
-      if case APIError.server(let status, _) = error, (400..<500).contains(status) {
-        value.attemptedBody = nil
-        value.attemptedLinkID = nil
-        value.clientID = UUID().uuidString
-        app.drafts[conversationID] = value
-      }
-      throw error
-    }
+    guard let api = app.api else { return }
+    try await app.drafts.send(in: conversationID, api: api)
+    scrollAfterSend = true
+    focused = true
+    await refresh()
   }
   private func refresh() async {
-    if conversation == nil {
-      if app.openingConversation?.id == conversationID {
-        conversation = app.openingConversation
-        app.openingConversation = nil
-      } else {
-        conversation = await app.api?.cached("/conversations/\(conversationID)")
-      }
-    }
-    if messages.isEmpty,
-      let cached: Page<Message> = await app.api?.cached(
-        "/conversations/\(conversationID)/messages", query: ["limit": "30"])
-    {
-      messages = cached.items
-      cursor = cached.nextCursor
-    }
-    loading = conversation == nil
-    error = nil
-    do {
-      async let detail: Conversation? = app.api?.request("/conversations/\(conversationID)")
-      var all: [Message] = []
-      var next: String?
-      for _ in 0..<pageCount {
-        var query = ["limit": "30"]
-        query["cursor"] = next
-        guard
-          let page: Page<Message> = try await app.api?.request(
-            "/conversations/\(conversationID)/messages", query: query)
-        else { break }
-        all += page.items
-        next = page.nextCursor
-        if next == nil { break }
-      }
-      try Task.checkCancellation()
-      messages = all
-      cursor = next
-      conversation = try await detail
-      if let newest = all.first, scenePhase == .active {
-        let _: Success? = try await app.api?.request(
-          "/conversations/\(conversationID)/read", method: "POST",
-          body: ["messageId": .string(newest.id)])
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+    guard let api = app.api else { return }
+    let opening = app.navigation.openingConversation
+    app.navigation.openingConversation = nil
+    do { try await model.load(api: api, id: conversationID, opening: opening) }
+    catch { app.handleSessionError(error) }
   }
   private func more() async throws {
-    guard let cursor else { return }
-    if let page: Page<Message> = try await app.api?.request(
-      "/conversations/\(conversationID)/messages", query: ["cursor": cursor, "limit": "30"])
-    {
-      messages += page.items
-      self.cursor = page.nextCursor
-      pageCount += 1
-    }
+    guard let api = app.api else { return }
+    try await model.load(api: api, id: conversationID, more: true)
   }
 }
 struct MessageBubble: View {

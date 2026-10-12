@@ -1,4 +1,5 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 struct ProfileView: View {
@@ -8,14 +9,15 @@ struct ProfileView: View {
     _filter = State(initialValue: groupID ?? "all")
   }
   @Environment(AppModel.self) private var app
-  @State private var profile: Profile?
-  @State private var groups: [LinkGroup] = []
+  @State private var model = ProfileModel()
+  private var profile: Profile? { model.profile }
+  private var groups: [LinkGroup] { model.groups }
   @State private var creatingGroup = false
   @State private var filter = "all"
-  @State private var weeks: [LibraryWeek] = []
-  @State private var nextBefore: String?
-  @State private var error: String?
-  @State private var loading = true
+  private var weeks: [LibraryWeek] { model.weeks }
+  private var nextBefore: String? { model.nextBefore }
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
   var own: Bool { userID == app.userID }
   var selected: LinkGroup? { groups.first { $0.id == filter } }
   // Starred holds other people's links, so it is a section of its own rather than a filter.
@@ -107,18 +109,17 @@ struct ProfileView: View {
       .task(id: "\(userID)-\(app.revision)") { await load() }
       .sheet(isPresented: $creatingGroup) {
         GroupEditorView { group in
-          groups.append(group)
+          model.created(group)
           filter = group.id
         }.indexSheetStyle().presentationDetents([.height(360), .large])
       }
       .task(id: filter) {
-        guard profile?.canViewContent == true else { return }
         do { try await loadWeeks() } catch { app.handle(error) }
       }
   }
   private func profileHeader(_ profile: Profile) -> some View {
     VStack(alignment: .leading, spacing: 12) {
-      if !app.path.isEmpty { BackButton().padding(.leading, -12) }
+      if !app.navigation.path.isEmpty { BackButton().padding(.leading, -12) }
       HStack(spacing: 20) {
         PersonAvatar(person: profile.person, size: 64)
         VStack(alignment: .leading, spacing: 10) {
@@ -191,63 +192,20 @@ struct ProfileView: View {
     ).sorted(by: >)
   }
   private func load() async {
-    if profile == nil { profile = await app.api?.cached("/profiles/\(userID)") }
-    if groups.isEmpty,
-      let cached: Page<LinkGroup> = await app.api?.cached(
-        "/groups", query: ["ownerId": userID, "limit": "100"])
-    {
-      groups = cached.items
-    }
-    loading = profile == nil
-    error = nil
+    guard let api = app.api else { return }
+    let generation = app.session.generation
     do {
-      let result: Profile? = try await app.api?.request("/profiles/\(userID)")
-      try Task.checkCancellation()
-      profile = result
-      if own { app.profile = result }
-      if result?.canViewContent == true {
-        async let availableGroups = allGroups(api: app.api, ownerID: userID)
-        try await loadWeeks()
-        groups = try await availableGroups
-        if filter != "all" && filter != "starred" && !groups.contains(where: { $0.id == filter }) {
-          filter = "all"
-        }
-      } else {
-        groups = []
-        weeks = []
+      let applied = try await model.load(api: api, userID: userID, filter: filter)
+      guard applied, !Task.isCancelled, generation == app.session.generation else { return }
+      if own { app.profile = model.profile }
+      if filter != "all" && filter != "starred" && !groups.contains(where: { $0.id == filter }) {
+        filter = "all"
       }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+    } catch { app.handleSessionError(error) }
   }
   private func loadWeeks(more: Bool = false) async throws {
-    let requestedFilter = filter
-    // Starred without a group yet has nothing to list.
-    if filter == "starred" {
-      weeks = []
-      nextBefore = nil
-      return
-    }
-    var query = ["limit": "10"]
-    if filter != "all" { query["groupId"] = filter }
-    if more { query["before"] = nextBefore }
-    if !more, weeks.isEmpty,
-      let cached: LibraryWeeks = await app.api?.cached("/profiles/\(userID)/weeks", query: query)
-    {
-      guard requestedFilter == filter else { return }
-      weeks = cached.items
-      nextBefore = cached.nextBefore
-    }
-    if let page: LibraryWeeks = try await app.api?.request(
-      "/profiles/\(userID)/weeks", query: query)
-    {
-      try Task.checkCancellation()
-      guard requestedFilter == filter else { return }
-      weeks = more ? weeks + page.items : page.items
-      nextBefore = page.nextBefore
-    }
+    guard let api = app.api else { return }
+    try await model.loadWeeks(api: api, userID: userID, filter: filter, more: more)
   }
 }
 struct ProfileWeekView: View {
@@ -257,9 +215,10 @@ struct ProfileWeekView: View {
   let canAdd: Bool
   var lockedGroups: Set<String> = []
   @Environment(AppModel.self) private var app
-  @State private var links: [SavedLink] = []
-  @State private var cursor: String?
-  @State private var error: String?
+  @State private var model = ProfileWeekModel()
+  private var links: [SavedLink] { model.links }
+  private var cursor: String? { model.cursor }
+  private var error: String? { model.error }
   var body: some View {
     LazyVStack(spacing: 0) {
       if canAdd && week == Week.monday() { QuickAddView(groupID: filter == "all" ? nil : filter) }
@@ -271,29 +230,9 @@ struct ProfileWeekView: View {
     }.task(id: app.revision) { await load() }
   }
   private func load(more: Bool = false) async {
-    var query = ["weekStart": week, "limit": "30"]
-    if more { query["cursor"] = cursor }
-    let path: String
-    if filter == "all" {
-      path = "/profiles/\(userID)/links"
-    } else {
-      path = "/groups/\(filter)/links"
-    }
-    if !more, links.isEmpty, let cached: Page<SavedLink> = await app.api?.cached(path, query: query)
-    {
-      links = cached.items
-      cursor = cached.nextCursor
-    }
-    do {
-      if let page: Page<SavedLink> = try await app.api?.request(path, query: query) {
-        links = more ? links + page.items : page.items
-        cursor = page.nextCursor
-        error = nil
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
+    guard let api = app.api else { return }
+    do { try await model.load(api: api, userID: userID, week: week, filter: filter, more: more) }
+    catch { app.handleSessionError(error) }
   }
 }
 struct FollowButton: View {

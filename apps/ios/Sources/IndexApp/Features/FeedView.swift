@@ -1,14 +1,16 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 struct FeedView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var weeks = [Week.monday()]
+  @State private var model = FeedWeeksModel()
+  private var weeks: [String] { model.weeks }
   @State private var selectedWeek = Week.monday()
   @State private var pickingWeek = false
-  @State private var followingCount: Int?
-  @State private var weeksError: String?
+  private var followingCount: Int? { model.followingCount }
+  private var weeksError: String? { model.error }
 
   var body: some View {
     GeometryReader { geometry in
@@ -44,27 +46,9 @@ struct FeedView: View {
     withAnimation(reduceMotion ? nil : .easeOut(duration: 0.16)) { selectedWeek = week }
   }
   private func loadWeeks() async {
-    do {
-      async let profile: Profile? = app.api?.request("/me/profile")
-      var loaded = [Week.monday()]
-      var before: String?
-      repeat {
-        var query = ["limit": "100"]
-        query["before"] = before
-        guard let page: LibraryWeeks = try await app.api?.request("/feed/weeks", query: query) else { break }
-        try Task.checkCancellation()
-        loaded += page.items.map(\.weekStart)
-        before = page.nextBefore
-      } while before != nil
-      weeks = Array(Set(loaded)).sorted(by: >)
-      if !weeks.contains(selectedWeek) { weeks.append(selectedWeek); weeks.sort(by: >) }
-      let loadedProfile = try await profile
-      followingCount = loadedProfile?.followingCount
-      weeksError = nil
-    } catch is CancellationError {} catch {
-      weeksError = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
+    guard let api = app.api else { return }
+    do { try await model.load(api: api, selectedWeek: selectedWeek) }
+    catch { app.handleSessionError(error) }
   }
 }
 
@@ -73,9 +57,10 @@ private struct FeedWeekView: View {
   let followingCount: Int?
   let compact: Bool
   @Environment(AppModel.self) private var app
-  @State private var feed: WeekFeed?
-  @State private var error: String?
-  @State private var loading = false
+  @State private var model = FeedWeekModel()
+  private var feed: WeekFeed? { model.feed }
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
   var body: some View {
     GeometryReader { geometry in
       let gap: CGFloat = compact ? 14 : 20
@@ -118,7 +103,7 @@ private struct FeedWeekView: View {
             Text("Links from people you follow will appear here.")
               .font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
             if followingCount == 0 {
-              Button { app.path = []; app.tab = .discover } label: {
+              Button { app.navigation.path = []; app.navigation.tab = .discover } label: {
                 Text("Discover people →").font(IndexFont.sans())
               }.buttonStyle(.plain).padding(.top, 4)
             }
@@ -147,40 +132,20 @@ private struct FeedWeekView: View {
     }.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
   }
   private func load() async {
-    if feed == nil {
-      feed = await app.api?.cached("/feed/week", query: ["weekStart": week, "linkLimit": "20"])
-    }
-    loading = feed == nil
-    error = nil
-    do {
-      let result: WeekFeed? = try await app.api?.request(
-        "/feed/week", query: ["weekStart": week, "linkLimit": "20"])
-      try Task.checkCancellation()
-      feed = result
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+    guard let api = app.api else { return }
+    do { try await model.load(api: api, week: week) }
+    catch { app.handleSessionError(error) }
   }
   private func moreOwn() async throws {
-    guard let cursor = feed?.own.nextCursor else { return }
-    let page: Page<SavedLink>? = try await app.api?.request(
-      "/links", query: ["weekStart": week, "cursor": cursor])
-    if let page { feed?.own = Page<SavedLink>.joined(feed!.own, page) }
+    guard let api = app.api else { return }
+    try await model.moreOwn(api: api, week: week)
   }
   private func morePerson(_ person: PersonLinks) async throws {
-    guard let cursor = person.links.nextCursor else { return }
-    let page: Page<SavedLink>? = try await app.api?.request(
-      "/profiles/\(person.id)/links", query: ["weekStart": week, "cursor": cursor])
-    if let page, let index = feed?.people.firstIndex(where: { $0.id == person.id }) {
-      feed?.people[index].links = .joined(feed!.people[index].links, page)
-    }
+    guard let api = app.api else { return }
+    try await model.morePerson(person.id, api: api, week: week)
   }
   private func morePeople() async throws {
-    guard let after = feed?.nextAfter else { return }
-    let next: WeekFeed? = try await app.api?.request(
-      "/feed/week", query: ["weekStart": week, "after": after])
-    if let next, let old = feed { feed = old.appendingPeople(next) }
+    guard let api = app.api else { return }
+    try await model.morePeople(api: api, week: week)
   }
 }

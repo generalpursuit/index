@@ -4,6 +4,7 @@ from pathlib import Path
 import plistlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
 root = Path(__file__).resolve().parents[1]
@@ -13,8 +14,12 @@ class SharingSources(unittest.TestCase):
     def test_generated_project_is_reproducible_and_embeds_extension(self):
         project = root / 'Index.xcodeproj/project.pbxproj'
         before = project.read_text()
-        subprocess.run([sys.executable, str(root / 'Scripts/generate-project.py')], check=True)
-        self.assertEqual(before, project.read_text())
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / 'Index.xcodeproj'
+            subprocess.run([sys.executable, str(root / 'Scripts/generate-project.py'), '--output', str(generated)], check=True)
+            for file in generated.rglob('*'):
+                if file.is_file():
+                    self.assertEqual(file.read_bytes(), (project.parent / file.relative_to(generated)).read_bytes(), str(file.relative_to(generated)))
         self.assertEqual(before.count('productType = "com.apple.product-type.app-extension"'), 2)
         for required in ['ShareExtension/ShareViewController.swift', 'Embed App Extensions', 'PBXTargetDependency', 'productName = IndexSharing', 'productName = IndexUI', 'APPLICATION_EXTENSION_API_ONLY = "YES"']:
             self.assertIn(required, before)

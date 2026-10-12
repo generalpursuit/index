@@ -1,4 +1,5 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 struct AddLinkView: View {
@@ -84,18 +85,8 @@ struct AddLinkView: View {
 
 @MainActor
 func allGroups(api: APIClient?, ownerID: String) async throws -> [LinkGroup] {
-  var groups: [LinkGroup] = []
-  var cursor: String?
-  repeat {
-    var query = ["ownerId": ownerID, "limit": "100"]
-    query["cursor"] = cursor
-    guard let page: Page<LinkGroup> = try await api?.request("/groups", query: query) else {
-      return []
-    }
-    groups += page.items
-    cursor = page.nextCursor
-  } while cursor != nil
-  return groups
+  guard let api else { return [] }
+  return try await loadGroups(api: api, ownerID: ownerID)
 }
 
 struct LinkDetailView: View {
@@ -234,9 +225,9 @@ struct LinkDetailView: View {
   }
   private func load() async {
     if link == nil {
-      if app.openingLink?.id == linkID {
-        link = app.openingLink
-        app.openingLink = nil
+      if app.navigation.openingLink?.id == linkID {
+        link = app.navigation.openingLink
+        app.navigation.openingLink = nil
       } else {
         link = await app.api?.cached("/links/\(linkID)")
       }

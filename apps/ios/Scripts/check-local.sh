@@ -1,6 +1,7 @@
 #!/bin/sh
 set -eu
 cd "$(dirname "$0")/.."
+python3 Scripts/check-sharing-source.py
 if ! xcodebuild -version; then
   echo "Full Xcode is required. Select it in Xcode > Settings > Locations > Command Line Tools." >&2
   exit 1

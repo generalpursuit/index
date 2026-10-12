@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Reproduce the checked-in Xcode project without a project-generator dependency."""
 from pathlib import Path
+import argparse
 import hashlib
 import json
 
 root = Path(__file__).resolve().parent.parent
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("--output", type=Path, default=root / "Index.xcodeproj", help="Generated project directory")
+project = parser.parse_args().output
+(project / "xcshareddata/xcschemes").mkdir(parents=True, exist_ok=True)
 objects = {}
 def ident(name): return hashlib.sha256(name.encode()).hexdigest()[:24].upper()
 def add(name, value):
@@ -45,7 +50,9 @@ add('core-product', '{ isa = XCSwiftPackageProductDependency; productName = Inde
 add('core-build', '{ isa = PBXBuildFile; productRef = ' + ref('core-product') + '; }')
 add('ui-product', '{ isa = XCSwiftPackageProductDependency; productName = IndexUI; }')
 add('ui-build', '{ isa = PBXBuildFile; productRef = ' + ref('ui-product') + '; }')
-add('frameworks', '{ isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (' + ref('core-build') + ',' + ref('ui-build') + ',); runOnlyForDeploymentPostprocessing = 0; }')
+add('features-product', '{ isa = XCSwiftPackageProductDependency; productName = IndexFeatures; }')
+add('features-build', '{ isa = PBXBuildFile; productRef = ' + ref('features-product') + '; }')
+add('frameworks', '{ isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (' + ref('core-build') + ',' + ref('ui-build') + ',' + ref('features-build') + ',); runOnlyForDeploymentPostprocessing = 0; }')
 add('sources', '{ isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (' + ','.join(build_refs) + ',); runOnlyForDeploymentPostprocessing = 0; }')
 assets = add('assets', '{ isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Resources/Assets.xcassets; sourceTree = SOURCE_ROOT; }')
 add('assets-build', '{ isa = PBXBuildFile; fileRef = '+assets+'; }')
@@ -72,11 +79,11 @@ add('share-embed', '{ isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647
 product = add('product', '{ isa = PBXFileReference; explicitFileType = wrapper.application; path = Index.app; sourceTree = BUILT_PRODUCTS_DIR; }')
 add('products', '{ isa = PBXGroup; children = (' + product + ',' + ref('share-ios-product') + ',' + ref('share-mac-product') + ',); name = Products; sourceTree = "<group>"; }')
 add('main-group', '{ isa = PBXGroup; children = (' + ','.join(source_refs + list(configs.values()) + [assets, share_source, ref('products')]) + ',); sourceTree = "<group>"; }')
-add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ref('share-dependency') + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
+add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ref('share-dependency') + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',' + ref('features-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
 add('project', '{ isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = ' + ref('project-config-list') + '; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = ' + ref('main-group') + '; packageReferences = (' + ref('local-package') + ',); productRefGroup = ' + ref('products') + '; projectDirPath = ""; projectRoot = ""; targets = (' + ref('app') + ',' + ref('share-ios') + ',' + ref('share-mac') + ',); }')
 content = '// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(f'{key} = {value};' for key,value in objects.items()) + '\n}; rootObject = ' + ref('project') + '; }\n'
-(root / 'Index.xcodeproj/project.pbxproj').write_text(content)
-(root / 'Index.xcodeproj/xcshareddata/xcschemes/Index.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
+(project / 'project.pbxproj').write_text(content)
+(project / 'xcshareddata/xcschemes/Index.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1600" version="1.3">
 <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{ref('app')}" BuildableName="Index.app" BlueprintName="Index" ReferencedContainer="container:Index.xcodeproj"/></BuildActionEntry></BuildActionEntries></BuildAction>
 <TestAction buildConfiguration="Debug" shouldUseLaunchSchemeArgsEnv="YES"/>
@@ -85,5 +92,5 @@ content = '// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56
 </Scheme>''')
 
 for target, name in [('share-ios', 'IndexShare'), ('share-mac', 'IndexShareMac')]:
-    (root / f'Index.xcodeproj/xcshareddata/xcschemes/{name}.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
+    (project / f'xcshareddata/xcschemes/{name}.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1600" version="1.3"><BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{ref(target)}" BuildableName="{name}.appex" BlueprintName="{name}" ReferencedContainer="container:Index.xcodeproj"/></BuildActionEntry></BuildActionEntries></BuildAction><AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/></Scheme>''')

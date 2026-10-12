@@ -1,5 +1,6 @@
 import Foundation
 import IndexCore
+import IndexFeatures
 
 @MainActor
 extension AppModel {
@@ -12,14 +13,14 @@ extension AppModel {
   }
   func openReadableURL(_ url: URL) {
     guard ReadableRouteRequest(url: url, webOrigins: routeOrigins) != nil else { return }
-    pendingRouteURL = url
-    pendingRouteAccountID = profile?.id ?? verificationUser?.id
+    navigation.pendingRouteURL = url
+    navigation.pendingRouteAccountID = profile?.id ?? verificationUser?.id
     resumeReadableURL()
   }
   func resumeReadableURL() {
-    guard let url = pendingRouteURL, verificationUser == nil, profile != nil, !userID.isEmpty else { return }
-    routeTask?.cancel()
-    routeTask = Task { await resolveReadableURL(url) }
+    guard let url = navigation.pendingRouteURL, verificationUser == nil, profile != nil, !userID.isEmpty else { return }
+    navigation.routeTask?.cancel()
+    navigation.routeTask = Task { await resolveReadableURL(url) }
   }
   private func resolveReadableURL(_ url: URL) async {
     guard let api, let request = ReadableRouteRequest(url: url, webOrigins: routeOrigins) else { return }
@@ -27,8 +28,11 @@ extension AppModel {
     do {
       // Restricted sessions can become verified without changing the account ID.
       let session = try await api.restore()
-      guard ReadableRouteReadiness.canResolve(userID: session?.user.id, emailVerified: session?.user.emailVerified == true),
-        session?.user.id == account, !Task.isCancelled, userID == account else { return }
+      guard !Task.isCancelled, userID == account else { return }
+      guard let session else { handle(APIError.unauthenticated); return }
+      guard session.user.emailVerified else { handle(APIError.emailNotVerified); return }
+      guard ReadableRouteReadiness.canResolve(userID: session.user.id, emailVerified: session.user.emailVerified),
+        session.user.id == account else { return }
       var query = ["path": request.path]
       if let group = request.query["group"] { query["group"] = group }
       let target: RouteResolution = try await api.request("/routes/resolve", query: query)
@@ -61,27 +65,24 @@ extension AppModel {
           if key == "edit", link.ownerId == account {
             destinations.append(.add(Week.monday(Week.date(link.savedOn)), link.groupId, link))
           } else if key == "attach", let chat = target.conversationId {
-            var draft = drafts[chat] ?? MessageDraft()
-            draft.attachment = link
-            draft.clientID = UUID().uuidString
-            drafts[chat] = draft
+            try drafts.attach(link, to: chat)
           }
         }
       }
       if request.query["settings"] == "true", target.userId == account { destinations.append(.settings) }
       guard !Task.isCancelled, userID == account else { return }
-      openingLink = nil
-      openingConversation = nil
-      sheet = nil
+      navigation.openingLink = nil
+      navigation.openingConversation = nil
+      navigation.sheet = nil
       if let last = destinations.last {
         switch last {
         case .link, .add, .settings:
-          sheet = destinations.removeLast()
+          navigation.sheet = destinations.removeLast()
         default: break
         }
       }
-      path = destinations
-      if pendingRouteURL == url { pendingRouteURL = nil; pendingRouteAccountID = nil }
+      navigation.path = destinations
+      if navigation.pendingRouteURL == url { navigation.pendingRouteURL = nil; navigation.pendingRouteAccountID = nil }
     } catch {
       guard !Task.isCancelled, userID == account else { return }
       handle(error)

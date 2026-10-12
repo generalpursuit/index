@@ -1,4 +1,5 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 private struct IndexSheetKey: EnvironmentKey { static let defaultValue = false }
@@ -74,7 +75,7 @@ struct AppErrorPresentation: ViewModifier {
 struct BackButton: View {
   @Environment(AppModel.self) private var app
   var body: some View {
-    Button { if !app.path.isEmpty { app.path.removeLast() } } label: {
+    Button { if !app.navigation.path.isEmpty { app.navigation.path.removeLast() } } label: {
       Image(systemName: "chevron.left").font(.system(size: 20, weight: .regular))
         .frame(width: 44, height: 44)
     }.buttonStyle(.plain).accessibilityLabel("Back")
