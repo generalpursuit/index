@@ -21,11 +21,6 @@ import type { SavedLink } from "@/lib/types";
 const report = (action: Promise<unknown>) =>
   void action.catch(() => toast.error("Could not complete that. Try again."));
 
-// The quick-add field as a tinted well on the panel's glass, with desktop text sizes; pending
-// rows match the saved rows below.
-const quickAddClassName =
-  "[&_.quick-add]:min-h-9.5 [&_.quick-add]:rounded-[10px] [&_.quick-add]:bg-foreground/[0.055] [&_.quick-add]:pr-1 [&_.quick-add_input]:h-9.5 [&_.quick-add_input]:text-[14px] [&_.quick-add>button]:rounded-full [&_.quick-add>button]:py-1.5 [&_.quick-add>button:hover]:bg-foreground/[0.06] [&_.link-row]:min-h-8.5 [&_.link-row]:pr-2 [&_.link-row_.link-open]:text-[13px]";
-
 export function MenuBarPage() {
   if (!isMenuBar)
     return <main className="p-6 text-sm">The menu bar is available in Index for macOS.</main>;
@@ -39,6 +34,11 @@ function MenuPanel() {
     scroller = useRef<HTMLDivElement>(null),
     content = useRef<HTMLDivElement>(null);
   useFittedPanel(panel, scroller, content);
+  useLayoutEffect(() => {
+    // A transparent page lets the window's native glass show through.
+    document.documentElement.classList.add("menu-bar-surface");
+    return () => document.documentElement.classList.remove("menu-bar-surface");
+  }, []);
   useEffect(() => {
     const begin = () => setChecking(true),
       end = () => setChecking(false);
@@ -124,7 +124,7 @@ function MenuPanel() {
 }
 /**
  * The native panel follows the content's natural height (the window clamps it), and opens fully
- * while a dialog sheet is shown. The page is transparent so the window's glass shows through.
+ * while a dialog sheet is shown.
  */
 function useFittedPanel(
   panel: RefObject<HTMLElement | null>,
@@ -132,8 +132,6 @@ function useFittedPanel(
   content: RefObject<HTMLElement | null>,
 ) {
   useLayoutEffect(() => {
-    const root = document.documentElement;
-    root.classList.add("menu-bar-surface");
     const measure = () => {
       if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
       const chrome = panel.current!.offsetHeight - scroller.current!.clientHeight;
@@ -162,7 +160,6 @@ function useFittedPanel(
       cancelAnimationFrame(frame);
       sizes.disconnect();
       dialogs.disconnect();
-      root.classList.remove("menu-bar-surface");
     };
   }, [panel, scroller, content]);
 }
@@ -210,13 +207,12 @@ function OwnWeek({ userId }: { userId: string }) {
           />
         </IconButton>
       </div>
-      <div className={quickAddClassName}>
-        <QuickAdd
-          links={links}
-          label="Add a link to this week"
-          onViewExisting={(link) => openIndex("/l/" + link.shortId, userId)}
-        />
-      </div>
+      <QuickAdd
+        compact
+        links={links}
+        label="Add a link to this week"
+        onViewExisting={(link) => openIndex("/l/" + link.shortId, userId)}
+      />
       {query.isPending && (
         <p role="status" className="px-2 py-3 text-subtle-foreground">
           Loading your links…
