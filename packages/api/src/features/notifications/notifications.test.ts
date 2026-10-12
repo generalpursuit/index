@@ -289,6 +289,23 @@ describe("durable notifications", () => {
     assert.equal((await fixture.db.select().from(devices)).length, 0);
     assert.equal((await api("bob").activity.list({})).items.length, 1);
   });
+  it("passes only transport data and stores safe provider diagnostics without changing retry ownership", async () => {
+    await enroll();
+    await api("alice").follows.follow({ userId: "bob" });
+    await deliverBatch(fixture.db, async (destination) => {
+      assert.deepEqual(destination, {
+        kind: "apns",
+        token: "a".repeat(64),
+        environment: "sandbox",
+      });
+      return { status: "retry", reason: "provider_authentication", retryAfter: 120 };
+    });
+    const [job] = await fixture.db.select().from(jobs);
+    assert.equal(job!.state, "pending");
+    assert.deepEqual(job!.outcome, { code: "provider_authentication" });
+    assert.equal((await fixture.db.select().from(devices)).length, 1);
+    assert.equal((await claim(fixture.db)).length, 0);
+  });
   it("binds desktop claims and acknowledgements to the owning account and lease", async () => {
     await enroll("bob", secret("b"), "desktop");
     await message();

@@ -10,6 +10,7 @@
     "env:generate": "varlock codegen"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "2.0.0",
     "@index/api": "workspace:*",
     "@index/auth": "workspace:*",
     "@index/db": "workspace:*",
@@ -19,6 +20,7 @@
     "@orpc/zod": "catalog:",
     "better-auth": "catalog:",
     "hono": "^4.13.7",
+    "jose": "6.2.12",
     "varlock": "catalog:",
     "zod": "catalog:"
   },

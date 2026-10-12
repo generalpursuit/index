@@ -10,7 +10,7 @@ export async function runNotifications() {
     await cleanup(db);
     return;
   }
-  const send = createPushAdapter(ENV, fetch, (key, issue) => providerToken(db, key, issue));
+  const send = await createPushAdapter(ENV, fetch, (key, issue) => providerToken(db, key, issue));
   // A bounded cron invocation drains up to 200 jobs; remaining rows survive to the next tick.
   for (let i = 0; i < 5; i++) {
     if ((await deliverBatch(db, send)).attempted < 40) break;

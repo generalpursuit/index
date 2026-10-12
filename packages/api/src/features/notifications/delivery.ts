@@ -3,9 +3,27 @@ import { notificationDevices } from "@index/db/schema/notifications";
 import type { QueryDatabase } from "../../data-access/database";
 import type { Alert } from "./schemas";
 import * as repo from "./repository";
-export type DeliveryResult = { status: "sent" | "dead" | "retry" | "failed"; retryAfter?: number };
+// Transport receives only a destination. Registration ownership and deletion stay here.
+export type DeliveryDestination =
+  | { kind: "web"; endpoint: string | null; p256dh: string | null; auth: string | null }
+  | { kind: "apns"; token: string | null; environment: "sandbox" | "production" | null }
+  | { kind: "desktop" };
+export type DeliveryFailure =
+  | "provider_disabled"
+  | "provider_configuration"
+  | "provider_authentication"
+  | "invalid_destination"
+  | "rate_limited"
+  | "provider_unavailable"
+  | "provider_rejected"
+  | "network_error";
+export type DeliveryResult = {
+  status: "sent" | "dead" | "retry" | "failed";
+  retryAfter?: number;
+  reason?: DeliveryFailure;
+};
 export type DeliveryAdapter = (
-  device: typeof notificationDevices.$inferSelect,
+  destination: DeliveryDestination,
   alert: Alert,
 ) => Promise<DeliveryResult>;
 /** Bounded, durable attempts. Provider collapse/tag identifiers use the job UUID on every retry. */
@@ -21,7 +39,14 @@ export async function deliverBatch(db: QueryDatabase, send: DeliveryAdapter, lim
     }
     let result: DeliveryResult;
     try {
-      result = await send(prepared.device, prepared.alert);
+      const device = prepared.device;
+      const destination: DeliveryDestination =
+        device.kind === "web"
+          ? { kind: "web", endpoint: device.endpoint, p256dh: device.p256dh, auth: device.auth }
+          : device.kind === "apns"
+            ? { kind: "apns", token: device.endpoint, environment: device.environment }
+            : { kind: "desktop" };
+      result = await send(destination, prepared.alert);
     } catch {
       result = { status: "retry" };
     } // Do not log provider endpoints, credentials or previews.
@@ -38,13 +63,13 @@ export async function deliverBatch(db: QueryDatabase, send: DeliveryAdapter, lim
         );
     } else if (result.status === "sent") await repo.finish(db, job, "delivered", "sent");
     else if (result.status === "failed" || job.attempts >= 8)
-      await repo.finish(db, job, "failed", "exhausted");
+      await repo.finish(db, job, "failed", result.reason ?? "exhausted");
     else
       await repo.finish(
         db,
         job,
         "pending",
-        "retry",
+        result.reason ?? "retry",
         Math.min(3600, Math.max(result.retryAfter ?? 0, 15 * 2 ** (job.attempts - 1))),
       );
   };
