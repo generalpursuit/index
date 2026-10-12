@@ -21,22 +21,24 @@ The preview does not offer an iOS-only Home Screen icon setting.
 2. Start the disposable development backend from `apps/web` with `bun e2e/server.mjs`. The Debug configuration uses `http://localhost:3002`. Fixture login: `alice@test.example` / `test-password-123`.
 3. Run. For an actual development backend, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and supply its HTTPS API/web URLs. An iPhone device cannot use the Mac's localhost; use an HTTPS development endpoint.
 
-Release builds require explicit HTTPS `INDEX_API_URL` and `INDEX_WEB_URL`. Configure your Apple signing team in the ignored local configuration or Xcode. The checked-in bundle identifier is `com.generalpursuit.index`; update it if the distribution account uses another identifier. No production endpoint, signing identity, or secret is embedded in this repository.
+Release builds require explicit HTTPS `INDEX_API_URL` and `INDEX_WEB_URL`. Configure your Apple signing team in the ignored `Config/Local.xcconfig`; changing generated project settings in Xcode will be overwritten by regeneration. The checked-in bundle identifier is `com.generalpursuit.index`; update it if the distribution account uses another identifier. No production endpoint, signing identity, or secret is embedded in this repository.
 
 ```sh
 xcodebuild -project Index.xcodeproj -scheme Index \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-The Xcode project is checked in. After adding/removing app source files, reproduce it with `python3 Scripts/generate-project.py`. It links the local `IndexCore` Swift package. `Package.swift` also exposes a macOS `IndexPreview` executable so source compilation can be checked independently of an iOS runtime; that preview is not the Tauri desktop product.
+The Xcode project is checked in. After adding/removing app source files, reproduce it with `python3 Scripts/generate-project.py`. It links the local `IndexCore`, `IndexFeatures`, and `IndexUI` products. The generator is the source of truth for project settings and shared schemes. `python3 Scripts/check-sharing-source.py` checks reproducibility in a temporary directory without rewriting the checkout. `Package.swift` also exposes a macOS `IndexPreview` executable so source compilation can be checked independently of an iOS runtime; that preview is not the Tauri desktop product.
 
 ## Structure
 
 - `Sources/IndexCore`: Codable API contracts, UTC week handling, URLSession transport, and Keychain storage.
-- `Sources/IndexApp/Features`: feed, profiles/library, link editing/comments, discovery, activity, and conversations.
+- `Sources/IndexFeatures`: testable message drafts, messaging/activity/profile/feed loading, account lifetime, and navigation state. Feature models use the existing API transport through a small injectable contract. An internal cursor collection owns loaded-page extent, request generations and duplicate removal.
+- `Sources/IndexApp/Features`: SwiftUI feature layouts and presentation state; complex messaging/activity/profile/feed loading lives in `IndexFeatures`.
 - `Sources/IndexApp/Components.swift`: shared visual components and asynchronous actions.
 - `Sources/IndexUI/Theme.swift`: shared semantic `IndexPalette`; `Sources/IndexApp/Theme.swift` retains the Settings appearance control; `IndexCore.ThemePreference` stores System/Light/Dark under device-local `index.theme`. The app defaults to System and keeps this preference through sign-out.
-- `Sources/IndexApp/IndexApp.swift`: authenticated root, navigation, tabs, app session and in-memory conversation drafts.
+- `Sources/IndexApp/IndexApp.swift`: authenticated SwiftUI root and destination rendering.
+- `Sources/IndexApp/AppModel.swift`: session/notification coordination and shared content-change signals. Private view identity, drafts, unread counts and presentation state reset together on account transitions.
 
 The five-tab navigation follows mobile web: Index, Discover, Activity, Messages, and your profile. Full pages use `NavigationStack` with explicit back controls; posts, settings, editors, and recipient/connection pickers open in rounded bottom sheets. Readable links use the same presentations, and account changes clear both navigation and sheet state.
 
@@ -48,26 +50,27 @@ Messages refresh while the conversation is active, conversations and activity po
 
 ## Loading and cache
 
-The API client retains up to 128 response snapshots in memory for five minutes and shares concurrent GET requests for the same path and query. Views restore these snapshots before refreshing, keeping feed, profiles, post details, conversations, and activity visible during network work. Opening a known post or conversation passes its existing content into the detail screen. Independent requests run concurrently. Polling and pull-to-refresh still reach the API.
+The API client retains up to 128 response snapshots in memory for five minutes and shares concurrent GET requests for the same path and query. Feature models and detail views restore these snapshots before refreshing, keeping feed, profiles, post details, conversations, and activity visible during network work. Conversation and activity polling replays the loaded page count and publishes the refreshed extent atomically. Query changes invalidate previous completions; overlapping pagination cannot append the same page twice. Opening a known post or conversation passes its existing content into the detail screen. Independent requests run concurrently. Polling and pull-to-refresh still reach the API.
 
-Mutations discard snapshots and restart overlapping reads against the new state; read receipts preserve content caches. Sign-out, session expiry, and authentication changes clear snapshots and reject late responses. Forbidden and missing resources evict their snapshots. Recoverable failures can leave already loaded content visible with retry feedback. This cache does not persist across process launches and is not an offline synchronization system.
+Mutations discard snapshots and restart overlapping reads against the new state; read receipts preserve content caches. Sign-out, session expiry, and authentication changes clear snapshots and reject late responses. Forbidden and missing resources evict their snapshots and clear displayed feature content; restricted sessions also remove private UI state. Recoverable failures can leave already loaded content visible with retry feedback. This cache does not persist across process launches and is not an offline synchronization system.
 
 ## Authentication
 
 Only Better Auth's signed `set-auth-token` header is retained. Native requests do not use cookies, and tokens are never stored in UserDefaults. Keychain entries are scoped to the API URL and use `WhenUnlockedThisDeviceOnly`. Session expiry/sign-out erase credentials and account state. The transport rejects remote HTTP and redirects; it accepts HTTP only for loopback development. The backend remains responsible for all content permissions.
 
-Restricted sessions show email verification instead of application content, including old unverified accounts. Passwords remain required for login; recovery codes never log in. See [email security](../../docs/authentication.md) for API contracts, delivery configuration, pending-link behavior and the Mac verification checklist. The new security source/tests have not been compiled or run on this Linux VM.
+Restricted sessions show email verification instead of application content, including old unverified accounts. Passwords remain required for login; recovery codes never log in. See [email security](../../docs/authentication.md) for API contracts, delivery configuration, pending-link behavior and the Mac verification checklist.
 
 ## Checks
 
-The local device and simulator app/Share extension builds and 42 Swift package
-tests passed. A normally signed simulator build also launched successfully on
-iPhone 18 Pro / iOS 27, with the supplied wordmark visible on the sign-in screen.
-The shared artwork uses a compiled asset catalog for SwiftUI's named-image lookup.
-Both iPhone/iPad alternate-icon declarations are included, and both 1024 px icon
-sources have no alpha channel. Home Screen icon switching and the full iPhone/iPad
-interaction review remain device checks. Historical VM notes below are not
-evidence of runtime verification.
+`Scripts/check-sharing-source.py` provides Linux-capable project and packaging
+checks. `IndexFeaturesTests` covers uncertain send identity, validation recovery,
+account changes during sends, paginated refresh, stale completions, access
+revocation, and pending-route/account transitions. These behavioral tests are part
+of the Swift package suite below.
+
+Syntax parsing and packaging checks do not establish Swift 6 type correctness or
+iOS behavior. The cleanup was developed in a Linux environment without Xcode;
+run the native checks on a Mac before merging it.
 
 From the repository root, run the same native checks as CI:
 
@@ -105,20 +108,16 @@ INDEX_NATIVE_INTEGRATION=1 swift test
 
 The integration test resets **only the disposable fixture API** and checks real signed login/restoration, weekly pagination, Favorites, comments, private forwarding, send retries, replies, follow requests, group locking, and logout. It does not use production credentials or databases. Do not run it concurrently with browser tests that use that fixture server.
 
-The mobile web parity changes passed Swift syntax parsing and the four Linux-capable packaging/security checks in `Scripts/check-sharing-source.py`. Bundled fonts were checked for valid PostScript names, static weights, licenses, and deterministic regeneration. Read-only checks against the disposable API confirmed the feed-week, pagination, group, and discovery contracts. These are not an iOS build or a native visual test: this Linux environment lacks Apple SDKs, and T3 device access is disabled. Run the Xcode build above and compare the iPhone feed, profile, post/editor sheets, settings, discovery, activity, and messaging screens against mobile web at the same viewport and with the same account. Also follow the [appearance Mac checklist](../../docs/themes.md#remaining-mac-verification), including live OS changes and relaunch. The following results describe an earlier build.
-
-On the earlier Mac's command-line-only installation, source compilation succeeded against the installed macOS 26.5 SDK with a Testing plugin/runtime workaround. That earlier run passed twelve unit tests (including a real Keychain round trip and authentication error cases) and the real-API integration test. The current check script requires full Xcode and replaces that partial workflow. These checks do not establish iPhone layout or simulator behavior. Full Xcode is still required for simulator/device verification, signing, and an iOS archive.
-
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
 
 ## Readable links
 
-Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. New native route parser/readiness tests and AppModel navigation changes have not been compiled or run on this Linux VM; run the documented Swift/Xcode checks on a Mac before distribution.
+Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. Run the route, account-lifetime and navigation tests with the documented Swift/Xcode checks on a Mac before distribution.
 
 ## Group management
 
-Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group callback contract and Mac verification checklist](../../docs/groups.md). The new native group source/tests are unverified on this Linux VM; earlier Mac checks above do not cover them.
+Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group callback contract and Mac verification checklist](../../docs/groups.md).
 
 ## Share extension
 
-`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. Shared picker/group creation lives in `IndexSharing`/`IndexUI`. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md). The new Swift, Objective-C and Rust source has not been compiled or launched on this Linux VM.
+`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. Shared picker/group creation lives in `IndexSharing`/`IndexUI`. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).

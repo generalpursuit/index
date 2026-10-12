@@ -16,7 +16,7 @@ struct PageHeading: View {
   @Environment(\.indexSheet) private var isSheet
   var body: some View {
     HStack(alignment: .center, spacing: 4) {
-      if !isSheet && !app.path.isEmpty { BackButton() }
+      if !isSheet && !app.navigation.path.isEmpty { BackButton() }
       Text(title).font(IndexFont.serif(isSheet ? 26 : 44, relativeTo: isSheet ? .title : .largeTitle))
         .tracking(isSheet ? -0.39 : -0.66).frame(maxWidth: .infinity, alignment: .leading)
         .accessibilityAddTraits(.isHeader)
@@ -218,8 +218,8 @@ struct LinkMenu: View {
         Task {
           do {
             let _: Success? = try await app.api?.request("/links/\(link.id)", method: "DELETE")
-            if app.sheet == .link(link.id) { app.sheet = nil }
-            if app.path.last == .link(link.id) { app.path.removeLast() }
+            if app.navigation.sheet == .link(link.id) { app.navigation.sheet = nil }
+            if app.navigation.path.last == .link(link.id) { app.navigation.path.removeLast() }
             app.changed()
           } catch { app.handle(error) }
         }

@@ -1,0 +1,89 @@
+import Foundation
+import IndexCore
+import Observation
+
+public struct PendingMessage: Equatable, Sendable {
+  public let clientID: String
+  public let body: String
+  public let linkID: String?
+  var payload: [String: JSONValue] {
+    var value: [String: JSONValue] = ["clientId": .string(clientID), "body": .string(body)]
+    if let linkID { value["linkId"] = .string(linkID) }
+    return value
+  }
+}
+
+public struct MessageDraft: Sendable {
+  public private(set) var body = ""
+  public private(set) var attachment: SavedLink?
+  public private(set) var pending: PendingMessage?
+  public var isEmpty: Bool { body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
+  public init() {}
+
+  mutating func edit(_ body: String) {
+    guard pending == nil else { return }
+    self.body = body
+  }
+  mutating func attach(_ link: SavedLink?) throws {
+    guard pending == nil else { throw DraftError.pendingMessage }
+    attachment = link
+  }
+  mutating func prepare() throws -> PendingMessage {
+    if let pending { return pending }
+    guard !isEmpty else { throw DraftError.emptyMessage }
+    let value = PendingMessage(clientID: UUID().uuidString, body: body.trimmingCharacters(in: .whitespacesAndNewlines), linkID: attachment?.id)
+    pending = value
+    return value
+  }
+  mutating func recover(from error: Error) {
+    // Only definite validation rejection permits changing the attempted payload.
+    if case APIError.server(let status, _) = error, (400..<500).contains(status) { pending = nil }
+  }
+}
+public enum DraftError: LocalizedError {
+  case pendingMessage, emptyMessage
+  public var errorDescription: String? {
+    switch self {
+    case .pendingMessage: "Retry the pending message in this conversation before attaching another link."
+    case .emptyMessage: "Add a message or link first."
+    }
+  }
+}
+
+/// One account's in-memory drafts. Picker, composer and deep links all use the same
+/// operations; no caller can replace a pending payload or its idempotency identity.
+@MainActor @Observable
+public final class MessageDrafts {
+  private var values: [String: MessageDraft] = [:]
+  private var sending: Set<String> = []
+  private var generation = 0
+  public init() {}
+  public func draft(for conversationID: String) -> MessageDraft { values[conversationID] ?? MessageDraft() }
+  public func isSending(_ conversationID: String) -> Bool { sending.contains(conversationID) }
+  public func edit(_ body: String, in conversationID: String) { values[conversationID, default: MessageDraft()].edit(body) }
+  public func attach(_ link: SavedLink?, to conversationID: String) throws {
+    try values[conversationID, default: MessageDraft()].attach(link)
+  }
+  public func clear() {
+    generation += 1
+    values = [:]
+    sending = []
+  }
+  public func send(in conversationID: String, api: any FeatureAPI) async throws {
+    guard !sending.contains(conversationID) else { return }
+    let pending = try values[conversationID, default: MessageDraft()].prepare()
+    let version = generation
+    sending.insert(conversationID)
+    defer { if version == generation { sending.remove(conversationID) } }
+    do {
+      let _: Message = try await api.write("/conversations/\(conversationID)/messages", body: pending.payload)
+      try Task.checkCancellation()
+      guard version == generation else { throw CancellationError() }
+      values[conversationID] = nil
+    } catch {
+      guard version == generation else { throw CancellationError() }
+      values[conversationID]?.recover(from: error)
+      throw error
+    }
+  }
+}

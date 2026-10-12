@@ -1,4 +1,5 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 private struct DiscoveryFollowButton: View {
@@ -95,10 +96,11 @@ struct ActivityView: View {
   @Environment(AppModel.self) private var app
   @Environment(\.scenePhase) private var scenePhase
   @State private var filter = "all"
-  @State private var items: [Activity] = []
-  @State private var cursor: String?
-  @State private var error: String?
-  @State private var loading = false
+  @State private var model = ActivityModel()
+  private var items: [Activity] { model.items }
+  private var cursor: String? { model.cursor }
+  private var error: String? { model.error }
+  private var loading: Bool { model.loading }
   var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0) {
@@ -159,7 +161,7 @@ struct ActivityView: View {
         LoadMore(hasMore: cursor != nil) { await load(more: true) }
       }
     }.indexPage().refreshable { await load() }
-      .task(id: "\(filter)-\(app.revision)-\(scenePhase)") {
+      .task(id: "\(filter)-\(scenePhase)") {
         guard scenePhase == .active else { return }
         await load()
         while !Task.isCancelled {
@@ -169,45 +171,19 @@ struct ActivityView: View {
       }
   }
   private func resolve(_ activity: Activity, accept: Bool) async throws {
-    if accept {
-      let _: FollowState? = try await app.api?.request(
-        "/me/follow-requests/\(activity.actor.id)/accept", method: "POST", body: [:])
-    } else {
-      let _: Success? = try await app.api?.request(
-        "/me/follow-requests/\(activity.actor.id)", method: "DELETE")
-    }
+    guard let api = app.api else { return }
+    let generation = app.session.generation
+    try await model.resolve(activity, accept: accept, api: api)
+    guard !Task.isCancelled, generation == app.session.generation else { return }
     app.changed()
+    await load()
   }
   private func load(more: Bool = false) async {
-    loading = items.isEmpty
-    error = nil
-    var query = ["limit": "30"]
-    if filter != "all" { query["type"] = filter }
-    if more { query["cursor"] = cursor }
-    if !more, items.isEmpty,
-      let cached: ActivityPage = await app.api?.cached("/me/activity", query: query)
-    {
-      items = cached.items
-      cursor = cached.nextCursor
-      loading = false
-    }
+    guard let api = app.api else { return }
     do {
-      if let page: ActivityPage = try await app.api?.request("/me/activity", query: query) {
-        items = more ? items + page.items : page.items
-        cursor = page.nextCursor
-        app.unreadActivity = page.unreadCount
-        let ids = page.items.filter { $0.readAt == nil }.map(\.id)
-        if !ids.isEmpty && scenePhase == .active {
-          let _: Success? = try await app.api?.request(
-            "/me/activity/read", method: "POST", body: ["ids": .strings(ids)])
-          await app.pollUnread()
-        }
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+      try await model.load(api: api, filter: filter, more: more)
+      await app.pollUnread()
+    } catch { app.handleSessionError(error) }
   }
 }
 func activityText(_ activity: Activity) -> String {

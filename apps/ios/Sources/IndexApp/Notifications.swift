@@ -1,5 +1,6 @@
 import Foundation
 import IndexCore
+import IndexFeatures
 import SwiftUI
 import UserNotifications
 #if os(iOS)
@@ -143,7 +144,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   func setActive(app: AppModel, foreground: Bool) async {
     self.foreground = foreground
     var conversation: String?
-    if foreground, let last = app.path.last, case .conversation(let id) = last { conversation = id }
+    if foreground, let last = app.navigation.path.last, case .conversation(let id) = last { conversation = id }
     activeConversationID = conversation
     guard binding?.accountID == app.userID, let api = app.api, registered else { return }
     var body = deviceBody(); body["conversationId"] = conversation.map(JSONValue.string) ?? .null
@@ -175,7 +176,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     // Transfer to the existing pending URL gate. Restricted same-ID sessions retain this
     // destination until verifiedSessionRevision resumes authorized resolution.
     app.open(url)
-    app.pendingRouteAccountID = click.recipientId
+    app.navigation.pendingRouteAccountID = click.recipientId
     pendingClick = nil
   }
 }
