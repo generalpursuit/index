@@ -55,22 +55,36 @@ int index_menu_init(const unsigned char *image, size_t imageLength) {
   statusItem.button.target = menuTarget; statusItem.button.action = @selector(toggle:);
   return 1;
 }
-void index_menu_present(void *pointer) {
+void index_menu_present(void *pointer, double width, double height) {
   NSWindow *window = (__bridge NSWindow *)pointer;
   NSStatusBarButton *button = statusItem.button;
   NSScreen *screen = button.window.screen ?: NSScreen.mainScreen;
   NSRect usable = screen.visibleFrame;
   NSRect anchor = [button.window convertRectToScreen:[button convertRect:button.bounds toView:nil]];
   NSRect frame = window.frame;
-  frame.size.height = MIN(560, NSHeight(usable) - 12);
-  frame.size.width = MIN(420, NSWidth(usable) - 12);
+  frame.size.height = MIN(height, NSHeight(usable) - 12);
+  frame.size.width = MIN(width, NSWidth(usable) - 12);
   frame.origin.x = MAX(NSMinX(usable) + 6, MIN(NSMidX(anchor) - frame.size.width / 2, NSMaxX(usable) - frame.size.width - 6));
   frame.origin.y = MAX(NSMinY(usable) + 6, MIN(NSMinY(anchor) - frame.size.height - 6, NSMaxY(usable) - frame.size.height - 6));
   [window setFrame:frame display:YES];
+  // A transparent window's shadow follows its drawn shape, which changes with its size.
+  [window invalidateShadow];
   window.level = NSPopUpMenuWindowLevel;
   window.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace | NSWindowCollectionBehaviorFullScreenAuxiliary;
   [NSApp activateIgnoringOtherApps:YES];
   [window makeKeyAndOrderFront:nil];
+}
+// Content-fit height while open: the top edge stays under the status item.
+void index_menu_resize(void *pointer, double height) {
+  NSWindow *window = (__bridge NSWindow *)pointer;
+  NSRect usable = (window.screen ?: NSScreen.mainScreen).visibleFrame;
+  NSRect frame = window.frame;
+  CGFloat top = NSMaxY(frame);
+  frame.size.height = MIN(height, NSHeight(usable) - 12);
+  frame.origin.y = MAX(NSMinY(usable) + 6, top - frame.size.height);
+  if (NSEqualRects(frame, window.frame)) return;
+  [window setFrame:frame display:YES];
+  [window invalidateShadow];
 }
 // No preference mirror and no registration during launch/status. The OS is authoritative.
 int index_login_status(void) {

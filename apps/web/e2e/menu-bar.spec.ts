@@ -23,7 +23,7 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await desktop.attach(page, "main");
   await login(page);
   const panel = await context.newPage();
-  await panel.setViewportSize({ width: 420, height: 560 });
+  await panel.setViewportSize({ width: 390, height: 560 });
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
@@ -31,10 +31,19 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
     panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
   ).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open .*in browser/ })).toHaveCount(5);
+  // The native panel hugs this week's content, and grows to its maximum for dialog sheets.
+  const panelHeight = (command: string) =>
+    desktop.commands.findLast((c) => c.label === "menu-bar" && c.command === command)?.args
+      ?.height as number | undefined;
+  await expect.poll(() => panelHeight("desktop_panel_resize")).toBeGreaterThan(300);
+  const fitted = panelHeight("desktop_panel_resize")!;
+  expect(fitted).toBeLessThan(560);
+  expect(panelHeight("desktop_panel_ready")).toBeLessThan(560);
   await panel.getByRole("button", { name: "Open Are.na in browser", exact: true }).click();
   await expect.poll(() => desktop.opened).toContain("https://are.na/");
   await expect(panel).toHaveURL(/\/menu-bar$/);
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
+  await expect.poll(() => panelHeight("desktop_panel_resize")).toBeGreaterThan(fitted);
   await panel.getByRole("button", { name: "Create group", exact: true }).click();
   await panel.getByRole("textbox", { name: "Name", exact: true }).fill("Menu reading");
   await panel.getByRole("button", { name: "Create", exact: true }).click();
@@ -130,7 +139,7 @@ test("menu session clears drafts and links across sign-out and account switching
   await expect(panel.getByRole("textbox", { name: "Add a link to this week" })).toBeVisible();
 });
 
-test("menu shell reports real login-item states and forwards hide/Open/Quit without notification ownership", async ({
+test("menu shell forwards hide/Open/Quit without notification ownership; Settings owns login items", async ({
   page,
   context,
   request,
@@ -138,44 +147,49 @@ test("menu shell reports real login-item states and forwards hide/Open/Quit with
   await request.post(apiURL + "/_test/reset");
   const desktop = new DesktopHarness();
   await desktop.attach(page, "main");
-  await page.goto("/login");
+  await login(page);
   const panel = await context.newPage();
-  await panel.setViewportSize({ width: 420, height: 560 });
+  await panel.setViewportSize({ width: 390, height: 560 });
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
-  const checkbox = panel.getByRole("checkbox", { name: "Launch at login" });
+  await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
+  await expect(panel.getByRole("checkbox", { name: "Launch at login" })).toHaveCount(0);
+  await panel.getByRole("button", { name: "Open Index", exact: true }).click();
+  await expect.poll(() => desktop.commands.some((c) => c.command === "desktop_open")).toBe(true);
+  await panel.keyboard.press("Escape");
+  await expect.poll(() => desktop.hidden).toContain("menu-bar");
+  await panel.getByRole("button", { name: "Quit", exact: true }).click();
+  await expect.poll(() => desktop.quits).toBe(1);
+  expect(
+    desktop.commands.filter((c) => c.label === "menu-bar" && c.command.startsWith("notification_")),
+  ).toHaveLength(0);
+  expect(desktop.commands.some((c) => c.command.startsWith("launch_at_login"))).toBe(false);
+
+  await page.goto("/settings");
+  const box = page.getByRole("region", { name: "Launch at login" });
+  const checkbox = box.getByRole("checkbox", { name: "Launch at login" });
   await expect(checkbox).not.toBeChecked();
   expect(desktop.commands.some((c) => c.command === "launch_at_login_set")).toBe(false);
   await checkbox.click();
   await expect(
-    panel.getByText("Approval needed in System Settings.", { exact: false }),
+    box.getByText("Approval needed in System Settings.", { exact: false }),
   ).toBeVisible();
   await expect(checkbox).not.toBeChecked();
-  await panel.getByRole("button", { name: "Open Login Items" }).click();
+  await box.getByRole("button", { name: "Open Login Items" }).click();
   desktop.loginState = "enabled";
-  await panel.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await expect(checkbox).toBeChecked();
   desktop.loginError = true;
   await checkbox.click();
-  await expect(panel.getByRole("alert")).toContainText("Could not update Launch at login");
+  await expect(box.getByRole("alert")).toContainText("Could not update Launch at login");
   await expect(checkbox).toBeChecked();
   desktop.loginError = false;
   await checkbox.click();
   await expect(checkbox).not.toBeChecked();
-  await panel.getByRole("button", { name: "Open Index", exact: true }).click();
-  await expect.poll(() => desktop.commands.some((c) => c.command === "desktop_open")).toBe(true);
-  await panel.getByRole("button", { name: "Close menu bar" }).click();
-  expect(desktop.hidden).toContain("menu-bar");
-  await panel.getByRole("button", { name: "Quit", exact: true }).click();
-  expect(desktop.quits).toBe(1);
-  expect(
-    desktop.commands.filter((c) => c.label === "menu-bar" && c.command.startsWith("notification_")),
-  ).toHaveLength(0);
   desktop.loginState = "unsupported";
   desktop.loginSupported = false;
-  await panel.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await expect(checkbox).toBeDisabled();
-  await expect(panel.getByText("Requires an installed macOS 13 or later app.")).toBeVisible();
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(box).toHaveCount(0);
 });
 
 test("lost peer events cannot submit an old menu draft using a new account", async ({
@@ -365,7 +379,9 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await add(panel, "https://pages.test/calm-software");
   await expect(input).toHaveValue("https://pages.test/calm-software");
   await expect(panel.getByRole("alert")).toBeVisible();
-  await panel.getByRole("button", { name: "Close menu bar" }).click();
+  await input.blur();
+  await panel.keyboard.press("Escape");
+  await expect.poll(() => desktop.hidden).toContain("menu-bar");
   await desktop.emit("index:desktop-open", null, "menu-bar");
   await expect(input).toHaveValue("https://pages.test/calm-software");
   await input.press("Enter");

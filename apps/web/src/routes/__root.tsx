@@ -58,8 +58,8 @@ function Root() {
       <Toaster
         theme={resolved}
         richColors
-        offset={isMenuBar ? 104 : undefined}
-        mobileOffset={isMenuBar ? { bottom: 104, left: 16, right: 16 } : undefined}
+        offset={isMenuBar ? 56 : undefined}
+        mobileOffset={isMenuBar ? { bottom: 56, left: 12, right: 12 } : undefined}
       />
     </>
   );

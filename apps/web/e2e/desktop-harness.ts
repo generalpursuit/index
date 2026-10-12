@@ -147,6 +147,10 @@ export class DesktopHarness {
           check();
           return;
         }
+        if (command === "desktop_panel_resize") {
+          if (label !== "menu-bar") throw new Error("Only the menu panel can be resized");
+          return;
+        }
         if (command === "desktop_hide") {
           this.hidden.push(label);
           return;

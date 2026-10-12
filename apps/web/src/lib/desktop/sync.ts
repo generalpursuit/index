@@ -9,6 +9,15 @@ import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./
 type RevisionEvent = { revision: number; source: string | null };
 type PendingNavigation = { id: number; path: string; recipientId: string | null };
 
+let menuPanelHeight: (() => number) | undefined;
+/** The menu page measures its content so the native panel opens at the matching height. */
+export function measureMenuPanel(measure: () => number) {
+  menuPanelHeight = measure;
+  return () => {
+    if (menuPanelHeight === measure) menuPanelHeight = undefined;
+  };
+}
+
 export async function presentMenuPanel(safeError = false) {
   if (!isMenuBar) return;
   // Bind visibility to the session response that actually produced the rendered UI.
@@ -17,7 +26,7 @@ export async function presentMenuPanel(safeError = false) {
     ? await desktopInvoke<number>("session_revision")
     : acceptedDesktopRevision();
   if (expectedRevision !== undefined && expectedRevision >= 0)
-    await desktopInvoke("desktop_panel_ready", { expectedRevision });
+    await desktopInvoke("desktop_panel_ready", { expectedRevision, height: menuPanelHeight?.() });
 }
 
 export async function openIndex(path?: string, recipientId?: string) {

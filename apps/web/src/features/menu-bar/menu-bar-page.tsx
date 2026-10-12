@@ -1,27 +1,29 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, RefreshCw, X } from "lucide-react";
+import { ArrowUpRight, Power, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
-import { QuickAdd } from "@/features/links/quick-add";
+import { IconButton } from "@index/ui/components/icon-button";
+import { categoryMarkClassName, QuickAdd } from "@/features/links/quick-add";
 import { weekLinksOptions } from "@/features/links/queries";
 import { domain } from "@/features/links/url";
 import { More } from "@/components/app/query-state";
 import { useAPI } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { desktopInvoke, isMenuBar } from "@/lib/desktop";
-import { openIndex, presentMenuPanel } from "@/lib/desktop/sync";
+import { measureMenuPanel, openIndex, presentMenuPanel } from "@/lib/desktop/sync";
 import { sessionOptions } from "@/lib/session";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { client } from "@/utils/orpc";
 import type { SavedLink } from "@/lib/types";
 
-type LoginStatus = {
-  supported: boolean;
-  state: "off" | "enabled" | "requires-approval" | "not-found" | "unsupported";
-};
 const report = (action: Promise<unknown>) =>
   void action.catch(() => toast.error("Could not complete that. Try again."));
+
+// The quick-add field as a tinted well on the panel's glass, with desktop text sizes; pending
+// rows match the saved rows below.
+const quickAddClassName =
+  "[&_.quick-add]:min-h-9.5 [&_.quick-add]:rounded-[10px] [&_.quick-add]:bg-foreground/[0.055] [&_.quick-add]:pr-1 [&_.quick-add_input]:h-9.5 [&_.quick-add_input]:text-[14px] [&_.quick-add>button]:rounded-full [&_.quick-add>button]:py-1.5 [&_.quick-add>button:hover]:bg-foreground/[0.06] [&_.link-row]:min-h-8.5 [&_.link-row]:pr-2 [&_.link-row_.link-open]:text-[13px]";
 
 export function MenuBarPage() {
   if (!isMenuBar)
@@ -32,6 +34,10 @@ function MenuPanel() {
   const session = useQuery(sessionOptions);
   const user = session.data?.user;
   const [checking, setChecking] = useState(false);
+  const panel = useRef<HTMLElement>(null),
+    scroller = useRef<HTMLDivElement>(null),
+    content = useRef<HTMLDivElement>(null);
+  useFittedPanel(panel, scroller, content);
   useEffect(() => {
     const begin = () => setChecking(true),
       end = () => setChecking(false);
@@ -60,63 +66,104 @@ function MenuPanel() {
   }, []);
   return (
     <main
-      className="flex h-dvh min-h-0 flex-col bg-background text-foreground text-sm"
+      ref={panel}
+      className="flex h-dvh min-h-0 flex-col gap-2 rounded-[16px] p-2.5 text-[13px] text-foreground shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.14)] dark:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.14)]"
       aria-label="Index menu bar"
     >
-      <header className="flex shrink-0 items-center justify-between border-b border-border px-4 py-3">
-        <span className="font-semibold tracking-tight">Index</span>
-        <button
-          className="rounded-md p-1.5 text-subtle-foreground hover:bg-muted"
-          aria-label="Close menu bar"
-          onClick={() => report(desktopInvoke("desktop_hide"))}
-        >
-          <X size={16} />
-        </button>
-      </header>
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-        {checking || session.isPending ? (
-          <p role="status">Checking your session…</p>
-        ) : session.isError ? (
-          <div className="flex flex-col items-start gap-3">
-            <p role="alert">Could not check your session.</p>
-            <Button variant="outline" onClick={() => void session.refetch()}>
-              Retry session
-            </Button>
-          </div>
-        ) : !user?.emailVerified ? (
-          <div className="flex flex-col items-start gap-3 py-8">
-            <h1 className="text-xl font-semibold">
-              {user ? "Verify your email" : "Your week, close at hand"}
-            </h1>
-            <p className="text-subtle-foreground">
-              {user
-                ? "Finish verification in Index to see and save links."
-                : "Sign in to Index to see and save your links here."}
+      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        <div ref={content}>
+          {checking || session.isPending ? (
+            <p role="status" className="py-8 text-center text-subtle-foreground">
+              Checking your session…
             </p>
-            <Button onClick={() => report(openIndex("/login"))}>
-              {user ? "Verify in Index" : "Sign in to Index"}
-            </Button>
-          </div>
-        ) : null}
-        {user?.emailVerified && (
-          <div hidden={checking || session.isPending || session.isError}>
-            <OwnWeek key={user.id + ":" + accountGeneration()} userId={user.id} />
-          </div>
-        )}
-      </div>
-      <footer className="shrink-0 space-y-2 border-t border-border px-4 py-3">
-        <LaunchAtLogin />
-        <div className="flex items-center justify-between gap-2">
-          <Button variant="ghost" size="sm" onClick={() => report(openIndex())}>
-            Open Index <ArrowUpRight size={14} />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => report(desktopInvoke("desktop_quit"))}>
-            Quit
-          </Button>
+          ) : session.isError ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p role="alert">Could not check your session.</p>
+              <Button variant="outline" onClick={() => void session.refetch()}>
+                Retry session
+              </Button>
+            </div>
+          ) : !user?.emailVerified ? (
+            <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
+              <h1 className="font-serif text-[21px] leading-[1.15] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
+                {user ? "Verify your email" : "Your week, close at hand"}
+              </h1>
+              <p className="max-w-60 text-subtle-foreground">
+                {user
+                  ? "Finish verification in Index to see and save links."
+                  : "Sign in to Index to see and save your links here."}
+              </p>
+              <Button className="mt-2 px-4" onClick={() => report(openIndex("/login"))}>
+                {user ? "Verify in Index" : "Sign in to Index"}
+              </Button>
+            </div>
+          ) : null}
+          {user?.emailVerified && (
+            <div hidden={checking || session.isPending || session.isError}>
+              <OwnWeek key={user.id + ":" + accountGeneration()} userId={user.id} />
+            </div>
+          )}
         </div>
+      </div>
+      <footer className="flex shrink-0 items-center gap-2 border-t border-foreground/10 pt-2">
+        <Button className="h-8 flex-1 text-[13px]" onClick={() => report(openIndex())}>
+          Open Index <ArrowUpRight data-icon="inline-end" className="size-3.5" />
+        </Button>
+        <Button
+          variant="ghost"
+          className="h-8 bg-foreground/[0.06] px-3 text-[13px] hover:bg-foreground/10 dark:hover:bg-foreground/10"
+          onClick={() => report(desktopInvoke("desktop_quit"))}
+        >
+          <Power data-icon="inline-start" className="size-3.5 text-subtle-foreground" />
+          Quit
+        </Button>
       </footer>
     </main>
   );
+}
+/**
+ * The native panel follows the content's natural height (the window clamps it), and opens fully
+ * while a dialog sheet is shown. The page is transparent so the window's glass shows through.
+ */
+function useFittedPanel(
+  panel: RefObject<HTMLElement | null>,
+  scroller: RefObject<HTMLElement | null>,
+  content: RefObject<HTMLElement | null>,
+) {
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    root.classList.add("menu-bar-surface");
+    const measure = () => {
+      if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
+      const chrome = panel.current!.offsetHeight - scroller.current!.clientHeight;
+      return Math.ceil(chrome + content.current!.getBoundingClientRect().height);
+    };
+    const stop = measureMenuPanel(measure);
+    let frame = 0,
+      reported = 0;
+    const update = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const height = measure();
+        if (height === reported) return;
+        reported = height;
+        void desktopInvoke("desktop_panel_resize", { height }).catch(() => {});
+      });
+    };
+    const sizes = new ResizeObserver(update);
+    for (const element of [panel.current!, scroller.current!, content.current!])
+      sizes.observe(element);
+    // Dialogs are portaled outside the panel.
+    const dialogs = new MutationObserver(update);
+    dialogs.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      stop();
+      cancelAnimationFrame(frame);
+      sizes.disconnect();
+      dialogs.disconnect();
+      root.classList.remove("menu-bar-surface");
+    };
+  }, [panel, scroller, content]);
 }
 function OwnWeek({ userId }: { userId: string }) {
   const api = useAPI();
@@ -141,33 +188,41 @@ function OwnWeek({ userId }: { userId: string }) {
     await desktopInvoke("open_website", { url: current.url });
   }
   return (
-    <section aria-label="This week's links">
-      <div className="mb-3 flex items-start justify-between">
+    <section aria-label="This week's links" className="flex flex-col gap-2">
+      <div className="flex items-start justify-between pt-1.5 pr-0.5 pb-1 pl-2">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">{weekLabel(week)}</h1>
-          <p className="mt-1 text-xs text-subtle-foreground">{weekRange(week)} · Your links</p>
+          <h1 className="font-serif text-[23px] leading-[1.05] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
+            {weekLabel(week)}
+          </h1>
+          <p className="mt-1.5 font-mono text-[10.5px] leading-none tracking-[0.06em] text-subtle-foreground uppercase">
+            {weekRange(week)} · Your links
+          </p>
         </div>
-        <button
-          aria-label="Refresh links"
-          className="rounded-md p-2 text-subtle-foreground hover:bg-muted disabled:opacity-50"
+        <IconButton
+          label="Refresh links"
+          className="text-subtle-foreground hover:bg-foreground/[0.06] dark:hover:bg-foreground/[0.06]"
           disabled={query.isFetching}
           onClick={() => void query.refetch()}
         >
-          <RefreshCw size={14} />
-        </button>
+          <RefreshCw
+            className={query.isFetching ? "size-3.5 motion-safe:animate-spin" : "size-3.5"}
+          />
+        </IconButton>
       </div>
-      <QuickAdd
-        links={links}
-        label="Add a link to this week"
-        onViewExisting={(link) => openIndex("/l/" + link.shortId, userId)}
-      />
+      <div className={quickAddClassName}>
+        <QuickAdd
+          links={links}
+          label="Add a link to this week"
+          onViewExisting={(link) => openIndex("/l/" + link.shortId, userId)}
+        />
+      </div>
       {query.isPending && (
-        <p role="status" className="py-4 text-subtle-foreground">
+        <p role="status" className="px-2 py-3 text-subtle-foreground">
           Loading your links…
         </p>
       )}
       {query.isError && (
-        <div role="alert" className="py-3 text-destructive">
+        <div role="alert" className="px-2 py-3 text-destructive">
           Could not load your links.{" "}
           <button className="underline" onClick={() => void query.refetch()}>
             Retry links
@@ -175,127 +230,39 @@ function OwnWeek({ userId }: { userId: string }) {
         </div>
       )}
       {query.isSuccess && !links.length && (
-        <p className="py-8 text-center text-subtle-foreground">
+        <p className="py-6 text-center text-subtle-foreground">
           Save your first link for this week.
         </p>
       )}
-      <ul className="mt-2 divide-y divide-border">
-        {links.map((link) => (
-          <li key={link.id}>
-            <button
-              className="flex w-full items-center gap-3 rounded-lg py-3 text-left hover:bg-muted focus-visible:outline-ring"
-              onClick={() => report(openSaved(link))}
-              aria-label={`Open ${link.title} in browser`}
-            >
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{link.title}</span>
-                <span className="block truncate text-xs text-subtle-foreground">
-                  {domain(link.url)}
+      {links.length > 0 && (
+        <ul>
+          {links.map((link) => (
+            <li key={link.id}>
+              <button
+                className="grid h-8.5 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
+                onClick={() => report(openSaved(link))}
+                aria-label={`Open ${link.title} in browser`}
+              >
+                <i
+                  className={categoryMarkClassName}
+                  data-category={link.category}
+                  aria-hidden="true"
+                />
+                <span className="truncate">{link.title}</span>
+                <span className="inline-flex max-w-30 min-w-0 items-center gap-1 text-[11.5px] text-subtle-foreground">
+                  <span className="truncate">{domain(link.url)}</span>
+                  <ArrowUpRight className="size-3 shrink-0" />
                 </span>
-              </span>
-              <ArrowUpRight className="shrink-0 text-subtle-foreground" size={15} />
-            </button>
-          </li>
-        ))}
-      </ul>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       <More
         hasNext={query.hasNextPage}
         isFetching={query.isFetchingNextPage}
         fetch={query.fetchNextPage}
       />
     </section>
-  );
-}
-function LaunchAtLogin() {
-  const [status, setStatus] = useState<LoginStatus | null>(null),
-    [pending, setPending] = useState(false),
-    [error, setError] = useState("");
-  useEffect(() => {
-    let active = true;
-    const read = () =>
-      void desktopInvoke<LoginStatus>("launch_at_login_status")
-        .then((value) => {
-          if (active) {
-            setStatus(value);
-            setError("");
-          }
-        })
-        .catch(() => {
-          if (active) setError("Could not read Launch at login.");
-        });
-    read();
-    window.addEventListener("focus", read);
-    return () => {
-      active = false;
-      window.removeEventListener("focus", read);
-    };
-  }, []);
-  const enabled = status?.state === "enabled";
-  return (
-    <div className="text-xs">
-      <label className="flex items-center gap-2 py-1">
-        <input
-          type="checkbox"
-          className="accent-primary"
-          checked={enabled}
-          disabled={!status?.supported || status.state === "not-found" || pending}
-          onChange={async (event) => {
-            const next = event.target.checked;
-            setPending(true);
-            setError("");
-            try {
-              setStatus(await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: next }));
-            } catch {
-              setError("Could not update Launch at login. Check System Settings.");
-            } finally {
-              setPending(false);
-            }
-          }}
-        />
-        Launch at login
-      </label>
-      {status?.state === "requires-approval" && (
-        <div className="text-subtle-foreground">
-          Approval needed in System Settings.{" "}
-          <button
-            className="underline"
-            onClick={() => report(desktopInvoke("launch_at_login_settings"))}
-          >
-            Open Login Items
-          </button>
-          <button
-            className="ml-2 underline"
-            disabled={pending}
-            onClick={async () => {
-              setPending(true);
-              try {
-                setStatus(
-                  await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: false }),
-                );
-              } catch {
-                setError("Could not cancel Launch at login.");
-              } finally {
-                setPending(false);
-              }
-            }}
-          >
-            Cancel request
-          </button>
-        </div>
-      )}
-      {status?.state === "not-found" && (
-        <p className="text-subtle-foreground">
-          Install Index in Applications to use Launch at login.
-        </p>
-      )}
-      {status?.state === "unsupported" && (
-        <p className="text-subtle-foreground">Requires an installed macOS 13 or later app.</p>
-      )}
-      {error && (
-        <p role="alert" className="text-destructive">
-          {error}
-        </p>
-      )}
-    </div>
   );
 }
