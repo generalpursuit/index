@@ -37,7 +37,7 @@
     "check:ios": "sh apps/ios/Scripts/check-local.sh",
     "test": "turbo run test",
     "dev:web": "turbo run dev:bare -F web --",
-    "dev:server": "turbo run dev:bare -F hono --",
+    "dev:server": "turbo run dev -F @index/infra --",
     "db:push": "turbo run db:push -F @index/db --",
     "db:studio": "turbo run db:studio -F @index/db --",
     "db:generate": "turbo run db:generate -F @index/db --",

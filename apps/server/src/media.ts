@@ -15,3 +15,17 @@ export function r2MediaStore(bucket: R2Bucket, base: string): MediaStore {
     delete: (key) => bucket.delete(key),
   };
 }
+
+/** Serve the same immutable metadata stored with each uniquely addressed upload. */
+export async function readPhoto(
+  bucket: Pick<R2Bucket, "get">,
+  key: string,
+): Promise<Response | null> {
+  const object = await bucket.get(key);
+  if (!object) return null;
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("etag", object.httpEtag);
+  headers.set("cache-control", mediaCacheControl);
+  return new Response(object.body, { headers });
+}

@@ -16,28 +16,12 @@ import { starsRouter } from "../features/stars/router";
 import { commentsRouter } from "../features/comments/router";
 import { feedRouter } from "../features/feed/router";
 import { discoveryRouter } from "../features/discovery/router";
-import { requireAuth } from "../procedures";
 
 const api = implement(appContract).$context<Context>().use(requireVerifiedSession);
 
 export const appRouter = api.router({
   healthCheck: api.healthCheck.handler(() => {
     return "OK";
-  }),
-  privateData: api.privateData.use(requireAuth).handler(({ context }) => {
-    const { user } = context.session;
-    return {
-      message: "This is private",
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        emailVerified: user.emailVerified,
-        image: user.image ?? null,
-        createdAt: user.createdAt.toISOString(),
-        updatedAt: user.updatedAt.toISOString(),
-      },
-    };
   }),
   notifications: notificationsRouter,
   routes: routesRouter,

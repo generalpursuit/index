@@ -44,9 +44,14 @@ Your profile is public or private. A private profile shows your links only to fo
 
 Index is a Bun and Turborepo monorepo: a React web app, a Hono server on Cloudflare Workers, and a SwiftUI iOS app. Start with the [docs](docs/).
 
-From the repository root, use `bun dev` for web development or `bun desktop:dev`
-to start the web/API stack together with the desktop app. Stop one before starting
-the other. App Quit or Ctrl-C stops the desktop development session and its servers.
+From the repository root, `bun dev` starts the Alchemy web/API development stack.
+`bun dev:server` explicitly selects that same infrastructure task, including its web
+companion; the server needs the Worker bindings that Alchemy supplies. Use
+`bun desktop:dev` to start the stack together with the desktop app. Stop one before
+starting another. App Quit or Ctrl-C stops the desktop development session and its servers.
+
+`bun run --cwd apps/server build` produces the Worker bundle. Deployment and local
+Worker execution use the infrastructure stack; there is no standalone Bun executable.
 
 Run `bun run check-types` for the JavaScript workspaces. On a Mac with full Xcode and an available iPhone simulator, `bun run check:ios` compiles device and simulator builds with the Share extension, then runs Swift unit tests.
 
