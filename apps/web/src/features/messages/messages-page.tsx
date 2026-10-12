@@ -1,7 +1,8 @@
 import { ChatAvatars, conversationName } from "./conversation-presentation";
+import { ProfileLink } from "@/components/app/profile-link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { ArrowUp, SquarePen, X, Link2, LockKeyhole, Search } from "lucide-react";
@@ -10,12 +11,13 @@ import { IconButton } from "@index/ui/components/icon-button";
 import { Confirmation } from "@index/ui/components/confirmation";
 import { QueryState, More } from "@/components/app/query-state";
 import { useConversations, useConversation, useMessageActions } from "./hooks/use-messages";
-import { RecipientPicker } from "./recipient-picker";
+import { RecipientPicker, prefetchRecipients } from "./recipient-picker";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useMessageDraft } from "./drafts";
 import type { MessageDraft } from "./draft";
 import { domain } from "@/features/links/url";
+import { preparePost } from "@/features/links/queries";
 import { timeAgo } from "@/lib/weeks";
 import type { Message, SavedLink } from "@/lib/types";
 
@@ -27,7 +29,9 @@ export function MessagesPage() {
   const [query, setQuery] = useState(""),
     [picker, setPicker] = useState(false),
     list = useConversations(useDebounced(query)),
-    viewer = useViewer()!;
+    viewer = useViewer()!,
+    cache = useQueryClient(),
+    api = useAPI();
   return (
     <div
       className={
@@ -41,6 +45,8 @@ export function MessagesPage() {
               "icon-link [@media(width>=701px)]:[&.profile-settings]:hidden relative flex items-center justify-center w-11 h-11 text-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7]"
             }
             label="New message"
+            onPointerEnter={() => prefetchRecipients(cache, api, viewer.id)}
+            onFocus={() => prefetchRecipients(cache, api, viewer.id)}
             onClick={() => setPicker(true)}
           >
             <SquarePen />
@@ -79,6 +85,7 @@ export function MessagesPage() {
                 }
                 to="/messages/$conversationId"
                 params={{ conversationId: chat.shortId }}
+                state={{ conversationId: chat.id }}
                 key={chat.id}
               >
                 <ChatAvatars chat={chat} viewerId={viewer.id} />
@@ -213,22 +220,16 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
           >
             <Back fallback="/messages" />
             {recipient ? (
-              <Link
-                to="/u/$username"
-                params={{ username: recipient.username! }}
-                aria-label={"View " + recipient.name + "’s profile"}
-              >
+              <ProfileLink person={recipient} aria-label={"View " + recipient.name + "’s profile"}>
                 <ChatAvatars chat={detail.data} viewerId={viewer.id} />
-              </Link>
+              </ProfileLink>
             ) : (
               <ChatAvatars chat={detail.data} viewerId={viewer.id} />
             )}
             <div className={personLabelClassName}>
               <strong>
                 {recipient ? (
-                  <Link to="/u/$username" params={{ username: recipient.username! }}>
-                    {recipient.name}
-                  </Link>
+                  <ProfileLink person={recipient}>{recipient.name}</ProfileLink>
                 ) : (
                   conversationName(detail.data, viewer.id)
                 )}
@@ -239,9 +240,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                   .map((p, i) => (
                     <span key={p.id}>
                       {i > 0 ? ", " : ""}
-                      <Link to="/u/$username" params={{ username: p.username! }}>
-                        @{p.username ?? p.name}
-                      </Link>
+                      <ProfileLink person={p}>@{p.username ?? p.name}</ProfileLink>
                     </span>
                   ))}
               </small>
@@ -404,20 +403,26 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
   );
 }
 function SharedPost({ message }: { message: Message }) {
-  const navigate = useNavigate();
-  if (message.attachment)
+  const navigate = useNavigate(),
+    cache = useQueryClient(),
+    api = useAPI();
+  if (message.attachment) {
+    const prepare = () => preparePost(cache, api, message.attachment!);
     return (
       <Button
         variant="ghost"
+        onPointerEnter={prepare}
+        onFocus={prepare}
         className={
           "shared-post [&[data-slot='button']]:flex [&[data-slot='button']]:items-center [&[data-slot='button']]:gap-3 [&[data-slot='button']]:p-[18px_16px] [&[data-slot='button']]:w-full [&[data-slot='button']]:h-auto [&[data-slot='button']]:bg-surface [&[data-slot='button']]:rounded-none! [&[data-slot='button']]:whitespace-normal [&[data-slot='button']]:text-left flex items-center gap-3 p-[18px_16px] w-full h-auto bg-surface rounded-none! whitespace-normal text-left [&>svg]:flex-none [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[11px] [&_small]:opacity-[0.7] [&_small]:wrap-anywhere [&.restricted>span>span]:text-[12px] [&.restricted>span>span]:underline [&.restricted>span>span]:underline-offset-[3px] [&.restricted>span>span]:mt-1.5"
         }
-        onClick={() =>
+        onClick={() => {
+          prepare();
           void navigate({
             to: ".",
             search: (old) => ({ ...old, post: message.attachment!.shortId }),
-          })
-        }
+          });
+        }}
       >
         <Link2 />
         <span>
@@ -426,14 +431,14 @@ function SharedPost({ message }: { message: Message }) {
         </span>
       </Button>
     );
+  }
   if (message.restrictedAuthor)
     return (
-      <Link
+      <ProfileLink
         className={
           "shared-post [&[data-slot='button']]:flex [&[data-slot='button']]:items-center [&[data-slot='button']]:gap-3 [&[data-slot='button']]:p-[18px_16px] [&[data-slot='button']]:w-full [&[data-slot='button']]:h-auto [&[data-slot='button']]:bg-surface [&[data-slot='button']]:rounded-none! [&[data-slot='button']]:whitespace-normal [&[data-slot='button']]:text-left flex items-center gap-3 p-[18px_16px] w-full h-auto bg-surface rounded-none! whitespace-normal text-left [&>svg]:flex-none [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[11px] [&_small]:opacity-[0.7] [&_small]:wrap-anywhere [&.restricted>span>span]:text-[12px] [&.restricted>span>span]:underline [&.restricted>span>span]:underline-offset-[3px] [&.restricted>span>span]:mt-1.5 restricted"
         }
-        to="/u/$username"
-        params={{ username: message.restrictedAuthor.username! }}
+        person={message.restrictedAuthor}
       >
         <LockKeyhole />
         <span>
@@ -443,7 +448,7 @@ function SharedPost({ message }: { message: Message }) {
           <small>Only approved followers can view this post.</small>
           <span>View profile</span>
         </span>
-      </Link>
+      </ProfileLink>
     );
   return message.hasAttachment ? (
     <div

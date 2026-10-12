@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import {
   Link,
   Outlet,
+  useMatches,
   useNavigate,
   useRouter,
   useRouterState,
@@ -12,12 +13,14 @@ import { Modal } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
 import brandSymbol from "@/assets/brand-symbol.svg";
 import { LinkReference } from "@/features/routes/link-reference";
+import { ProfileLink } from "@/components/app/profile-link";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
 import { useBack, useEdgeBack } from "@/hooks/use-back";
 import { MessageDraftProvider } from "@/features/messages/drafts";
 import { LinkDraftProvider } from "@/features/links/drafts";
 import { queryClient } from "@/utils/orpc";
+import { useWarmUp } from "@/hooks/use-warm-up";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const navItemClassName =
@@ -35,8 +38,11 @@ export function AppShell() {
     prior = useRef(viewer?.id);
   const back = useBack(),
     swipe = useEdgeBack(back);
-  const feed = path === "/",
-    chat = path.startsWith("/messages/");
+  // The page on screen, not the one loading: the location changes before the next page is ready.
+  const layout = useMatches({ select: (matches) => matches.at(-1)?.staticData.layout });
+  const feed = layout === "feed",
+    chat = layout === "chat";
+  useWarmUp(viewer);
   useEffect(() => {
     if (prior.current !== viewer?.id) {
       const old = prior.current;
@@ -112,14 +118,9 @@ export function AppShell() {
               {unread.messages > 0 && <i className={unreadDotClassName} />}
             </Link>
             {viewer ? (
-              <Link
-                to="/u/$username"
-                params={{ username: viewer.username! }}
-                className={navItemClassName}
-                aria-label="Your profile"
-              >
+              <ProfileLink person={viewer} className={navItemClassName} aria-label="Your profile">
                 <User />
-              </Link>
+              </ProfileLink>
             ) : (
               <Link to="/login" className={navItemClassName} aria-label="Sign in">
                 <User />
@@ -167,8 +168,9 @@ export function AppShell() {
           <Modal
             open={!!search.post}
             title="Post"
+            size="lg"
             className={
-              "post-dialog w-162.5 max-w-[calc(100vw_-_32px)] h-[min(820px,_calc(100dvh_-_40px))] flex flex-col pb-5 overflow-hidden [&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)] [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1"
+              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] flex flex-col pb-5 overflow-hidden [&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)] [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1"
             }
             onOpenChange={(v) => {
               if (!v)
@@ -189,7 +191,8 @@ export function AppShell() {
           <Modal
             open={!!search.edit}
             title="Edit link"
-            className={"editor-dialog w-150 max-w-[calc(100vw_-_32px)]"}
+            size="md"
+            className="editor-dialog"
             onOpenChange={(v) => {
               if (!v) closeEditor();
             }}

@@ -6,19 +6,24 @@ export function QueryState({
   hasData = false,
   error,
   retry,
+  placeholder,
   children,
 }: {
   pending?: boolean;
   hasData?: boolean;
   error?: Error | null;
   retry?: () => void;
+  /** Holds the loaded content's space, where its size is known in advance. */
+  placeholder?: ReactNode;
   children?: ReactNode;
 }) {
+  if (pending && !hasData && placeholder) return placeholder;
+  // Hidden for the first 300ms, so a quick load goes straight to its content.
   if (pending && !hasData)
     return (
       <div
         className={
-          "loading-state grid gap-4 p-[24px_0] w-full [&>div]:h-12 [&>div]:bg-surface [&>div]:rounded-[12px] [&>div]:[animation:loading-pulse_1.5s_ease-in-out_infinite]"
+          "loading-state grid gap-4 p-[24px_0] w-full [animation:loading-reveal_1ms_300ms_backwards] [&>div]:h-12 [&>div]:bg-surface [&>div]:rounded-[12px] [&>div]:[animation:loading-pulse_1.5s_ease-in-out_infinite]"
         }
         role="status"
         aria-label="Loading"

@@ -1,5 +1,5 @@
 import { Fragment } from "react";
-import { Link } from "@tanstack/react-router";
+import { ProfileLink } from "@/components/app/profile-link";
 import type { Profile } from "@/lib/types";
 
 /**
@@ -21,9 +21,7 @@ export function FollowedBy({
         <Fragment key={person.id}>
           {i > 0 && " and "}
           {linked ? (
-            <Link to="/u/$username" params={{ username: person.username! }}>
-              {person.username ?? person.name}
-            </Link>
+            <ProfileLink person={person}>{person.username ?? person.name}</ProfileLink>
           ) : (
             (person.username ?? person.name)
           )}

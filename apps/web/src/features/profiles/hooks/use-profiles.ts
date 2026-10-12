@@ -3,9 +3,9 @@ import { accountMutationOptions } from "@/lib/account-boundary";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { sessionOptions } from "@/lib/session";
+import { connectionsOptions, profileOptions } from "../queries";
 export function useProfile(userId: string, enabled = true) {
-  const api = useAPI();
-  return useQuery(api.profiles.get.queryOptions({ input: { userId }, enabled }));
+  return useQuery({ ...profileOptions(useAPI(), userId), enabled });
 }
 export function useProfileActions() {
   const router = useRouter();
@@ -22,6 +22,7 @@ export function useProfileActions() {
         api.links.key(),
         api.messages.key(),
         api.activity.key(),
+        api.routes.key(),
       ].map((queryKey) => cache.invalidateQueries({ queryKey })),
     );
   };
@@ -70,12 +71,5 @@ export function useProfileActions() {
   };
 }
 export function useConnections(userId: string, kind: "followers" | "following", query?: string) {
-  const api = useAPI();
-  return useInfiniteQuery(
-    api.follows[kind].infiniteOptions({
-      input: (after: string | undefined) => ({ userId, query, after, limit: 30 }),
-      initialPageParam: undefined,
-      getNextPageParam: (p) => p.nextAfter ?? undefined,
-    }),
-  );
+  return useInfiniteQuery(connectionsOptions(useAPI(), userId, kind, query));
 }

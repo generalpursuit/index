@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { ProfileLink } from "@/components/app/profile-link";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Heading } from "@/components/app/navigation";
@@ -30,14 +31,13 @@ function FriendCard({
         "friend-card [flex:0_0_calc((100%_-_16px)_/_2)] min-w-0 h-full flex flex-col gap-1 p-[var(--person-top)_14px_6px] [scroll-snap-align:start] [transition:opacity_150ms_ease] [&[data-peeking]]:opacity-[0.3] [&[data-peeking]]:cursor-pointer [&[data-peeking]_*]:cursor-pointer [&[data-peeking]:hover]:opacity-[0.55] [&>.person-inline]:flex-none [&>.person-inline]:h-[var(--person-heading-height)] [&_.user-avatar]:w-8 [&_.user-avatar]:h-8"
       }
     >
-      <Link
+      <ProfileLink
         className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
-        to="/u/$username"
-        params={{ username: person.username! }}
+        person={person}
       >
         <UserAvatar person={person} />
         <strong>{person.username ?? person.name}</strong>
-      </Link>
+      </ProfileLink>
       <div className={"friend-links flex-1 min-h-0 flex flex-col"}>
         <WeekLinks userId={person.id} week={week} seed={seed} updatedAt={updatedAt} />
       </div>
@@ -161,7 +161,8 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         <h2 id={"yours-" + week} className="sr-only">
           Yours
         </h2>
-        {ownEmpty && !current ? (
+        {/* A neighboring week waits for its feed, which carries these links. */}
+        {feed.isPending ? null : ownEmpty && !current ? (
           <p
             className={
               "week-empty p-[4px_0_12px] text-subtle-foreground leading-[1.6] [&_a]:text-foreground [&_a]:whitespace-nowrap [&_a:hover]:underline [&_a:hover]:underline-offset-[4px]"

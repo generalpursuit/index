@@ -7,6 +7,7 @@ React, TanStack Router/Query and Tauri share one frontend. Run `bun dev` from th
 - [Routes](src/routes) own URL state, guards and loaders. [Features](src/features) own queries, mutations, drafts and product behavior; loaders and hooks share query options.
 - [App components](src/components/app) own navigation, account-model avatars, week controls and query presentation. Forbidden/not-found results hide content; transient refresh failures can retain usable data.
 - [Shared UI](../../packages/ui/src) owns accessible primitives, responsive Modal/Confirmation, control styling, tokens and fonts. It has no app routes, API models, account state or native bridge dependencies. Features own layout and product-specific controls.
+- Loaders load everything a page shows on its first screen, in parallel, so the current page stays (under a progress bar) until the next is complete. Links pass identifiers they already know in navigation state, so a loader fetches data while `resolveLocation` still checks the path. Data behind a modal is prefetched on hover/focus of what opens it, and the shell takes its layout from the rendered route's `staticData`, never from the pending location.
 - Groups own complete-list/selection reconciliation; links own weekly link presentation; messages own conversation presentation and immutable send attempts. [Retry rules](../../docs/api.md#messages-and-retries) and [account isolation](../../docs/authentication.md#account-isolation) apply across navigation and awaited callbacks.
 
 ## Appearance and mobile focus

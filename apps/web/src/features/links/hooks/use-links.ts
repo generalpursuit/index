@@ -42,6 +42,7 @@ export function useLibraryActions() {
         api.stars.key(),
         api.profiles.key(),
         api.messages.key(),
+        api.routes.key(),
       ].map((queryKey) => cache.invalidateQueries({ queryKey })),
     );
   };

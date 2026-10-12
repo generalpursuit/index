@@ -8,7 +8,9 @@ import { ChevronRight } from "lucide-react";
 import { Modal } from "@index/ui/components/modal";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
+import { connectionsOptions } from "@/features/profiles/queries";
+import { conversationsOptions } from "./queries";
 import { useViewer, useAPI } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useConnections } from "@/features/profiles/hooks/use-profiles";
@@ -21,6 +23,15 @@ const personLabelClassName =
 const recipientRowClassName =
   "recipient-row [&>.person-label]:flex-1 [@media(hover:_hover)_and_(pointer:_fine)]:[&:hover_.recipient-select]:opacity-[1] [@media(hover:_hover)_and_(pointer:_fine)]:[&:focus-within_.recipient-select]:opacity-[1]";
 
+/** What the picker shows first, for whatever opens it. */
+export function prefetchRecipients(
+  cache: QueryClient,
+  api: ReturnType<typeof useAPI>,
+  viewerId: string,
+) {
+  void cache.prefetchInfiniteQuery(connectionsOptions(api, viewerId, "following"));
+  void cache.prefetchInfiniteQuery(conversationsOptions(api));
+}
 export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: () => void }) {
   const viewer = useViewer()!,
     navigate = useNavigate(),
@@ -38,12 +49,13 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
     { start } = useMessageActions();
   const recipients = people.data?.pages.flatMap((page) => page.items) ?? [];
   const singleRecipient = recipients.length === 1 && !people.hasNextPage && !selected.length;
-  const open = (id: string) => {
+  const open = (chat: { id: string; shortId: string }) => {
     onClose();
     void navigate({
       to: "/messages/$conversationId",
-      params: { conversationId: id },
+      params: { conversationId: chat.shortId },
       search: { attach: link?.shortId },
+      state: { conversationId: chat.id },
     });
   };
   return (
@@ -53,8 +65,9 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
         if (!v) onClose();
       }}
       title={link ? "Send link" : "New message"}
+      position="top"
     >
-      {author.data?.profileVisibility === "private" && (
+      {link && author.data?.profileVisibility === "private" && (
         <p className={"muted text-subtle-foreground"}>
           Only approved followers can view this post. Other recipients will see a link to the
           author’s profile.
@@ -94,12 +107,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                   className={recipientRowClassName}
                   key={person.id}
                   disabled={start.isPending}
-                  onClick={() =>
-                    start.mutate(
-                      { recipientIds: [person.id] },
-                      { onSuccess: (chat) => open(chat.shortId) },
-                    )
-                  }
+                  onClick={() => start.mutate({ recipientIds: [person.id] }, { onSuccess: open })}
                 >
                   {identity}
                 </Button>
@@ -150,7 +158,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
                 "person-row flex items-center justify-between gap-4 p-[13px_0] [&>.person-inline]:flex-1 [&_.person-label]:max-w-full [&>button]:shrink-0 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.person-label_small]:max-w-45"
               }
               key={chat.id}
-              onClick={() => open(chat.shortId)}
+              onClick={() => open(chat)}
             >
               <ChatAvatars chat={chat} viewerId={viewer.id} />
               <span className={personLabelClassName}>{conversationName(chat, viewer.id)}</span>
@@ -174,9 +182,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
         {!singleRecipient && (
           <Button
             disabled={!selected.length || start.isPending || selected.length > 19}
-            onClick={() =>
-              start.mutate({ recipientIds: selected }, { onSuccess: (chat) => open(chat.shortId) })
-            }
+            onClick={() => start.mutate({ recipientIds: selected }, { onSuccess: open })}
           >
             {start.isPending
               ? "Opening…"

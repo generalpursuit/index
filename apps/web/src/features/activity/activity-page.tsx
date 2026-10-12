@@ -1,5 +1,6 @@
 import { useEffect } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { ProfileLink } from "@/components/app/profile-link";
+import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { ChevronRight } from "lucide-react";
 import { Heading } from "@/components/app/navigation";
@@ -9,11 +10,23 @@ import { IconButton } from "@index/ui/components/icon-button";
 import { useActivity } from "./hooks/use-activity";
 import { useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { timeAgo } from "@/lib/weeks";
+import { useQueryClient } from "@tanstack/react-query";
+import { useAPI } from "@/hooks/use-api";
+import { activityOptions } from "./queries";
+import { preparePostReference } from "@/features/links/queries";
 type Filter = "all" | "comment" | "request" | "mention" | "follow";
 export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
   const navigate = useNavigate(),
     { list, read } = useActivity(filter === "all" ? undefined : filter),
-    actions = useProfileActions();
+    actions = useProfileActions(),
+    cache = useQueryClient(),
+    api = useAPI();
+  const prefetchFilter = (value: Filter) =>
+    void cache.prefetchInfiniteQuery(activityOptions(api, value === "all" ? undefined : value));
+  const preparePostFor = (item: { linkId: string | null; linkShortId: string | null }) => {
+    if (item.linkId && item.linkShortId)
+      preparePostReference(cache, api, { id: item.linkId, shortId: item.linkShortId });
+  };
   const items = list.data?.pages.flatMap((p) => p.items) ?? [];
   const unread = items
     .filter((i) => !i.readAt)
@@ -58,6 +71,8 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
             key={value}
             aria-pressed={filter === value}
             variant={filter === value ? "default" : "secondary"}
+            onPointerEnter={() => prefetchFilter(value)}
+            onFocus={() => prefetchFilter(value)}
             onClick={() =>
               void navigate({ to: "/activity", search: { filter: value }, replace: true })
             }
@@ -80,18 +95,16 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
               }
               key={a.id}
             >
-              <Link to="/u/$username" params={{ username: a.actor.username! }}>
+              <ProfileLink person={a.actor}>
                 <UserAvatar person={a.actor} />
-              </Link>
+              </ProfileLink>
               <div
                 className={
                   "activity-body flex-1 min-w-0 text-[13px] [&_header]:flex [&_header]:items-center [&_header]:gap-2 [&_header]:text-[13px] [&_small]:text-[11px] [&_p]:mt-0.5 [&_p]:text-foreground [&_p]:wrap-anywhere [@media(width<=700px)]:text-[12px] [@media(width<=700px)]:[&_header]:text-[12px] [@media(width<=700px)]:[&_header]:gap-1.5"
                 }
               >
                 <header>
-                  <Link to="/u/$username" params={{ username: a.actor.username! }}>
-                    {a.actor.username ?? a.actor.name}
-                  </Link>
+                  <ProfileLink person={a.actor}>{a.actor.username ?? a.actor.name}</ProfileLink>
                   <small>{timeAgo(a.createdAt)}</small>
                 </header>
                 <p>
@@ -135,12 +148,15 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
               ) : a.linkId ? (
                 <IconButton
                   label="Open post"
-                  onClick={() =>
+                  onPointerEnter={() => preparePostFor(a)}
+                  onFocus={() => preparePostFor(a)}
+                  onClick={() => {
+                    preparePostFor(a);
                     void navigate({
                       to: ".",
                       search: (old) => ({ ...old, post: a.linkShortId ?? undefined }),
-                    })
-                  }
+                    });
+                  }}
                 >
                   <ChevronRight />
                 </IconButton>

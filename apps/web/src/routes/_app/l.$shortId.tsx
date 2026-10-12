@@ -5,11 +5,13 @@ import { apiFor } from "@/utils/orpc";
 import { resolveLocation } from "@/lib/routes";
 export const Route = createFileRoute("/_app/l/$shortId")({
   loader: async ({ context, location }) => {
-    const result = await resolveLocation(location);
+    const result = await resolveLocation(context, location);
     if (result.kind !== "link") throw new Error("Destination not found.");
     const api = apiFor(context.session?.user.id ?? null);
-    await context.queryClient.ensureQueryData(linkOptions(api, result.linkId));
-    void context.queryClient.prefetchInfiniteQuery(commentsOptions(api, result.linkId));
+    await Promise.all([
+      context.queryClient.ensureQueryData(linkOptions(api, result.linkId)),
+      context.queryClient.ensureInfiniteQueryData(commentsOptions(api, result.linkId)),
+    ]);
     return result;
   },
   component: () => <LinkDetail id={Route.useLoaderData().linkId} standalone />,

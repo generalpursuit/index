@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
+import { ProfileLink } from "@/components/app/profile-link";
 import { Input } from "@index/ui/components/input";
 import { LockKeyhole, Search } from "lucide-react";
 import { Heading } from "@/components/app/navigation";
@@ -60,9 +61,8 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
                 }
                 key={p.id}
               >
-                <Link
-                  to="/u/$username"
-                  params={{ username: p.username! }}
+                <ProfileLink
+                  person={p}
                   className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
                 >
                   <UserAvatar person={p} />
@@ -84,7 +84,7 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
                       )}
                     </small>
                   </span>
-                </Link>
+                </ProfileLink>
                 <FollowButton person={p} followingStatus={p.followingStatus} />
               </div>
             ))}
