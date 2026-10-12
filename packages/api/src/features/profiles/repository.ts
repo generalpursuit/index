@@ -1,9 +1,9 @@
-import { follows } from "@index/db/schema/app";
+import { follows, links } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
 import { and, eq, inArray, lte, sql, type SQL } from "drizzle-orm";
 import { okAsync, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
-import { profileContentVisible } from "../../data-access/visibility";
+import { linkVisible, profileContentVisible } from "../../data-access/visibility";
 import { databaseError, type ApplicationError } from "../../errors";
 import type { FollowedBy, UpdateProfileInput } from "./schemas";
 
@@ -28,7 +28,9 @@ export function findProfile(db: QueryDatabase, viewerId: string | null, filter: 
         >`case when "user".id = ${viewerId} then (select count(*)::int from follows f where f.follower_id = "user".id and f.status = 'accepted') else null end`,
         linkCount: sql<
           number | null
-        >`case when "user".id = ${viewerId} then (select count(*)::int from links l where l.owner_id = "user".id) when "user".profile_visibility = 'public' then (select count(*)::int from links l join groups g on g.id=l.group_id where l.owner_id="user".id and g.visibility='public' and g.kind='custom') else null end`,
+        >`case when "user".id = ${viewerId} or "user".profile_visibility = 'public'
+          then (select count(*)::int from ${links} where ${links.ownerId} = "user".id and ${linkVisible(viewerId)})
+          else null end`,
         // Keep the outer reference qualified inside the correlated subquery. Drizzle
         // otherwise unqualifies selected columns, which can bind to the inner user.
         canViewContent: profileContentVisible(viewerId, sql`"user"."id"`),
@@ -44,25 +46,31 @@ export function findProfile(db: QueryDatabase, viewerId: string | null, filter: 
   );
 }
 
-export const findImage = (db: QueryDatabase, actorId: string) =>
-  ResultAsync.fromPromise(
-    db
-      .select({ image: user.image })
-      .from(user)
-      .where(eq(user.id, actorId))
-      .then((rows) => rows[0]?.image ?? null),
-    databaseError,
-  );
-
 export function updateProfile(
   db: QueryDatabase,
   actorId: string,
   // Uploads set an address of the store's own; everyone else may only remove it.
   input: Omit<UpdateProfileInput, "image"> & { image?: string | null },
 ) {
-  const updated = db
-    .$with("updated_profile")
-    .as(db.update(user).set(input).where(eq(user.id, actorId)).returning({ id: user.id }));
+  // Lock before reading the previous image. Concurrent replacements/removals must
+  // clean the object they actually replaced, not an earlier service-layer snapshot.
+  const previous = db
+    .$with("previous_profile")
+    .as(
+      db
+        .select({ id: user.id, image: user.image })
+        .from(user)
+        .where(eq(user.id, actorId))
+        .for("update"),
+    );
+  const updated = db.$with("updated_profile").as(
+    db
+      .update(user)
+      .set(input)
+      .where(sql`${user.id} = (select id from ${previous})`)
+      .returning({ id: user.id }),
+  );
+  const selection = { id: updated.id, previousImage: previous.image };
   if (input.profileVisibility === "public") {
     // Profile publication and pending-request acceptance are one atomic statement.
     const accepted = db.$with("accepted_requests").as(
@@ -84,11 +92,24 @@ export function updateProfile(
     const notices = db.$with("acceptance_notices", {}).as(sql`
       insert into activities(recipient_id,actor_id,type) select follower_id,${actorId},'accepted' from accepted_requests returning id`);
     return ResultAsync.fromPromise(
-      db.with(updated, accepted, resolved, notices).select().from(updated),
+      db
+        .with(previous, updated, accepted, resolved, notices)
+        .select(selection)
+        .from(updated)
+        .innerJoin(previous, eq(previous.id, updated.id))
+        .then((rows) => rows[0]),
       profileWriteError,
     );
   }
-  return ResultAsync.fromPromise(db.with(updated).select().from(updated), profileWriteError);
+  return ResultAsync.fromPromise(
+    db
+      .with(previous, updated)
+      .select(selection)
+      .from(updated)
+      .innerJoin(previous, eq(previous.id, updated.id))
+      .then((rows) => rows[0]),
+    profileWriteError,
+  );
 }
 
 function profileWriteError(cause: unknown): ApplicationError {
