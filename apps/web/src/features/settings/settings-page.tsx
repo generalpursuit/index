@@ -30,6 +30,7 @@ import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
 import { AppIconSettings } from "./app-icon";
+import { LaunchAtLoginSettings } from "./launch-at-login";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const settingsPhotoClassName =
@@ -120,6 +121,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
         <ThemeControl />
       </section>
       <AppIconSettings />
+      <LaunchAtLoginSettings />
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />
       <NotificationSettings />

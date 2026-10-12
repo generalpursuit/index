@@ -7,6 +7,14 @@ static MENU_REQUESTED: std::sync::atomic::AtomicBool = std::sync::atomic::Atomic
 static APP: OnceLock<AppHandle> = OnceLock::new();
 static NAVIGATION: Mutex<Option<PendingNavigation>> = Mutex::new(None);
 static NEXT_NAVIGATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+// The panel is a fixed-width glass sheet whose height follows its content (see desktop_panel_resize).
+const PANEL_WIDTH: f64 = 390.0;
+const PANEL_MIN_HEIGHT: f64 = 160.0;
+const PANEL_MAX_HEIGHT: f64 = 560.0;
+static PANEL_HEIGHT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(PANEL_MAX_HEIGHT.to_bits());
+fn panel_height(requested: f64) -> f64 {
+    if requested.is_finite() { requested.clamp(PANEL_MIN_HEIGHT, PANEL_MAX_HEIGHT) } else { PANEL_MAX_HEIGHT }
+}
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PendingNavigation { id: u64, path: String, recipient_id: Option<String> }
@@ -25,7 +33,8 @@ mod os {
     use std::ffi::c_void;
     unsafe extern "C" {
         pub fn index_menu_init(image: *const u8, length: usize) -> i32;
-        pub fn index_menu_present(window: *mut c_void);
+        pub fn index_menu_present(window: *mut c_void, width: f64, height: f64);
+        pub fn index_menu_resize(window: *mut c_void, height: f64);
         pub fn index_login_status() -> i32;
         pub fn index_login_set(enabled: bool) -> i32;
         pub fn index_login_settings();
@@ -83,8 +92,13 @@ fn toggle(app: &AppHandle) -> tauri::Result<()> {
         window
     } else {
         let builder = WebviewWindowBuilder::new(app, "menu-bar", WebviewUrl::App("menu-bar".into()))
-            .title("Index menu bar").inner_size(420.0, 560.0).resizable(false)
+            .title("Index menu bar").inner_size(PANEL_WIDTH, PANEL_MAX_HEIGHT).resizable(false)
             .decorations(false).shadow(true).skip_taskbar(true).always_on_top(true)
+            // The WebView draws no background; the native popover material and its rounded
+            // corners show through, following the window appearance set by set_appearance.
+            .transparent(true)
+            .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Popover)
+                .state(tauri::window::EffectState::Active).radius(16.0).build())
             .visible(false).focused(false)
             .initialization_script("window.__INDEX_MENU_BAR__ = true;");
         let window = crate::restrict_navigation(builder, app).build()?;
@@ -160,19 +174,38 @@ pub fn hide_on_session_change(app: &AppHandle) {
         let _ = window.run_on_main_thread(move || { let _ = handle.hide(); });
     }
 }
-/// Called after the UI has checked its session and committed safe content.
+/// Called after the UI has checked its session and committed safe content, with that content's height.
 #[tauri::command]
-pub async fn desktop_panel_ready(window: WebviewWindow, expected_revision: u64) -> Result<(), String> {
+pub async fn desktop_panel_ready(window: WebviewWindow, expected_revision: u64, height: Option<f64>) -> Result<(), String> {
     if window.label() != "menu-bar" { return Err("Only the menu panel can be presented.".into()); }
     crate::session::check_revision(expected_revision)?;
+    if let Some(height) = height { PANEL_HEIGHT.store(panel_height(height).to_bits(), std::sync::atomic::Ordering::SeqCst); }
     #[cfg(target_os = "macos")]
     {
         let handle = window.clone();
         window.run_on_main_thread(move || {
             if MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) && crate::session::visible_revision() == expected_revision {
-                if let Ok(pointer) = handle.ns_window() { unsafe { os::index_menu_present(pointer); } }
+                let height = f64::from_bits(PANEL_HEIGHT.load(std::sync::atomic::Ordering::SeqCst));
+                if let Ok(pointer) = handle.ns_window() { unsafe { os::index_menu_present(pointer, PANEL_WIDTH, height); } }
             }
         }).map_err(|_| "Could not show the menu panel.".to_string())?;
+    }
+    Ok(())
+}
+/// Geometry only: keeps the top edge under the status item while content grows or shrinks.
+#[tauri::command]
+pub fn desktop_panel_resize(window: WebviewWindow, height: f64) -> Result<(), String> {
+    if window.label() != "menu-bar" { return Err("Only the menu panel can be resized.".into()); }
+    let height = panel_height(height);
+    PANEL_HEIGHT.store(height.to_bits(), std::sync::atomic::Ordering::SeqCst);
+    #[cfg(target_os = "macos")]
+    {
+        let handle = window.clone();
+        window.run_on_main_thread(move || {
+            if handle.is_visible().unwrap_or(false) {
+                if let Ok(pointer) = handle.ns_window() { unsafe { os::index_menu_resize(pointer, height); } }
+            }
+        }).map_err(|_| "Could not resize the menu panel.".to_string())?;
     }
     Ok(())
 }
@@ -217,6 +250,14 @@ mod tests {
         assert!(valid_navigation("/login", None));
         for path in ["https://example.com", "//example.com", "/l/../settings", "/l/a?token=x", "/l/a%2Fb", "/menu-bar"] { assert!(!valid_navigation(path, Some("recipient"))); }
         assert!(!valid_navigation("/l/abc", None));
+    }
+    #[test]
+    fn panel_height_stays_within_the_menu_panel_bounds() {
+        assert_eq!(PANEL_HEIGHT.load(std::sync::atomic::Ordering::SeqCst), PANEL_MAX_HEIGHT.to_bits());
+        assert_eq!(panel_height(320.0), 320.0);
+        assert_eq!(panel_height(12.0), PANEL_MIN_HEIGHT);
+        assert_eq!(panel_height(4000.0), PANEL_MAX_HEIGHT);
+        assert_eq!(panel_height(f64::NAN), PANEL_MAX_HEIGHT);
     }
     #[test]
     fn login_items_reflect_approval_and_support_without_assuming_enabled() {

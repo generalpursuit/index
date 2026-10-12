@@ -32,11 +32,14 @@ pub fn set_appearance(
         .map_err(|_| "Could not update window appearance.".to_string())?;
     // Set the native window layer. macOS does not implement WebView background color;
     // the pre-paint bootstrap and semantic body background cover the WebView itself.
-    window
-        .as_ref()
-        .window()
-        .set_background_color(Some(color))
-        .map_err(|_| "Could not update window background.".to_string())?;
+    // The menu panel stays transparent: its glass material follows the theme set above.
+    if window.label() != "menu-bar" {
+        window
+            .as_ref()
+            .window()
+            .set_background_color(Some(color))
+            .map_err(|_| "Could not update window background.".to_string())?;
+    }
     crate::session::share_appearance(&preference);
     Ok(())
 }
