@@ -17,7 +17,9 @@ Tauri skips its Finder-scripted DMG layout on CI, so [dmg.ts](../apps/web/script
 
 macOS distribution requires valid Developer ID signing, notarization and host/Share-extension profiles authorizing the channel's shared Keychain group. Every platform requires that channel's existing Tauri updater signing key. The release workflow owns those build inputs and validation; retain the updater key across releases.
 
-Public unauthenticated GitHub downloads are required for in-app updates. Private repository members can download installers manually; no repository credential is embedded in an app. Updates are checked on launch and periodically, and installation requires the user's explicit install/restart action.
+Public unauthenticated GitHub downloads are required for in-app updates. Private repository members can download installers manually; no repository credential is embedded in an app.
+
+[Updates](../apps/web/src-tauri/src/updates.rs) are checked at launch and hourly, then downloaded, verified and installed without asking; the new version runs the next time the app opens. Windows cannot replace a running app, so it keeps the verified installer and runs it silently on quit. Settings can restart into a waiting update sooner.
 
 ## Publication and recovery
 

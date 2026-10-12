@@ -59,7 +59,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         updates::desktop_release_info,
         updates::desktop_check_update,
-        updates::desktop_install_update,
+        updates::desktop_restart_to_update,
         notifications::notification_status,
         notifications::notification_start,
         notifications::notification_stop,
@@ -95,7 +95,7 @@ pub fn run() {
     let builder = builder.invoke_handler(tauri::generate_handler![
         updates::desktop_release_info,
         updates::desktop_check_update,
-        updates::desktop_install_update,
+        updates::desktop_restart_to_update,
         notifications::notification_status,
         notifications::notification_start,
         notifications::notification_stop,
@@ -131,6 +131,7 @@ pub fn run() {
             }
             session::init(app.handle().clone());
             if !menu_bar::init(app.handle())? { app.handle().exit(0); return Ok(()); }
+            updates::init(app.handle());
             app_icon::restore();
             notifications::init();
             if cfg!(debug_assertions) {
@@ -150,7 +151,10 @@ pub fn run() {
             tauri::RunEvent::Reopen { .. } => { let _ = menu_bar::show_main(app); }
             // Closing a macOS window is intercepted by its lifecycle handler; Quit
             // (including Command-Q) exits normally and retains device opt-in.
-            tauri::RunEvent::Exit => notifications::shutdown(),
+            tauri::RunEvent::Exit => {
+                notifications::shutdown();
+                updates::exit(app);
+            }
             _ => { let _ = app; }
         });
 }

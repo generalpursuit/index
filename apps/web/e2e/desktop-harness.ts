@@ -23,11 +23,13 @@ export class DesktopHarness {
   appIconSupported = true;
   appIconError = false;
   releaseChannel = "development";
+  releaseVersion = "0.2.0";
   updatesEnabled = false;
+  /** The channel's newest release; a check prepares it as `readyVersion`. */
   updateVersion: string | null = null;
+  readyVersion: string | null = null;
   updateError = false;
-  installError = false;
-  installWait: Promise<void> | undefined;
+  restartError = false;
   quits = 0;
   hidden: string[] = [];
   pending: { id: number; path: string; recipientId: string | null } | null = null;
@@ -97,19 +99,21 @@ export class DesktopHarness {
         if (command === "desktop_release_info")
           return {
             channel: this.releaseChannel,
-            version: "0.1.42",
+            version: this.releaseVersion,
             updatesEnabled: this.updatesEnabled,
+            readyVersion: this.readyVersion,
           };
         if (command === "desktop_check_update") {
           if (this.updateError)
             throw new Error("Could not check for updates. Please try again later.");
-          return this.updateVersion ? { version: this.updateVersion } : null;
+          this.readyVersion = this.updateVersion ?? this.readyVersion;
+          return this.readyVersion;
         }
-        if (command === "desktop_install_update") {
-          await this.installWait;
-          if (this.installError || args.version !== this.updateVersion)
-            throw new Error("The update could not be verified or installed. Please try again.");
-          return;
+        if (command === "desktop_restart_to_update") {
+          if (this.restartError)
+            throw new Error("The required update isn’t available yet. Please try again later.");
+          // A successful restart replaces the app and never answers.
+          return new Promise(() => {});
         }
         if (command === "app_icon_status")
           return { supported: this.appIconSupported, icon: this.appIcon };

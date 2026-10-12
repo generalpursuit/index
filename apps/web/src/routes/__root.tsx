@@ -2,7 +2,6 @@ import { useTheme } from "@/lib/appearance/use-theme";
 import { NotificationLifecycle } from "@/features/notifications/lifecycle";
 import { isMenuBar } from "@/lib/desktop";
 import { DesktopTheme } from "@/lib/desktop/theme";
-import { DesktopUpdateNotifications } from "@/lib/desktop/updates";
 import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
@@ -52,7 +51,6 @@ function Root() {
     <>
       <HeadContent />
       <DesktopTheme />
-      <DesktopUpdateNotifications />
       {!isMenuBar && <NotificationLifecycle />}
       <Outlet />
       <Toaster

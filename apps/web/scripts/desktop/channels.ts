@@ -121,7 +121,8 @@ export function releaseConfig(
             endpoints: [
               `https://raw.githubusercontent.com/${repository}/desktop-updates/${channel}/latest.json`,
             ],
-            windows: { installMode: "passive" },
+            // Updates install in the background, so Windows runs its installer without UI.
+            windows: { installMode: "quiet" },
           },
         }
       : {},

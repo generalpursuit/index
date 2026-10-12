@@ -1,61 +1,33 @@
 import { useEffect, useState } from "react";
 import { Button } from "@index/ui/components/button";
-import { toast } from "sonner";
 import { desktopInvoke, isDesktop, isMenuBar } from ".";
 
-type ReleaseInfo = { channel: string; version: string; updatesEnabled: boolean };
-let info: Promise<ReleaseInfo> | undefined;
-function releaseInfo() {
-  return (info ??= desktopInvoke<ReleaseInfo>("desktop_release_info").catch((error) => {
-    info = undefined;
-    throw error;
-  }));
-}
+type ReleaseInfo = {
+  channel: string;
+  version: string;
+  updatesEnabled: boolean;
+  readyVersion: string | null;
+};
 
-export function DesktopUpdateNotifications() {
-  useEffect(() => {
-    if (!isDesktop || isMenuBar) return;
-    let active = true;
-    async function check() {
-      const value = await releaseInfo();
-      if (!value.updatesEnabled) return;
-      const next = await desktopInvoke<{ version: string } | null>("desktop_check_update");
-      if (active && next)
-        toast.info(`Index ${next.version} is available`, {
-          id: "desktop-update",
-          description: "Open Settings to install and restart.",
-        });
-    }
-    void check().catch(() => {});
-    const timer = setInterval(() => void check().catch(() => {}), 4 * 60 * 60 * 1000);
-    return () => {
-      active = false;
-      clearInterval(timer);
-    };
-  }, []);
-  return null;
-}
-
+/** Updates install silently in the background; Settings only offers to apply one sooner. */
 export function DesktopUpdates() {
   const [release, setRelease] = useState<ReleaseInfo>();
-  const [available, setAvailable] = useState<string>();
-  const [state, setState] = useState<"idle" | "checking" | "installing" | "current">("idle");
-  const [progress, setProgress] = useState<number>();
+  const [ready, setReady] = useState<string | null>(null);
+  const [state, setState] = useState<"idle" | "checking" | "restarting" | "current">("idle");
   const [error, setError] = useState<string>();
   useEffect(() => {
     if (!isDesktop || isMenuBar) return;
     let active = true;
-    void releaseInfo()
+    void desktopInvoke<ReleaseInfo>("desktop_release_info")
       .then((value) => {
-        if (active) setRelease(value);
+        if (!active) return;
+        setRelease(value);
+        setReady(value.readyVersion);
       })
       .catch(() => {});
-    const listener = window.__TAURI__?.event.listen<number>(
-      "index:update-progress",
-      ({ payload }) => {
-        if (active) setProgress(payload);
-      },
-    );
+    const listener = window.__TAURI__?.event.listen<string>("index:update-ready", ({ payload }) => {
+      if (active) setReady(payload);
+    });
     return () => {
       active = false;
       void listener?.then((stop) => stop()).catch(() => {});
@@ -66,25 +38,22 @@ export function DesktopUpdates() {
     setError(undefined);
     setState("checking");
     try {
-      const next = await desktopInvoke<{ version: string } | null>("desktop_check_update");
-      setAvailable(next?.version);
+      const next = await desktopInvoke<string | null>("desktop_check_update");
+      setReady(next);
       setState(next ? "idle" : "current");
     } catch (cause) {
       setError(String(cause));
       setState("idle");
     }
   }
-  async function install() {
-    setState("installing");
+  async function restart() {
     setError(undefined);
-    setProgress(undefined);
+    setState("restarting");
     try {
-      await desktopInvoke("desktop_install_update", { version: available });
+      await desktopInvoke("desktop_restart_to_update");
     } catch (cause) {
       setError(String(cause));
-      setAvailable(undefined);
       setState("idle");
-      toast.error("Update could not be installed");
     }
   }
   return (
@@ -98,17 +67,22 @@ export function DesktopUpdates() {
       <p className="mt-1 text-sm text-subtle-foreground">Version {release.version}</p>
       {release.updatesEnabled && (
         <div className="mt-3 flex flex-col items-start gap-2">
+          {ready && (
+            <p className="text-sm text-subtle-foreground" role="status">
+              Index {ready} is ready. It applies the next time Index opens.
+            </p>
+          )}
           <Button
             variant="outline"
-            disabled={state === "checking" || state === "installing"}
-            onClick={() => void (available ? install() : check())}
+            disabled={state === "checking" || state === "restarting"}
+            onClick={() => void (ready ? restart() : check())}
           >
             {state === "checking"
               ? "Checking…"
-              : state === "installing"
-                ? `Installing${progress === undefined ? "…" : ` ${progress}%…`}`
-                : available
-                  ? `Install ${available} and restart`
+              : state === "restarting"
+                ? "Restarting…"
+                : ready
+                  ? "Restart now"
                   : "Check for updates"}
           </Button>
           {state === "current" && (
