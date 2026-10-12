@@ -1,135 +1,262 @@
-// Keep the supplied artwork as the source of truth. Requires the installed Tauri CLI.
+// Generate only from the supplied artwork. Every selected output is staged before publishing.
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
+import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
+import { orderedIcns } from "./icns.mjs";
 
 const brand = dirname(fileURLToPath(import.meta.url));
 const root = resolve(brand, "../..");
-const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
-const cli = join(root, "apps/web/node_modules/.bin/tauri");
-const ios = join(root, "apps/ios/Resources/Assets.xcassets");
-const ui = join(root, "apps/ios/Sources/IndexUI/Resources");
-const desktop = join(root, "apps/web/src-tauri/icons");
-const web = join(root, "apps/web/public");
-const copy = (from, to) => {
-  mkdirSync(dirname(to), { recursive: true });
-  copyFileSync(from, to);
-};
-const render = (source, output, sizes = []) => {
-  const args = ["icon", source, "--output", output];
-  for (const size of sizes) args.push("--png", String(size));
-  const result = spawnSync(cli, args, { stdio: "inherit" });
+const cli = join(root, "apps/web/node_modules/@tauri-apps/cli/tauri.js");
+const ios = "apps/ios/Resources/Assets.xcassets";
+const ui = "apps/ios/Sources/IndexUI/Resources";
+const desktop = "apps/web/src-tauri/icons";
+const web = "apps/web/public";
+const { values } = parseArgs({
+  options: {
+    target: { type: "string", multiple: true },
+    check: { type: "boolean", default: false },
+    help: { type: "boolean", default: false },
+  },
+});
+if (values.help) {
+  console.log(
+    "Usage: bun assets/brand/sync.mjs [--target web|desktop|ios]... [--check]\nDefault: all targets. --check regenerates into temporary staging and never changes outputs.",
+  );
+  process.exit(0);
+}
+const targets = new Set(values.target ?? ["web", "desktop", "ios"]);
+for (const target of targets) {
+  if (!["web", "desktop", "ios"].includes(target))
+    throw new Error(`Unknown brand target: ${target}`);
+}
+const run = (command, args, options = {}) => {
+  const result = spawnSync(command, args, { stdio: "inherit", ...options });
   if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error("Could not render Index icons.");
+  if (result.status !== 0) throw new Error(`${command} failed (${result.status}).`);
+  return result;
 };
-const paper = (source, output) => {
-  // Swap only the two supplied palette colors; all original paths and spacing stay intact.
+
+// Check every prerequisite before any generation or output changes, including all-target runs.
+if (!existsSync(cli))
+  throw new Error("Install the repository's locked dependencies before generating brand assets.");
+run(process.execPath, [cli, "--version"], { stdio: "pipe" });
+if (targets.has("ios")) {
+  if (process.platform !== "darwin")
+    throw new Error(
+      "The ios target requires macOS and Xcode. Use --target web or --target desktop on this platform.",
+    );
+  run("xcrun", ["--find", "swift"], { stdio: "pipe" });
+  // Check the frameworks too, before rendering or modifying even a web output.
+  run("xcrun", ["swift", join(brand, "opaque-icon.swift")], { stdio: "pipe" });
+}
+if (targets.has("desktop")) {
+  run("python3", ["--version"], { stdio: "pipe" });
+  const converter = process.env.RSVG_CONVERT || "rsvg-convert";
+  let help;
+  try {
+    help = run(converter, ["--help"], { encoding: "utf8", stdio: "pipe" }).stdout;
+  } catch {
+    throw new Error(
+      "Desktop generation requires librsvg's rsvg-convert. Install librsvg or set RSVG_CONVERT to its executable.",
+    );
+  }
+  if (!help.includes("pdf1.4"))
+    throw new Error("Update librsvg: rsvg-convert must support --format pdf1.4.");
+}
+const required = new Set();
+if (targets.has("web") || targets.has("ios")) {
+  for (const source of [
+    "app-icon/app-store-1024.png",
+    "app-icon/app-icon-square.svg",
+    "wordmark/wordmark-white.svg",
+    "symbol/symbol-white.svg",
+  ])
+    required.add(source);
+}
+if (targets.has("web") || targets.has("desktop")) required.add("app-icon/app-icon-rounded.svg");
+if (targets.has("web")) required.add("app-icon/favicon.svg");
+if (targets.has("desktop")) required.add("symbol/symbol-black.svg");
+for (const source of required) readFileSync(join(brand, source));
+
+const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
+const outputs = new Map();
+const stage = (source, destination, size, opaque = false) =>
+  outputs.set(destination, { source, size, opaque });
+const render = (source, name, sizes = []) => {
+  const output = join(scratch, name);
+  const args = [cli, "icon", source, "--output", output];
+  for (const size of sizes) args.push("--png", String(size));
+  run(process.execPath, args);
+  return output;
+};
+const paper = (file) => {
+  const path = join(scratch, `paper-${file}`);
+  // Swap only the supplied palette. Geometry, placement and source files stay unchanged.
   writeFileSync(
-    output,
-    readFileSync(source, "utf8").replace(/#0B0B0C|#FFFFFF/g, (color) =>
+    path,
+    readFileSync(join(brand, "app-icon", file), "utf8").replace(/#0B0B0C|#FFFFFF/g, (color) =>
       color === "#0B0B0C" ? "#FFFFFF" : "#0B0B0C",
     ),
   );
+  return path;
 };
-const catalog = (name, source) => {
-  const folder = join(ios, name + ".appiconset");
-  copy(source, join(folder, "Icon.png"));
+const catalog = (folder, filename, image, size, appIcon = false) => {
+  stage(image, `${folder}/${filename}`, size, appIcon);
+  const metadata = join(scratch, `${outputs.size}-Contents.json`);
   writeFileSync(
-    join(folder, "Contents.json"),
+    metadata,
     JSON.stringify(
       {
-        images: [{ filename: "Icon.png", idiom: "universal", platform: "ios", size: "1024x1024" }],
+        images: [
+          {
+            filename,
+            idiom: "universal",
+            ...(appIcon ? { platform: "ios", size: "1024x1024" } : {}),
+          },
+        ],
         info: { author: "xcode", version: 1 },
       },
       null,
       2,
     ) + "\n",
   );
+  stage(metadata, `${folder}/Contents.json`);
 };
-const imageSet = (name, source) => {
-  const folder = join(ui, "Brand.xcassets", name + ".imageset");
-  copy(source, join(folder, "Image.png"));
-  writeFileSync(
-    join(folder, "Contents.json"),
-    JSON.stringify(
-      {
-        images: [{ filename: "Image.png", idiom: "universal" }],
-        info: { author: "xcode", version: 1 },
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  // These were previously loose PNGs; SwiftUI's named lookup requires catalog entries.
-  rmSync(join(ui, name + ".png"), { force: true });
-};
+function validate(path, { source, size, opaque }) {
+  const data = readFileSync(source);
+  if (size) {
+    if (
+      !data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
+      data.readUInt32BE(16) !== size ||
+      data.readUInt32BE(20) !== size ||
+      !data.subarray(-12).equals(Buffer.from("0000000049454e44ae426082", "hex")) ||
+      (opaque && data[25] !== 2)
+    )
+      throw new Error(`Invalid ${size}px${opaque ? " opaque RGB" : ""} PNG: ${path}`);
+  } else if (path.endsWith(".ico")) {
+    if (data.readUInt32LE(0) !== 0x00010000 || data.readUInt16LE(4) === 0)
+      throw new Error(`Invalid ICO: ${path}`);
+  } else if (path.endsWith(".icns")) {
+    if (data.toString("ascii", 0, 4) !== "icns" || data.readUInt32BE(4) !== data.length)
+      throw new Error(`Invalid ICNS: ${path}`);
+  } else if (!data.length) throw new Error(`Empty output: ${path}`);
+}
 
 try {
-  const squarePaper = join(scratch, "paper-square.svg");
-  const roundedPaper = join(scratch, "paper-rounded.svg");
-  paper(join(brand, "app-icon/app-icon-square.svg"), squarePaper);
-  paper(join(brand, "app-icon/app-icon-rounded.svg"), roundedPaper);
-  render(squarePaper, join(scratch, "paper-ios"), [1024, 256]);
-  render(join(brand, "app-icon/app-store-1024.png"), join(scratch, "ink-ios"), [256]);
-  render(join(brand, "app-icon/app-icon-rounded.svg"), join(scratch, "ink-desktop"));
-  render(roundedPaper, join(scratch, "paper-desktop"), [512]);
-
-  catalog("AppIcon", join(brand, "app-icon/app-store-1024.png"));
-  catalog("AppIconPaper", join(scratch, "paper-ios/1024x1024.png"));
-  const opaque = spawnSync(
-    "xcrun",
-    [
-      "swift",
-      join(brand, "opaque-icon.swift"),
-      join(ios, "AppIcon.appiconset/Icon.png"),
-      join(ios, "AppIconPaper.appiconset/Icon.png"),
-    ],
-    { stdio: "inherit" },
-  );
-  if (opaque.error) throw opaque.error;
-  if (opaque.status !== 0) throw new Error("Could not remove iOS app icon alpha channels.");
-  copy(
-    join(brand, "wordmark/wordmark-white.svg"),
-    join(ui, "Assets.xcassets/IndexWordmark.imageset/wordmark.svg"),
-  );
-  copy(
-    join(brand, "symbol/symbol-white.svg"),
-    join(ui, "Assets.xcassets/NavFeed.imageset/icon.svg"),
-  );
-  for (const style of ["ink", "paper"]) {
-    const preview = join(scratch, style + "-ios/256x256.png");
-    imageSet(style === "ink" ? "AppIconInk" : "AppIconPaper", preview);
-    copy(preview, join(web, "app-icons", style + ".png"));
+  let inkPreviews, paperPreviews;
+  if (targets.has("web") || targets.has("ios")) {
+    inkPreviews = render(
+      join(brand, "app-icon/app-store-1024.png"),
+      "ink-previews",
+      targets.has("web") ? [192, 256, 512] : [256],
+    );
+    paperPreviews = render(
+      paper("app-icon-square.svg"),
+      "paper-previews",
+      targets.has("ios") ? [256, 1024] : [256],
+    );
   }
-  // The existing Tauri bundle's full set, including Windows tiles and multi-size ICNS/ICO.
-  for (const file of [
-    "32x32.png",
-    "64x64.png",
-    "128x128.png",
-    "128x128@2x.png",
-    "icon.png",
-    "icon.icns",
-    "icon.ico",
-    "Square30x30Logo.png",
-    "Square44x44Logo.png",
-    "Square71x71Logo.png",
-    "Square89x89Logo.png",
-    "Square107x107Logo.png",
-    "Square142x142Logo.png",
-    "Square150x150Logo.png",
-    "Square284x284Logo.png",
-    "Square310x310Logo.png",
-    "StoreLogo.png",
-  ]) {
-    copy(join(scratch, "ink-desktop", file), join(desktop, file));
+  let rounded;
+  if (targets.has("web") || targets.has("desktop"))
+    rounded = render(join(brand, "app-icon/app-icon-rounded.svg"), "rounded");
+  if (targets.has("web")) {
+    stage(join(inkPreviews, "256x256.png"), `${web}/app-icon.png`, 256);
+    for (const size of [192, 512])
+      stage(join(inkPreviews, `${size}x${size}.png`), `${web}/app-icon-${size}.png`, size);
+    for (const [style, folder] of [
+      ["ink", inkPreviews],
+      ["paper", paperPreviews],
+    ])
+      stage(join(folder, "256x256.png"), `${web}/app-icons/${style}.png`, 256);
+    stage(join(rounded, "icon.ico"), `${web}/favicon.ico`);
+    stage(join(brand, "app-icon/favicon.svg"), `${web}/favicon.svg`);
+    stage(join(brand, "wordmark/wordmark-white.svg"), "apps/web/src/assets/wordmark.svg");
+    stage(join(brand, "symbol/symbol-white.svg"), "apps/web/src/assets/brand-symbol.svg");
   }
-  copy(join(scratch, "paper-desktop/512x512.png"), join(desktop, "icon-paper.png"));
-  copy(join(scratch, "ink-ios/256x256.png"), join(web, "app-icon.png"));
-  copy(join(scratch, "ink-desktop/icon.ico"), join(web, "favicon.ico"));
-  copy(join(brand, "wordmark/wordmark-white.svg"), join(root, "apps/web/src/assets/wordmark.svg"));
-  copy(join(brand, "symbol/symbol-white.svg"), join(root, "apps/web/src/assets/brand-symbol.svg"));
+  if (targets.has("desktop")) {
+    const icns = join(rounded, "icon.icns");
+    writeFileSync(icns, orderedIcns(readFileSync(icns)));
+    const sizes = {
+      "32x32.png": 32,
+      "64x64.png": 64,
+      "128x128.png": 128,
+      "128x128@2x.png": 256,
+      "icon.png": 512,
+      "StoreLogo.png": 50,
+    };
+    for (const size of [30, 44, 71, 89, 107, 142, 150, 284, 310])
+      sizes[`Square${size}x${size}Logo.png`] = size;
+    for (const [file, size] of Object.entries(sizes))
+      stage(join(rounded, file), `${desktop}/${file}`, size);
+    for (const file of ["icon.icns", "icon.ico"]) stage(join(rounded, file), `${desktop}/${file}`);
+    const alternate = render(paper("app-icon-rounded.svg"), "paper-desktop", [512]);
+    stage(join(alternate, "512x512.png"), `${desktop}/icon-paper.png`, 512);
+    const menu = join(scratch, "menu-bar.pdf");
+    run("python3", [join(root, "apps/web/scripts/menu-bar-icon.py"), "--output", menu]);
+    stage(menu, `${desktop}/menu-bar.pdf`);
+  }
+  if (targets.has("ios")) {
+    const ink = join(scratch, "ink-opaque.png"),
+      alternate = join(scratch, "paper-opaque.png");
+    copyFileSync(join(brand, "app-icon/app-store-1024.png"), ink);
+    copyFileSync(join(paperPreviews, "1024x1024.png"), alternate);
+    run("xcrun", ["swift", join(brand, "opaque-icon.swift"), ink, alternate]);
+    catalog(`${ios}/AppIcon.appiconset`, "Icon.png", ink, 1024, true);
+    catalog(`${ios}/AppIconPaper.appiconset`, "Icon.png", alternate, 1024, true);
+    catalog(
+      `${ui}/Brand.xcassets/AppIconInk.imageset`,
+      "Image.png",
+      join(inkPreviews, "256x256.png"),
+      256,
+    );
+    catalog(
+      `${ui}/Brand.xcassets/AppIconPaper.imageset`,
+      "Image.png",
+      join(paperPreviews, "256x256.png"),
+      256,
+    );
+    stage(
+      join(brand, "wordmark/wordmark-white.svg"),
+      `${ui}/Assets.xcassets/IndexWordmark.imageset/wordmark.svg`,
+    );
+    stage(
+      join(brand, "symbol/symbol-white.svg"),
+      `${ui}/Assets.xcassets/NavFeed.imageset/icon.svg`,
+    );
+  }
+  for (const [path, output] of outputs) validate(path, output);
+  if (values.check) {
+    const stale = [...outputs]
+      .filter(
+        ([path, { source }]) =>
+          !existsSync(join(root, path)) ||
+          !readFileSync(source).equals(readFileSync(join(root, path))),
+      )
+      .map(([path]) => path);
+    if (stale.length)
+      throw new Error(
+        `Missing or stale brand outputs:\n${stale.join("\n")}\nRegenerate the selected targets without --check.`,
+      );
+    console.log(`Brand outputs match (${[...targets].join(", ")}; ${outputs.size} files).`);
+  } else {
+    for (const [path, { source }] of outputs) {
+      const destination = join(root, path);
+      mkdirSync(dirname(destination), { recursive: true });
+      copyFileSync(source, destination);
+    }
+    console.log(`Updated brand outputs (${[...targets].join(", ")}; ${outputs.size} files).`);
+  }
 } finally {
   rmSync(scratch, { recursive: true, force: true });
 }

@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -29,15 +30,30 @@ class MenuBarPackaging(unittest.TestCase):
     def test_native_asset_and_composed_build(self):
         asset = TAURI / 'icons/menu-bar.pdf'
         before = asset.read_bytes()
+        modified = asset.stat().st_mtime_ns
         self.assertTrue(before.startswith(b'%PDF-1.4'))
-        subprocess.run([sys.executable, str(WEB / 'scripts/menu-bar-icon.py')], check=True)
+        subprocess.run([sys.executable, str(WEB / 'scripts/menu-bar-icon.py'), '--check'], check=True)
         self.assertEqual(before, asset.read_bytes())
+        self.assertEqual(modified, asset.stat().st_mtime_ns)
         build = (TAURI / 'build.rs').read_text()
         for module in ['sharing_build', 'notification_build', 'menu_bar_build']:
             self.assertIn(module + '::build()', build)
         menu_build = (TAURI / 'menu_bar_build.rs').read_text()
         self.assertIn('native/menu_bar.m', menu_build)
         self.assertIn('ServiceManagement', menu_build)
+
+    def test_pdf_check_reports_stale_or_missing_without_repair(self):
+        with tempfile.TemporaryDirectory(prefix='index-menu-check-') as folder:
+            output = Path(folder) / 'menu-bar.pdf'
+            output.write_bytes(b'stale')
+            modified = output.stat().st_mtime_ns
+            command = [sys.executable, str(WEB / 'scripts/menu-bar-icon.py'), '--check', '--output', str(output)]
+            self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            self.assertEqual(output.read_bytes(), b'stale')
+            self.assertEqual(output.stat().st_mtime_ns, modified)
+            output.unlink()
+            self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+            self.assertFalse(output.exists())
 
     def test_login_items_only_register_from_explicit_set(self):
         source = (TAURI / 'native/menu_bar.m').read_text()
