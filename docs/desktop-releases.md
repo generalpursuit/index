@@ -13,6 +13,8 @@ Promote tested work from `dev` through `staging` to `main`. [desktop-release.yml
 
 Targets are macOS 14+ Apple Silicon/Intel DMGs and updater archives, Windows x64 per-user NSIS, and Linux x64 AppImage/DEB/RPM. Windows publisher signing is not configured. Linux in-app updates apply to AppImage; DEB/RPM use their package installer.
 
+Tauri skips its Finder-scripted DMG layout on CI, so [dmg.ts](../apps/web/scripts/desktop/dmg.ts) packages and signs the DMG with the hash-pinned dmgbuild in [dmgbuild-requirements.txt](../apps/web/scripts/desktop/dmgbuild-requirements.txt). Local DMG builds need it on `PATH` or `DMGBUILD`. The window background is [background.svg](../apps/web/src-tauri/dmg/background.svg) and its rendered PNGs.
+
 macOS distribution requires valid Developer ID signing, notarization and host/Share-extension profiles authorizing the channel's shared Keychain group. Every platform requires that channel's existing Tauri updater signing key. The release workflow owns those build inputs and validation; retain the updater key across releases.
 
 Public unauthenticated GitHub downloads are required for in-app updates. Private repository members can download installers manually; no repository credential is embedded in an app. Updates are checked on launch and periodically, and installation requires the user's explicit install/restart action.

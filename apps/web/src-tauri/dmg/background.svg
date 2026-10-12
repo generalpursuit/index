@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="540" height="280" viewBox="0 0 540 280">
+  <!-- DMG window background (apps/web/scripts/desktop/dmg.ts). Render background.png and
+       background@2x.png with rsvg-convert -w 540 and -w 1080. Icons sit at y=130. -->
+  <rect width="540" height="280" fill="#FFFFFF"/>
+  <g fill="none" stroke="#0B0B0C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M249 122l8 8-8 8" stroke-opacity="0.16"/>
+    <path d="M265 122l8 8-8 8" stroke-opacity="0.32"/>
+    <path d="M281 122l8 8-8 8" stroke-opacity="0.56"/>
+  </g>
+</svg>

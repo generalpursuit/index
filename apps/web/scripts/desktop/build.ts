@@ -2,6 +2,7 @@ import { apiScope } from "./api-scope.ts";
 import { prepareShareExtension, verifyShareExtension } from "./share-extension.ts";
 import { spawnSync } from "node:child_process";
 import { channels, isChannel, readBaseConfig, releaseConfig } from "./channels.ts";
+import { buildDmg, deferDmg, requireDmgbuild } from "./dmg.ts";
 
 const argsIn = process.argv.slice(2);
 const channelIndex = argsIn.indexOf("--channel");
@@ -55,6 +56,11 @@ for (const key of ["VITE_SERVER_URL"]) {
     throw new Error(`${key} must use HTTPS. --local permits loopback HTTP for development builds.`);
 }
 process.env.VITE_SERVER_URL = apiScope(process.env.VITE_SERVER_URL);
+const tauri = deferDmg(
+  argsIn.filter((arg) => arg !== "--local" && arg !== "--without-share-extension"),
+);
+// Fail before compiling when the requested DMG cannot be packaged.
+if (tauri.dmg) requireDmgbuild();
 // Native smoke uses its deliberately separate legacy credential namespace and no extension.
 const sharing =
   process.platform === "darwin" &&
@@ -92,9 +98,10 @@ const args = [
   "build",
   "--config",
   JSON.stringify(config),
-  ...argsIn.filter((arg) => arg !== "--local" && arg !== "--without-share-extension"),
+  ...tauri.args,
 ];
 const result = spawnSync("bun", args, { stdio: "inherit", env: process.env });
-if (result.status === 0 && sharing)
-  verifyShareExtension(argsIn, config.productName || base.productName);
+const productName = config.productName || base.productName;
+if (result.status === 0 && sharing) verifyShareExtension(argsIn, productName);
+if (result.status === 0 && tauri.dmg) buildDmg(argsIn, productName, config.version || base.version);
 process.exit(result.status ?? 1);

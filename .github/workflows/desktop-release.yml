@@ -118,6 +118,12 @@ jobs:
         env:
           VITE_SERVER_URL: ${{ needs.prepare.outputs.channel == 'production' && 'https://index-production-api.generalpursuit.workers.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
         run: cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
+      - name: Install pinned DMG layout tool
+        if: runner.os == 'macOS'
+        run: |
+          python3 -m venv "$RUNNER_TEMP/dmgbuild"
+          "$RUNNER_TEMP/dmgbuild/bin/pip" install --require-hashes --only-binary :all: -r apps/web/scripts/desktop/dmgbuild-requirements.txt
+          echo "DMGBUILD=$RUNNER_TEMP/dmgbuild/bin/dmgbuild" >> "$GITHUB_ENV"
       - name: Build signed update artifacts and installers
         working-directory: apps/web
         env:
