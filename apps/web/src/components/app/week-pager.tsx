@@ -55,7 +55,7 @@ export function WeekPager({
           </section>
         ))}
       </div>
-      <WeekScrubber weeks={weeks} active={week} onJump={jump} anchor={viewport} />
+      <WeekScrubber weeks={weeks} active={[week]} onJump={jump} />
     </>
   );
 }

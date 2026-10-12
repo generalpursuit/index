@@ -47,8 +47,15 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   const older = page.locator(`.profile-week[data-week="${fixture.older}"]`);
   await expect(older).toContainText("Earlier notes");
   await expect(older.getByRole("textbox")).toHaveCount(0);
-  // The scrubber jumps to a week, whose heading then sticks at the top while you read it.
-  // Even the last week can get there: the list leaves just enough room after it.
+  // The scrubber marks every week on screen: with the whole list in view, all of them.
+  const ticks = page.locator(".week-tick");
+  await expect(ticks.first()).toHaveAttribute("data-active", "true");
+  await expect(ticks.nth(1)).toHaveAttribute("data-active", "true");
+  // On a shorter screen it jumps to a week, whose heading then sticks at the top while you read
+  // it. Nothing follows the last week, so jumping there scrolls only as far as the list goes.
+  const viewport = page.viewportSize()!;
+  await page.setViewportSize({ ...viewport, height: 400 });
+  await expect(ticks.nth(1)).not.toHaveAttribute("data-active");
   const scroller = page.locator("#app-scroll");
   const headingOffset = (week: typeof older) => async () => {
     const [heading, top] = await Promise.all([
@@ -57,20 +64,21 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
     ]);
     return Math.round(heading!.y - top!.y);
   };
-  await page.locator(".week-tick").nth(1).click();
-  await expect.poll(headingOffset(older)).toBe(0);
-  await expect(page.locator(".week-tick").nth(1)).toHaveAttribute("data-active", "true");
+  await ticks.nth(1).click();
+  await expect(older).toBeInViewport();
+  await expect(ticks.nth(1)).toHaveAttribute("data-active", "true");
   // Chromium can leave a fractional CSS pixel after smooth scrolling settles.
   await expect
     .poll(() =>
       scroller.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
     )
     .toBeLessThanOrEqual(1);
-  await page.locator(".week-tick").first().click();
+  await ticks.first().click();
   await expect.poll(headingOffset(weeks.first())).toBe(0);
-  await expect(page.locator(".week-tick").first()).toHaveAttribute("data-active", "true");
+  await expect(ticks.first()).toHaveAttribute("data-active", "true");
   await scroller.evaluate((el) => el.scrollBy(0, 60));
   await expect.poll(headingOffset(weeks.first())).toBe(0);
+  await page.setViewportSize(viewport);
   // The week titles open the same choice as a list, for keyboards and phones.
   await older.getByRole("button", { name: /Jump to a week/ }).click();
   await page.getByRole("dialog", { name: "Weeks" }).getByRole("button").first().click();

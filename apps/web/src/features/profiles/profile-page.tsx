@@ -314,8 +314,7 @@ function ProfileLinks({
       : undefined;
   const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const endSpace = useEndSpace(listRef, weeks.length);
-  const reading = useReadingWeek(weeks);
+  const onScreen = useVisibleWeeks(listRef, weeks);
   const navigate = useNavigate();
   const select = (group?: string) =>
     void navigate({
@@ -374,15 +373,7 @@ function ProfileLinks({
                 onPick={() => setPicking(true)}
               />
             ))}
-            {/* Room for the last week's heading to reach the top, so every week can be jumped to. */}
-            <div className="profile-end-space" style={{ height: endSpace }} aria-hidden="true" />
-            <WeekScrubber
-              weeks={weeks}
-              active={reading}
-              onJump={jump}
-              anchor={listRef}
-              offset={52}
-            />
+            <WeekScrubber weeks={weeks} active={onScreen} onJump={jump} />
           </>
         ) : (
           <>
@@ -497,56 +488,32 @@ function ProfileWeek({
     </section>
   );
 }
-/**
- * How much empty space the list needs after its last week so that week's heading can scroll
- * to the top: the scroller's height, less the last week and the page's own bottom padding.
- */
-function useEndSpace(list: RefObject<HTMLElement | null>, weekCount: number) {
-  const [space, setSpace] = useState(0);
+/** The weeks with some of their section on screen, as you scroll. */
+function useVisibleWeeks(list: RefObject<HTMLElement | null>, weeks: Week[]) {
+  const [visible, setVisible] = useState<string[]>([]);
+  // `weeks` is a new array on every render; watch the sections again only when they change.
+  const key = weeks.map((w) => w.weekStart).join();
   useEffect(() => {
-    const scroller = document.getElementById("app-scroll"),
-      last = list.current?.querySelector<HTMLElement>(".profile-week:last-of-type");
-    if (!scroller || !last) return;
-    const content = scroller.querySelector<HTMLElement>(".app-content");
-    const measure = () => {
-      const padding = content ? parseFloat(getComputedStyle(content).paddingBottom) : 0;
-      setSpace(Math.max(0, scroller.clientHeight - last.offsetHeight - padding));
-    };
-    measure();
-    const resize = new ResizeObserver(measure);
-    resize.observe(scroller);
-    resize.observe(last);
-    return () => resize.disconnect();
-  }, [list, weekCount]);
-  return space;
-}
-/** The week whose section reaches the top of the page, as you scroll. */
-function useReadingWeek(weeks: Week[]) {
-  const [reading, setReading] = useState(weeks[0]?.weekStart);
-  useEffect(() => {
-    const scroller = document.getElementById("app-scroll");
-    if (!scroller) return;
-    let frame = 0;
-    const track = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const top = scroller.getBoundingClientRect().top + 8;
-        let current: string | undefined;
-        for (const section of document.querySelectorAll<HTMLElement>(".profile-week")) {
-          if (section.getBoundingClientRect().top > top) break;
-          current = section.dataset.week;
+    const root = document.getElementById("app-scroll"),
+      sections = list.current?.querySelectorAll<HTMLElement>(".profile-week");
+    if (!root || !sections?.length) return;
+    const shown = new Set<string>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const week = (entry.target as HTMLElement).dataset.week!;
+          if (entry.isIntersecting) shown.add(week);
+          else shown.delete(week);
         }
-        setReading(current ?? weeks[0]?.weekStart);
-      });
-    };
-    track();
-    scroller.addEventListener("scroll", track, { passive: true });
-    return () => {
-      cancelAnimationFrame(frame);
-      scroller.removeEventListener("scroll", track);
-    };
-  }, [weeks]);
-  return reading;
+        setVisible([...shown]);
+      },
+      // A sliver at the top or bottom edge doesn't count.
+      { root, rootMargin: "-8px 0px" },
+    );
+    for (const section of sections) observer.observe(section);
+    return () => observer.disconnect();
+  }, [list, key]);
+  return visible;
 }
 /**
  * Picks which of the person's lists to show. Starred (other people's links you kept) sits
