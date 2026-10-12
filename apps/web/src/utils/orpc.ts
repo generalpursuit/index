@@ -17,7 +17,9 @@ export function createQueryClient() {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
-        gcTime: 30 * 60_000,
+        // Windows stay open for days (closing the desktop window only hides it), so keep what
+        // was loaded instead of loading it again; stale data still refreshes when shown.
+        gcTime: 24 * 60 * 60_000,
         retry: (count, error) =>
           !("status" in error && [400, 401, 403, 404, 426].includes(Number(error.status))) &&
           count < 2,
