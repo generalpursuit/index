@@ -1,6 +1,6 @@
 import { useId } from "react";
-import { useTheme } from "../hooks/use-theme";
-import type { ThemePreference } from "../lib/theme";
+import { useTheme } from "@/lib/appearance/use-theme";
+import type { ThemePreference } from "@/lib/appearance/store";
 
 /** Native radios retain keyboard, touch and screen-reader behavior in pages and sheets. */
 export function ThemeControl() {

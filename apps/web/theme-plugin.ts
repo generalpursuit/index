@@ -1,5 +1,5 @@
 import type { Plugin } from "vite";
-import { themeBootstrapScript } from "../../packages/ui/src/lib/theme";
+import { themeBootstrapScript } from "./src/lib/appearance/store";
 
 /** A blocking external script avoids both a wrong first paint and CSP inline exceptions. */
 export function themeBootstrap(): Plugin {

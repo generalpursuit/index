@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Input } from "@index/ui/components/input";
 import { LockKeyhole, Search } from "lucide-react";
-import { Heading, QueryState, UserAvatar, More } from "@/components/app/primitives";
+import { Heading } from "@/components/app/navigation";
+import { QueryState, More } from "@/components/app/query-state";
+import { UserAvatar } from "@/components/app/user-avatar";
 import { useDiscovery } from "./hooks/use-discovery";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useViewer } from "@/hooks/use-api";
@@ -28,6 +30,7 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
       >
         <Search size={18} />
         <Input
+          variant="plain"
           aria-label="Search people"
           placeholder="Search people"
           value={query}

@@ -14,7 +14,8 @@
     "desktop:test": "bun scripts/desktop-smoke.mjs",
     "dev:bare": "vite dev",
     "env:generate": "varlock codegen",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test": "bun test tests"
   },
   "dependencies": {
     "@index/api": "workspace:*",
@@ -29,7 +30,6 @@
     "@tanstack/react-router": "^1.170.32",
     "better-auth": "catalog:",
     "lucide-react": "catalog:",
-    "next-themes": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "sonner": "catalog:",

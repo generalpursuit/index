@@ -1,16 +1,19 @@
+import { ChatAvatars, conversationName } from "./conversation-presentation";
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Checkbox } from "@index/ui/components/checkbox";
 import { ChevronRight } from "lucide-react";
-import { Modal, UserAvatar, QueryState, More } from "@/components/app/primitives";
+import { Modal } from "@index/ui/components/modal";
+import { UserAvatar } from "@/components/app/user-avatar";
+import { QueryState, More } from "@/components/app/query-state";
 import { useQuery } from "@tanstack/react-query";
 import { useViewer, useAPI } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useConnections } from "@/features/profiles/hooks/use-profiles";
 import { useConversations, useMessageActions } from "./hooks/use-messages";
-import type { SavedLink, Conversation } from "@/lib/types";
+import type { SavedLink } from "@/lib/types";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const personLabelClassName =
@@ -18,14 +21,6 @@ const personLabelClassName =
 const recipientRowClassName =
   "recipient-row [&>.person-label]:flex-1 [@media(hover:_hover)_and_(pointer:_fine)]:[&:hover_.recipient-select]:opacity-[1] [@media(hover:_hover)_and_(pointer:_fine)]:[&:focus-within_.recipient-select]:opacity-[1]";
 
-export function conversationName(chat: Conversation, viewerId: string) {
-  return (
-    chat.participants
-      .filter((p) => p.id !== viewerId)
-      .map((p) => (chat.participants.length > 2 ? p.name.split(" ")[0] : p.name))
-      .join(", ") || "Conversation"
-  );
-}
 export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: () => void }) {
   const viewer = useViewer()!,
     navigate = useNavigate(),
@@ -157,18 +152,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
               key={chat.id}
               onClick={() => open(chat.shortId)}
             >
-              <span
-                className={
-                  "avatar-stack relative inline-flex w-12 h-12 flex-none items-center [&_.user-avatar]:w-11 [&_.user-avatar]:h-11 [&:has(.user-avatar:nth-child(2))_.user-avatar]:w-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:h-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:absolute [&:has(.user-avatar:nth-child(2))_.user-avatar]:left-0 [&:has(.user-avatar:nth-child(2))_.user-avatar]:top-0 [&_.user-avatar:nth-child(2)]:left-4! [&_.user-avatar:nth-child(2)]:top-4.25! [&_.user-avatar:nth-child(2)]:[outline:2px_solid_var(--background)]"
-                }
-              >
-                {chat.participants
-                  .filter((p) => p.id !== viewer.id)
-                  .slice(0, 2)
-                  .map((p) => (
-                    <UserAvatar key={p.id} person={p} />
-                  ))}
-              </span>
+              <ChatAvatars chat={chat} viewerId={viewer.id} />
               <span className={personLabelClassName}>{conversationName(chat, viewer.id)}</span>
               <ChevronRight />
             </Button>

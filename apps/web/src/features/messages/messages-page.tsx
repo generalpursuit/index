@@ -1,46 +1,28 @@
+import { ChatAvatars, conversationName } from "./conversation-presentation";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { ArrowUp, SquarePen, X, Link2, LockKeyhole, Search } from "lucide-react";
-import {
-  Heading,
-  Back,
-  IconButton,
-  UserAvatar,
-  QueryState,
-  More,
-} from "@/components/app/primitives";
+import { Heading, Back } from "@/components/app/navigation";
+import { IconButton } from "@index/ui/components/icon-button";
+import { Confirmation } from "@index/ui/components/confirmation";
+import { QueryState, More } from "@/components/app/query-state";
 import { useConversations, useConversation, useMessageActions } from "./hooks/use-messages";
-import { RecipientPicker, conversationName } from "./recipient-picker";
+import { RecipientPicker } from "./recipient-picker";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
-import { useDraft } from "@/hooks/use-draft";
-import { domain } from "@/features/links/link-row";
+import { useMessageDraft } from "./drafts";
+import type { MessageDraft } from "./draft";
+import { domain } from "@/features/links/url";
 import { timeAgo } from "@/lib/weeks";
-import type { Message, SavedLink, Conversation } from "@/lib/types";
+import type { Message, SavedLink } from "@/lib/types";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const personLabelClassName =
   "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle";
 
-export function ChatAvatars({ chat, viewerId }: { chat: Conversation; viewerId: string }) {
-  return (
-    <span
-      className={
-        "avatar-stack relative inline-flex w-12 h-12 flex-none items-center [&_.user-avatar]:w-11 [&_.user-avatar]:h-11 [&:has(.user-avatar:nth-child(2))_.user-avatar]:w-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:h-7.75 [&:has(.user-avatar:nth-child(2))_.user-avatar]:absolute [&:has(.user-avatar:nth-child(2))_.user-avatar]:left-0 [&:has(.user-avatar:nth-child(2))_.user-avatar]:top-0 [&_.user-avatar:nth-child(2)]:left-4! [&_.user-avatar:nth-child(2)]:top-4.25! [&_.user-avatar:nth-child(2)]:[outline:2px_solid_var(--background)]"
-      }
-    >
-      {chat.participants
-        .filter((p) => p.id !== viewerId)
-        .slice(0, 2)
-        .map((p) => (
-          <UserAvatar key={p.id} person={p} />
-        ))}
-    </span>
-  );
-}
 export function MessagesPage() {
   const [query, setQuery] = useState(""),
     [picker, setPicker] = useState(false),
@@ -74,6 +56,7 @@ export function MessagesPage() {
       >
         <Search size={18} />
         <Input
+          variant="plain"
           aria-label="Search conversations"
           placeholder="Search conversations"
           value={query}
@@ -141,18 +124,16 @@ export function MessagesPage() {
     </div>
   );
 }
-type Draft = { body: string; attachment?: SavedLink; clientId: string };
 export function ConversationPage({ id, attach }: { id: string; attach?: string }) {
   const { detail, list } = useConversation(id),
     actions = useMessageActions(),
     api = useAPI(),
     viewer = useViewer()!,
     navigate = useNavigate();
-  const [draft, setDraft] = useDraft<Draft>("message:" + id, {
-      body: "",
-      clientId: crypto.randomUUID(),
-    }),
-    [failure, setFailure] = useState(false);
+  const { draft, owner: draftOwner } = useMessageDraft(id);
+  const [recovery, setRecovery] = useState<MessageDraft>();
+  const sending = draft.status === "sending";
+  const locked = sending || draft.status === "uncertain";
   const attached = useQuery(
     api.links.get.queryOptions({
       input: { id: attach ?? "00000000-0000-4000-8000-000000000000" },
@@ -164,7 +145,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
     scroller = useRef<HTMLDivElement>(null),
     nearBottom = useRef(true);
   const queueAttachment = useEffectEvent((link: SavedLink) => {
-    setDraft({ ...draft, attachment: link, clientId: crypto.randomUUID() });
+    draftOwner.attach(link);
     input.current?.focus();
   });
   useEffect(() => {
@@ -205,20 +186,15 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       .slice()
       .reverse() ?? [];
   async function send() {
-    if (!draft.body.trim() && !draft.attachment) return;
-    setFailure(false);
+    const attempt = draftOwner.prepare();
+    if (!attempt) return;
     try {
-      await actions.send.mutateAsync({
-        conversationId: id,
-        body: draft.body,
-        linkId: draft.attachment?.id,
-        clientId: draft.clientId,
-      });
-      setDraft({ body: "", clientId: crypto.randomUUID() });
+      await actions.send.mutateAsync(attempt);
+      draftOwner.complete(attempt);
       nearBottom.current = true;
       input.current?.focus();
-    } catch {
-      setFailure(true);
+    } catch (error) {
+      draftOwner.fail(attempt, error);
     }
   }
   return (
@@ -333,7 +309,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             </QueryState>
             <div ref={end} />
           </div>
-          <div className={"chat-composer-area flex-none [&_.composer_input]:h-10"}>
+          <div className={"chat-composer-area flex-none"}>
             {attached.error && <p role="alert">This attachment is unavailable.</p>}
             {draft.attachment && (
               <div
@@ -348,45 +324,75 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                 </div>
                 <IconButton
                   label="Remove attachment"
-                  disabled={actions.send.isPending}
-                  onClick={() =>
-                    setDraft({ ...draft, attachment: undefined, clientId: crypto.randomUUID() })
-                  }
+                  disabled={locked}
+                  onClick={() => draftOwner.removeAttachment()}
                 >
                   <X />
                 </IconButton>
               </div>
             )}
-            {failure && (
+            {(draft.status === "uncertain" || draft.status === "rejected") && (
               <p className={"field-error select-text text-[12px] text-destructive"} role="alert">
-                Message wasn’t sent. Your draft is safe. Try sending again.
+                {draft.status === "uncertain"
+                  ? "Delivery is unconfirmed. Your draft is safe. Retry this message before editing."
+                  : "Message was rejected. Your draft is safe. Check it and try again."}
               </p>
             )}
+            {draft.queuedAttachment && (
+              <div className="flex items-center gap-3 py-2 text-sm" role="status">
+                <span className="min-w-0 flex-1">
+                  For your next message: {draft.queuedAttachment.title}
+                </span>
+                <IconButton
+                  label="Remove next attachment"
+                  onClick={() => draftOwner.removeQueuedAttachment()}
+                >
+                  <X />
+                </IconButton>
+              </div>
+            )}
+            {draft.status === "uncertain" && (
+              <Button variant="ghost" onClick={() => setRecovery(draftOwner)}>
+                Start a new message
+              </Button>
+            )}
+            <Confirmation
+              open={!!recovery}
+              onOpenChange={(open) => {
+                if (!open) setRecovery(undefined);
+              }}
+              title="Discard this unconfirmed draft?"
+              description="It may already have been delivered. Starting a new message won’t remove a delivered message. Your queued attachment will be kept."
+              label="Discard draft"
+              onConfirm={() => {
+                recovery?.abandonUnconfirmed();
+                setRecovery(undefined);
+              }}
+            />
             <form
-              className={
-                "composer flex gap-2.5 items-center pt-4 [&_input]:flex-1 [&_input]:min-w-0 [&_input]:bg-muted! [&_input]:border [&_input]:border-border [&_input]:rounded-full [&_input]:h-11.5 [&_input]:p-[0_16px] [&_input]:text-[14px] [&_button]:w-10 [&_button]:h-10 [&_button]:flex-none"
-              }
+              className={"composer flex gap-2.5 items-center pt-4"}
               onSubmit={(e) => {
                 e.preventDefault();
                 void send();
               }}
             >
               <Input
+                variant="composer"
+                className="h-10"
                 ref={input}
-                disabled={actions.send.isPending}
+                disabled={locked}
                 aria-label="Message"
                 placeholder="Message"
                 maxLength={10000}
                 value={draft.body}
-                onChange={(e) =>
-                  setDraft({ ...draft, body: e.target.value, clientId: crypto.randomUUID() })
-                }
+                onChange={(e) => draftOwner.editBody(e.target.value)}
               />
               <Button
                 type="submit"
                 size="icon"
+                className="size-10 flex-none"
                 aria-label="Send message"
-                disabled={actions.send.isPending || (!draft.body.trim() && !draft.attachment)}
+                disabled={sending || (!draft.body.trim() && !draft.attachment)}
               >
                 <ArrowUp />
               </Button>

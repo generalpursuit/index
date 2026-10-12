@@ -2,20 +2,17 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Folder, Link, LockKeyhole, Plus, Search } from "lucide-react";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { Modal, More } from "@/components/app/primitives";
+import { Modal } from "@index/ui/components/modal";
+import { More } from "@/components/app/query-state";
 import { CreateGroupForm } from "@/features/groups/create-group";
-import { useGroups } from "@/features/links/hooks/use-links";
+import { useGroups } from "@/features/groups/use-groups";
 import { useQuery } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { useViewer } from "@/hooks/use-api";
 import type { Group } from "@/lib/types";
 
-/** Missing is authoritative only after every page was loaded successfully. Keep its ID until
- * the person chooses again; null always means an explicit/default Your links selection. */
-export function reconcileDestination(value: Group | null, items: Group[], complete: boolean) {
-  const current = value && items.find((group) => group.id === value.id);
-  return { current: current || value, unavailable: !!value && !current && complete };
-}
+import { reconcileGroup } from "@/features/groups/selection";
+
 export function useDestinationStatus(value: Group | null) {
   const viewer = useViewer()!,
     groups = useGroups(viewer.id);
@@ -25,11 +22,7 @@ export function useDestinationStatus(value: Group | null) {
   return {
     groups,
     items,
-    ...reconcileDestination(
-      value,
-      items,
-      !!groups.data && !groups.hasNextPage && !groups.isError && !groups.isFetching,
-    ),
+    ...reconcileGroup(value, items, groups.complete),
   };
 }
 

@@ -32,7 +32,7 @@ jobs:
           bun run oxlint
       - name: API, server, and deployment tests
         run: |
-          bun test apps/web/tests/desktop-release.test.mjs apps/web/tests/desktop-publish.test.mjs
+          bun run --cwd apps/web test
           python3 apps/web/scripts/test-desktop-signing.py
           python3 apps/web/scripts/test-share-profiles.py
           bun run --cwd packages/api test
@@ -43,6 +43,7 @@ jobs:
           VITE_SERVER_URL: http://localhost:3002
         run: |
           bun run --cwd apps/web check-types
+          bun run --cwd packages/ui check-types
           bun run --cwd apps/server check-types
           bun run --cwd packages/infra check-types
       - name: Install Chromium

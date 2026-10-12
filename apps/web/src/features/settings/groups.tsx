@@ -7,8 +7,12 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@index/ui/components/dropdown-menu";
-import { Confirmation, Modal, IconButton, QueryState, More } from "@/components/app/primitives";
-import { useGroups, useLibraryActions } from "@/features/links/hooks/use-links";
+import { Confirmation } from "@index/ui/components/confirmation";
+import { Modal } from "@index/ui/components/modal";
+import { IconButton } from "@index/ui/components/icon-button";
+import { QueryState, More } from "@/components/app/query-state";
+import { useGroupActions } from "@/features/groups/use-groups";
+import { useGroups } from "@/features/groups/use-groups";
 import { CreateGroup } from "@/features/groups/create-group";
 import { GroupForm, groupSaveError } from "@/features/groups/group-form";
 import { GroupLockControl, groupPrivacyDescription } from "@/features/groups/group-lock-control";
@@ -100,7 +104,7 @@ export function GroupSettings({ userId }: { userId: string }) {
 }
 // Only custom groups can be renamed/deleted. Starred never offers an unlock action.
 function GroupActions({ group }: { group: Group }) {
-  const actions = useLibraryActions(),
+  const actions = useGroupActions(),
     [edit, setEdit] = useState(false),
     [remove, setRemove] = useState(false),
     [privacy, setPrivacy] = useState<boolean>(),

@@ -4,14 +4,14 @@ import { DestinationPicker, useDestinationStatus } from "@/features/sharing/dest
 import { useShareSave } from "@/features/sharing/use-share-save";
 import { useViewer } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
-import { Modal } from "@/components/app/primitives";
+import { Modal } from "@index/ui/components/modal";
 import { Button } from "@index/ui/components/button";
-import { useGroups } from "./hooks/use-links";
+import { useGroups } from "@/features/groups/use-groups";
 import type { Group } from "@/lib/types";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { useLibraryActions } from "./hooks/use-links";
-import { domain, webURL } from "./link-row";
+import { domain, webURL } from "./url";
 import type { SavedLink } from "@/lib/types";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.

@@ -51,7 +51,11 @@ async function dialogLayout(page: Page, name: string) {
     .toBe(0);
   await layout(page, name, dialog);
   const box = await dialog.boundingBox();
-  const width = await page.evaluate(() => document.documentElement.clientWidth);
+  // Mobile Chromium can expose a fractional visual viewport at scale 1; clientWidth
+  // rounds it to an integer even though fixed sheets fill the fractional viewport.
+  const width = await page.evaluate(
+    () => visualViewport?.width ?? document.documentElement.clientWidth,
+  );
   expect.soft(box!.x, `${name}: left edge`).toBeGreaterThanOrEqual(0);
   expect.soft(box!.x + box!.width, `${name}: right edge`).toBeLessThanOrEqual(width);
   expect.soft(box!.y, `${name}: top edge`).toBeGreaterThanOrEqual(0);

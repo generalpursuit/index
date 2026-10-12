@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useTheme } from "@index/ui/hooks/use-theme";
+import { useTheme } from "@/lib/appearance/use-theme";
 import { isDesktop } from "./index";
 
 /** Keep native window chrome and the web content on the same device preference. */
