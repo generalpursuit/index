@@ -1,4 +1,3 @@
-import { useRouter } from "@tanstack/react-router";
 import {
   accountMutationOptions,
   accountGeneration,
@@ -7,16 +6,7 @@ import {
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import type { SavedLink } from "@/lib/types";
-import {
-  linkOptions,
-  groupsOptions,
-  weekLinksOptions,
-  weeksOptions,
-  commentsOptions,
-} from "../queries";
-export function useGroups(ownerId: string) {
-  return useInfiniteQuery(groupsOptions(useAPI(), ownerId));
-}
+import { linkOptions, weekLinksOptions, weeksOptions, commentsOptions } from "../queries";
 export function useLink(id: string) {
   return useQuery(linkOptions(useAPI(), id));
 }
@@ -37,7 +27,6 @@ export function useLibraryWeeks(userId: string, groupId?: string, enabled = true
   return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
 }
 export function useLibraryActions() {
-  const router = useRouter();
   const api = useAPI(),
     cache = useQueryClient();
   const refresh = async () => {
@@ -64,9 +53,6 @@ export function useLibraryActions() {
     cache.setQueryData(queryKey, link);
     return refresh();
   };
-  const create = useMutation(
-    accountMutationOptions(api.links.create.mutationOptions({ onSuccess: saved })),
-  );
   const update = useMutation(
     accountMutationOptions(api.links.update.mutationOptions({ onSuccess: saved })),
   );
@@ -79,21 +65,6 @@ export function useLibraryActions() {
         },
       }),
     ),
-  );
-  const createGroup = useMutation(
-    accountMutationOptions(api.groups.create.mutationOptions({ onSuccess: refresh })),
-  );
-  const refreshGroups = () =>
-    Promise.all([
-      refresh(),
-      router.invalidate(),
-      cache.invalidateQueries({ queryKey: api.links.get.key() }),
-    ]);
-  const updateGroup = useMutation(
-    accountMutationOptions(api.groups.update.mutationOptions({ onSuccess: refreshGroups })),
-  );
-  const deleteGroup = useMutation(
-    accountMutationOptions(api.groups.delete.mutationOptions({ onSuccess: refreshGroups })),
   );
   const collect = useMutation(
     accountMutationOptions({
@@ -126,7 +97,7 @@ export function useLibraryActions() {
       onSettled: () => refresh(),
     }),
   );
-  return { create, update, remove, createGroup, updateGroup, deleteGroup, collect };
+  return { update, remove, collect };
 }
 export function useComments(linkId: string) {
   const api = useAPI(),

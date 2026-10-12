@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { installTheme, type ThemePreference, type ThemeSnapshot } from "../lib/theme";
+import { installTheme, type ThemePreference, type ThemeSnapshot } from "./store";
 
 const serverSnapshot: ThemeSnapshot = { preference: "system", resolved: "light" };
 const subscribe = (listener: () => void) => installTheme(window).subscribe(listener);

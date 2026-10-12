@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { apiFor } from "@/utils/orpc";
-import { groupsOptions } from "@/features/links/queries";
+import { groupsOptions } from "@/features/groups/queries";
 import { SettingsPage } from "@/features/settings/settings-page";
 import { requireSession } from "@/lib/session";
 

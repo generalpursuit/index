@@ -25,12 +25,12 @@ export function useFeedWeeks() {
       getNextPageParam: (p) => p.nextBefore ?? undefined,
     }),
   );
-  const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
+  const { hasNextPage, isFetching, fetchNextPage } = list;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !list.isFetchNextPageError) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, list.isFetchNextPageError, fetchNextPage]);
+    if (hasNextPage && !isFetching && !list.isError) void fetchNextPage();
+  }, [hasNextPage, isFetching, list.isError, fetchNextPage]);
   const loaded = list.data?.pages.flatMap((p) => p.items) ?? [];
-  return loaded[0]?.weekStart === monday()
-    ? loaded
-    : [{ weekStart: monday(), count: 0 }, ...loaded];
+  const weeks =
+    loaded[0]?.weekStart === monday() ? loaded : [{ weekStart: monday(), count: 0 }, ...loaded];
+  return { ...list, weeks };
 }

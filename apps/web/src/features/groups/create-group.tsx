@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from "react";
-import { Modal } from "@/components/app/primitives";
-import { useLibraryActions } from "@/features/links/hooks/use-links";
+import { Modal } from "@index/ui/components/modal";
+import { useGroupActions } from "@/features/groups/use-groups";
 import type { Group } from "@/lib/types";
 import { GroupForm } from "./group-form";
 
@@ -59,7 +59,7 @@ export function CreateGroup({
 }
 
 function useGroupCreation(onCreated: CreateGroupProps["onCreated"]) {
-  const { createGroup } = useLibraryActions();
+  const { createGroup } = useGroupActions();
   const [created, setCreated] = useState(false);
   const active = useRef(false);
   useEffect(() => {

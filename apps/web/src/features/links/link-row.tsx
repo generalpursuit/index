@@ -25,23 +25,9 @@ import { Button } from "@index/ui/components/button";
 import { useViewer, useAPI } from "@/hooks/use-api";
 import { useLibraryActions } from "./hooks/use-links";
 import { RecipientPicker } from "@/features/messages/recipient-picker";
-import { Confirmation } from "@/components/app/primitives";
+import { Confirmation } from "@index/ui/components/confirmation";
 import type { SavedLink } from "@/lib/types";
-export function domain(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return "";
-  }
-}
-/** Only web links can be saved. */
-export function webURL(value: string) {
-  try {
-    return ["http:", "https:"].includes(new URL(value.trim()).protocol);
-  } catch {
-    return false;
-  }
-}
+import { domain } from "./url";
 /**
  * `owner` names whose link it is (in Starred, which holds other people's); `locked` marks
  * your own link in a locked group, so what is private shows without filtering.

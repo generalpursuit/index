@@ -13,12 +13,15 @@ import {
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
 } from "@index/ui/components/dropdown-menu";
-import { UserAvatar, QueryState, Modal, More } from "@/components/app/primitives";
+import { UserAvatar } from "@/components/app/user-avatar";
+import { QueryState, More } from "@/components/app/query-state";
+import { Modal } from "@index/ui/components/modal";
 import { SettingsContent } from "@/features/settings/settings-page";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
-import { useGroups, useLibraryWeeks } from "@/features/links/hooks/use-links";
-import { WeekLinks } from "@/features/feed/feed-page";
+import { useLibraryWeeks } from "@/features/links/hooks/use-links";
+import { useAllGroups } from "@/features/groups/use-groups";
+import { WeekLinks } from "@/features/links/week-links";
 import { CreateGroup } from "@/features/groups/create-group";
 import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrubber";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
@@ -282,22 +285,24 @@ function ProfileLinks({
   onNewGroup: (trigger?: HTMLButtonElement | null) => void;
   username: string;
 }) {
-  const groups = useGroups(userId),
+  const groups = useAllGroups(userId),
     allGroups = groups.data?.pages.flatMap((p) => p.items) ?? [],
     selected = allGroups.find((g) => g.id === filter),
     starredGroup = allGroups.find((g) => g.kind === "starred");
   // A chosen list is known once groups load. Starred has no group until something is starred,
   // and a deleted group has none either; both simply show as empty.
-  const ready = filter === "all" || !!groups.data,
-    missing = ready && filter !== "all" && !selected;
+  const ready =
+      filter === "all" ? !!groups.data && !groups.hasNextPage : !!selected || groups.complete,
+    missing = groups.complete && filter !== "all" && !selected;
   const list = useLibraryWeeks(userId, selected?.id, filter === "all" || !!selected),
     canAdd = own && (filter === "all" || selected?.kind === "custom");
   // The scrubber shows every week, and the list is small (one entry per week): load it all.
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = list;
   useEffect(() => {
-    if (hasNextPage && !isFetchingNextPage && !list.isFetchNextPageError) void fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, list.isFetchNextPageError, fetchNextPage]);
-  const loaded = list.data?.pages.flatMap((p) => p.items) ?? [];
+    if (hasNextPage && !list.isFetching && !list.isError) void fetchNextPage();
+  }, [hasNextPage, list.isFetching, list.isError, fetchNextPage]);
+  const loaded =
+    filter === "all" || selected ? (list.data?.pages.flatMap((p) => p.items) ?? []) : [];
   const weeks: Week[] = missing
     ? []
     : canAdd && loaded[0]?.weekStart !== monday()
@@ -339,12 +344,17 @@ function ProfileLinks({
       ref={listRef}
       className={"profile-links [--row:48px] relative [@media(width<=700px)]:[--row:46px]"}
     >
-      {groups.error && <QueryState error={groups.error} retry={() => void groups.refetch()} />}
       <QueryState
-        pending={!ready || (!missing && list.isPending)}
+        pending={!groups.error && (!ready || (!missing && list.isPending))}
         hasData={ready && !!list.data}
-        error={list.error}
-        retry={() => void list.refetch()}
+        error={groups.error ?? list.error}
+        retry={() =>
+          void (groups.isFetchNextPageError
+            ? groups.fetchNextPage()
+            : groups.error
+              ? groups.refetch()
+              : list.refetch())
+        }
       >
         {weeks.length ? (
           <>

@@ -4,12 +4,6 @@ import type { SavedLink } from "@/lib/types";
 type API = ReturnType<typeof apiFor>;
 
 export const linkOptions = (api: API, id: string) => api.links.get.queryOptions({ input: { id } });
-export const groupsOptions = (api: API, ownerId: string) =>
-  api.groups.list.infiniteOptions({
-    input: (cursor: string | undefined) => ({ ownerId, limit: 100, cursor }),
-    initialPageParam: undefined,
-    getNextPageParam: (p) => p.nextCursor ?? undefined,
-  });
 export const weeksOptions = (api: API, userId: string, groupId?: string) =>
   api.links.weeks.infiniteOptions({
     input: (before: string | undefined) => ({ userId, groupId, before, limit: 10 }),

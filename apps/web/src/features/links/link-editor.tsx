@@ -8,17 +8,13 @@ import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
 import { createLinkInputSchema } from "@index/api/features/links/schemas";
 import { LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
-import { QueryState, More } from "@/components/app/primitives";
+import { QueryState, More } from "@/components/app/query-state";
 import { useAPI, useViewer } from "@/hooks/use-api";
-import { useDraft } from "@/hooks/use-draft";
-import { useGroups, useLibraryActions } from "./hooks/use-links";
+import { useLinkDrafts } from "./drafts";
+import type { LinkDraft } from "./draft";
+import { useLibraryActions } from "./hooks/use-links";
+import { useGroups } from "@/features/groups/use-groups";
 import type { SavedLink } from "@/lib/types";
-type Draft = {
-  url: string;
-  title: string;
-  description: string;
-  groupId: string | null;
-};
 /**
  * Edits a saved link: its address, title, note and group. Links are added by pasting them into
  * the "Enter a link" field, so this is the only form for a link. Calls `onDone` after saving.
@@ -41,13 +37,14 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
   const viewer = useViewer()!,
     groups = useGroups(viewer.id),
     actions = useLibraryActions();
-  const saved: Draft = {
+  const saved: LinkDraft = {
     url: existing.url,
     title: existing.title,
     description: existing.description ?? "",
     groupId: existing.groupId,
   };
-  const [draft, setDraft] = useDraft<Draft>("link:" + existing.id, saved);
+  const drafts = useLinkDrafts();
+  const draft = drafts.read(existing.id, saved);
   const form = useForm({
     defaultValues: draft,
     validators: {
@@ -59,6 +56,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
     },
     onSubmit: async ({ value }) => {
       const { url, title, description, groupId } = value;
+      const submitted = drafts.read(existing.id, saved);
       try {
         await actions.update.mutateAsync({
           id: existing.id,
@@ -67,7 +65,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
           description,
           groupId,
         });
-        setDraft(saved);
+        drafts.complete(existing.id, submitted);
         toast.success("Link saved");
         onDone();
       } catch {
@@ -78,12 +76,12 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
   const saving = actions.update.isPending;
   const customGroups =
     groups.data?.pages.flatMap((p) => p.items).filter((g) => g.kind === "custom") ?? [];
-  const change = (name: keyof Draft, value: string | null) =>
-    setDraft({ ...form.state.values, [name]: value });
+  const change = (name: keyof LinkDraft, value: string | null) =>
+    drafts.edit(existing.id, { ...form.state.values, [name]: value });
   return (
     <form
       className={
-        "link-form flex flex-col gap-6 max-w-140 [&_input]:min-h-11.5 [&_input]:p-[11px_14px] [&_input]:border-border [&_input]:rounded-[10px] [&_input]:bg-surface [&_input]:text-[16px] [&_textarea]:min-h-11.5 [&_textarea]:p-[11px_14px] [&_textarea]:border-border [&_textarea]:rounded-[10px] [&_textarea]:bg-surface [&_textarea]:text-[16px] [&_textarea]:[field-sizing:content] [&_textarea]:max-h-60 [&_textarea]:[resize:none] [&_label.link-form-label]:font-mono [&_label.link-form-label]:text-[11px] [&_label.link-form-label]:font-normal [&_label.link-form-label]:tracking-[0.06em] [&_label.link-form-label]:uppercase [&_label.link-form-label]:text-subtle-foreground"
+        "link-form flex flex-col gap-6 max-w-140 [&_label.link-form-label]:font-mono [&_label.link-form-label]:text-[11px] [&_label.link-form-label]:font-normal [&_label.link-form-label]:tracking-[0.06em] [&_label.link-form-label]:uppercase [&_label.link-form-label]:text-subtle-foreground"
       }
       onSubmit={(e) => {
         e.preventDefault();
@@ -102,6 +100,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
               Link
             </FieldLabel>
             <Input
+              variant="surface"
               id="link-url"
               type="url"
               value={field.state.value}
@@ -127,6 +126,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
               Title
             </FieldLabel>
             <Input
+              variant="surface"
               id="link-title"
               value={field.state.value}
               onBlur={field.handleBlur}
@@ -151,6 +151,8 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
               Note
             </FieldLabel>
             <Textarea
+              variant="surface"
+              className="max-h-60"
               id="link-note"
               rows={1}
               placeholder="Why it caught your eye (optional)"

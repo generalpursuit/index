@@ -1,7 +1,7 @@
 import { NotificationSettings } from "@/features/notifications/settings";
 import { DesktopUpdates } from "@/lib/desktop/updates";
 import { AccountSecurity } from "@/features/auth/security-forms";
-import { ThemeControl } from "@index/ui/components/theme-control";
+import { ThemeControl } from "@/features/settings/appearance";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { ChevronDown, Pencil } from "lucide-react";
@@ -18,13 +18,11 @@ import {
 } from "@index/ui/components/dropdown-menu";
 import { updateProfileSchema } from "@index/api/features/profiles/schemas";
 import { useEffect, useRef, useState, type RefObject } from "react";
-import {
-  Confirmation,
-  IconButton,
-  Modal,
-  QueryState,
-  UserAvatar,
-} from "@/components/app/primitives";
+import { Confirmation } from "@index/ui/components/confirmation";
+import { IconButton } from "@index/ui/components/icon-button";
+import { Modal } from "@index/ui/components/modal";
+import { QueryState } from "@/components/app/query-state";
+import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { squarePhoto } from "@/lib/photo";
@@ -231,9 +229,7 @@ function EditProfile({
       }}
     >
       <form
-        className={
-          "form-stack flex flex-col gap-4.5 edit-profile [&_input]:min-h-11.5 [&_input]:p-[11px_14px] [&_input]:border-border [&_input]:rounded-[10px] [&_input]:bg-surface [&_input]:text-[16px]"
-        }
+        className={"form-stack flex flex-col gap-4.5 edit-profile"}
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -279,6 +275,7 @@ function EditProfile({
                   {input.label}
                 </FieldLabel>
                 <Input
+                  variant="surface"
                   id={"profile-" + input.name}
                   name={input.name}
                   autoComplete={input.autoComplete}

@@ -3,7 +3,7 @@ import { useForm } from "@tanstack/react-form";
 import { createGroupSchema, type CreateGroupInput } from "@index/api/features/groups/schemas";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { Confirmation } from "@/components/app/primitives";
+import { Confirmation } from "@index/ui/components/confirmation";
 import type { Group } from "@/lib/types";
 import { GroupLockControl, groupPrivacyDescription } from "./group-lock-control";
 

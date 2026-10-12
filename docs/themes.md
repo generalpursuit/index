@@ -2,54 +2,40 @@
 
 Appearance is `system`, `light`, or `dark`, stored under `index.theme` on this device. System is the default. It is independent of account state, remains after sign-out, and is not sent to the API. Web tabs share the choice for their origin; Tauri and the native app keep their own local preference. Switching domains does not transfer browser storage.
 
-Shared web imports:
+Web appearance is application/device state:
 
 ```tsx
-import { ThemeControl } from "@index/ui/components/theme-control";
-import { useTheme } from "@index/ui/hooks/use-theme";
-import type { ThemePreference } from "@index/ui/lib/theme";
+import { ThemeControl } from "@/features/settings/appearance";
+import { useTheme } from "@/lib/appearance/use-theme";
+import type { ThemePreference } from "@/lib/appearance/store";
 // useTheme(): { preference, resolved, setPreference }
 ```
 
-`ThemeControl` is an accessible fieldset of native radios. No provider is required. `installTheme(window)` owns one device store, follows `prefers-color-scheme`, handles unavailable storage, and synchronizes other tabs. Its self-contained `themeBootstrapScript` must run before CSS/app startup; the web build serves it as a same-origin blocking script, compatible with Tauri's existing CSP. The bootstrap sets the root class and `color-scheme` before paint, and React subscribes to that same store.
+`ThemeControl` is an accessible fieldset of native radios in Settings. No provider is required. `installTheme(window)` owns one device store under `__INDEX_THEME__`, follows `prefers-color-scheme`, handles unavailable storage, and synchronizes other tabs. Its self-contained `themeBootstrapScript` runs before CSS/app startup through `apps/web/theme-plugin.ts`; the build serves `/theme.js` as a same-origin blocking script, compatible with Tauri's CSP. The bootstrap sets the root class and `color-scheme` before paint, and React subscribes to that same store. Desktop appearance synchronization uses this web store; the shared UI toaster receives the resolved theme from the root component.
+
+The UI package owns visual tokens, fonts and presentation, without storage keys, bootstrap or app account/platform dependencies. Its stylesheet scans UI sources; the importing web stylesheet registers web source files.
 
 Use semantic Tailwind colors from `packages/ui/src/styles/globals.css`: `background`, `foreground`, `card`, `popover`, `primary`/`primary-foreground`, `secondary`, `muted`/`muted-foreground`, `surface`, `subtle-foreground`, `accent`, `border`, `input`, `ring`, `destructive`, `destructive-surface`, `success`, `overlay`, `category-*`, and `avatar-foreground`. Foreground pairs follow each surface in both schemes. Use `primary-foreground` on primary buttons/bubbles; do not hardcode white text. Category colors and white avatar initials are intentional semantic roles. Application layout utilities belong in the components; class markers used by tests or scroll hooks are retained.
 
 Native imports: `ThemePreference` from `IndexCore` exposes `storageKey`, `init(storedValue:)`, and `resolved(systemIsDark:)`. `IndexPalette` and `AppearanceSettings` live in `Sources/IndexApp/Theme.swift`. `@AppStorage(ThemePreference.storageKey)` is device-local; `ThemePreference.colorScheme` maps System to `nil` so SwiftUI follows OS appearance, including presented sheets. Use `IndexPalette.background`, `.foreground`, `.surface`, `.card`, `.muted`, `.mutedForeground`, `.border`, `.primary`, `.primaryForeground`, and `.destructive` in new screens.
 
-Native source compilation, Xcode/simulator/device checks, VoiceOver/Dynamic Type, and signed Tauri WKWebView/titlebar behavior must be verified on a Mac. They have not been verified on this Linux VM. Prior native checks in other documents describe earlier builds.
-
-## Verification in this VM
-
-The production build, web/shared UI TypeScript checks, and seven device-store tests passed. Six production bootstrap browser cases passed, including saved Light/Dark, default System, invalid preference fallback, blocked storage and live OS changes before app JavaScript. The emitted `dist/index.html` references `/theme.js` before both app modules and CSS. The first-paint cases enforce `script-src 'self'`; no provider injects an inline script.
-
-The initial Linux renderer stall was resolved by an independent Xvfb display. The working setup is headed Nix Chromium 150 on a fresh owned display `:174` (1440×960×24, `-nolisten tcp`), with the themes API/web ports 3302/4473 and Bun 1.4.2. No `LD_LIBRARY_PATH` or application rendering workaround is required. The rollout runner owns and cleans only its own display and refuses to reuse an existing one:
+## Checks
 
 ```sh
-# From the worktree root; prepend the verified Bun 1.4.2 bin directory to PATH in this VM.
-VITE_SERVER_URL=http://localhost:3302 bun run --cwd apps/web build
-E2E_PRODUCTION=1 python3 /home/ono/index/.git/t3-feature-rollout/run-browser-tests.py --feature themes --
-```
-
-On another machine, use the repository Playwright workflow with an installed browser:
-
-```sh
-bun test apps/web/tests/theme.test.ts apps/web/tests/desktop-session.test.ts
+bun run --cwd apps/web test
 bun run --cwd packages/ui check-types
 VITE_SERVER_URL=http://localhost:3302 bun run --cwd apps/web check-types
 cd apps/web
-E2E_API_PORT=3302 E2E_WEB_PORT=4473 E2E_PRODUCTION=1 bun run test:e2e
+E2E_API_PORT=3302 E2E_WEB_PORT=4473 E2E_PRODUCTION=1 bun run test:e2e themes.spec.ts theme-bootstrap.spec.ts groups.spec.ts mobile-layout.spec.ts
 ```
 
-`PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` optionally selects an installed Chromium. Each suite uses disposable, isolated PGlite data. Do not run native fixture checks against the same API while browser tests reset it. Screenshots and traces are in ignored `apps/web/test-results`.
+The browser suite uses disposable PGlite data and checks the production bootstrap before application modules, including saved/default/invalid preferences, unavailable storage, live system changes, cross-tab changes and signed-out persistence. It also checks light/dark settings, nested dialogs, focus and narrow-screen layout. Artifacts go to ignored `apps/web/test-results`.
 
-The focused Settings/theme/desktop bridge run passed all 11 cases (37.7s): keyboard-accessible radios, live OS changes, persistence across reload/sign-out/another account, tab synchronization, Light/Dark text contrast (at least 4.5:1), overlays, forms, menus and mobile/desktop layout. Browser bridge assertions verify the commands sent to Tauri, not native execution. Screenshots were inspected at desktop and phone sizes. The full production suite then passed 42/45 (2.3m). Its three failures were corrected: recipient circles now retain the original literal `50%` radius, and the profile scroll assertion accepts the reviewed fractional residual of at most one CSS pixel while retaining sticky-heading/active-week checks. All three affected cases passed on the rebuilt production bundle (10.3s). Final web/shared UI types, 11 theme/desktop transport unit tests and scoped lint passed.
-
-The mobile overflow investigation compared a blank page and the Settings sheet. Under this headed emulation, requesting 390px produced `innerWidth = clientWidth = scrollWidth = 391`, `visualViewport.width = 390.6865539550781` and DPR `0.9999999767169356`. Both documents had zero overflow. The test now asserts exact `scrollWidth === clientWidth` instead of equating rendered geometry to Playwright's requested size; dialog/input and carousel bounds remain checked. No product layout workaround was added.
+On Linux, run Playwright with `--headed` under an owned Xvfb display (`xvfb-run --auto-servernum`). Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to use an already installed Chromium. The API/web ports must match the build and remain isolated from other test suites. Chromium phone emulation and simulated viewport changes do not verify physical Safari keyboard behavior or native Tauri chrome.
 
 ## Remaining Mac verification
 
-Swift is absent from this VM. Rustup reports no installed toolchains; Cargo reports `rustup could not choose a version of cargo to run, because one wasn't specified explicitly, and no default is configured.` Native compilation/tests, signing, simulator/device checks and actual macOS titlebar behavior are **unrun**. Earlier native results elsewhere in the repository are not evidence for these changes.
+Native compilation, signing, simulator/device checks and actual macOS titlebar behavior require a Mac with Xcode and Rust. Linux browser checks do not establish those results.
 
 On the user's Mac with full Xcode and Rust installed, run from the worktree root (commands below only use disposable loopback endpoints):
 

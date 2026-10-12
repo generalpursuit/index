@@ -60,6 +60,7 @@ export function SecurityField({
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <Input
+        className="bg-surface px-2.5 py-1 text-xs"
         id={id}
         type={type}
         value={value}

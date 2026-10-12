@@ -1,6 +1,6 @@
 import { describe, test } from "node:test";
 import assert from "node:assert/strict";
-import { installTheme, themeBootstrapScript } from "../../../packages/ui/src/lib/theme";
+import { installTheme, themeBootstrapScript } from "../src/lib/appearance/store";
 
 function device(stored: string | null = null, dark = false, blocked = false) {
   const values = new Map(stored === null ? [] : [["index.theme", stored]]);

@@ -64,7 +64,7 @@ function Login() {
     return (
       <main
         className={
-          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_button]:cursor-pointer [&_[data-slot='button']]:rounded-full"
+          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1]"
         }
       >
         <p role="status">Checking your session…</p>
@@ -74,12 +74,12 @@ function Login() {
     return (
       <main
         className={
-          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_button]:cursor-pointer [&_[data-slot='button']]:rounded-full"
+          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1]"
         }
       >
         <div
           className={
-            "auth-form w-[min(100%,_360px)] [&_input]:h-11 [&_input]:bg-surface [&_input]:rounded-[10px] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
+            "auth-form w-[min(100%,_360px)] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
           }
         >
           <h1
@@ -104,12 +104,12 @@ function Login() {
     return (
       <main
         className={
-          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_button]:cursor-pointer [&_[data-slot='button']]:rounded-full"
+          "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1]"
         }
       >
         <div
           className={
-            "auth-form w-[min(100%,_360px)] [&_input]:h-11 [&_input]:bg-surface [&_input]:rounded-[10px] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
+            "auth-form w-[min(100%,_360px)] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
           }
         >
           <RecoveryForm onBack={() => setRecovering(false)} />
@@ -153,12 +153,12 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
   return (
     <main
       className={
-        "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_button]:cursor-pointer [&_[data-slot='button']]:rounded-full"
+        "auth-page select-none bg-background text-foreground text-[14px] leading-[1.5] min-h-dvh grid place-items-center p-[40px_24px] [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1]"
       }
     >
       <div
         className={
-          "auth-form w-[min(100%,_360px)] [&_input]:h-11 [&_input]:bg-surface [&_input]:rounded-[10px] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
+          "auth-form w-[min(100%,_360px)] [&_[type='submit']]:h-11 [&_[type='submit']]:mt-1.5"
         }
       >
         <h1
@@ -181,6 +181,7 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
                 <Field>
                   <FieldLabel htmlFor={input.name}>{input.label}</FieldLabel>
                   <Input
+                    className="bg-surface px-2.5 py-1 text-xs"
                     id={input.name}
                     type={input.type}
                     autoComplete={input.autoComplete}

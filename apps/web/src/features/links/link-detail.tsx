@@ -12,8 +12,11 @@ import {
 import { useViewer } from "@/hooks/use-api";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
 import { useLink, useComments } from "./hooks/use-links";
-import { LinkActions, domain } from "./link-row";
-import { QueryState, UserAvatar, More, Back } from "@/components/app/primitives";
+import { LinkActions } from "./link-row";
+import { domain } from "./url";
+import { QueryState, More } from "@/components/app/query-state";
+import { UserAvatar } from "@/components/app/user-avatar";
+import { Back } from "@/components/app/navigation";
 import { timeAgo } from "@/lib/weeks";
 export function LinkDetail({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const link = useLink(id);
@@ -175,9 +178,7 @@ function Post({
       </div>
       {viewer ? (
         <form
-          className={
-            "composer flex gap-2.5 items-center pt-4 [&_input]:flex-1 [&_input]:min-w-0 [&_input]:bg-muted! [&_input]:border [&_input]:border-border [&_input]:rounded-full [&_input]:h-11.5 [&_input]:p-[0_16px] [&_input]:text-[14px] [&_button]:w-10 [&_button]:h-10 [&_button]:flex-none"
-          }
+          className={"composer flex gap-2.5 items-center pt-4"}
           onSubmit={(e) => {
             e.preventDefault();
             if (text.trim())
@@ -185,6 +186,7 @@ function Post({
           }}
         >
           <Input
+            variant="composer"
             ref={input}
             disabled={create.isPending}
             aria-label="Comment"
@@ -196,6 +198,7 @@ function Post({
           <Button
             type="submit"
             size="icon"
+            className="size-10 flex-none"
             aria-label="Post comment"
             disabled={!text.trim() || create.isPending}
           >

@@ -1,3 +1,4 @@
+import { useTheme } from "@/lib/appearance/use-theme";
 import { NotificationLifecycle } from "@/features/notifications/lifecycle";
 import { isMenuBar } from "@/lib/desktop";
 import { DesktopTheme } from "@/lib/desktop/theme";
@@ -18,20 +19,7 @@ export interface RouterAppContext {
   queryClient: QueryClient;
 }
 export const Route = createRootRouteWithContext<RouterAppContext>()({
-  component: () => (
-    <>
-      <HeadContent />
-      <DesktopTheme />
-      <DesktopReleaseIdentity />
-      {!isMenuBar && <NotificationLifecycle />}
-      <Outlet />
-      <Toaster
-        richColors
-        offset={isMenuBar ? 104 : undefined}
-        mobileOffset={isMenuBar ? { bottom: 104, left: 16, right: 16 } : undefined}
-      />
-    </>
-  ),
+  component: Root,
   head: () => ({
     meta: [
       { title: "Index" },
@@ -57,3 +45,22 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
     </div>
   ),
 });
+
+function Root() {
+  const { resolved } = useTheme();
+  return (
+    <>
+      <HeadContent />
+      <DesktopTheme />
+      <DesktopReleaseIdentity />
+      {!isMenuBar && <NotificationLifecycle />}
+      <Outlet />
+      <Toaster
+        theme={resolved}
+        richColors
+        offset={isMenuBar ? 104 : undefined}
+        mobileOffset={isMenuBar ? { bottom: 104, left: 16, right: 16 } : undefined}
+      />
+    </>
+  );
+}

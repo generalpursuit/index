@@ -5,7 +5,7 @@ import { useAPI } from "@/hooks/use-api";
 import { linkReferencePath, isUUID } from "@/lib/routes";
 import { LinkDetail } from "@/features/links/link-detail";
 import { LinkEditor } from "@/features/links/link-editor";
-import { QueryState } from "@/components/app/primitives";
+import { QueryState } from "@/components/app/query-state";
 /** Search parameters contain short references; only resolved UUIDs reach data hooks. */
 export function LinkReference({
   value,

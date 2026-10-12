@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import { weekLabel, weekRange } from "@/lib/weeks";
-import { Modal } from "./primitives";
+import { Modal } from "@index/ui/components/modal";
 
 export type Week = { weekStart: string; count: number };
 

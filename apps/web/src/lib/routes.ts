@@ -1,7 +1,8 @@
 import { redirect } from "@tanstack/react-router";
 import { client, apiFor } from "@/utils/orpc";
 import type { QueryClient } from "@tanstack/react-query";
-import { groupsOptions, weeksOptions, weekLinksOptions } from "@/features/links/queries";
+import { weeksOptions, weekLinksOptions } from "@/features/links/queries";
+import { groupsOptions } from "@/features/groups/queries";
 export { profilePath, groupPath, linkPath, conversationPath } from "@index/api/routes";
 export const isUUID = (value: string) =>
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);

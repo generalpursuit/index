@@ -2,7 +2,9 @@ import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@index/ui/components/tabs";
-import { Modal, More, QueryState, UserAvatar } from "@/components/app/primitives";
+import { Modal } from "@index/ui/components/modal";
+import { More, QueryState } from "@/components/app/query-state";
+import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
 import { useConnections, useProfileActions } from "./hooks/use-profiles";
 export function Connections({
