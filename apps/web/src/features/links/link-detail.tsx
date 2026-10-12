@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import { ProfileLink } from "@/components/app/profile-link";
 import { Link } from "@tanstack/react-router";
 import { ArrowUp, ArrowUpRight, MoreHorizontal, Reply, Trash } from "lucide-react";
 import { Button } from "@index/ui/components/button";
@@ -55,19 +56,18 @@ function Post({
     >
       <header
         className={
-          "post-author flex items-center gap-3 pr-6 mb-7.5 text-[13px] [&_.user-avatar]:w-7.5 [&_.user-avatar]:h-7.5"
+          "post-author flex items-center gap-3 pr-6 mb-7.5 min-h-7.5 text-[13px] [&_.user-avatar]:w-7.5 [&_.user-avatar]:h-7.5"
         }
       >
         {standalone && <Back />}
         {author.data && (
-          <Link
-            to="/u/$username"
-            params={{ username: author.data.username! }}
+          <ProfileLink
+            person={author.data}
             className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
           >
             <UserAvatar person={author.data} />
             <strong>{author.data.username ?? author.data.name}</strong>
-          </Link>
+          </ProfileLink>
         )}
         <small>{timeAgo(link.createdAt)}</small>
       </header>
@@ -112,18 +112,18 @@ function Post({
                 }
                 key={c.id}
               >
-                <Link to="/u/$username" params={{ username: c.author.username! }}>
+                <ProfileLink person={c.author}>
                   <UserAvatar person={c.author} />
-                </Link>
+                </ProfileLink>
                 <div
                   className={
                     "comment-body [&_p]:select-text [&_p]:whitespace-pre-wrap [&_p]:wrap-anywhere [&_p]:mt-1.5 [&_p]:text-foreground [&_header]:flex [&_header]:items-center [&_header]:gap-2 [&_header]:text-[13px] [&_small]:text-[11px] flex-1 min-w-0"
                   }
                 >
                   <header>
-                    <Link to="/u/$username" params={{ username: c.author.username! }}>
+                    <ProfileLink person={c.author}>
                       {c.author.username ?? c.author.name}
-                    </Link>
+                    </ProfileLink>
                     <small>{timeAgo(c.createdAt)}</small>
                   </header>
                   <p>{c.body}</p>

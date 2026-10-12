@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "@tanstack/react-router";
+import { ProfileLink } from "@/components/app/profile-link";
 import { Button } from "@index/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@index/ui/components/tabs";
 import { Modal } from "@index/ui/components/modal";
@@ -25,6 +25,7 @@ export function Connections({
         if (!v) onClose();
       }}
       title="Connections"
+      position="top"
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList variant="line">
@@ -52,15 +53,14 @@ export function Connections({
                 }
                 key={p.id}
               >
-                <Link
-                  to="/u/$username"
-                  params={{ username: p.username! }}
+                <ProfileLink
+                  person={p}
                   onClick={onClose}
                   className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
                 >
                   <UserAvatar person={p} />
                   <span>{p.username ?? p.name}</span>
-                </Link>
+                </ProfileLink>
                 <Button
                   variant="outline"
                   disabled={actions.removeFollower.isPending || actions.unfollow.isPending}

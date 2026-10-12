@@ -7,5 +7,5 @@ export const Route = createFileRoute("/_app/people/$userId")({
     settings: z.boolean().optional().catch(undefined),
   }),
   loaderDeps: ({ search }) => ({ group: search.group }),
-  loader: ({ location }) => resolveLocation(location),
+  loader: ({ context, location }) => resolveLocation(context, location),
 });

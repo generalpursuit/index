@@ -24,7 +24,7 @@ import {
 import { Button } from "@index/ui/components/button";
 import { useViewer, useAPI } from "@/hooks/use-api";
 import { useLibraryActions } from "./hooks/use-links";
-import { RecipientPicker } from "@/features/messages/recipient-picker";
+import { RecipientPicker, prefetchRecipients } from "@/features/messages/recipient-picker";
 import { Confirmation } from "@index/ui/components/confirmation";
 import type { SavedLink } from "@/lib/types";
 import { categoryMarkClassName } from "./category-mark";
@@ -114,6 +114,7 @@ export function LinkActions({ link }: { link: SavedLink }) {
     own = viewer?.id === link.ownerId,
     actions = useLibraryActions();
   const api = useAPI(),
+    cache = useQueryClient(),
     group = useQuery(
       api.groups.get.queryOptions({
         input: { id: link.groupId ?? "00000000-0000-4000-8000-000000000000" },
@@ -147,6 +148,8 @@ export function LinkActions({ link }: { link: SavedLink }) {
                     : "Star"}
               </DropdownMenuItem>
               <DropdownMenuItem
+                onPointerEnter={() => prefetchRecipients(cache, api, viewer.id)}
+                onFocus={() => prefetchRecipients(cache, api, viewer.id)}
                 onClick={() => setForward(true)}
                 // Only links in locked groups stay private to their owner.
                 disabled={!!link.groupId && group.data?.visibility !== "public"}

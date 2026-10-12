@@ -1,24 +1,37 @@
 import { redirect } from "@tanstack/react-router";
 import { client, apiFor } from "@/utils/orpc";
 import type { QueryClient } from "@tanstack/react-query";
+import type { ResolvedRoute } from "@/lib/types";
+import { monday } from "@/lib/weeks";
 import { weeksOptions, weekLinksOptions } from "@/features/links/queries";
 import { groupsOptions } from "@/features/groups/queries";
+import { profileOptions } from "@/features/profiles/queries";
+import { linkPath } from "@index/api/routes";
 export { profilePath, groupPath, linkPath, conversationPath } from "@index/api/routes";
 export const isUUID = (value: string) =>
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
 export const linkReferencePath = (value: string) =>
   `${isUUID(value) ? "/links/" : "/l/"}${encodeURIComponent(value)}`;
-/** Revalidate on each navigation, before disclosing even a canonical redirect. */
-export async function resolveLocation(location: {
-  pathname: string;
-  searchStr: string;
-  hash: string;
-}) {
-  const search = new URLSearchParams(location.searchStr);
-  const result = await client.routes.resolve({
-    path: location.pathname,
-    group: search.get("group") ?? undefined,
+type RouteContext = {
+  session: { user: { id: string; emailVerified?: boolean } } | null;
+  queryClient: QueryClient;
+};
+type RouteLocation = { pathname: string; searchStr: string; hash: string; state?: unknown };
+const api = (context: RouteContext) =>
+  apiFor(context.session?.user.emailVerified ? context.session.user.id : null);
+const routeOptions = (context: RouteContext, location: RouteLocation) =>
+  api(context).routes.resolve.queryOptions({
+    input: {
+      path: location.pathname,
+      group: new URLSearchParams(location.searchStr).get("group") ?? undefined,
+    },
+    // A hover preload's answer serves the navigation that follows it, not later ones.
+    staleTime: 5_000,
   });
+/** Revalidate on each navigation, before disclosing even a canonical redirect. */
+export async function resolveLocation(context: RouteContext, location: RouteLocation) {
+  const search = new URLSearchParams(location.searchStr);
+  const result = await context.queryClient.fetchQuery(routeOptions(context, location));
   search.delete("group");
   // Old modal/attachment URLs remain usable, but addresses written back contain short IDs.
   for (const key of ["post", "edit", "attach"]) {
@@ -44,20 +57,64 @@ export async function resolveLocation(location: {
   if (href !== current) throw redirect({ href, replace: true });
   return result;
 }
-export async function preloadProfile(
-  context: { session: { user: { id: string } } | null; queryClient: QueryClient },
-  userId: string,
-  groupId?: string,
+/** Where a link said it goes (navigation state), or where the path last resolved. */
+export type RouteHint = { userId?: string; groupId?: string; conversationId?: string };
+export function routeHint(context: RouteContext, location: RouteLocation): RouteHint {
+  const state = (location.state ?? {}) as Record<string, unknown>;
+  const known: Partial<ResolvedRoute> =
+    context.queryClient.getQueryData(routeOptions(context, location).queryKey) ?? {};
+  // User IDs aren't UUIDs; any of these is only used once the path resolves to it.
+  const id = (value: unknown) =>
+    typeof value === "string" && /^[\w-]{1,64}$/.test(value) ? value : undefined;
+  return {
+    userId: id(state.userId) ?? ("userId" in known ? known.userId : undefined),
+    groupId: id(state.groupId) ?? ("groupId" in known ? known.groupId : undefined),
+    conversationId:
+      id(state.conversationId) ?? ("conversationId" in known ? known.conversationId : undefined),
+  };
+}
+/** A list row already knows its post; opening it needs no lookup before showing it. */
+export function seedLinkRoute(
+  cache: QueryClient,
+  api: ReturnType<typeof apiFor>,
+  link: { id: string; shortId: string },
 ) {
-  const api = apiFor(context.session?.user.id ?? null),
-    cache = context.queryClient;
-  const profile = await cache.ensureQueryData(api.profiles.get.queryOptions({ input: { userId } }));
-  if (!profile.canViewContent) return;
-  const [, weeks] = await Promise.all([
-    cache.ensureInfiniteQueryData(groupsOptions(api, userId)),
-    cache.ensureInfiniteQueryData(weeksOptions(api, userId, groupId)),
-  ]);
-  const first = weeks.pages[0]?.items[0];
-  if (first)
-    void cache.prefetchInfiniteQuery(weekLinksOptions(api, userId, first.weekStart, groupId));
+  const { queryKey } = api.routes.resolve.queryOptions({
+    input: { path: linkReferencePath(link.shortId) },
+  });
+  const route: ResolvedRoute = {
+    kind: "link",
+    linkId: link.id,
+    canonicalPath: linkPath(link.shortId),
+  };
+  if (!cache.getQueryData(queryKey)) cache.setQueryData(queryKey, route, { updatedAt: 0 });
+}
+export async function preloadProfile(context: RouteContext, userId: string, groupId?: string) {
+  const cache = context.queryClient,
+    profileApi = api(context);
+  const profile = cache.ensureQueryData(profileOptions(profileApi, userId));
+  // Each list applies the profile's visibility itself, so they can start alongside it.
+  const groups = cache.ensureInfiniteQueryData(groupsOptions(profileApi, userId));
+  const weeks = cache.ensureInfiniteQueryData(weeksOptions(profileApi, userId, groupId));
+  groups.catch(() => {});
+  weeks.catch(() => {});
+  if (!(await profile).canViewContent) return;
+  const [, loaded] = await Promise.all([groups, weeks]);
+  // The weeks that fill the first screen open with their links, including your empty current week.
+  const shown = context.session?.user.id === userId ? [monday()] : [];
+  let rows = 0;
+  for (const week of loaded.pages[0]?.items ?? []) {
+    if (rows >= 24 || shown.length >= 4) break;
+    if (!shown.includes(week.weekStart)) shown.push(week.weekStart);
+    rows += week.count;
+  }
+  // A failed week shows its own retry; it doesn't hold the page.
+  await Promise.all(
+    shown.map((week) =>
+      cache.prefetchInfiniteQuery({
+        ...weekLinksOptions(profileApi, userId, week, groupId),
+        retry: false,
+      }),
+    ),
+  );
 }

@@ -6,6 +6,18 @@ import type { ReactNode, RefObject } from "react";
 export const modalClassName =
   "app-dialog select-none bg-surface text-foreground border-border [&_.dialog-title]:pr-10 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15] [&_[data-slot='dialog-header']]:gap-3 [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 [&_[data-slot='drawer-close']]:absolute [&_[data-slot='drawer-close']]:top-6.5 [&_[data-slot='drawer-close']]:right-5.5 wrap-anywhere min-w-0";
 
+// Each replaces the dialog primitive's `sm:max-w-sm`, which would cap every size at small.
+const modalSizes = {
+  sm: "w-96 sm:max-w-[calc(100vw_-_32px)]",
+  md: "w-150 sm:max-w-[calc(100vw_-_32px)]",
+  lg: "w-162.5 sm:max-w-[calc(100vw_-_32px)]",
+};
+// A list that changes length grows downward from a fixed top instead of re-centering.
+const modalPositions = {
+  center: "max-h-[calc(100dvh_-_40px)]",
+  top: "top-[12dvh] translate-y-0 max-h-[calc(88dvh_-_20px)]",
+};
+
 export function Modal({
   open,
   onOpenChange,
@@ -13,6 +25,8 @@ export function Modal({
   description,
   children,
   className = "",
+  size = "sm",
+  position = "center",
   returnFocus,
 }: {
   open: boolean;
@@ -21,6 +35,8 @@ export function Modal({
   description?: string;
   children: ReactNode;
   className?: string;
+  size?: keyof typeof modalSizes;
+  position?: keyof typeof modalPositions;
   returnFocus?: RefObject<HTMLElement | null>;
 }) {
   // Phones get a bottom sheet that can be swiped away; larger screens a centered dialog.
@@ -52,7 +68,7 @@ export function Modal({
         finalFocus={returnFocus}
         className={
           modalClassName +
-          " rounded-[22px] max-h-[calc(100dvh_-_40px)] overflow-y-auto p-7 gap-5 " +
+          ` ${modalSizes[size]} ${modalPositions[position]} rounded-[22px] overflow-y-auto p-7 gap-5 ` +
           className
         }
       >

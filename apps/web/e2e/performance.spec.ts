@@ -42,12 +42,13 @@ test("a visible post opens with content while its detail refresh is still pendin
     release();
   }
 });
-test("Discover preloads its data on navigation intent", async ({ page }) => {
-  await login(page);
+test("Discover's data loads once, before it opens", async ({ page }) => {
+  // Counted from the start: an idle warm-up after login may load it before the hover does.
   let recommendations = 0;
   page.on("request", (request) => {
     if (request.url().includes("/rpc/v1/discovery/recommendations")) recommendations++;
   });
+  await login(page);
   await page.getByRole("link", { name: "Discover", exact: true }).hover();
   await expect.poll(() => recommendations, { timeout: 1500 }).toBe(1);
   await page.getByRole("link", { name: "Discover", exact: true }).click();
@@ -57,7 +58,6 @@ test("Discover preloads its data on navigation intent", async ({ page }) => {
 test("a profile renders its first weeks while the rest of the index is pending", async ({
   page,
 }) => {
-  await login(page);
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
@@ -75,6 +75,8 @@ test("a profile renders its first weeks while the rest of the index is pending",
     body.json.nextBefore = fixture.older;
     await route.fulfill({ response, json: body });
   });
+  // Routed before login: an idle warm-up may load the first weeks before the click does.
+  await login(page);
   try {
     await page.getByRole("link", { name: "Your profile", exact: true }).click();
     await expect.poll(() => requests).toBeGreaterThan(1);
@@ -84,6 +86,38 @@ test("a profile renders its first weeks while the rest of the index is pending",
   } finally {
     release();
   }
+});
+test("the current page keeps its layout until the next page is ready", async ({ page }) => {
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/rpc/v1/discovery/recommendations**", async (route) => {
+    await blocked;
+    await route.continue();
+  });
+  await login(page);
+  try {
+    await page.getByRole("link", { name: "Discover", exact: true }).click();
+    await expect(page).toHaveURL(/\/discover$/);
+    // The feed is still on screen, so it keeps the feed's full-height layout.
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+    await expect(page.locator("#app-content")).toHaveClass(/feed-main/);
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
+  await expect(page.locator("#app-content")).not.toHaveClass(/feed-main/);
+});
+test("a post opens at its full width", async ({ page }) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
+  expect(await post.evaluate((element) => (element as HTMLElement).offsetWidth)).toBe(650);
 });
 test("Discover follow buttons do not fetch every person's full profile", async ({ page }) => {
   await login(page);

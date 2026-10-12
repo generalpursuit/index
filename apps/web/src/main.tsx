@@ -17,6 +17,9 @@ const router = createRouter({
   routeTree,
   defaultPreload: "intent",
   defaultPreloadStaleTime: 0,
+  // The current page stays, under a progress bar, until the next one is ready. Only a very slow
+  // load replaces it with a spinner.
+  defaultPendingMs: 3000,
   scrollToTopSelectors: ["#app-scroll"],
   scrollRestoration: true,
   defaultPendingComponent: () => <Loader />,
@@ -29,6 +32,16 @@ const router = createRouter({
 declare module "@tanstack/react-router" {
   interface Register {
     router: typeof router;
+  }
+  interface StaticDataRouteOption {
+    /** Full-height pages that scroll inside themselves. */
+    layout?: "feed" | "chat";
+  }
+  /** Identifiers a link already knows, so the next page loads while its path is checked. */
+  interface HistoryState {
+    userId?: string;
+    groupId?: string;
+    conversationId?: string;
   }
 }
 

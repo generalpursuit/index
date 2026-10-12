@@ -1,6 +1,6 @@
 import { groupPath, profilePath } from "@index/api/routes";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
 import { Button } from "@index/ui/components/button";
 import { LockKeyhole, Earth, Plus, Star, Settings, ChevronDown } from "lucide-react";
@@ -17,7 +17,9 @@ import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
 import { Modal } from "@index/ui/components/modal";
 import { SettingsContent } from "@/features/settings/settings-page";
-import { useViewer } from "@/hooks/use-api";
+import { useAPI, useViewer } from "@/hooks/use-api";
+import { useQueryClient } from "@tanstack/react-query";
+import { connectionsOptions } from "./queries";
 import { useProfile, useProfileActions } from "./hooks/use-profiles";
 import { useLibraryWeeks } from "@/features/links/hooks/use-links";
 import { useAllGroups } from "@/features/groups/use-groups";
@@ -125,6 +127,13 @@ function ProfileContent({
     [newGroup, setNewGroup] = useState(false);
   const groupReturnFocus = useRef<HTMLButtonElement>(null);
   const hidden = !profile.canViewContent;
+  const cache = useQueryClient(),
+    api = useAPI();
+  // Both tabs, so switching between them is instant too.
+  const prefetchConnections = () => {
+    for (const kind of ["followers", "following"] as const)
+      void cache.prefetchInfiniteQuery(connectionsOptions(api, profile.id, kind));
+  };
   return (
     <div className="profile-page">
       <header
@@ -164,10 +173,20 @@ function ProfileContent({
             {profile.linkCount !== null && <span>{count(profile.linkCount, "link")}</span>}
             {own && (
               <>
-                <button type="button" onClick={() => setConnections("followers")}>
+                <button
+                  type="button"
+                  onPointerEnter={prefetchConnections}
+                  onFocus={prefetchConnections}
+                  onClick={() => setConnections("followers")}
+                >
                   {count(profile.followerCount ?? 0, "follower")}
                 </button>
-                <button type="button" onClick={() => setConnections("following")}>
+                <button
+                  type="button"
+                  onPointerEnter={prefetchConnections}
+                  onFocus={prefetchConnections}
+                  onClick={() => setConnections("following")}
+                >
                   {profile.followingCount ?? 0} following
                 </button>
               </>
@@ -260,6 +279,7 @@ function ProfileContent({
             void navigate({
               to: groupPath(profile.username!, group.slug),
               search: (old) => ({ ...old, group: undefined }),
+              state: { userId: profile.id, groupId: group.id },
             });
           }}
         />
@@ -315,15 +335,19 @@ function ProfileLinks({
   const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const onScreen = useVisibleWeeks(listRef, weeks);
-  const navigate = useNavigate();
-  const select = (group?: string) =>
-    void navigate({
+  const navigate = useNavigate(),
+    router = useRouter();
+  const destination = (value: string) => {
+    const group = value === "starred" ? (starredGroup?.id ?? value) : value;
+    return {
       to:
-        !group || group === "all"
+        group === "all"
           ? profilePath(username)
           : groupPath(username, allGroups.find((g) => g.id === group)?.slug ?? group),
-      search: (old) => ({ ...old, group: undefined }),
-    });
+      search: (old: Record<string, unknown>) => ({ ...old, group: undefined }),
+      state: { userId, groupId: group === "all" ? undefined : group },
+    };
+  };
   const jump = (week: string) =>
     document.querySelector(`.profile-week[data-week="${week}"]`)?.scrollIntoView({
       block: "start",
@@ -334,7 +358,9 @@ function ProfileLinks({
       groups={allGroups}
       filter={selected?.kind === "starred" ? "starred" : filter}
       own={own}
-      onSelect={(value) => select(value === "starred" ? (starredGroup?.id ?? value) : value)}
+      onSelect={(value) => void navigate(destination(value))}
+      // Menu items aren't links, so they preload like one on hover/focus.
+      onPreview={(value) => void router.preloadRoute(destination(value)).catch(() => {})}
       onNewGroup={onNewGroup}
     />
   );
@@ -478,14 +504,20 @@ function ProfileWeek({
           add={add}
           showOwners={showOwners}
           lockedGroups={lockedGroups}
+          placeholder={<WeekPlaceholder rows={week.count} />}
         />
       ) : (
-        <div
-          className={"profile-week-placeholder h-[calc(var(--rows)_*_var(--row))]"}
-          style={{ "--rows": week.count + (add ? 1 : 0) } as CSSProperties}
-        />
+        <WeekPlaceholder rows={week.count + (add ? 1 : 0)} />
       )}
     </section>
+  );
+}
+function WeekPlaceholder({ rows }: { rows: number }) {
+  return (
+    <div
+      className={"profile-week-placeholder h-[calc(var(--rows)_*_var(--row))]"}
+      style={{ "--rows": rows } as CSSProperties}
+    />
   );
 }
 /** The weeks with some of their section on screen, as you scroll. */
@@ -524,12 +556,14 @@ function ListFilter({
   filter,
   own,
   onSelect,
+  onPreview,
   onNewGroup,
 }: {
   groups: Group[];
   filter: string;
   own: boolean;
   onSelect: (value: string) => void;
+  onPreview: (value: string) => void;
   onNewGroup: (trigger?: HTMLButtonElement | null) => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
@@ -540,6 +574,10 @@ function ListFilter({
     chosen = lists.find((g) => g.id === filter);
   const name =
     filter === "all" ? "All" : filter === "starred" ? "Starred" : (chosen?.name ?? "All");
+  const preview = (value: string) => ({
+    onPointerEnter: () => onPreview(value),
+    onFocus: () => onPreview(value),
+  });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -560,9 +598,11 @@ function ListFilter({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="list-filter-menu">
         <DropdownMenuRadioGroup value={filter} onValueChange={(value) => onSelect(String(value))}>
-          <DropdownMenuRadioItem value="all">All</DropdownMenuRadioItem>
+          <DropdownMenuRadioItem value="all" {...preview("all")}>
+            All
+          </DropdownMenuRadioItem>
           {lists.map((g) => (
-            <DropdownMenuRadioItem key={g.id} value={g.id}>
+            <DropdownMenuRadioItem key={g.id} value={g.id} {...preview(g.id)}>
               {g.visibility === "private" && <LockKeyhole aria-hidden="true" />}
               {g.name}
             </DropdownMenuRadioItem>
@@ -570,7 +610,7 @@ function ListFilter({
           {own && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuRadioItem value="starred">
+              <DropdownMenuRadioItem value="starred" {...preview("starred")}>
                 <Star aria-hidden="true" />
                 Starred
               </DropdownMenuRadioItem>

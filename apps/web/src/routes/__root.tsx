@@ -5,8 +5,15 @@ import { DesktopTheme } from "@/lib/desktop/theme";
 import { Button } from "@index/ui/components/button";
 import { Toaster } from "@index/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
-import { HeadContent, Outlet, createRootRouteWithContext, Link } from "@tanstack/react-router";
+import {
+  HeadContent,
+  Outlet,
+  createRootRouteWithContext,
+  Link,
+  useRouterState,
+} from "@tanstack/react-router";
 import { orpc } from "@/utils/orpc";
+import { useEffect, useState } from "react";
 import "../index.css";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
@@ -45,10 +52,31 @@ export const Route = createRootRouteWithContext<RouterAppContext>()({
   ),
 });
 
+/** Shown while a page loads behind the current one; quick loads finish before it appears. */
+function NavigationProgress() {
+  const loading = useRouterState({ select: (s) => s.status === "pending" });
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setTimeout(() => setSlow(true), 150);
+    return () => {
+      clearTimeout(timer);
+      setSlow(false);
+    };
+  }, [loading]);
+  return loading && slow ? (
+    <div
+      aria-hidden="true"
+      className="navigation-progress fixed inset-x-0 top-0 z-100 h-0.5 origin-left bg-foreground/50 [animation:navigation-progress_8s_cubic-bezier(0.1,0.7,0.2,1)_both]"
+    />
+  ) : null;
+}
+
 function Root() {
   const { resolved } = useTheme();
   return (
     <>
+      <NavigationProgress />
       <HeadContent />
       <DesktopTheme />
       {!isMenuBar && <NotificationLifecycle />}

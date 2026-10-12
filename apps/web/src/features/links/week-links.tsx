@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { QueryState, More } from "@/components/app/query-state";
 import { LinkRow } from "./link-row";
 import { QuickAdd } from "./quick-add";
@@ -15,6 +15,7 @@ export function WeekLinks({
   updatedAt,
   showOwners = false,
   lockedGroups,
+  placeholder,
 }: {
   userId: string;
   week: string;
@@ -26,6 +27,8 @@ export function WeekLinks({
   showOwners?: boolean;
   /** Your locked groups; their links show a lock. */
   lockedGroups?: ReadonlySet<string>;
+  /** Shown while the links load, sized like them. */
+  placeholder?: ReactNode;
 }) {
   const list = useWeekLinks(userId, week, groupId, seed, updatedAt);
   const links = list.data?.pages.flatMap((p) => p.items) ?? [];
@@ -90,6 +93,7 @@ export function WeekLinks({
             hasData={!!list.data}
             error={list.error}
             retry={() => void list.refetch()}
+            placeholder={placeholder}
           >
             {links.map((link) => (
               <LinkRow

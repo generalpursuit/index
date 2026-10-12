@@ -11,3 +11,20 @@ html.menu-bar-surface
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
   font-size: revert-layer;
 }
+
+@keyframes navigation-progress {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(0.9);
+  }
+}
+
+/* Holds its element invisible through the animation delay; without animation it shows at once. */
+@keyframes loading-reveal {
+  from,
+  to {
+    opacity: 0;
+  }
+}
