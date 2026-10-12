@@ -116,7 +116,7 @@ Profiles, collections, post sharing and inbound links use the shared [readable r
 
 ## Group management
 
-Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group callback contract and Mac verification checklist](../../docs/groups.md).
+Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group visibility rules](../../docs/api.md#visibility-and-groups).
 
 ## Share extension
 
