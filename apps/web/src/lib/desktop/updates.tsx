@@ -100,3 +100,39 @@ export function DesktopUpdates() {
     </section>
   );
 }
+
+/** The API no longer supports this release: install the newest one and restart into it. */
+export function DesktopUpdateRequired() {
+  const [attempt, setAttempt] = useState(0);
+  const [error, setError] = useState<string>();
+  useEffect(() => {
+    let active = true;
+    desktopInvoke("desktop_restart_to_update").catch((cause) => {
+      if (active) setError(String(cause));
+    });
+    return () => {
+      active = false;
+    };
+  }, [attempt]);
+  if (!error)
+    return (
+      <p className="text-sm text-subtle-foreground" role="status">
+        Updating Index…
+      </p>
+    );
+  return (
+    <>
+      <p className="text-sm text-destructive" role="alert">
+        {error}
+      </p>
+      <Button
+        onClick={() => {
+          setError(undefined);
+          setAttempt((value) => value + 1);
+        }}
+      >
+        Try again
+      </Button>
+    </>
+  );
+}

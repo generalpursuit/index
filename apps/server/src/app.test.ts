@@ -7,6 +7,7 @@ import type { SecurityEmail } from "@index/auth/delivery";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { createApp } from "./app";
+import { minimumClientVersions } from "./client-version";
 import { mediaCacheControl, readPhoto } from "./media";
 
 const origin = "https://api.example.com";
@@ -180,6 +181,36 @@ describe("mounted server application", () => {
     assert.ok(paths["/me/profile"]);
     assert.equal(paths["/private-data"], undefined);
     assert.equal((await request("/api/v1/private-data")).status, 404);
+  });
+
+  it("asks unsupported clients to update before auth or API context runs", async () => {
+    const preflight = await request("/rpc/v1/links/list", {
+      method: "OPTIONS",
+      headers: {
+        Origin: web,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "content-type,x-index-client",
+      },
+    });
+    assert.equal(preflight.status, 204);
+    assert.match(preflight.headers.get("access-control-allow-headers")!, /X-Index-Client/);
+    for (const path of ["/rpc/v1/links/list", "/api/v1/links", "/api/auth/get-session"]) {
+      const outdated = await request(path, {
+        headers: { Origin: web, "X-Index-Client": "web/0.0.1" },
+      });
+      assert.equal(outdated.status, 426);
+      assert.equal(outdated.headers.get("access-control-allow-origin"), web);
+      assert.deepEqual(await outdated.json(), {
+        code: "CLIENT_UPDATE_REQUIRED",
+        message: "Update Index to continue.",
+      });
+    }
+    assert.equal(contexts, 0);
+    assert.equal(authRequests, 0);
+    const current = await request("/", {
+      headers: { "X-Index-Client": `web/${minimumClientVersions.web}` },
+    });
+    assert.equal(await current.text(), "OK");
   });
 
   it("allows configured desktop origins and withholds CORS permission from untrusted origins", async () => {

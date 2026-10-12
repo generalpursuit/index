@@ -119,6 +119,31 @@ struct APIClientTests {
     let _: Success = try await client.request("/test")
     #expect(try credentials.read() == "rotated.signature")
   }
+  @Test func identifiesItsReleaseAndReportsRequiredUpdatesWithoutSigningOut() async throws {
+    final class Signal: @unchecked Sendable {
+      private let lock = NSLock()
+      private var count = 0
+      func fire() { lock.withLock { count += 1 } }
+      var fired: Int { lock.withLock { count } }
+    }
+    let signal = Signal()
+    let credentials = MemoryCredentials("alice.signed")
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HTTPStub.self]
+    let client = try APIClient(
+      baseURL: URL(string: "https://api.example.com")!, credentials: credentials,
+      session: URLSession(configuration: config), onUpdateRequired: { signal.fire() })
+    HTTPStub.handler = { request in
+      #expect(request.value(forHTTPHeaderField: "X-Index-Client")?.contains("/") == true)
+      return (426, [:], Data(#"{"code":"CLIENT_UPDATE_REQUIRED","message":"Update Index to continue."}"#.utf8))
+    }
+    do {
+      let _: Success = try await client.request("/test")
+      Issue.record("An unsupported release unexpectedly reached the API")
+    } catch APIError.updateRequired {}
+    #expect(signal.fired == 1)
+    #expect(try credentials.read() == "alice.signed")
+  }
   @Test func expiresAndClearsCredentials() async throws {
     let credentials = MemoryCredentials("expired.signature")
     let client = try make(credentials)

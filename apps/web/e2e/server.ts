@@ -7,6 +7,7 @@ import { createTestDatabase } from "../../../packages/api/src/testing/database.t
 import { createAuth } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
 import { appRouter } from "../../../packages/api/src/routers/index.ts";
+import { clientHeader } from "../../server/src/client-version.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
 const database = await createTestDatabase();
@@ -149,7 +150,7 @@ Bun.serve({
       headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Expose-Headers", "set-auth-token");
     headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    headers.set("Access-Control-Allow-Headers", `Content-Type,Authorization,${clientHeader}`);
     headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     return new Response(response.body, { status: response.status, headers });
   },

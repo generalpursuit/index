@@ -3,6 +3,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { mountAuthentication, type AuthFactory } from "./authentication";
+import { clientHeader, clientVersionGate } from "./client-version";
 import { apiHandler, rpcHandler } from "./transport";
 
 type BackgroundTask = (task: Promise<unknown>) => void;
@@ -22,11 +23,12 @@ export function createApp(options: AppOptions) {
     cors({
       origin: options.origins,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization"],
+      allowHeaders: ["Content-Type", "Authorization", clientHeader],
       exposeHeaders: ["set-auth-token"],
       credentials: true,
     }),
   );
+  app.use("/*", clientVersionGate);
   mountAuthentication(app, options.auth);
   app.get(
     "/media/*",

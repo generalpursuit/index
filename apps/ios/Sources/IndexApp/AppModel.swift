@@ -18,6 +18,8 @@ final class AppModel {
   // transition for the SAME account. No private destination resolves while restricted.
   var verifiedSessionRevision: Int { session.verifiedRevision }
   var restoring = true
+  /// Set once the API rejects this release; the app cannot continue until it is updated.
+  var updateRequired = false
   var error: String?
   var configurationError: String?
   // Errors are presented by the frontmost sheet, including local/nested sheets.
@@ -49,7 +51,10 @@ final class AppModel {
       guard let url = URL(string: address), !address.contains("$(") else {
         throw APIError.invalidServer
       }
-      api = try APIClient(baseURL: url, credentials: KeychainCredentials(server: url, accessGroup: Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String))
+      api = try APIClient(
+        baseURL: url,
+        credentials: KeychainCredentials(server: url, accessGroup: Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String),
+        onUpdateRequired: { [weak self] in Task { @MainActor [weak self] in self?.updateRequired = true } })
     } catch { configurationError = error.localizedDescription }
   }
   func restore() async {
@@ -131,6 +136,8 @@ final class AppModel {
   }
   func handle(_ error: Error) {
     if error is CancellationError || Task.isCancelled { return }
+    // The update screen replaces the app; an error alert would only repeat it.
+    if case APIError.updateRequired = error { return }
     if case APIError.unauthenticated = error { clearAccount() }
     if case APIError.emailNotVerified = error {
       NotificationController.shared.clearAccount()

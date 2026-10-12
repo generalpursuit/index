@@ -9,6 +9,7 @@ import { installDesktopLinks } from "./lib/desktop";
 import { toast } from "sonner";
 
 import Loader from "./components/loader";
+import { UpdateRequired } from "./components/app/update-required";
 import { routeTree } from "./routeTree.gen";
 import { orpc, queryClient } from "./utils/orpc";
 
@@ -62,7 +63,13 @@ async function mount() {
   );
   if (import.meta.hot) import.meta.hot.dispose(dispose);
   if (!rootElement!.innerHTML) {
-    ReactDOM.createRoot(rootElement!).render(<RouterProvider router={router} />);
+    // Outside the router, so a failed route cannot hide that this release must update.
+    ReactDOM.createRoot(rootElement!).render(
+      <>
+        <RouterProvider router={router} />
+        <UpdateRequired />
+      </>,
+    );
   }
 }
 void mount().catch(() => {

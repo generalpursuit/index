@@ -19,7 +19,7 @@ macOS distribution requires valid Developer ID signing, notarization and host/Sh
 
 Public unauthenticated GitHub downloads are required for in-app updates. Private repository members can download installers manually; no repository credential is embedded in an app.
 
-[Updates](../apps/web/src-tauri/src/updates.rs) are checked at launch and hourly, then downloaded, verified and installed without asking; the new version runs the next time the app opens. Windows cannot replace a running app, so it keeps the verified installer and runs it silently on quit. Settings can restart into a waiting update sooner.
+[Updates](../apps/web/src-tauri/src/updates.rs) are checked at launch and hourly, then downloaded, verified and installed without asking; the new version runs the next time the app opens. Windows cannot replace a running app, so it keeps the verified installer and runs it silently on quit. Settings can restart into a waiting update sooner. When the API rejects the running version, the app restarts into the newest release itself.
 
 ## Publication and recovery
 

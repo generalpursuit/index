@@ -34,7 +34,11 @@ struct RootView: View {
   var body: some View {
     @Bindable var navigation = app.navigation
     Group {
-      if let message = app.configurationError {
+      if app.updateRequired {
+        ContentUnavailableView(
+          "Update Index", systemImage: "arrow.down.app",
+          description: Text("This version of Index is no longer supported. Update it from the App Store to continue."))
+      } else if let message = app.configurationError {
         ContentUnavailableView(
           "Configuration needed", systemImage: "gear", description: Text(message))
       } else if app.restoring {

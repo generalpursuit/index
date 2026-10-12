@@ -1,15 +1,22 @@
 import { accountGeneration, assertCurrentAccount } from "./account-boundary";
 
+type SessionEvent =
+  | "index:session-expired"
+  | "index:verification-required"
+  | "index:update-required";
+
 /** Check after reading the body too: a delayed old response must not expire a new identity. */
 export function createSessionEventFetch(
   network: typeof fetch,
-  notify: (event: "index:session-expired" | "index:verification-required") => void,
+  notify: (event: SessionEvent) => void,
 ): typeof fetch {
   return async (input, init) => {
     const generation = accountGeneration();
     const response = await network(input, init);
     assertCurrentAccount(generation);
-    if (response.status === 403) {
+    if (response.status === 426) {
+      notify("index:update-required");
+    } else if (response.status === 403) {
       const body = await response
         .clone()
         .json()

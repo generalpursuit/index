@@ -21,7 +21,7 @@ From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, sup
 
 The root [package.json](../package.json) `version` is the product version. Staging releases it as `X.Y.Z-staging.<run>` without a bump. Production releases exactly `X.Y.Z`: [release.ts](../packages/infra/release.ts) refuses to start unless it is higher than the latest `vX.Y.Z` tag, which the workflow creates only after every part is published. Bump the version on the way to `main`, and regenerate the iOS project with `python3 apps/ios/Scripts/generate-project.py`.
 
-The API and web deploy together once checks pass; desktop builds run alongside, and their update feed advances only after the deployment.
+The API and web deploy together once checks pass; desktop builds run alongside, and their update feed advances only after the deployment. Keep the API compatible with the previous release's clients: desktop apps update silently, but iOS updates and open browser tabs lag. To drop older clients, follow [client versions](api.md#client-versions).
 
 The administrative `setup:github` command in `packages/infra` maintains the two environments, branch policies and separate Cloudflare deployment tokens. Run it locally with authenticated `gh`, the `admin` Alchemy profile, `NEON_API_KEY` and `WORKERS_SUBDOMAIN` available:
 

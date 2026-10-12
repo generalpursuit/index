@@ -1,7 +1,7 @@
 import Foundation
 
 public enum APIError: LocalizedError, Sendable {
-  case invalidServer, invalidResponse, unauthenticated, emailNotVerified
+  case invalidServer, invalidResponse, unauthenticated, emailNotVerified, updateRequired
   case server(Int, String)
   case missingToken
   public var errorDescription: String? {
@@ -10,6 +10,7 @@ public enum APIError: LocalizedError, Sendable {
       "Configure a valid HTTPS API server. Local development may use HTTP on localhost."
     case .invalidResponse: "The server returned an unexpected response."
     case .emailNotVerified: "Verify your email to continue."
+    case .updateRequired: "Update Index to continue."
     case .unauthenticated: "Your session expired. Please sign in again."
     case .server(_, let message): message
     case .missingToken: "The server did not return a signed session token."
@@ -41,9 +42,25 @@ public actor APIClient {
   private let externallyManagedSession: Bool
   private var generation = 0
   private let responses = ResponseCache()
-  public init(baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil, externallyManagedSession: Bool = false) throws {
+  private let onUpdateRequired: (@Sendable () -> Void)?
+  /// Identifies this release so the API can ask unsupported clients to update. The macOS
+  /// Share extension ships inside the desktop app and shares its version.
+  private static let clientIdentity: String = {
+    #if os(macOS)
+      let platform = "desktop"
+    #else
+      let platform = "ios"
+    #endif
+    let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+    return "\(platform)/\(version ?? "unknown")"
+  }()
+  public init(
+    baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil,
+    externallyManagedSession: Bool = false, onUpdateRequired: (@Sendable () -> Void)? = nil
+  ) throws {
     self.baseURL = URL(string: try APIScope.normalize(baseURL.absoluteString))!
     self.externallyManagedSession = externallyManagedSession
+    self.onUpdateRequired = onUpdateRequired
     self.credentials = credentials
     self.token = try credentials.read()
     let config = URLSessionConfiguration.ephemeral
@@ -254,6 +271,7 @@ public actor APIClient {
     var request = URLRequest(url: url)
     request.httpMethod = method
     request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue(Self.clientIdentity, forHTTPHeaderField: "X-Index-Client")
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
     if let body {
       request.httpBody = try JSONEncoder().encode(body)
@@ -267,6 +285,10 @@ public actor APIClient {
     guard generation == startGeneration else { throw CancellationError() }
     guard let response = response as? HTTPURLResponse else { throw APIError.invalidResponse }
     guard (200..<300).contains(response.statusCode) else {
+      if response.statusCode == 426 {
+        onUpdateRequired?()
+        throw APIError.updateRequired
+      }
       if response.statusCode == 401, token != nil {
         try await clearSession()
         throw APIError.unauthenticated

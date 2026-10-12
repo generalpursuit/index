@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
 import { DesktopHarness } from "./desktop-harness";
 import { apiURL } from "./urls";
+
+const { version } = JSON.parse(
+  readFileSync(new URL("../../../package.json", import.meta.url), "utf8"),
+) as { version: string };
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -12,6 +17,16 @@ async function login(page: Page) {
 async function openSettings(page: Page) {
   await login(page);
   await page.getByRole("link", { name: "Settings", exact: true }).click();
+}
+/** Keep the real response's CORS headers, but answer as an API that requires an update. */
+async function requireUpdate(page: Page) {
+  await page.route("**/rpc/v1/**", async (route) =>
+    route.fulfill({
+      response: await route.fetch(),
+      status: 426,
+      json: { code: "CLIENT_UPDATE_REQUIRED", message: "Update Index to continue." },
+    }),
+  );
 }
 
 test.beforeEach(async ({ request }) => {
@@ -92,4 +107,45 @@ test("development and package-manager builds have no install action", async ({ p
 test("web settings do not offer native updates", async ({ page }) => {
   await openSettings(page);
   await expect(page.getByRole("region", { name: "Desktop updates" })).toHaveCount(0);
+});
+
+test("web identifies its release and reloads when the API requires an update", async ({ page }) => {
+  const identified = page.waitForRequest(
+    (request) =>
+      request.url().includes("/rpc/v1/") &&
+      request.headers()["x-index-client"] === `web/${version}`,
+  );
+  await login(page);
+  await identified;
+  await requireUpdate(page);
+  await page.reload();
+  const dialog = page.getByRole("alertdialog", { name: "Update Index" });
+  await expect(dialog).toContainText("no longer supported");
+  await page.unroute("**/rpc/v1/**");
+  await dialog.getByRole("button", { name: "Reload" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+  await expect(dialog).toHaveCount(0);
+});
+
+test("desktop restarts into the required update and can retry", async ({ page }) => {
+  const desktop = new DesktopHarness();
+  desktop.releaseChannel = "production";
+  desktop.updatesEnabled = true;
+  desktop.restartError = true;
+  await desktop.attach(page, "main");
+  const identified = page.waitForRequest(
+    (request) => request.headers()["x-index-client"] === `desktop/${version}`,
+  );
+  await login(page);
+  await identified;
+  await requireUpdate(page);
+  await page.reload();
+  const dialog = page.getByRole("alertdialog", { name: "Update Index" });
+  await expect(dialog.getByRole("alert")).toContainText("isn’t available yet");
+  desktop.restartError = false;
+  await dialog.getByRole("button", { name: "Try again" }).click();
+  await expect(dialog.getByRole("status")).toHaveText("Updating Index…");
+  expect(
+    desktop.commands.filter(({ command }) => command === "desktop_restart_to_update"),
+  ).toHaveLength(2);
 });

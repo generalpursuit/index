@@ -19,7 +19,8 @@ export function createQueryClient() {
         staleTime: 30_000,
         gcTime: 30 * 60_000,
         retry: (count, error) =>
-          !("status" in error && [400, 401, 403, 404].includes(Number(error.status))) && count < 2,
+          !("status" in error && [400, 401, 403, 404, 426].includes(Number(error.status))) &&
+          count < 2,
         refetchOnWindowFocus: true,
       },
       mutations: { retry: false },

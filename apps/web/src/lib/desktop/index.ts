@@ -1,3 +1,4 @@
+import { identifyClient } from "../client-version";
 import { createSessionEventFetch } from "../session-events";
 import { ENV } from "@/env.public";
 import { createNativeSessionFetch, type NativeSessionSnapshot } from "./session-fetch";
@@ -77,15 +78,18 @@ export function acceptDesktopSession(revision = checkedRevision) {
 }
 
 /** Restricted sessions retain their native credential, but must drop all app content. */
-export const apiFetch = createSessionEventFetch(sessionFetch, (event) => {
-  if (isDesktop && event === "index:verification-required") {
-    void revokeDesktopAccess()
-      .then(() => window.dispatchEvent(new Event(event)))
-      .catch(() => {
-        window.dispatchEvent(new Event("index:desktop-stale-window"));
-      });
-  } else window.dispatchEvent(new Event(event));
-});
+export const apiFetch = createSessionEventFetch(
+  identifyClient(sessionFetch, isDesktop ? "desktop" : "web"),
+  (event) => {
+    if (isDesktop && event === "index:verification-required") {
+      void revokeDesktopAccess()
+        .then(() => window.dispatchEvent(new Event(event)))
+        .catch(() => {
+          window.dispatchEvent(new Event("index:desktop-stale-window"));
+        });
+    } else window.dispatchEvent(new Event(event));
+  },
+);
 
 export function installDesktopLinks(reportError: (message: string) => void) {
   if (!isDesktop) return () => {};
