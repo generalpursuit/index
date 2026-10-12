@@ -54,10 +54,11 @@ function MenuPanel() {
   }, [session.isPending, session.isError, session.dataUpdatedAt, checking]);
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
+      // A dialog that is animating closed has already handled its own Escape.
       if (
         event.key !== "Escape" ||
         event.defaultPrevented ||
-        document.querySelector('[role="dialog"]')
+        document.querySelector('[role="dialog"]:not([data-closed])')
       )
         return;
       report(desktopInvoke("desktop_hide"));
