@@ -55,8 +55,9 @@ export const server = Cloudflare.Worker(
       domain: release?.apiDomain,
       main: "../../apps/server/src/index.ts",
       crons: ["* * * * *"],
+      // Node.js APIs are on by default from 2026-08-04; workerd warns if nodejs_compat is named.
       compatibility: {
-        flags: ["nodejs_compat"],
+        date: "2026-08-31",
       },
       env: {
         ...databaseBindings,
