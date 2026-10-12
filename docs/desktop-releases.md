@@ -1,6 +1,6 @@
 # Desktop releases
 
-Promote tested work from `dev` through `staging` to `main`. [desktop-release.yml](../.github/workflows/desktop-release.yml) releases only from `staging` or `main`, on push or manual dispatch, after CI and all native targets pass.
+Promote tested work from `dev` through `staging` to `main`. The manually dispatched [release workflow](deployment.md#release-deployment) publishes desktop apps only from `staging` or `main`, after CI and all native targets pass and the API is deployed.
 
 | Branch    | Installed app | GitHub environment   | Channel      |
 | --------- | ------------- | -------------------- | ------------ |
@@ -21,7 +21,7 @@ Public unauthenticated GitHub downloads are required for in-app updates. Private
 
 ## Publication and recovery
 
-Artifacts publish to [GitHub Releases](https://github.com/generalpursuit/index/releases) with `SHA256SUMS.txt`. Tags are `desktop-<channel>-vVERSION`; staging is a prerelease. Versioning adds the workflow run number to the base patch in [tauri.conf.json](../apps/web/src-tauri/tauri.conf.json). Do not decrease the base version. Rerunning a failed job retains its version; a new run advances it.
+Artifacts publish to [GitHub Releases](https://github.com/generalpursuit/index/releases) with `SHA256SUMS.txt`. Tags are `desktop-<channel>-vVERSION`; staging is a prerelease. [tauri.conf.json](../apps/web/src-tauri/tauri.conf.json) reads the product version from the root `package.json`; staging builds add `-staging.<run>`, so a new staging run advances the version without a bump. Rerunning a failed job retains its version.
 
 The [publisher](../apps/web/scripts/desktop/publish.ts) uploads a draft, publishes a complete release, then atomically advances only that channel's `latest.json` on `desktop-updates`. It refuses an older feed version. Failed builds leave the current feed intact.
 

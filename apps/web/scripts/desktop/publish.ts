@@ -42,12 +42,10 @@ if (currentFile) {
   const previous = updateFeed.parse(
     JSON.parse(Buffer.from(currentFile.content, "base64").toString()),
   );
-  const order = version.split(".").map(Number);
-  const old = previous.version.split(".").map(Number);
-  const different = order.findIndex((part, i) => part !== old[i]);
-  if (different >= 0 && order[different]! < old[different]!)
+  const order = Bun.semver.order(version, previous.version);
+  if (order < 0)
     throw new Error("A newer version is already on this channel. Refusing to move it backwards.");
-  alreadyCurrent = different < 0;
+  alreadyCurrent = order === 0;
   if (
     alreadyCurrent &&
     Object.entries(update.platforms).some(

@@ -2,6 +2,7 @@ import { z } from "zod";
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, copyFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
+import { desktopVersion } from "./channels.ts";
 
 export const updaterFiles = {
   "darwin-aarch64": ".app.tar.gz",
@@ -13,7 +14,7 @@ export type Platform = keyof typeof updaterFiles;
 const identity = z.object({
   platform: z.enum(["darwin-aarch64", "darwin-x86_64", "linux-x86_64", "windows-x86_64"]),
   channel: z.enum(["staging", "production"]),
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  version: z.string().regex(desktopVersion),
 });
 export const artifactMetadata = identity.extend({
   file: z.string().min(1),
@@ -25,7 +26,7 @@ type ArtifactPart = Omit<z.infer<typeof artifactMetadata>, "digests" | "platform
   channel: string;
 };
 export const updateFeed = z.object({
-  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  version: z.string().regex(desktopVersion),
   platforms: z.record(z.string(), z.object({ signature: z.string(), url: z.string() })).optional(),
 });
 

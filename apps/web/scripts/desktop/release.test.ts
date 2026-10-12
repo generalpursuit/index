@@ -5,13 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import {
-  channels,
-  channelForBranch,
-  readBaseConfig,
-  releaseConfig,
-  releaseVersion,
-} from "./channels.ts";
+import { channels, channelForBranch, readBaseConfig, releaseConfig } from "./channels.ts";
 import { collect, manifest, updaterFiles } from "./artifacts.ts";
 
 describe("macOS Share extension build", () => {
@@ -93,7 +87,7 @@ describe("macOS Share extension build", () => {
 });
 
 describe("desktop release isolation", () => {
-  test("release preparation reads and validates its config before dependencies are installed", () => {
+  test("channel config reads and validates the Tauri identity without dependencies", () => {
     const root = mkdtempSync(join(tmpdir(), "index-release-prepare-"));
     try {
       const scripts = join(root, "scripts/desktop");
@@ -110,7 +104,7 @@ describe("desktop release isolation", () => {
           process.execPath,
           [
             "--eval",
-            'import { readBaseConfig, channelForBranch, releaseVersion } from "./scripts/desktop/channels.ts"; console.log(channelForBranch("staging"), releaseVersion(readBaseConfig().version, "42"));',
+            'import { readBaseConfig, channelForBranch } from "./scripts/desktop/channels.ts"; console.log(channelForBranch("staging"), readBaseConfig().version);',
           ],
           { cwd: root, encoding: "utf8" },
         );
@@ -152,12 +146,19 @@ describe("desktop release isolation", () => {
     ).toThrow();
     expect(() => releaseConfig("unknown", readBaseConfig(), {})).toThrow();
   });
-  test("workflow versions advance and remain valid for native installers", () => {
-    expect(releaseVersion("0.1.0", "42")).toBe("0.1.42");
-    expect(releaseVersion("0.1.0", "43")).toBe("0.1.43");
-    for (const value of ["0", "-1", "wat", "65536"])
-      expect(() => releaseVersion("0.1.0", value)).toThrow();
-    expect(() => releaseVersion("0.1.0-beta", "1")).toThrow();
+  test("the app version is the product version from the root package.json", () => {
+    const root = JSON.parse(
+      readFileSync(new URL("../../../../package.json", import.meta.url), "utf8"),
+    );
+    expect(readBaseConfig().version).toBe(root.version);
+  });
+  test("only staging versions carry a pre-release suffix, within installer limits", () => {
+    const version = (channel: string, INDEX_DESKTOP_VERSION: string) =>
+      releaseConfig(channel, readBaseConfig(), { INDEX_DESKTOP_VERSION }).version;
+    expect(version("production", "0.3.0")).toBe("0.3.0");
+    expect(version("staging", "0.3.0-staging.42")).toBe("0.3.0-staging.42");
+    for (const value of ["0.3.0-staging.42", "0.3", "v0.3.0", "256.0.0", "0.3.65536"])
+      expect(() => version("production", value)).toThrow();
   });
 });
 

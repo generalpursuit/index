@@ -8,12 +8,14 @@ on:
       - "apps/web/scripts/**"
       - "apps/ios/**"
       - ".github/workflows/desktop-*.yml"
+      - ".github/workflows/release.yml"
   pull_request:
     paths:
       - "apps/web/src-tauri/**"
       - "apps/web/scripts/**"
       - "apps/ios/**"
       - ".github/workflows/desktop-*.yml"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 permissions:

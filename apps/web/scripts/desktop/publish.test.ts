@@ -93,7 +93,7 @@ function fixture(run: (fixture: Fixture) => void) {
         join(artifacts, `metadata-${platform}.json`),
         JSON.stringify({
           channel: "staging",
-          version: "0.1.42",
+          version: "0.2.0-staging.42",
           platform,
           file,
           signature: "c2ln",
@@ -109,7 +109,7 @@ function fixture(run: (fixture: Fixture) => void) {
           INDEX_TEST_GITHUB_STATE: statePath,
           GITHUB_REF_NAME: "staging",
           GITHUB_REPOSITORY: "generalpursuit/index",
-          INDEX_DESKTOP_VERSION: "0.1.42",
+          INDEX_DESKTOP_VERSION: "0.2.0-staging.42",
           GITHUB_SHA: "release-commit",
         },
       });
@@ -143,7 +143,7 @@ describe("desktop publication transaction", () => {
       const state = read();
       assert.ok(state.release && state.feeds.staging);
       expect(state.release.isDraft).toBe(false);
-      expect(state.feeds.staging.version).toBe("0.1.42");
+      expect(state.feeds.staging.version).toBe("0.2.0-staging.42");
       expect(state.feeds.production).toEqual({ version: "0.1.10" });
       const upload = state.calls.findIndex((args) => args[1] === "upload");
       const publishIndex = state.calls.findIndex((args) => args[1] === "edit");
@@ -171,11 +171,11 @@ describe("desktop publication transaction", () => {
       save({ ...read(), failFeed: false });
       expect(publish().status).toBe(0);
       expect(read().calls.filter((args) => args[1] === "upload")).toHaveLength(1);
-      expect(read().feeds.staging?.version).toBe("0.1.42");
+      expect(read().feeds.staging?.version).toBe("0.2.0-staging.42");
     }));
   test("newer channel versions and GitHub permission failures cannot be overwritten", () =>
     fixture(({ publish, read, save }) => {
-      save({ ...read(), branch: true, feeds: { staging: { version: "0.1.43" } } });
+      save({ ...read(), branch: true, feeds: { staging: { version: "0.2.0-staging.43" } } });
       expect(publish().status).not.toBe(0);
       expect(read().release).toBeUndefined();
       save({ ...read(), forbidden: true });

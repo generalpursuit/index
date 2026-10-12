@@ -40,7 +40,6 @@ function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-// This module also runs in the release workflow before dependency installation.
 // Preserve Tauri fields, validating the identity and windows used by these tools.
 function parseBaseConfig(value: unknown): BaseConfig {
   if (
@@ -79,17 +78,8 @@ export function channelForBranch(branch: string | undefined): Channel {
   return name;
 }
 
-export function releaseVersion(base: string, run: string | number) {
-  if (!/^\d+\.\d+\.\d+$/.test(base) || !/^[1-9]\d*$/.test(String(run)))
-    throw new Error("A numeric base version and positive workflow run number are required.");
-  const [major = 0, minor = 0, patch = 0] = base.split(".").map(Number);
-  const next = patch + Number(run);
-  if (major > 255 || minor > 255 || !Number.isSafeInteger(next) || next > 65535)
-    throw new Error(
-      "Desktop version exceeds installer limits; revise the version counter before releasing.",
-    );
-  return `${major}.${minor}.${next}`;
-}
+/** Release versions are numeric; only staging builds carry a pre-release suffix. */
+export const desktopVersion = /^(\d+)\.(\d+)\.(\d+)(-[0-9A-Za-z.]+)?$/;
 
 export function releaseConfig(
   channel: string,
@@ -99,8 +89,13 @@ export function releaseConfig(
   if (!isChannel(channel)) throw new Error("Unknown desktop release channel.");
   const selected = channels[channel];
   const version = env.INDEX_DESKTOP_VERSION || base.version;
-  if (!/^\d+\.\d+\.\d+$/.test(version))
-    throw new Error("Desktop versions must be numeric major.minor.patch.");
+  const [, major, minor, patch, prerelease] = desktopVersion.exec(version) ?? [];
+  if (!patch || (channel === "production" && prerelease))
+    throw new Error(
+      "Desktop versions must be major.minor.patch; only staging adds a pre-release suffix.",
+    );
+  if (Number(major) > 255 || Number(minor) > 255 || Number(patch) > 65535)
+    throw new Error("Desktop version exceeds installer limits.");
   const repository = env.INDEX_RELEASE_REPOSITORY || "generalpursuit/index";
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository)) throw new Error("Invalid release repository.");
   const pubkey = env.INDEX_UPDATER_PUBLIC_KEY?.trim();
@@ -134,7 +129,12 @@ export function releaseConfig(
 }
 
 export function readBaseConfig() {
-  return parseBaseConfig(
-    JSON.parse(readFileSync(new URL("../../src-tauri/tauri.conf.json", import.meta.url), "utf8")),
-  );
+  const file = new URL("../../src-tauri/tauri.conf.json", import.meta.url);
+  const config = parseBaseConfig(JSON.parse(readFileSync(file, "utf8")));
+  // Like Tauri, accept a package.json path: the product version lives in the root package.
+  if (!config.version.endsWith("package.json")) return config;
+  const { version } = JSON.parse(readFileSync(new URL(config.version, file), "utf8"));
+  if (typeof version !== "string" || !version)
+    throw new Error(`Missing version in ${config.version}.`);
+  return { ...config, version };
 }

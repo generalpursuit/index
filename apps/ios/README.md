@@ -28,7 +28,7 @@ xcodebuild -project Index.xcodeproj -scheme Index \
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-The Xcode project is checked in. After adding/removing app source files, reproduce it with `python3 Scripts/generate-project.py`. It links the local `IndexCore`, `IndexFeatures`, and `IndexUI` products. The generator is the source of truth for project settings and shared schemes. `python3 Scripts/check-sharing-source.py` checks reproducibility in a temporary directory without rewriting the checkout. `Package.swift` also exposes a macOS `IndexPreview` executable so source compilation can be checked independently of an iOS runtime; that preview is not the Tauri desktop product.
+The Xcode project is checked in. After adding/removing app source files or changing the root `package.json` version, reproduce it with `python3 Scripts/generate-project.py`; the app and its extensions take their marketing version from that file. It links the local `IndexCore`, `IndexFeatures`, and `IndexUI` products. The generator is the source of truth for project settings and shared schemes. `python3 Scripts/check-sharing-source.py` checks reproducibility in a temporary directory without rewriting the checkout. `Package.swift` also exposes a macOS `IndexPreview` executable so source compilation can be checked independently of an iOS runtime; that preview is not the Tauri desktop product.
 
 ## Structure
 

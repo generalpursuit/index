@@ -1,27 +1,22 @@
-name: Desktop release
+name: Release
 
+# Release only on manual dispatch; the selected branch picks the stage.
 on:
-  push:
-    branches: [main, staging]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-release-${{ github.ref_name }}
+  group: release-${{ github.ref_name }}
   cancel-in-progress: false
 
 jobs:
-  checks:
+  version:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
-    uses: ./.github/workflows/ci.yml
-
-  prepare:
-    needs: checks
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     outputs:
-      channel: ${{ steps.release.outputs.channel }}
+      stage: ${{ steps.release.outputs.stage }}
       version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -29,19 +24,52 @@ jobs:
         with:
           bun-version: 1.4.2
       - id: release
-        name: Select branch-bound release identity
-        run: |
-          bun - <<'JS'
-          import { appendFileSync } from 'node:fs';
-          import { channelForBranch, readBaseConfig, releaseVersion } from './apps/web/scripts/desktop/channels.ts';
-          const channel = channelForBranch(process.env.GITHUB_REF_NAME);
-          const version = releaseVersion(readBaseConfig().version, process.env.GITHUB_RUN_NUMBER);
-          appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\nversion=${version}\n`);
-          JS
+        name: Select the release version; production must exceed the latest tag
+        run: bun packages/infra/release.ts
+
+  checks:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: [version, checks]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: ${{ needs.version.outputs.stage }}
+    env:
+      DEPLOY_STAGE: ${{ needs.version.outputs.stage }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Deploy API, web, database migrations, and photos
+        working-directory: packages/infra
+        env:
+          NODE_ENV: production
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+          WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
+          AUTH_TRUSTED_ORIGINS: ${{ vars.AUTH_TRUSTED_ORIGINS }}
+        run: bun run deploy --stage "$DEPLOY_STAGE" --yes
+      - name: Verify the deployed application
+        working-directory: packages/infra
+        env:
+          WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
+          WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          API_DOMAIN: ${{ vars.API_DOMAIN }}
+        run: bun run smoke -- "$DEPLOY_STAGE"
 
   build:
-    needs: prepare
-    environment: desktop-${{ needs.prepare.outputs.channel }}
+    needs: [version, checks]
+    environment: desktop-${{ needs.version.outputs.stage }}
     strategy:
       fail-fast: false
       matrix:
@@ -68,8 +96,8 @@ jobs:
       run:
         shell: bash
     env:
-      INDEX_DESKTOP_CHANNEL: ${{ needs.prepare.outputs.channel }}
-      INDEX_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+      INDEX_DESKTOP_CHANNEL: ${{ needs.version.outputs.stage }}
+      INDEX_DESKTOP_VERSION: ${{ needs.version.outputs.version }}
       INDEX_UPDATE_PLATFORM: ${{ matrix.platform }}
       INDEX_RELEASE_REPOSITORY: ${{ github.repository }}
       INDEX_UPDATER_PUBLIC_KEY: ${{ vars.INDEX_UPDATER_PUBLIC_KEY }}
@@ -92,7 +120,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: apps/web/src-tauri -> target
-          key: release-${{ needs.prepare.outputs.channel }}-${{ matrix.target }}
+          key: release-${{ needs.version.outputs.stage }}-${{ matrix.target }}
       - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
@@ -116,7 +144,7 @@ jobs:
         run: python3 apps/web/scripts/ci-apple-signing.py prepare
       - name: Test native shell
         env:
-          VITE_SERVER_URL: ${{ needs.prepare.outputs.channel == 'production' && 'https://index-production-api.generalpursuit.workers.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
+          VITE_SERVER_URL: ${{ needs.version.outputs.stage == 'production' && 'https://index-production-api.generalpursuit.workers.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
         run: cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
       - name: Install pinned DMG layout tool
         if: runner.os == 'macOS'
@@ -133,7 +161,7 @@ jobs:
       - name: Verify Apple notarization ticket and Gatekeeper acceptance
         if: runner.os == 'macOS'
         env:
-          PRODUCT_NAME: ${{ needs.prepare.outputs.channel == 'production' && 'Index' || 'Index Staging' }}
+          PRODUCT_NAME: ${{ needs.version.outputs.stage == 'production' && 'Index' || 'Index Staging' }}
         run: |
           app="apps/web/src-tauri/target/${{ matrix.target }}/release/bundle/macos/$PRODUCT_NAME.app"
           xcrun stapler validate "$app"
@@ -142,7 +170,7 @@ jobs:
         run: bun apps/web/scripts/desktop/artifacts.ts "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
       - uses: actions/upload-artifact@v4
         with:
-          name: desktop-${{ needs.prepare.outputs.channel }}-${{ matrix.platform }}
+          name: desktop-${{ needs.version.outputs.stage }}-${{ matrix.platform }}
           path: desktop-artifacts/
           if-no-files-found: error
           retention-days: 14
@@ -151,7 +179,8 @@ jobs:
         run: python3 apps/web/scripts/ci-apple-signing.py cleanup
 
   publish:
-    needs: [prepare, build]
+    # Advance the update feed only once the API that new apps call is live.
+    needs: [version, build, deploy]
     runs-on: ubuntu-22.04
     permissions:
       contents: write
@@ -167,11 +196,24 @@ jobs:
       - run: bun install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
-          pattern: desktop-${{ needs.prepare.outputs.channel }}-*
+          pattern: desktop-${{ needs.version.outputs.stage }}-*
           path: desktop-artifacts
           merge-multiple: true
       - name: Publish the complete release and advance its update feed
         env:
           GH_TOKEN: ${{ github.token }}
-          INDEX_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
+          INDEX_DESKTOP_VERSION: ${{ needs.version.outputs.version }}
         run: bun apps/web/scripts/desktop/publish.ts desktop-artifacts
+
+  tag:
+    if: needs.version.outputs.stage == 'production'
+    needs: [version, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Tag the completed production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$VERSION" -f sha="$GITHUB_SHA"
