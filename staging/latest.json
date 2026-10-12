@@ -1,0 +1,23 @@
+{
+  "version": "0.1.5",
+  "notes": "Index staging 0.1.5",
+  "pub_date": "2026-10-12T12:51:11.540Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRRzBiN20vSU9BUWthVXoxcFoyU1ptaVZCOFJRRWJFYXZneVB0RnY4WWNQRFRjVUpSeEViWjQrV21rSUJ5ZVBTMHM0ZWdiQmNCdjFIeXVsYTI5VWZiTWV6SFZPRFBJNWdRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODA5MjM0CWZpbGU6SW5kZXggU3RhZ2luZ18wLjEuNV94NjQtc2V0dXAuZXhlCXZlcnNpb246MC4xLjUKc3hCVmU0blJiVTE3Y200dnFqNlA4OWYra25IOVpRa1U4VFFNK2h1eXYyeXppVlNwQTdOaTlRdnozRDFPRzlwL2FDdkFTbm1wcGE2eWEvNytGc1UvQkE9PQo=",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-staging-v0.1.5/staging-windows-x86_64-Index_Staging_0.1.5_x64-setup.exe"
+    },
+    "darwin-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRRzBiN20vSU9BUWpYZzVUQVV3WVhsWWlHSnhscWdleXd4ZSt0aUtpSWk2TFpuemwvZFZkQkl6TVVTUWduaVgzNExIYmk3Z0loS1BKbW4xRy9mZnJPMG1tSlNTcUF2end3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODA5NDQwCWZpbGU6SW5kZXggU3RhZ2luZy5hcHAudGFyLmd6CXZlcnNpb246MC4xLjUKNXZmb2RQcEVqL0tQZEcwTTdSaHhqTXhBcDdPYW5QVXZQcnNad1NzZWdhVUZ2djJTRlhudU8vcmpNQnlCZWtNY0ZiQ3Y4N1dCQVg0Vzc3NmJOaUxhQWc9PQo=",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-staging-v0.1.5/staging-darwin-x86_64-Index_Staging.app.tar.gz"
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRRzBiN20vSU9BUXZVYW1iTitJcTBqOXJPbTF1dmwwMWJBaVdRaENhWUdGQmplbW9oR1NsNnhUM3FPZmxkKyt6MnhoT1lIczZVV3U2VzJnQUxFbG1laDRjMUxYT3BOcUFFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODA4OTY3CWZpbGU6SW5kZXggU3RhZ2luZ18wLjEuNV9hbWQ2NC5BcHBJbWFnZQl2ZXJzaW9uOjAuMS41Cnc5em13S1pkOEVKNEc1L055OXVmU1EwdU95UG5HeURPZmVsSkpzOUZnbmY4NGJCRE83a3VvemhHMmQrczIxQm1ZUW4zV1ptdTJiNG1HVnEzaHM5VkFnPT0K",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-staging-v0.1.5/staging-linux-x86_64-Index_Staging_0.1.5_amd64.AppImage"
+    },
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRRzBiN20vSU9BUW00cFN1R2lZdTY4V2JUT0F3anNrVzFDZDBmVWFLOTJNY1RraklZQUdOYWFpZmNMTkp6cnBzLzlSVWFOdGpHcjBpL0lSOUFLQmZjNktFMXBMVlJmRVF3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxODA5MjM4CWZpbGU6SW5kZXggU3RhZ2luZy5hcHAudGFyLmd6CXZlcnNpb246MC4xLjUKOWNLdjlSSVB1bDhsQ0lLL0ROWWpHdFVuc212eWtqREVPVlpOQVBCSjB4WVEvVG9hNmhJMFZJczFrUnpQdkQxaVA2NWRZbk5pTW1QeGpJN0VLZ3NmRFE9PQo=",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-staging-v0.1.5/staging-darwin-aarch64-Index_Staging.app.tar.gz"
+    }
+  }
+}
