@@ -19,6 +19,16 @@ Paste a link to save it to this week, revisit earlier weeks, and organize your l
 
 Your profile is public or private. A private profile shares links only with approved followers. Locked groups stay yours regardless of profile visibility.
 
+## What You Can Do
+
+- **Save a link by pasting it.** Index reads the title and marks it as an article, video, music, podcast, book, tool or note.
+- **Read the week.** Your links on top, the people you follow below.
+- **Go back in time.** Jump to any earlier week from the strip on the right.
+- **Keep a library.** Your profile holds everything you saved, week by week, filtered by group, Favorites or Starred.
+- **Find people.** Search by name, or follow who your people follow.
+- **Talk about links.** Comment, mention someone with `@username`, or send a link in Messages.
+- **Stay up to date.** Activity shows new comments, mentions, follows and requests.
+
 ## Development
 
 Index uses Bun and Turborepo, with a React web/Tauri desktop app, a Hono API on Cloudflare Workers, and a SwiftUI iOS app.
