@@ -32,8 +32,8 @@ jobs:
           bun run oxlint
       - name: Verify generated brand assets
         run: |
-          bun assets/brand/sync.mjs --target web --check
-          bun test assets/brand/sync.test.mjs
+          bun assets/brand/sync.ts --target web --check
+          bun test assets/brand/sync.test.ts
       - name: API, server, and deployment tests
         run: |
           bun run --cwd apps/web test
@@ -46,6 +46,7 @@ jobs:
         env:
           VITE_SERVER_URL: http://localhost:3002
         run: |
+          bun run check:tooling
           bun run --cwd apps/web check-types
           bun run --cwd packages/ui check-types
           bun run --cwd apps/server check-types

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { after, before, describe, test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
@@ -6,8 +7,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const web = fileURLToPath(new URL("..", import.meta.url));
-const runner = join(web, "scripts/desktop-dev-runner.mjs");
+const web = fileURLToPath(new URL("../..", import.meta.url));
+const runner = join(web, "scripts/desktop/dev.ts");
 const devConfig = join(web, "src-tauri/tauri.dev.conf.json");
 
 describe("macOS desktop development", { skip: process.platform !== "darwin" }, () => {
@@ -42,13 +43,16 @@ describe("macOS desktop development", { skip: process.platform !== "darwin" }, (
   test("an unbundled process reports notifications unavailable without crashing or waiting", () => {
     const result = spawnSync(binary, [], { encoding: "utf8", timeout: 10_000 });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(JSON.parse(result.stdout).permission, -1);
+    assert.equal(
+      z.object({ permission: z.number() }).parse(JSON.parse(result.stdout)).permission,
+      -1,
+    );
   });
 
   const environment = () => ({
     ...process.env,
     TAURI_CONFIG: JSON.stringify({
-      ...JSON.parse(readFileSync(devConfig, "utf8")),
+      ...z.record(z.string(), z.unknown()).parse(JSON.parse(readFileSync(devConfig, "utf8"))),
       productName: "Index Runner Test",
       identifier: "com.generalpursuit.index.runner-test",
     }),
@@ -63,7 +67,16 @@ describe("macOS desktop development", { skip: process.platform !== "darwin" }, (
       timeout: 15_000,
     });
     assert.equal(result.status, 0, result.stderr);
-    const state = JSON.parse(result.stdout);
+    const state = z
+      .object({
+        identifier: z.string(),
+        delegate: z.string(),
+        permission: z.number(),
+        arguments: z.array(z.string()),
+        environment: z.string(),
+        bundle: z.string(),
+      })
+      .parse(JSON.parse(result.stdout));
     assert.equal(state.identifier, "com.generalpursuit.index.runner-test");
     assert.equal(state.delegate, "IndexNotificationDelegate");
     assert.ok(state.permission >= 0, result.stdout);
@@ -112,7 +125,7 @@ describe("macOS desktop development", { skip: process.platform !== "darwin" }, (
           output += data;
           if (output.includes("\n")) {
             clearTimeout(timer);
-            resolve(JSON.parse(output));
+            resolve(z.object({ pid: z.number().int().positive() }).parse(JSON.parse(output)));
           }
         });
       });

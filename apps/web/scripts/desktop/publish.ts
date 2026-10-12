@@ -1,17 +1,25 @@
+import { z } from "zod";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { channelForBranch } from "./desktop-channels.mjs";
-import { manifest } from "./desktop-artifacts.mjs";
+import { channelForBranch } from "./channels.ts";
+import { artifactMetadata, manifest, updateFeed } from "./artifacts.ts";
 
 const channel = channelForBranch(process.env.GITHUB_REF_NAME);
 const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.INDEX_DESKTOP_VERSION;
 const commit = process.env.GITHUB_SHA;
-const root = resolve(process.argv[2]);
+const directory = process.argv[2];
+if (!repository || !version || !commit || !directory)
+  throw new Error(
+    "Set GITHUB_REPOSITORY, INDEX_DESKTOP_VERSION and GITHUB_SHA, and supply the artifact directory.",
+  );
+const root = resolve(directory);
 const tag = `desktop-${channel}-v${version}`;
-function gh(args, allowedFailure = false, input) {
+function gh(args: string[], allowedFailure?: false, input?: string): string;
+function gh(args: string[], allowedFailure: true, input?: string): string | null;
+function gh(args: string[], allowedFailure = false, input?: string) {
   const result = spawnSync("gh", args, { encoding: "utf8", env: process.env, input });
   if (result.status !== 0) {
     if (allowedFailure && /HTTP 404|release not found/i.test(result.stderr || "")) return null;
@@ -21,19 +29,23 @@ function gh(args, allowedFailure = false, input) {
 }
 const parts = readdirSync(root)
   .filter((name) => /^metadata-.*\.json$/.test(name))
-  .map((name) => JSON.parse(readFileSync(join(root, name), "utf8")));
+  .map((name) => artifactMetadata.parse(JSON.parse(readFileSync(join(root, name), "utf8"))));
 const update = manifest(parts, { channel, version, repository, tag });
 const feedPath = `repos/${repository}/contents/${channel}/latest.json`;
 const feedExists = gh(["api", `repos/${repository}/git/ref/heads/desktop-updates`], true);
 const current = feedExists ? gh(["api", `${feedPath}?ref=desktop-updates`], true) : null;
-const currentFile = current && JSON.parse(current);
+const currentFile = current
+  ? z.object({ content: z.string(), sha: z.string() }).parse(JSON.parse(current))
+  : null;
 let alreadyCurrent = false;
 if (currentFile) {
-  const previous = JSON.parse(Buffer.from(currentFile.content, "base64").toString());
+  const previous = updateFeed.parse(
+    JSON.parse(Buffer.from(currentFile.content, "base64").toString()),
+  );
   const order = version.split(".").map(Number);
   const old = previous.version.split(".").map(Number);
   const different = order.findIndex((part, i) => part !== old[i]);
-  if (different >= 0 && order[different] < old[different])
+  if (different >= 0 && order[different]! < old[different]!)
     throw new Error("A newer version is already on this channel. Refusing to move it backwards.");
   alreadyCurrent = different < 0;
   if (
@@ -46,8 +58,8 @@ if (currentFile) {
   )
     throw new Error("This version already points to different artifacts.");
 }
-const files = [];
-const sums = [];
+const files: string[] = [];
+const sums: string[] = [];
 for (const part of parts)
   for (const [file, digest] of Object.entries(part.digests)) {
     if (
@@ -72,7 +84,9 @@ const existing = gh(
   ["release", "view", tag, "--repo", repository, "--json", "isDraft,targetCommitish"],
   true,
 );
-const existingRelease = existing && JSON.parse(existing);
+const existingRelease = existing
+  ? z.object({ targetCommitish: z.string(), isDraft: z.boolean() }).parse(JSON.parse(existing))
+  : null;
 if (existingRelease && existingRelease.targetCommitish !== commit)
   throw new Error("The existing release belongs to a different commit.");
 if (existingRelease && !existingRelease.isDraft) {

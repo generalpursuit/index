@@ -2,6 +2,7 @@ import { apiURL, webURL, webPort } from "./e2e/urls";
 import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "**/*.spec.ts",
   fullyParallel: false,
   workers: 1,
   timeout: 45_000,
@@ -21,7 +22,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: "bun e2e/server.mjs",
+      command: "bun e2e/server.ts",
       url: apiURL + "/health",
       timeout: 90_000,
       reuseExistingServer: false,

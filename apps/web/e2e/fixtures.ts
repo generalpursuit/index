@@ -1,73 +1,19 @@
-import { deliverBatch } from "../../../packages/api/src/features/notifications/delivery.ts";
-import { apiURL, webURL } from "./urls.ts";
-import { createTestDatabase } from "../../../packages/api/src/testing/database.ts";
-import { createAuth } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
 import { appRouter } from "../../../packages/api/src/routers/index.ts";
-import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
-import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
-const database = await createTestDatabase();
-// Isolated public key only; browser notification tests stub the push provider.
-const pushKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
-  "sign",
-  "verify",
-]);
-const vapidPublicKey = Buffer.from(
-  await crypto.subtle.exportKey("raw", pushKey.publicKey),
-).toString("base64url");
-const notifications = {
-  web: true,
-  apns: false,
-  apnsEnvironment: null,
-  desktop: true,
-  vapidPublicKey,
+import type { AppRouterClient } from "../../../packages/api/src/contracts.ts";
+import type { createTestDatabase } from "../../../packages/api/src/testing/database.ts";
+
+type Database = Awaited<ReturnType<typeof createTestDatabase>>;
+type Group = Awaited<ReturnType<AppRouterClient["groups"]["create"]>>;
+type Person = "Alice" | "Bob" | "Lena" | "Amir" | "Iris" | "Mia" | "Noah";
+export type Registration = {
+  body: { name: string; username: string; email: string; password: string };
 };
-const emails = [];
-const deliveries = [];
-let failEmails = false;
-const auth = createAuth(
-  {
-    BETTER_AUTH_URL: apiURL,
-    BETTER_AUTH_SECRET: "isolated-playwright-only-secret-32-characters",
-    CORS_ORIGIN: webURL,
-  },
-  database.db,
-  ["tauri://localhost", "http://tauri.localhost"],
-  {
-    sendEmail: async (message) => {
-      if (failEmails) throw new Error("Fixture delivery unavailable");
-      emails.push(message);
-    },
-    backgroundTask: (task) => deliveries.push(task),
-  },
-);
-async function registerFixture({ body }) {
-  const response = await auth.handler(
-    new Request(apiURL + "/api/auth/sign-up/email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    }),
-  );
-  if (!response.ok) throw new Error("Fixture signup failed");
-  const result = await response.json();
-  const verified = await auth.handler(
-    new Request(apiURL + "/api/auth/security/verify-email", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${response.headers.get("set-auth-token")}`,
-      },
-      body: JSON.stringify({ code: emails.findLast((message) => message.to === body.email)?.code }),
-    }),
-  );
-  if (!verified.ok) throw new Error("Fixture verification failed");
-  return result;
-}
-let fixture;
+type RegisterFixture = (input: Registration) => Promise<{ user: { id: string } }>;
+
 // Pages on the reserved .test domain are served from fixtures so tests never need the internet.
 // Set E2E_LIVE_PAGES=1 to read real pages while clicking through the app by hand.
-const fixturePages = {
+const fixturePages: Record<string, string> = {
   "https://pages.test/calm-software": `<html><head><title>Ignored</title>
     <meta property="og:title" content="Calm Software — Pages">
     <meta property="og:site_name" content="Pages">
@@ -76,23 +22,19 @@ const fixturePages = {
 };
 // Takes a moment like a real site, so tests can check what happens while a page is read.
 const slowPages = new Set(["https://pages.test/slow-read"]);
-async function fetchPage(url, init) {
+export async function fetchPage(url: string, init?: RequestInit) {
   if (slowPages.has(url)) await new Promise((resolve) => setTimeout(resolve, 1500));
   const html = fixturePages[url];
   if (html) return new Response(html, { headers: { "content-type": "text/html" } });
   if (process.env.E2E_LIVE_PAGES === "1") return fetch(url, init);
   throw new TypeError("Offline: only fixture pages are available.");
 }
-async function seed() {
-  await Promise.all(deliveries);
-  deliveries.length = 0;
-  emails.length = 0;
-  failEmails = false;
+export async function seedFixture(database: Database, registerFixture: RegisterFixture) {
   await database.client.exec(
     'TRUNCATE TABLE "user", auth_challenge, auth_throttle, conversations, short_routes CASCADE',
   );
-  const people = {};
-  for (const name of ["Alice", "Bob", "Lena", "Amir", "Iris", "Mia", "Noah"]) {
+  const people = { Alice: "", Bob: "", Lena: "", Amir: "", Iris: "", Mia: "", Noah: "" };
+  for (const name of Object.keys(people) as Person[]) {
     const result = await registerFixture({
       body: {
         name,
@@ -103,12 +45,13 @@ async function seed() {
     });
     people[name] = result.user.id;
   }
-  const api = (name) => createRouterClient(appRouter, { context: database.context(people[name]) });
-  for (const name of Object.keys(people))
+  const api = (name: Person) =>
+    createRouterClient(appRouter, { context: database.context(people[name]) });
+  for (const name of Object.keys(people) as Person[])
     await api(name).profiles.update({
       profileVisibility: ["Iris", "Mia"].includes(name) ? "private" : "public",
     });
-  for (const name of ["Bob", "Lena", "Amir", "Iris"]) {
+  for (const name of ["Bob", "Lena", "Amir", "Iris"] as const) {
     await api("Alice").follows.follow({ userId: people[name] });
     if (name === "Iris") await api("Iris").follows.accept({ userId: people.Alice });
   }
@@ -140,7 +83,7 @@ async function seed() {
           "https://open.spotify.com/album/test",
           "https://designengineering.io",
           "https://shapeofdesignbook.com",
-        ][i],
+        ][i]!,
         groupId: reading.id,
       }),
     );
@@ -157,7 +100,7 @@ async function seed() {
     groupId: notes.id,
   });
   let privateLink;
-  for (const name of ["Lena", "Amir", "Iris"]) {
+  for (const name of ["Lena", "Amir", "Iris"] as const) {
     const g = await api(name).groups.create({ name: "Reading" });
     for (const [i, title] of [
       "The Shape of Design",
@@ -197,13 +140,14 @@ async function seed() {
   await api("Lena").follows.follow({ userId: people.Alice });
   await api("Alice").follows.accept({ userId: people.Lena });
   await api("Lena").comments.create({
-    linkId: links[0].id,
+    linkId: links[0]!.id,
     body: "Do you have a favorite channel?",
   });
   // Set E2E_MORE_SAMPLES=1 for months of extra people and links while clicking through by hand.
   // Tests rely on the exact data above, so they never set it.
-  if (process.env.E2E_MORE_SAMPLES === "1") await seedMore(people, week, reading);
-  fixture = {
+  if (process.env.E2E_MORE_SAMPLES === "1")
+    await seedMore(database, registerFixture, people, week, reading);
+  return {
     people,
     week,
     older,
@@ -215,10 +159,9 @@ async function seed() {
     conversationId: chat.id,
     conversationShortId: chat.shortId,
   };
-  return fixture;
 }
 // [title, url] per category, as people would save them; the category is stored as given.
-const catalog = {
+const catalog: Record<string, [title: string, url: string][]> = {
   article: [
     ["Attention Is All You Need", "https://arxiv.org/abs/1706.03762"],
     ["Scaling Laws for Neural Language Models", "https://arxiv.org/abs/2001.08361"],
@@ -340,7 +283,13 @@ const samples = Object.entries(catalog).flatMap(([category, items]) =>
   items.map(([title, url]) => ({ title, url, category })),
 );
 // [username, name, visibility, weeks of history, people they follow]; alice follows the first eight.
-const samplePeople = [
+const samplePeople: [
+  username: string,
+  name: string,
+  visibility: "public" | "private",
+  weeks: number,
+  follows: string,
+][] = [
   [
     "sofia_marques",
     "Sofia Marques",
@@ -364,15 +313,26 @@ const samplePeople = [
 // Nobody saved anything in these weeks, so the feed has to skip past them.
 const quietWeeks = new Set([4, 11, 12, 19]);
 // Groups by category; Alice keeps some of hers locked.
-const aliceGroups = {
+const aliceGroups: Record<string, string> = {
   book: "Reading",
   music: "Listening",
   podcast: "Listening",
   video: "Watch later",
 };
-const lockedGroups = { article: "Research", note: "Someday" };
-const sampleGroups = { book: "Reading", article: "Reading", music: "Listening", video: "Watching" };
-async function seedMore(people, week, reading) {
+const lockedGroups: Record<string, string> = { article: "Research", note: "Someday" };
+const sampleGroups: Record<string, string> = {
+  book: "Reading",
+  article: "Reading",
+  music: "Listening",
+  video: "Watching",
+};
+async function seedMore(
+  database: Database,
+  registerFixture: RegisterFixture,
+  people: Record<Person, string>,
+  week: string,
+  reading: Group,
+) {
   // Fixed seed, so every reset makes the same data relative to this week.
   let state = 7;
   const random = () => {
@@ -381,7 +341,7 @@ async function seedMore(people, week, reading) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
-  const pick = (low, high) => low + Math.floor(random() * (high - low + 1));
+  const pick = (low: number, high: number) => low + Math.floor(random() * (high - low + 1));
   const ids = Object.fromEntries(Object.entries(people).map(([n, id]) => [n.toLowerCase(), id]));
   const hidden = new Set(["alice", "iris", "mia"]);
   for (const [username, name, visibility] of samplePeople) {
@@ -391,13 +351,18 @@ async function seedMore(people, week, reading) {
     ids[username] = result.user.id;
     if (visibility === "private") hidden.add(username);
   }
-  const api = (username) =>
-    createRouterClient(appRouter, { context: database.context(ids[username]) });
+  const userId = (username: string) => {
+    const id = ids[username];
+    if (!id) throw new Error(`Unknown sample person: ${username}`);
+    return id;
+  };
+  const api = (username: string) =>
+    createRouterClient(appRouter, { context: database.context(userId(username)) });
   for (const [username, , profileVisibility] of samplePeople)
     await api(username).profiles.update({ profileVisibility });
-  const follow = async (from, to) => {
-    await api(from).follows.follow({ userId: ids[to] });
-    if (hidden.has(to)) await api(to).follows.accept({ userId: ids[from] });
+  const follow = async (from: string, to: string) => {
+    await api(from).follows.follow({ userId: userId(to) });
+    if (hidden.has(to)) await api(to).follows.accept({ userId: userId(from) });
   };
   const followed = samplePeople.slice(0, 8).map(([username]) => username);
   for (const username of followed) await follow("alice", username);
@@ -406,13 +371,13 @@ async function seedMore(people, week, reading) {
   await follow("lena", "sofia_marques");
   await follow("lena", "elena_p");
   // Everyone saves from a shuffled deck, so a week never repeats a link.
-  const authors = [
+  const authors: [username: string, weeks: number][] = [
     ["alice", 28],
     ["lena", 20],
     ["amir", 16],
     ["iris", 14],
     ["bob", 10],
-    ...samplePeople.map(([username, , , weeks]) => [username, weeks]),
+    ...samplePeople.map(([username, , , weeks]) => [username, weeks] as [string, number]),
   ];
   const alice = { ...aliceGroups, ...lockedGroups };
   const newcomers = new Set(samplePeople.map(([username]) => username));
@@ -421,8 +386,8 @@ async function seedMore(people, week, reading) {
   const today = now - (now % 86_400_000);
   const rows = [];
   for (const [username, weeks] of authors) {
-    const groups = username === "alice" ? { Reading: reading } : {};
-    const groupFor = async (category) => {
+    const groups: Record<string, Group> = username === "alice" ? { Reading: reading } : {};
+    const groupFor = async (category: string) => {
       const name = (username === "alice" ? alice : newcomers.has(username) ? sampleGroups : {})[
         category
       ];
@@ -436,7 +401,7 @@ async function seedMore(people, week, reading) {
     const deck = [...samples];
     for (let i = deck.length - 1; i > 0; i--) {
       const j = pick(0, i);
-      [deck[i], deck[j]] = [deck[j], deck[i]];
+      [deck[i], deck[j]] = [deck[j]!, deck[i]!];
     }
     let next = 0;
     for (let back = 0; back < weeks; back++) {
@@ -444,11 +409,11 @@ async function seedMore(people, week, reading) {
       const roll = random();
       const count = roll < 0.4 ? pick(1, 2) : roll < 0.75 ? pick(3, 7) : pick(8, 25);
       for (let n = 0; n < count; n++) {
-        const sample = deck[next++ % deck.length];
+        const sample = deck[next++ % deck.length]!;
         const day = Math.min(monday + (pick(0, 6) - back * 7) * 86_400_000, today);
         const time = Math.min(day + pick(7 * 60, 22 * 60) * 60_000, now - n * 60_000);
         rows.push({
-          owner_id: ids[username],
+          owner_id: userId(username),
           group_id: random() < 0.7 ? await groupFor(sample.category) : null,
           url: sample.url,
           title: sample.title,
@@ -459,7 +424,11 @@ async function seedMore(people, week, reading) {
       }
     }
   }
-  const { rows: saved } = await database.client.query(
+  const { rows: saved } = await database.client.query<{
+    id: string;
+    owner_id: string;
+    group_id: string | null;
+  }>(
     `insert into links (owner_id, group_id, url, title, category, saved_on, created_at)
      select * from jsonb_to_recordset($1::jsonb) as x(owner_id text, group_id uuid, url text,
        title text, category text, saved_on date, created_at timestamptz)
@@ -469,93 +438,20 @@ async function seedMore(people, week, reading) {
   // Alice favorites some of her own links and stars visible ones from people she follows.
   const following = new Set(["lena", "amir", "iris", "bob", ...followed].map((u) => ids[u]));
   const locked = new Set(
-    (await database.client.query("select id from groups where visibility = 'private'")).rows.map(
-      (g) => g.id,
-    ),
+    (
+      await database.client.query<{ id: string }>(
+        "select id from groups where visibility = 'private'",
+      )
+    ).rows.map((g) => g.id),
   );
   for (const link of saved) {
     if (link.owner_id === ids.alice && random() < 0.12)
       await api("alice").favorites.add({ linkId: link.id });
-    else if (following.has(link.owner_id) && !locked.has(link.group_id) && random() < 0.06)
+    else if (
+      following.has(link.owner_id) &&
+      (link.group_id === null || !locked.has(link.group_id)) &&
+      random() < 0.06
+    )
       await api("alice").stars.add({ linkId: link.id });
   }
 }
-await seed();
-// Uploaded photos stay in memory, served at `/media/*` like the bucket on the real server.
-const media = memoryMediaStore(apiURL);
-Bun.serve({
-  hostname: "127.0.0.1",
-  port: Number(new URL(apiURL).port),
-  async fetch(request) {
-    const url = new URL(request.url);
-    let response;
-    if (request.method === "OPTIONS") response = new Response(null, { status: 204 });
-    else if (url.pathname === "/_test/reset" && request.method === "POST")
-      response = Response.json(await seed());
-    else if (url.pathname === "/_test/notify" && request.method === "POST") {
-      const actor = createRouterClient(appRouter, {
-        context: database.context(fixture.people.Bob),
-      });
-      await actor.messages.send({
-        conversationId: fixture.conversationId,
-        clientId: crypto.randomUUID(),
-        body: "PRIVATE browser fixture",
-      });
-      const ids = [];
-      await deliverBatch(database.db, async (_device, alert) => {
-        ids.push(alert.id);
-        return { status: "sent" };
-      });
-      response = Response.json({ ids });
-    } else if (url.pathname === "/_test/mail") {
-      await Promise.all(deliveries);
-      response = Response.json(
-        emails.filter((message) => message.to === url.searchParams.get("email")),
-      );
-    } else if (url.pathname === "/_test/auth-clock" && request.method === "POST") {
-      await database.client.exec(
-        "UPDATE auth_challenge SET sent_at=now()-interval '61 seconds'; UPDATE auth_throttle SET expires_at=now()-interval '1 second'",
-      );
-      response = Response.json({ success: true });
-    } else if (url.pathname === "/_test/email-failure" && request.method === "POST") {
-      failEmails = (await request.json()).enabled === true;
-      response = Response.json({ success: true });
-    } else if (url.pathname === "/_test/fixture") response = Response.json(fixture);
-    else if (url.pathname === "/health") response = new Response("ready");
-    else if (url.pathname.startsWith("/media/")) {
-      const object = media.get(url.pathname.slice("/media/".length));
-      response = object
-        ? new Response(object.body, {
-            headers: {
-              "content-type": object.contentType,
-              "cache-control": "public, max-age=31536000, immutable",
-            },
-          })
-        : new Response("Not found", { status: 404 });
-    } else if (url.pathname.startsWith("/api/auth/")) response = await auth.handler(request);
-    else {
-      const session = await auth.api.getSession({ headers: request.headers });
-      const result = await rpcHandler.handle(request, {
-        prefix: "/rpc/v1",
-        context: { db: database.db, session, fetchPage, media, notifications },
-      });
-      const rest = result.matched
-        ? result
-        : await apiHandler.handle(request, {
-            prefix: "/api/v1",
-            context: { db: database.db, session, fetchPage, media, notifications },
-          });
-      response = rest.response ?? new Response("Not found", { status: 404 });
-    }
-    const headers = new Headers(response.headers);
-    const origin = request.headers.get("origin");
-    if ([webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))
-      headers.set("Access-Control-Allow-Origin", origin);
-    headers.set("Access-Control-Expose-Headers", "set-auth-token");
-    headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set("Access-Control-Allow-Headers", "Content-Type,Authorization");
-    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-    return new Response(response.body, { status: response.status, headers });
-  },
-});
-console.log(`Isolated browser-test API ready on ${apiURL}`);

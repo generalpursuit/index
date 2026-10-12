@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { z } from "zod";
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -9,8 +11,8 @@ import {
   readBaseConfig,
   releaseConfig,
   releaseVersion,
-} from "../scripts/desktop-channels.mjs";
-import { collect, manifest, updaterFiles } from "../scripts/desktop-artifacts.mjs";
+} from "./channels.ts";
+import { collect, manifest, updaterFiles } from "./artifacts.ts";
 
 describe("macOS Share extension build", () => {
   for (const manual of [true, false]) {
@@ -31,7 +33,7 @@ describe("macOS Share extension build", () => {
             `#!/usr/bin/env bun\nimport { appendFileSync } from "node:fs";\nappendFileSync(process.env.INDEX_TEST_CALLS, JSON.stringify(process.argv.slice(2)) + "\\n");\n`,
             { mode: 0o700 },
           );
-        const module = new URL("../scripts/share-extension-build.mjs", import.meta.url).href;
+        const module = new URL("./share-extension.ts", import.meta.url).href;
         const result = spawnSync(
           process.execPath,
           [
@@ -59,7 +61,11 @@ describe("macOS Share extension build", () => {
           },
         );
         expect(result.status, result.stderr).toBe(0);
-        const [build, verify] = readFileSync(calls, "utf8").trim().split("\n").map(JSON.parse);
+        const [build, verify] = readFileSync(calls, "utf8")
+          .trim()
+          .split("\n")
+          .map((line) => z.array(z.string()).parse(JSON.parse(line)));
+        assert.ok(build && verify);
         expect(build).toContain(
           "INDEX_SHARE_EXTENSION_ID=com.generalpursuit.index.staging.share-mac",
         );
@@ -87,6 +93,36 @@ describe("macOS Share extension build", () => {
 });
 
 describe("desktop release isolation", () => {
+  test("release preparation reads and validates its config before dependencies are installed", () => {
+    const root = mkdtempSync(join(tmpdir(), "index-release-prepare-"));
+    try {
+      const scripts = join(root, "scripts/desktop");
+      mkdirSync(scripts, { recursive: true });
+      mkdirSync(join(root, "src-tauri"));
+      writeFileSync(
+        join(scripts, "channels.ts"),
+        readFileSync(new URL("./channels.ts", import.meta.url)),
+      );
+      const config = join(root, "src-tauri/tauri.conf.json");
+      writeFileSync(config, JSON.stringify(readBaseConfig()));
+      const run = () =>
+        spawnSync(
+          process.execPath,
+          [
+            "--eval",
+            'import { readBaseConfig, channelForBranch, releaseVersion } from "./scripts/desktop/channels.ts"; console.log(channelForBranch("staging"), releaseVersion(readBaseConfig().version, "42"));',
+          ],
+          { cwd: root, encoding: "utf8" },
+        );
+      assert.equal(run().status, 0);
+      writeFileSync(config, JSON.stringify({ ...readBaseConfig(), app: { windows: [null] } }));
+      const invalid = run();
+      assert.notEqual(invalid.status, 0);
+      assert.match(invalid.stderr, /Invalid desktop identity or app windows/);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
   test("branches cannot select the other release channel", () => {
     expect(channelForBranch("main")).toBe("production");
     expect(channelForBranch("staging")).toBe("staging");
@@ -97,16 +133,17 @@ describe("desktop release isolation", () => {
     const base = readBaseConfig();
     const staging = releaseConfig("staging", base, { INDEX_UPDATER_PUBLIC_KEY: "c3RhZ2luZw==" });
     const production = releaseConfig("production", base, { INDEX_UPDATER_PUBLIC_KEY: "cHJvZA==" });
-    for (const key of ["productName", "identifier", "mainBinaryName"])
+    for (const key of ["productName", "identifier", "mainBinaryName"] as const)
       expect(staging[key]).not.toBe(production[key]);
-    for (const key of ["api", "web", "keychainSuffix"])
+    for (const key of ["api", "web", "keychainSuffix"] as const)
       expect(channels.staging[key]).not.toBe(channels.production[key]);
+    assert.ok(staging.plugins.updater && production.plugins.updater);
     expect(staging.plugins.updater.endpoints[0]).toEndWith("/staging/latest.json");
     expect(production.plugins.updater.endpoints[0]).toEndWith("/production/latest.json");
     expect(production.plugins.updater.pubkey).not.toBe(staging.plugins.updater.pubkey);
     expect(production.plugins.updater.requireSignedVersion).toBe(true);
     expect(staging.bundle.windows.allowDowngrades).toBe(false);
-    expect(staging.app.windows[0].create).toBe(false);
+    expect(staging.app.windows[0]?.create).toBe(false);
   });
   test("CI cannot silently ship builds without a verifiable update key", () => {
     expect(() => releaseConfig("production", readBaseConfig(), { CI: "true" })).toThrow();
@@ -131,12 +168,12 @@ describe("complete release manifests", () => {
     repository: "generalpursuit/index",
     tag: "desktop-staging-v0.1.42",
   };
-  const parts = Object.keys(updaterFiles).map((platform) => ({
+  const parts = Object.entries(updaterFiles).map(([platform, suffix]) => ({
     channel: options.channel,
     version: options.version,
     platform,
     signature: "c2ln",
-    file: `staging-${platform}-Index${updaterFiles[platform]}`,
+    file: `staging-${platform}-Index${suffix}`,
   }));
   test("all target URLs select immutable artifacts of the same channel and version", () => {
     const result = manifest(parts, options);
@@ -146,12 +183,12 @@ describe("complete release manifests", () => {
   });
   test("missing, duplicate, cross-channel and mixed-version artifacts cannot publish", () => {
     expect(() => manifest(parts.slice(1), options)).toThrow();
-    expect(() => manifest([parts[0], ...parts.slice(0, 3)], options)).toThrow();
+    expect(() => manifest([parts[0]!, ...parts.slice(0, 3)], options)).toThrow();
     expect(() =>
-      manifest([{ ...parts[0], channel: "production" }, ...parts.slice(1)], options),
+      manifest([{ ...parts[0]!, channel: "production" }, ...parts.slice(1)], options),
     ).toThrow();
     expect(() =>
-      manifest([{ ...parts[0], version: "0.1.43" }, ...parts.slice(1)], options),
+      manifest([{ ...parts[0]!, version: "0.1.43" }, ...parts.slice(1)], options),
     ).toThrow();
   });
   test("collects only distributables, checksums the bytes and requires a signature", () => {

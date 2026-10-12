@@ -1,12 +1,12 @@
-import { apiScope } from "./api-scope.mjs";
-import { prepareShareExtension, verifyShareExtension } from "./share-extension-build.mjs";
+import { apiScope } from "./api-scope.ts";
+import { prepareShareExtension, verifyShareExtension } from "./share-extension.ts";
 import { spawnSync } from "node:child_process";
-import { channels, readBaseConfig, releaseConfig } from "./desktop-channels.mjs";
+import { channels, isChannel, readBaseConfig, releaseConfig } from "./channels.ts";
 
 const argsIn = process.argv.slice(2);
 const channelIndex = argsIn.indexOf("--channel");
 const channel = channelIndex < 0 ? undefined : argsIn.splice(channelIndex, 2)[1];
-if (channelIndex >= 0 && !channels[channel])
+if (channelIndex >= 0 && !isChannel(channel))
   throw new Error("Choose --channel staging or production.");
 const local = argsIn.includes("--local");
 if (
@@ -20,8 +20,10 @@ if (
     "Release channels cannot use development/test hooks or override their configuration.",
   );
 const base = readBaseConfig();
-const release = channel ? releaseConfig(channel, base) : {};
-if (channel) {
+const release: Partial<ReturnType<typeof releaseConfig>> = channel
+  ? releaseConfig(channel, base)
+  : {};
+if (isChannel(channel)) {
   const selected = channels[channel];
   // A channel's backend is part of its identity, never inherited from a developer's .env.
   process.env.VITE_SERVER_URL = selected.api;
@@ -37,6 +39,7 @@ for (const key of ["VITE_SERVER_URL"]) {
   const raw = process.env[key];
   let url;
   try {
+    if (!raw) throw new Error("Missing server URL");
     url = new URL(raw);
   } catch {
     throw new Error(`Set ${key} before building desktop.`);
@@ -52,8 +55,19 @@ for (const key of ["VITE_SERVER_URL"]) {
     throw new Error(`${key} must use HTTPS. --local permits loopback HTTP for development builds.`);
 }
 process.env.VITE_SERVER_URL = apiScope(process.env.VITE_SERVER_URL);
+// Native smoke uses its deliberately separate legacy credential namespace and no extension.
+const sharing =
+  process.platform === "darwin" &&
+  !argsIn.includes("--without-share-extension") &&
+  !argsIn.includes("native-smoke");
+const share = sharing
+  ? prepareShareExtension({ local, args: argsIn, configurationFile: { ...base, ...release } })
+  : undefined;
 const config = {
   ...release,
+  ...(share
+    ? { bundle: { ...release.bundle, macOS: { ...release.bundle?.macOS, ...share.bundle.macOS } } }
+    : {}),
   app: {
     ...release.app,
     security: {
@@ -71,19 +85,6 @@ const config = {
     },
   },
 };
-// Native smoke uses its deliberately separate legacy credential namespace and no extension.
-const sharing =
-  process.platform === "darwin" &&
-  !argsIn.includes("--without-share-extension") &&
-  !argsIn.includes("native-smoke");
-if (sharing) {
-  const share = prepareShareExtension({
-    local,
-    args: argsIn,
-    configurationFile: { ...base, ...release },
-  });
-  config.bundle = { ...config.bundle, macOS: { ...config.bundle?.macOS, ...share.bundle.macOS } };
-}
 const args = [
   "x",
   "--no-install",

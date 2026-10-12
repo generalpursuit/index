@@ -1,12 +1,14 @@
+import { z } from "zod";
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 if (process.platform !== "darwin") throw new Error("This native smoke runner requires macOS.");
-const fixture = await fetch("http://localhost:3002/_test/fixture").then((r) => r.json());
-if (!fixture.people?.Alice)
-  throw new Error("Start the disposable API with bun e2e/server.mjs first.");
+const fixture = z
+  .object({ people: z.object({ Alice: z.string().min(1) }) })
+  .safeParse(await fetch("http://localhost:3002/_test/fixture").then((r) => r.json()));
+if (!fixture.success) throw new Error("Start the disposable API with bun e2e/server.ts first.");
 const env = {
   ...process.env,
   VITE_SERVER_URL: "http://localhost:3002",
@@ -16,7 +18,7 @@ const phases = process.argv.includes("--icons-only")
   ? ["icons", "icons-restore"]
   : ["login", "restore", "signed-out", "icons", "icons-restore"];
 const bundle = resolve("src-tauri/target/release/bundle/macos/Index.app");
-const run = (command, args) => {
+const run = (command: string, args: string[]) => {
   const result = spawnSync(command, args, { env, stdio: "inherit" });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed (${result.status}). Logs: ${logs}`);
@@ -34,7 +36,7 @@ const clearTestCredential = () => {
     ],
     { stdio: "ignore" },
   );
-  if (![0, 44].includes(result.status))
+  if (result.status !== 0 && result.status !== 44)
     throw new Error("Could not clear the isolated smoke credential.");
 };
 run("bun", ["run", "desktop:build", "--local", "--features", "native-smoke", "--bundles", "app"]);

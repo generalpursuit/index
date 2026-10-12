@@ -10,12 +10,12 @@
     "check-types": "tsc -b ../../packages/api && vite build && tsc --noEmit",
     "tauri": "tauri",
     "desktop:dev": "tauri dev --config src-tauri/tauri.dev.conf.json",
-    "desktop:build": "bun scripts/desktop-build.mjs",
-    "desktop:test": "bun scripts/desktop-smoke.mjs",
+    "desktop:build": "bun scripts/desktop/build.ts",
+    "desktop:test": "bun scripts/desktop/smoke.ts",
     "dev:bare": "vite dev",
     "env:generate": "varlock codegen",
     "test:e2e": "playwright test",
-    "test": "bun test tests"
+    "test": "bun test tests scripts/desktop e2e/server.test.ts"
   },
   "dependencies": {
     "@index/api": "workspace:*",

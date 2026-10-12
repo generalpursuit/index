@@ -1,15 +1,16 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
+import { readBaseConfig, type AppIdentity } from "./channels.ts";
 
-const run = (command, args) => {
+const run = (command: string, args: string[]) => {
   const result = spawnSync(command, args, { stdio: "inherit", env: process.env });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed (${result.status}).`);
 };
-const xml = (value) =>
+const xml = (value: string) =>
   String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
-const plist = (dict) =>
+const plist = (dict: Record<string, string | string[]>) =>
   `<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict>${Object.entries(
     dict,
   )
@@ -23,8 +24,14 @@ const plist = (dict) =>
 export function prepareShareExtension({
   local,
   args,
-  configurationFile = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8")),
+  configurationFile = readBaseConfig(),
+}: {
+  local: boolean;
+  args: string[];
+  configurationFile?: AppIdentity;
 }) {
+  const api = process.env.VITE_SERVER_URL;
+  if (!api) throw new Error("Set VITE_SERVER_URL before building the Share extension.");
   const team = process.env.INDEX_APPLE_TEAM_ID;
   const group = process.env.INDEX_KEYCHAIN_GROUP;
   const identity = process.env.APPLE_SIGNING_IDENTITY;
@@ -110,7 +117,7 @@ export function prepareShareExtension({
         ]
       : ["INDEX_MAC_CODE_SIGN_STYLE=Automatic"]),
     "ENABLE_HARDENED_RUNTIME=YES",
-    `INDEX_API_URL=${process.env.VITE_SERVER_URL}`,
+    `INDEX_API_URL=${api}`,
     `INDEX_WEB_URL=${web}`,
     `MARKETING_VERSION=${configurationFile.version}`,
     `CURRENT_PROJECT_VERSION=${configurationFile.bundle?.macOS?.bundleVersion ?? configurationFile.version}`,
@@ -130,7 +137,7 @@ export function prepareShareExtension({
     info,
     plist({
       IndexKeychainGroup: group,
-      IndexAPIURL: process.env.VITE_SERVER_URL,
+      IndexAPIURL: api,
       IndexWebURL: web,
     }),
   );
@@ -162,7 +169,7 @@ export function prepareShareExtension({
   };
 }
 
-export function verifyShareExtension(args, productName = "Index") {
+export function verifyShareExtension(args: string[], productName = "Index") {
   const index = args.findIndex((arg) => ["--target", "-t"].includes(arg));
   const target =
     index >= 0 ? args[index + 1] : args.find((arg) => arg.startsWith("--target="))?.split("=")[1];

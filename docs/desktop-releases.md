@@ -7,7 +7,7 @@ Promote tested work from `dev` through `staging` to `main`. [desktop-release.yml
 | `staging` | Index Staging | `desktop-staging`    | `staging`    |
 | `main`    | Index         | `desktop-production` | `production` |
 
-[Channel configuration](../apps/web/scripts/desktop-channels.mjs) binds each app to its service, identity and feed. The channels have separate credentials, app data, Share extensions and updater keys; they can be installed together. A staging update cannot convert the production app. Release builds select `--channel staging` or `--channel production` and reject development overrides.
+[Channel configuration](../apps/web/scripts/desktop/channels.ts) binds each app to its service, identity and feed. The channels have separate credentials, app data, Share extensions and updater keys; they can be installed together. A staging update cannot convert the production app. Release builds select `--channel staging` or `--channel production` and reject development overrides.
 
 ## Artifacts and prerequisites
 
@@ -21,7 +21,7 @@ Public unauthenticated GitHub downloads are required for in-app updates. Private
 
 Artifacts publish to [GitHub Releases](https://github.com/generalpursuit/index/releases) with `SHA256SUMS.txt`. Tags are `desktop-<channel>-vVERSION`; staging is a prerelease. Versioning adds the workflow run number to the base patch in [tauri.conf.json](../apps/web/src-tauri/tauri.conf.json). Do not decrease the base version. Rerunning a failed job retains its version; a new run advances it.
 
-The [publisher](../apps/web/scripts/publish-desktop.mjs) uploads a draft, publishes a complete release, then atomically advances only that channel's `latest.json` on `desktop-updates`. It refuses an older feed version. Failed builds leave the current feed intact.
+The [publisher](../apps/web/scripts/desktop/publish.ts) uploads a draft, publishes a complete release, then atomically advances only that channel's `latest.json` on `desktop-updates`. It refuses an older feed version. Failed builds leave the current feed intact.
 
 If publication succeeds but the feed update fails, rerun the failed publish job: it verifies the existing checksums and resumes. Do not rebuild and overwrite a published version; newly signed bytes differ. Roll back code by reverting it and releasing a **higher** version.
 
@@ -30,7 +30,7 @@ If publication succeeds but the feed update fails, rerun the failed publish job:
 From the root:
 
 ```sh
-bun test apps/web/tests/desktop-release.test.mjs apps/web/tests/desktop-publish.test.mjs
+bun test apps/web/scripts/desktop/release.test.ts apps/web/scripts/desktop/publish.test.ts
 python3 apps/web/scripts/test-desktop-signing.py
 ```
 

@@ -26,12 +26,14 @@ Preserve these constraints in shared controls, including portals:
 From `apps/web`, with Chromium installed:
 
 ```sh
-bun test tests/*.test.ts tests/*.test.mjs
+bun run test
 VITE_SERVER_URL=http://localhost:3002 bun run check-types
 E2E_PRODUCTION=1 bun run test:e2e --headed
 ```
 
-The type check builds the production frontend. Playwright starts its own disposable PGlite API on 3002 and web preview on 4173. It resets fixture data; do not share that API with simultaneous native tests. Override `E2E_API_PORT` / `E2E_WEB_PORT` for another test stack and build with the matching `VITE_SERVER_URL`. Omit `E2E_PRODUCTION=1` to use Vite development mode; bootstrap cases require a production build.
+`bun run check:tooling` from the root separately checks the Bun/Node tools in [scripts/desktop](scripts/desktop), [e2e/server.ts](e2e/server.ts), [e2e/fixtures.ts](e2e/fixtures.ts), and brand generation under strict TypeScript. CI runs this check; Bun execution alone does not check types.
+
+The web type check builds the production frontend. Playwright starts its own disposable PGlite API on 3002 and web preview on 4173. It resets fixture data; do not share that API with simultaneous native tests. Override `E2E_API_PORT` / `E2E_WEB_PORT` for another test stack and build with the matching `VITE_SERVER_URL`. Omit `E2E_PRODUCTION=1` to use Vite development mode; bootstrap cases require a production build.
 
 Install the browser with `bun run playwright install chromium`, or set `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` to an installed Chromium. On Linux, wrap the headed command with `xvfb-run --auto-servernum`; full Chromium is required for notification-permission cases. Traces/screenshots go to ignored `test-results`.
 
@@ -69,6 +71,6 @@ After the web build above, with Rust and platform prerequisites, run from the ro
 cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
 ```
 
-For macOS native integration, start `bun e2e/server.mjs` in `apps/web`, then run `bun run desktop:test` there in another terminal. It uses isolated credentials and rebuilds the normal host-only app afterward. This smoke feature omits the Share extension/menu lifecycle and stubs notifications.
+For macOS native integration, start `bun e2e/server.ts` in `apps/web`, then run `bun run desktop:test` there in another terminal. It uses isolated credentials and rebuilds the normal host-only app afterward. This smoke feature omits the Share extension/menu lifecycle and stubs notifications.
 
 Use a real signed bundle to check Keychain restore/erase and two-window account races, menu-bar placement/focus/VoiceOver, main hide/reopen, Quit, login-item OS approval, sleep/wake and real notifications. Check first-paint/native appearance after relaunch. Windows/Linux installation and updates need their respective systems; compilation or a mocked browser bridge is not native acceptance.

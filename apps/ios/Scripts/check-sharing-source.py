@@ -64,7 +64,7 @@ class SharingSources(unittest.TestCase):
         bridge = (repo / 'apps/web/src-tauri/native/shared_session.m').read_text()
         self.assertIn('kSecUseDataProtectionKeychain: @YES', bridge)
         self.assertIn('kSecAttrAccessibleWhenUnlockedThisDeviceOnly', bridge)
-        packaging = (repo / 'apps/web/scripts/share-extension-build.mjs').read_text()
+        packaging = (repo / 'apps/web/scripts/desktop/share-extension.ts').read_text()
         self.assertIn('"PlugIns/IndexShareMac.appex": extension', packaging)
         self.assertRegex(packaging, r'"-scheme",\s*"IndexShareMac"')
 

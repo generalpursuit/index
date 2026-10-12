@@ -33,7 +33,7 @@ jobs:
         run: |
           bun - <<'JS'
           import { appendFileSync } from 'node:fs';
-          import { channelForBranch, readBaseConfig, releaseVersion } from './apps/web/scripts/desktop-channels.mjs';
+          import { channelForBranch, readBaseConfig, releaseVersion } from './apps/web/scripts/desktop/channels.ts';
           const channel = channelForBranch(process.env.GITHUB_REF_NAME);
           const version = releaseVersion(readBaseConfig().version, process.env.GITHUB_RUN_NUMBER);
           appendFileSync(process.env.GITHUB_OUTPUT, `channel=${channel}\nversion=${version}\n`);
@@ -133,7 +133,7 @@ jobs:
           xcrun stapler validate "$app"
           spctl --assess --type execute --verbose "$app"
       - name: Collect release files and checksums
-        run: bun apps/web/scripts/desktop-artifacts.mjs "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
+        run: bun apps/web/scripts/desktop/artifacts.ts "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ needs.prepare.outputs.channel }}-${{ matrix.platform }}
@@ -158,6 +158,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.4.2
+      - run: bun install --frozen-lockfile --ignore-scripts
       - uses: actions/download-artifact@v4
         with:
           pattern: desktop-${{ needs.prepare.outputs.channel }}-*
@@ -167,4 +168,4 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           INDEX_DESKTOP_VERSION: ${{ needs.prepare.outputs.version }}
-        run: bun apps/web/scripts/publish-desktop.mjs desktop-artifacts
+        run: bun apps/web/scripts/desktop/publish.ts desktop-artifacts

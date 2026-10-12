@@ -1,12 +1,12 @@
 /** Normalize Tauri's random ICNS HashMap order without reencoding any image/mask. */
-export function orderedIcns(data) {
+export function orderedIcns(data: Buffer): Buffer {
   if (
     data.length < 8 ||
     data.toString("ascii", 0, 4) !== "icns" ||
     data.readUInt32BE(4) !== data.length
   )
     throw new Error("Invalid generated ICNS header.");
-  const elements = [];
+  const elements: Buffer[] = [];
   for (let offset = 8; offset < data.length;) {
     if (offset + 8 > data.length) throw new Error("Truncated generated ICNS element.");
     const length = data.readUInt32BE(offset + 4);

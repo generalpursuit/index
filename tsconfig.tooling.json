@@ -1,0 +1,21 @@
+{
+  "extends": "./packages/config/tsconfig.base.json",
+  "references": [
+    {
+      "path": "./packages/api"
+    }
+  ],
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "types": ["bun", "node"],
+    "lib": ["ESNext", "DOM"]
+  },
+  "include": [
+    "apps/web/scripts/**/*.ts",
+    "apps/web/e2e/server.ts",
+    "apps/web/e2e/fixtures.ts",
+    "apps/web/e2e/server.test.ts",
+    "assets/brand/**/*.ts"
+  ]
+}

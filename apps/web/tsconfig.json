@@ -1,5 +1,9 @@
 {
-  "references": [{ "path": "../../packages/api" }],
+  "references": [
+    {
+      "path": "../../packages/api"
+    }
+  ],
   "compilerOptions": {
     "strict": true,
     "esModuleInterop": true,
@@ -14,5 +18,6 @@
       "@/*": ["./src/*"],
       "@index/ui/*": ["../../packages/ui/src/*"]
     }
-  }
+  },
+  "exclude": ["scripts", "e2e/server.ts", "e2e/fixtures.ts", "e2e/server.test.ts"]
 }

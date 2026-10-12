@@ -18,7 +18,7 @@ The preview does not offer an iOS-only Home Screen icon setting.
 ## Run
 
 1. Open `Index.xcodeproj` in Xcode and select the `Index` scheme and an iPhone simulator.
-2. Start the disposable development backend from `apps/web` with `bun e2e/server.mjs`. The Debug configuration uses `http://localhost:3002`. Fixture login: `alice@test.example` / `test-password-123`.
+2. Start the disposable development backend from `apps/web` with `bun e2e/server.ts`. The Debug configuration uses `http://localhost:3002`. Fixture login: `alice@test.example` / `test-password-123`.
 3. Run. For an actual development backend, copy `Config/Local.xcconfig.example` to `Config/Local.xcconfig` and supply its HTTPS API/web URLs. An iPhone device cannot use the Mac's localhost; use an HTTPS development endpoint.
 
 Release builds require explicit HTTPS `INDEX_API_URL` and `INDEX_WEB_URL`. Configure your Apple signing team in the ignored `Config/Local.xcconfig`; changing generated project settings in Xcode will be overwritten by regeneration. The checked-in bundle identifier is `com.generalpursuit.index`; update it if the distribution account uses another identifier. No production endpoint, signing identity, or secret is embedded in this repository.

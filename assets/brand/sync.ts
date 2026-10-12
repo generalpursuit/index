@@ -1,5 +1,5 @@
 // Generate only from the supplied artwork. Every selected output is staged before publishing.
-import { spawnSync } from "node:child_process";
+import { spawnSync, type SpawnSyncOptionsWithStringEncoding } from "node:child_process";
 import {
   copyFileSync,
   existsSync,
@@ -13,7 +13,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
-import { orderedIcns } from "./icns.mjs";
+import { orderedIcns } from "./icns.ts";
 
 const brand = dirname(fileURLToPath(import.meta.url));
 const root = resolve(brand, "../..");
@@ -31,7 +31,7 @@ const { values } = parseArgs({
 });
 if (values.help) {
   console.log(
-    "Usage: bun assets/brand/sync.mjs [--target web|desktop|ios]... [--check]\nDefault: all targets. --check regenerates into temporary staging and never changes outputs.",
+    "Usage: bun assets/brand/sync.ts [--target web|desktop|ios]... [--check]\nDefault: all targets. --check regenerates into temporary staging and never changes outputs.",
   );
   process.exit(0);
 }
@@ -40,8 +40,12 @@ for (const target of targets) {
   if (!["web", "desktop", "ios"].includes(target))
     throw new Error(`Unknown brand target: ${target}`);
 }
-const run = (command, args, options = {}) => {
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
+const run = (
+  command: string,
+  args: string[],
+  options: Omit<SpawnSyncOptionsWithStringEncoding, "encoding"> = {},
+) => {
+  const result = spawnSync(command, args, { stdio: "inherit", encoding: "utf8", ...options });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} failed (${result.status}).`);
   return result;
@@ -65,7 +69,7 @@ if (targets.has("desktop")) {
   const converter = process.env.RSVG_CONVERT || "rsvg-convert";
   let help;
   try {
-    help = run(converter, ["--help"], { encoding: "utf8", stdio: "pipe" }).stdout;
+    help = run(converter, ["--help"], { stdio: "pipe" }).stdout;
   } catch {
     throw new Error(
       "Desktop generation requires librsvg's rsvg-convert. Install librsvg or set RSVG_CONVERT to its executable.",
@@ -74,7 +78,7 @@ if (targets.has("desktop")) {
   if (!help.includes("pdf1.4"))
     throw new Error("Update librsvg: rsvg-convert must support --format pdf1.4.");
 }
-const required = new Set();
+const required = new Set<string>();
 if (targets.has("web") || targets.has("ios")) {
   for (const source of [
     "app-icon/app-store-1024.png",
@@ -90,17 +94,18 @@ if (targets.has("desktop")) required.add("symbol/symbol-black.svg");
 for (const source of required) readFileSync(join(brand, source));
 
 const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
-const outputs = new Map();
-const stage = (source, destination, size, opaque = false) =>
+type Output = { source: string; size?: number; opaque: boolean };
+const outputs = new Map<string, Output>();
+const stage = (source: string, destination: string, size?: number, opaque = false) =>
   outputs.set(destination, { source, size, opaque });
-const render = (source, name, sizes = []) => {
+const render = (source: string, name: string, sizes: number[] = []) => {
   const output = join(scratch, name);
   const args = [cli, "icon", source, "--output", output];
   for (const size of sizes) args.push("--png", String(size));
   run(process.execPath, args);
   return output;
 };
-const paper = (file) => {
+const paper = (file: string) => {
   const path = join(scratch, `paper-${file}`);
   // Swap only the supplied palette. Geometry, placement and source files stay unchanged.
   writeFileSync(
@@ -111,7 +116,13 @@ const paper = (file) => {
   );
   return path;
 };
-const catalog = (folder, filename, image, size, appIcon = false) => {
+const catalog = (
+  folder: string,
+  filename: string,
+  image: string,
+  size: number,
+  appIcon = false,
+) => {
   stage(image, `${folder}/${filename}`, size, appIcon);
   const metadata = join(scratch, `${outputs.size}-Contents.json`);
   writeFileSync(
@@ -133,7 +144,7 @@ const catalog = (folder, filename, image, size, appIcon = false) => {
   );
   stage(metadata, `${folder}/Contents.json`);
 };
-function validate(path, { source, size, opaque }) {
+function validate(path: string, { source, size, opaque }: Output) {
   const data = readFileSync(source);
   if (size) {
     if (
@@ -154,22 +165,24 @@ function validate(path, { source, size, opaque }) {
 }
 
 try {
-  let inkPreviews, paperPreviews;
+  // Paths are fixed before conditional rendering; consumers share the same target gates.
+  const inkPreviews = join(scratch, "ink-previews"),
+    paperPreviews = join(scratch, "paper-previews");
   if (targets.has("web") || targets.has("ios")) {
-    inkPreviews = render(
+    render(
       join(brand, "app-icon/app-store-1024.png"),
       "ink-previews",
       targets.has("web") ? [192, 256, 512] : [256],
     );
-    paperPreviews = render(
+    render(
       paper("app-icon-square.svg"),
       "paper-previews",
       targets.has("ios") ? [256, 1024] : [256],
     );
   }
-  let rounded;
+  const rounded = join(scratch, "rounded");
   if (targets.has("web") || targets.has("desktop"))
-    rounded = render(join(brand, "app-icon/app-icon-rounded.svg"), "rounded");
+    render(join(brand, "app-icon/app-icon-rounded.svg"), "rounded");
   if (targets.has("web")) {
     stage(join(inkPreviews, "256x256.png"), `${web}/app-icon.png`, 256);
     for (const size of [192, 512])
@@ -177,7 +190,7 @@ try {
     for (const [style, folder] of [
       ["ink", inkPreviews],
       ["paper", paperPreviews],
-    ])
+    ] as const)
       stage(join(folder, "256x256.png"), `${web}/app-icons/${style}.png`, 256);
     stage(join(rounded, "icon.ico"), `${web}/favicon.ico`);
     stage(join(brand, "app-icon/favicon.svg"), `${web}/favicon.svg`);
@@ -187,7 +200,7 @@ try {
   if (targets.has("desktop")) {
     const icns = join(rounded, "icon.icns");
     writeFileSync(icns, orderedIcns(readFileSync(icns)));
-    const sizes = {
+    const sizes: Record<string, number> = {
       "32x32.png": 32,
       "64x64.png": 64,
       "128x128.png": 128,

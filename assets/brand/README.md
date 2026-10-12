@@ -27,10 +27,10 @@ brand resources. They are retained even when no current application imports them
 Run from the repository root after installing the locked dependencies:
 
 ```sh
-bun assets/brand/sync.mjs --target web
-bun assets/brand/sync.mjs --target desktop
-bun assets/brand/sync.mjs --target ios
-bun assets/brand/sync.mjs --target web --check
+bun assets/brand/sync.ts --target web
+bun assets/brand/sync.ts --target desktop
+bun assets/brand/sync.ts --target ios
+bun assets/brand/sync.ts --target web --check
 ```
 
 Repeat `--target` to select several platforms; omitting it selects all three.
@@ -53,12 +53,12 @@ the same renderer versions (librsvg 2.62.3 / Cairo 1.18.4 for the committed PDF)
 Review regenerated outputs when upgrading renderers. ICNS element order is
 normalized because Tauri otherwise emits the same encoded images in random order.
 
-CI regenerates and checks web outputs. `bun test assets/brand/sync.test.mjs` covers
+CI regenerates and checks web outputs. `bun test assets/brand/sync.test.ts` covers
 stale/missing outputs and failure before publication. The desktop source check
 uses the same nonmutating PDF conversion:
 `python3 apps/web/scripts/check-menu-bar-source.py`.
 Native regeneration and final appearance still need their platform tools; on a
-Mac, run `bun assets/brand/sync.mjs --check` and the iOS/native packaging checks.
+Mac, run `bun assets/brand/sync.ts --check` and the iOS/native packaging checks.
 
 ## Platform behavior
 

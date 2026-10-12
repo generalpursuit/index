@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, copyFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
@@ -7,9 +8,28 @@ export const updaterFiles = {
   "darwin-x86_64": ".app.tar.gz",
   "linux-x86_64": ".AppImage",
   "windows-x86_64": ".exe",
+} as const;
+export type Platform = keyof typeof updaterFiles;
+const identity = z.object({
+  platform: z.enum(["darwin-aarch64", "darwin-x86_64", "linux-x86_64", "windows-x86_64"]),
+  channel: z.enum(["staging", "production"]),
+  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+});
+export const artifactMetadata = identity.extend({
+  file: z.string().min(1),
+  signature: z.string().regex(/^[A-Za-z0-9+/=]+$/),
+  digests: z.record(z.string(), z.string().regex(/^[a-f0-9]{64}$/)),
+});
+type ArtifactPart = Omit<z.infer<typeof artifactMetadata>, "digests" | "platform" | "channel"> & {
+  platform: string;
+  channel: string;
 };
+export const updateFeed = z.object({
+  version: z.string().regex(/^\d+\.\d+\.\d+$/),
+  platforms: z.record(z.string(), z.object({ signature: z.string(), url: z.string() })).optional(),
+});
 
-function walk(root) {
+function walk(root: string): string[] {
   return readdirSync(root, { withFileTypes: true }).flatMap((entry) => {
     const path = join(root, entry.name);
     // Never collect contents of an app, signing files, or unrelated build outputs.
@@ -21,19 +41,21 @@ function walk(root) {
   });
 }
 
-export function collect(bundle, destination, { platform, channel, version }) {
-  if (
-    !updaterFiles[platform] ||
-    !["staging", "production"].includes(channel) ||
-    !/^\d+\.\d+\.\d+$/.test(version)
-  )
-    throw new Error("Invalid artifact identity.");
+export function collect(
+  bundle: string,
+  destination: string,
+  options: { platform?: string; channel?: string; version?: string },
+) {
+  const parsed = identity.safeParse(options);
+  if (!parsed.success) throw new Error("Invalid artifact identity.");
+  const { platform, channel, version } = parsed.data;
   mkdirSync(destination, { recursive: true });
   const files = walk(bundle).filter((path) =>
     /\.(dmg|deb|rpm|AppImage|exe|msi|app\.tar\.gz)(\.sig)?$/.test(path),
   );
   const updater = files.filter((path) => path.endsWith(updaterFiles[platform]));
-  if (updater.length !== 1) throw new Error(`Expected one updater artifact for ${platform}.`);
+  if (updater.length !== 1 || !updater[0])
+    throw new Error(`Expected one updater artifact for ${platform}.`);
   const required = platform.startsWith("darwin")
     ? [".dmg"]
     : platform.startsWith("linux")
@@ -46,7 +68,7 @@ export function collect(bundle, destination, { platform, channel, version }) {
   if (!signature || !/^[A-Za-z0-9+/=]+$/.test(signature))
     throw new Error("Missing or invalid updater signature.");
   const prefix = `${channel}-${platform}-`;
-  const digests = {};
+  const digests: Record<string, string> = {};
   for (const file of files) {
     const name = prefix + basename(file).replaceAll(" ", "_");
     if (digests[name]) throw new Error("Duplicate artifact name.");
@@ -66,8 +88,14 @@ export function collect(bundle, destination, { platform, channel, version }) {
 }
 
 export function manifest(
-  parts,
-  { channel, version, repository, tag, now = new Date().toISOString() },
+  parts: ArtifactPart[],
+  {
+    channel,
+    version,
+    repository,
+    tag,
+    now = new Date().toISOString(),
+  }: { channel: string; version: string; repository: string; tag: string; now?: string },
 ) {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repository) || !/^[\w.-]+$/.test(tag))
     throw new Error("Invalid release destination.");
@@ -76,12 +104,12 @@ export function manifest(
     new Set(parts.map((part) => part.platform)).size !== parts.length
   )
     throw new Error("A release needs all four native targets.");
-  const platforms = {};
+  const platforms: Record<string, { signature: string; url: string }> = {};
   for (const part of parts) {
     if (
       part.channel !== channel ||
       part.version !== version ||
-      !updaterFiles[part.platform] ||
+      !Object.hasOwn(updaterFiles, part.platform) ||
       !part.file.startsWith(`${channel}-${part.platform}-`)
     )
       throw new Error("Mixed channel, version, or platform artifacts cannot be published.");
@@ -95,6 +123,8 @@ export function manifest(
 
 if (import.meta.main) {
   const [bundle, destination] = process.argv.slice(2);
+  if (!bundle || !destination)
+    throw new Error("Usage: bun scripts/desktop/artifacts.ts <bundle> <destination>");
   collect(resolve(bundle), resolve(destination), {
     platform: process.env.INDEX_UPDATE_PLATFORM,
     channel: process.env.INDEX_DESKTOP_CHANNEL,

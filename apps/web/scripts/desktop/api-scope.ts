@@ -1,5 +1,5 @@
 /** Same conservative namespace as IndexCore.APIScope and the macOS Keychain bridge. */
-export function apiScope(raw) {
+export function apiScope(raw: unknown): string {
   if (typeof raw !== "string" || !/^[\x21-\x7e]+$/.test(raw) || raw.includes("\\"))
     throw new Error("Invalid API scope.");
   const match = /^(https?):\/\/([^/?#]+)(\/[^?#]*)?$/i.exec(raw);

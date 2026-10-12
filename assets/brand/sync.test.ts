@@ -1,5 +1,6 @@
+import { z } from "zod";
 import assert from "node:assert/strict";
-import { orderedIcns } from "./icns.mjs";
+import { orderedIcns } from "./icns.ts";
 import { spawnSync } from "node:child_process";
 import {
   cpSync,
@@ -18,7 +19,7 @@ import { after, before, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-let fixture;
+let fixture: string;
 before(() => {
   fixture = mkdtempSync(join(tmpdir(), "index-brand-test-"));
   cpSync(join(root, "assets/brand"), join(fixture, "assets/brand"), { recursive: true });
@@ -29,14 +30,14 @@ before(() => {
   symlinkSync(join(root, "apps/web/node_modules"), join(fixture, "apps/web/node_modules"), "dir");
 });
 after(() => rmSync(fixture, { recursive: true, force: true }));
-const run = (args, env = {}) =>
-  spawnSync(process.execPath, [join(fixture, "assets/brand/sync.mjs"), ...args], {
+const run = (args: string[], env: NodeJS.ProcessEnv = {}) =>
+  spawnSync(process.execPath, [join(fixture, "assets/brand/sync.ts"), ...args], {
     cwd: fixture,
     encoding: "utf8",
     env: { ...process.env, ...env },
   });
 function outputSnapshot() {
-  const files = readdirSync(join(fixture, "apps"), { recursive: true }).filter(
+  const files = readdirSync(join(fixture, "apps"), { recursive: true, encoding: "utf8" }).filter(
     (path) => !path.includes("node_modules") && statSync(join(fixture, "apps", path)).isFile(),
   );
   return files.map((path) => [
@@ -126,11 +127,16 @@ it("declares existing canonical favicon and 192/512 manifest resources without d
   assert.match(html, /rel="icon" href="\/favicon.ico"/);
   assert.match(html, /rel="icon" href="\/favicon.svg" type="image\/svg\+xml"/);
   assert.match(html, /rel="apple-touch-icon" href="\/app-icon.png"/);
-  const manifest = JSON.parse(
-    readFileSync(join(root, "apps/web/public/manifest.webmanifest"), "utf8"),
-  );
+  const manifest = z
+    .object({
+      icons: z.array(
+        z.object({ src: z.string(), sizes: z.string(), type: z.string(), purpose: z.string() }),
+      ),
+    })
+    .parse(JSON.parse(readFileSync(join(root, "apps/web/public/manifest.webmanifest"), "utf8")));
   for (const size of [192, 512]) {
     const icon = manifest.icons.find((icon) => icon.sizes === `${size}x${size}`);
+    assert.ok(icon);
     assert.equal(icon?.type, "image/png");
     assert.equal(icon?.purpose, "any");
     assert.ok(existsSync(join(root, "apps/web/public", icon.src)));
@@ -139,7 +145,7 @@ it("declares existing canonical favicon and 192/512 manifest resources without d
 
 it("normalizes ICNS order while preserving every encoded image and mask", () => {
   const original = readFileSync(join(root, "apps/web/src-tauri/icons/icon.icns"));
-  const elements = [];
+  const elements: Buffer[] = [];
   for (let offset = 8; offset < original.length;) {
     const end = offset + original.readUInt32BE(offset + 4);
     elements.push(original.subarray(offset, end));

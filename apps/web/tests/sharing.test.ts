@@ -19,7 +19,7 @@ test("share retries keep identity, explicit duplicates and account/payload chang
 
 // Build-time normalization must not scope the host and extension to different credentials.
 test("build URL scopes match the Swift and Rust bridge fixtures", async () => {
-  const { apiScope } = await import("../scripts/api-scope.mjs");
+  const { apiScope } = await import("../scripts/desktop/api-scope");
   const cases = JSON.parse(
     await readFile(
       new URL("../../ios/Tests/IndexCoreTests/Fixtures/api-scopes.json", import.meta.url),
