@@ -1,21 +1,54 @@
-"""Deterministic vector PDF of the existing Index symbol for NSImage template rendering."""
+#!/usr/bin/env python3
+"""Convert the canonical symbol to a vector PDF for NSImage template rendering."""
+import argparse
+import os
+import subprocess
+import tempfile
+import xml.etree.ElementTree as ET
 from pathlib import Path
-# Same two rounded shapes as src/assets/brand-symbol.svg, in bottom-left PDF coordinates.
-stream = b'''0 g
-3 0 m 15 0 l 16.657 0 18 1.343 18 3 c 18 45 l 18 46.657 16.657 48 15 48 c
-3 48 l 1.343 48 0 46.657 0 45 c 0 3 l 0 1.343 1.343 0 3 0 c f
-35.6 58 m 46.4 58 l 48.388 58 50 59.612 50 61.6 c 50 72.4 l
-50 74.388 48.388 76 46.4 76 c 35.6 76 l 33.612 76 32 74.388 32 72.4 c
-32 61.6 l 32 59.612 33.612 58 35.6 58 c f
-'''
-objects = [b'<< /Type /Catalog /Pages 2 0 R >>', b'<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-           b'<< /Type /Page /Parent 2 0 R /MediaBox [0 0 50 76] /Resources << >> /Contents 4 0 R >>',
-           b'<< /Length ' + str(len(stream)).encode() + b' >>\nstream\n' + stream + b'endstream']
-pdf = b'%PDF-1.4\n'; offsets = [0]
-for i, obj in enumerate(objects, 1):
-    offsets.append(len(pdf)); pdf += str(i).encode() + b' 0 obj\n' + obj + b'\nendobj\n'
-xref = len(pdf)
-pdf += b'xref\n0 5\n0000000000 65535 f \n'
-for offset in offsets[1:]: pdf += f'{offset:010d} 00000 n \n'.encode()
-pdf += f'trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n'.encode()
-Path(__file__).resolve().parents[1].joinpath('src-tauri/icons/menu-bar.pdf').write_bytes(pdf)
+
+ROOT = Path(__file__).resolve().parents[3]
+SOURCE = ROOT / 'assets/brand/symbol/symbol-black.svg'
+OUTPUT = ROOT / 'apps/web/src-tauri/icons/menu-bar.pdf'
+
+
+def render(converter, output):
+    # The SVG viewBox owns the geometry and aspect ratio; no duplicate paths.
+    _, _, width, height = map(float, ET.parse(SOURCE).getroot().attrib['viewBox'].split())
+    if width <= 0 or height <= 0:
+        raise ValueError('The canonical symbol needs a positive viewBox.')
+    subprocess.run([
+        converter, '--format', 'pdf1.4', '--width', f'{width:g}pt', '--height', f'{height:g}pt',
+        '--page-width', f'{width:g}pt', '--page-height', f'{height:g}pt',
+        '--output', str(output), str(SOURCE),
+    ], check=True, env={**os.environ, 'SOURCE_DATE_EPOCH': '0'})
+    data = output.read_bytes()
+    bounds = f'/MediaBox [ 0 0 {width:g} {height:g} ]'.encode()
+    if not data.startswith(b'%PDF-1.4') or bounds not in data or b'/Subtype /Image' in data:
+        raise ValueError('Expected a vector PDF with the canonical symbol dimensions.')
+    return data
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--check', action='store_true', help='Compare without changing the output.')
+    parser.add_argument('--output', type=Path, default=OUTPUT)
+    parser.add_argument('--rsvg-convert', default=os.environ.get('RSVG_CONVERT', 'rsvg-convert'))
+    args = parser.parse_args()
+    try:
+        with tempfile.TemporaryDirectory(prefix='index-menu-icon-') as folder:
+            data = render(args.rsvg_convert, Path(folder) / 'menu-bar.pdf')
+        if args.check:
+            if not args.output.exists() or args.output.read_bytes() != data:
+                parser.exit(1, f'Missing or stale menu-bar icon: {args.output}\nRun python3 apps/web/scripts/menu-bar-icon.py\n')
+        else:
+            args.output.parent.mkdir(parents=True, exist_ok=True)
+            args.output.write_bytes(data)
+    except FileNotFoundError as error:
+        parser.exit(1, f'{error}\nInstall librsvg (rsvg-convert with pdf1.4 support), or set RSVG_CONVERT to its executable.\n')
+    except (ValueError, subprocess.CalledProcessError) as error:
+        parser.exit(1, f'Menu-bar icon generation failed: {error}\n')
+
+
+if __name__ == '__main__':
+    main()

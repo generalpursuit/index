@@ -30,6 +30,10 @@ jobs:
         run: |
           bun run oxfmt --check
           bun run oxlint
+      - name: Verify generated brand assets
+        run: |
+          bun assets/brand/sync.mjs --target web --check
+          bun test assets/brand/sync.test.mjs
       - name: API, server, and deployment tests
         run: |
           bun test apps/web/tests/desktop-release.test.mjs apps/web/tests/desktop-publish.test.mjs

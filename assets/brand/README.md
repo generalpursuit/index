@@ -1,22 +1,74 @@
-The original files in `symbol`, `wordmark`, `lockup`, and `app-icon` come unchanged
-from `index-geist-original-hop-square-ink.zip`. See `README.txt` from that pack.
+# Brand artwork
 
-Run `bun assets/brand/sync.mjs` from the repository root to refresh the iOS asset
-catalogs, shared SwiftUI artwork, desktop bundle icons, web favicon and icon
-previews. Run it on a Mac with Xcode and the locally installed Tauri CLI; no separate image tool is needed.
-Generated assets are committed so normal builds do not need this step.
-The SwiftUI icon previews live in the shared package's `Brand.xcassets`; the
-wordmark and Home symbol use its existing vector `Assets.xcassets`. Both catalogs
-support named-image lookup in the built app and preview.
+This folder is the canonical artwork source shared by web, desktop and iOS; it is
+not a package. The supplied SVG and PNG files come unchanged from
+`index-geist-original-hop-square-ink.zip` (Geist, Original icon, hop square, Ink).
+The wordmark is outlined Geist 600 and needs no installed font; consult the
+original typeface licence before reusing it outside this project.
 
-Ink is the supplied default. Paper swaps the pack's two colors, retaining its exact
-paths, scale and placement. iOS uses opaque, square 1024 px images; the OS supplies
-the corner mask. `opaque-icon.swift` removes alpha channels from both iOS icons for
-App Store compatibility, leaving the supplied source files untouched. Desktop uses
-the supplied rounded artwork with transparent corners.
+Ink uses background `#0B0B0C` and symbol `#FFFFFF`. Paper swaps only those colors,
+preserving the exact paths, scale and placement.
 
-In Settings, iOS changes the actual Home Screen icon through its alternate-icon
-API. macOS saves the choice on the device and reapplies it to the Dock at launch.
-Finder and the downloaded bundle retain the default Ink icon; changing them would
-require modifying the installed application. Other desktop platforms retain Ink
+| Source                          | Use                                                    |
+| ------------------------------- | ------------------------------------------------------ |
+| `symbol/symbol-white.svg`       | Web Home symbol and shared SwiftUI template image      |
+| `symbol/symbol-black.svg`       | Desktop menu-bar vector PDF                            |
+| `wordmark/wordmark-white.svg`   | Web and shared SwiftUI wordmark                        |
+| `app-icon/app-store-1024.png`   | Opaque square iOS Ink icon; web icons and Ink previews |
+| `app-icon/app-icon-square.svg`  | Paper iOS icon and previews after palette swap         |
+| `app-icon/app-icon-rounded.svg` | Desktop bundle icons and web ICO fallback              |
+| `app-icon/favicon.svg`          | Explicit web SVG favicon                               |
+
+The other wordmarks, symbols, lockups, PNG sizes and rounded exports remain useful
+brand resources. They are retained even when no current application imports them.
+
+## Generate and check
+
+Run from the repository root after installing the locked dependencies:
+
+```sh
+bun assets/brand/sync.mjs --target web
+bun assets/brand/sync.mjs --target desktop
+bun assets/brand/sync.mjs --target ios
+bun assets/brand/sync.mjs --target web --check
+```
+
+Repeat `--target` to select several platforms; omitting it selects all three.
+`--check` regenerates selected outputs in temporary staging, reports missing or
+stale files, and never repairs them. Generation checks all selected prerequisites
+first, stages and validates every output, then copies them into the repository.
+Generated assets stay committed, so normal builds need no conversion tools.
+
+| Target    | Prerequisites                                                     | Generated destinations                                                                                                      |
+| --------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `web`     | Repository's locked Tauri CLI                                     | `apps/web/public`: SVG/ICO favicons, 192/256/512 PNGs and Ink/Paper previews; `apps/web/src/assets`: wordmark and symbol    |
+| `desktop` | Tauri CLI, Python 3, librsvg `rsvg-convert` with `pdf1.4` support | `apps/web/src-tauri/icons`: rounded bundle icons, Paper icon and vector `menu-bar.pdf`                                      |
+| `ios`     | Tauri CLI, macOS and Xcode with Swift/CoreGraphics/ImageIO        | `apps/ios/Resources/Assets.xcassets`: Ink/Paper app icons; `apps/ios/Sources/IndexUI/Resources`: previews and vector images |
+
+Install librsvg with your platform's package manager (for example, `brew install
+librsvg`). Put `rsvg-convert` on `PATH` or set `RSVG_CONVERT` to its executable.
+The PDF is generated at its SVG viewBox dimensions, with a fixed creation date;
+the native menu-bar image retains template rendering. Reproducible bytes require
+the same renderer versions (librsvg 2.62.3 / Cairo 1.18.4 for the committed PDF).
+Review regenerated outputs when upgrading renderers. ICNS element order is
+normalized because Tauri otherwise emits the same encoded images in random order.
+
+CI regenerates and checks web outputs. `bun test assets/brand/sync.test.mjs` covers
+stale/missing outputs and failure before publication. The desktop source check
+uses the same nonmutating PDF conversion:
+`python3 apps/web/scripts/check-menu-bar-source.py`.
+Native regeneration and final appearance still need their platform tools; on a
+Mac, run `bun assets/brand/sync.mjs --check` and the iOS/native packaging checks.
+
+## Platform behavior
+
+The iOS icons remain opaque, square 1024px images; the OS supplies the corner
+mask. `opaque-icon.swift` removes the alpha channel in staging without changing
+canonical artwork. Shared SwiftUI previews use `Brand.xcassets`, while the Home
+symbol and wordmark use vector `Assets.xcassets`. Desktop icons retain transparent
+rounded corners.
+
+iOS Settings changes the actual Home Screen icon through the alternate-icon API.
+macOS saves the choice on the device and reapplies it to the Dock at launch.
+Finder and the downloaded bundle retain Ink. Other desktop platforms retain Ink
 and do not show an unsupported icon picker.
