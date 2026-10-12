@@ -455,6 +455,48 @@ describe("verification and account security", () => {
       200,
     );
   });
+  it("shares the current-password attempt budget across correction, email change and password change", async () => {
+    const { token } = await signup();
+    for (let attempt = 0; attempt < 4; attempt++) {
+      assert.equal(
+        (
+          await post(
+            "/security/correct-email",
+            {
+              email: "corrected@example.test",
+              password: "wrong-password",
+            },
+            token,
+          )
+        ).status,
+        400,
+      );
+    }
+    await verify(token);
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const response =
+        attempt % 2 === 0
+          ? await post(
+              "/security/request-email-change",
+              { email: "changed@example.test", password: "wrong-password" },
+              token,
+            )
+          : await post(
+              "/security/change-password",
+              { currentPassword: "wrong-password", newPassword: "replacement-password" },
+              token,
+            );
+      assert.equal(response.status, 400);
+    }
+    for (const [path, body] of [
+      ["/security/request-email-change", { email: "changed@example.test", password }],
+      [
+        "/security/change-password",
+        { currentPassword: password, newPassword: "replacement-password" },
+      ],
+    ] as const)
+      assert.equal((await post(path, body, token)).status, 429);
+  });
   it("reports failed delivery safely and recovers through a later resend; reset failures remain generic", async () => {
     failDelivery = true;
     const { token, user } = await signup();

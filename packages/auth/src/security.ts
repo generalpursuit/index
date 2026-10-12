@@ -3,8 +3,7 @@ import { account, user } from "@index/db/schema/auth";
 import { authChallenge } from "@index/db/schema/auth-security";
 import { and, eq, sql } from "drizzle-orm";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { APIError, createAuthEndpoint, sessionMiddleware } from "better-auth/api";
-import { z } from "zod";
+import { APIError } from "better-auth/api";
 import type { EmailTransport, SecurityEmail } from "./delivery";
 
 type DB = Pick<PgAsyncDatabase<PgQueryResultHKT>, "select" | "update">;
@@ -12,16 +11,14 @@ type Identity = {
   user: { id: string; email: string; emailVerified: boolean };
   session: { id: string };
 };
+type Passwords = {
+  verify(input: { hash: string; password: string }): Promise<boolean>;
+  hash(password: string): Promise<string>;
+};
 export type SecurityOptions = {
   sendEmail: EmailTransport;
   backgroundTask?: (task: Promise<unknown>) => void;
 };
-const emailSchema = z
-  .email()
-  .max(254)
-  .transform((s) => s.toLowerCase());
-const passwordSchema = z.string().min(8).max(128);
-const codeSchema = z.string().regex(/^\d{6}$/);
 const invalidCode = () =>
   new APIError("BAD_REQUEST", {
     code: "INVALID_CODE",
@@ -169,167 +166,98 @@ export function securityService(db: DB, secret: string, options: SecurityOptions
     if (options.backgroundTask) options.backgroundTask(safeCleanup);
     else await safeCleanup;
   }
-  return { digest, throttle, issue, status, consume, maintain };
-}
-
-export function securityPlugin(db: DB, security: ReturnType<typeof securityService>) {
-  async function credential(userId: string) {
-    return (
-      await db
-        .select()
-        .from(account)
-        .where(and(eq(account.userId, userId), eq(account.providerId, "credential")))
-        .limit(1)
-    )[0];
+  async function confirmCurrentPassword(
+    identity: Identity,
+    password: string,
+    passwords: Passwords,
+  ) {
+    await throttle(`password:${identity.user.id}`, 10);
+    const [credential] = await db
+      .select()
+      .from(account)
+      .where(and(eq(account.userId, identity.user.id), eq(account.providerId, "credential")))
+      .limit(1);
+    if (!credential?.password || !(await passwords.verify({ hash: credential.password, password })))
+      throw new APIError("BAD_REQUEST", { message: "Current password is incorrect." });
+    // The exact checked hash is part of the database compare-and-set. A password
+    // reset racing confirmation must invalidate this operation, not be overwritten.
+    return credential.password;
+  }
+  function requireVerified(identity: Identity) {
+    if (!identity.user.emailVerified)
+      throw new APIError("FORBIDDEN", {
+        code: "EMAIL_NOT_VERIFIED",
+        message: "Verify your email first.",
+      });
+  }
+  async function resendVerification(identity: Identity) {
+    if (identity.user.emailVerified)
+      throw new APIError("BAD_REQUEST", { message: "Email is already verified." });
+    // Resume a corrected address instead of silently returning to the mistaken one.
+    const pending = await status(identity);
+    return issue("verify", pending.email, identity);
+  }
+  async function correctEmail(
+    identity: Identity,
+    email: string,
+    password: string,
+    passwords: Passwords,
+  ) {
+    if (identity.user.emailVerified)
+      throw new APIError("BAD_REQUEST", { message: "Use Change email in Settings." });
+    const hash = await confirmCurrentPassword(identity, password, passwords);
+    return issue("verify", email, identity, hash);
+  }
+  async function requestEmailChange(
+    identity: Identity,
+    email: string,
+    password: string,
+    passwords: Passwords,
+  ) {
+    requireVerified(identity);
+    const hash = await confirmCurrentPassword(identity, password, passwords);
+    return issue("change-email", email, identity, hash);
+  }
+  async function resetPassword(
+    email: string,
+    code: string,
+    password: string,
+    passwords: Passwords,
+  ) {
+    const hash = await passwords.hash(password);
+    return consume("reset", email, code, undefined, hash);
+  }
+  async function changePassword(
+    identity: Identity,
+    currentPassword: string,
+    newPassword: string,
+    passwords: Passwords,
+  ) {
+    requireVerified(identity);
+    const previousHash = await confirmCurrentPassword(identity, currentPassword, passwords);
+    const hash = await passwords.hash(newPassword);
+    const [result] = await db
+      .select({
+        ok: sql<boolean>`index_auth_password(${identity.user.id},${identity.session.id},${previousHash},${hash})`,
+      })
+      .from(sql`(select 1) as auth_op`);
+    if (!result?.ok)
+      throw new APIError("BAD_REQUEST", {
+        message: "Your session changed. Sign in and try again.",
+      });
+    return { success: true };
   }
   return {
-    id: "index-security",
-    endpoints: {
-      securityStatus: createAuthEndpoint(
-        "/security/status",
-        { method: "GET", use: [sessionMiddleware] },
-        async (ctx) => ({
-          verification: await security.status(ctx.context.session),
-          emailChange: await security.status(ctx.context.session, "change-email"),
-        }),
-      ),
-      sendVerificationCode: createAuthEndpoint(
-        "/security/send-verification",
-        { method: "POST", body: z.object({}), use: [sessionMiddleware] },
-        async (ctx) => {
-          if (ctx.context.session.user.emailVerified)
-            throw new APIError("BAD_REQUEST", { message: "Email is already verified." });
-          // Resume a corrected address instead of silently switching back to the mistaken one.
-          const status = await security.status(ctx.context.session);
-          return security.issue("verify", status.email, ctx.context.session);
-        },
-      ),
-      correctSignupEmail: createAuthEndpoint(
-        "/security/correct-email",
-        {
-          method: "POST",
-          body: z.object({ email: emailSchema, password: passwordSchema }),
-          use: [sessionMiddleware],
-        },
-        async (ctx) => {
-          const identity = ctx.context.session;
-          if (identity.user.emailVerified)
-            throw new APIError("BAD_REQUEST", { message: "Use Change email in Settings." });
-          await security.throttle(`password:${identity.user.id}`, 10);
-          const found = await credential(identity.user.id);
-          if (
-            !found?.password ||
-            !(await ctx.context.password.verify({
-              hash: found.password,
-              password: ctx.body.password,
-            }))
-          )
-            throw new APIError("BAD_REQUEST", { message: "Current password is incorrect." });
-          return security.issue("verify", ctx.body.email, identity, found.password);
-        },
-      ),
-      verifySignupEmail: createAuthEndpoint(
-        "/security/verify-email",
-        { method: "POST", body: z.object({ code: codeSchema }), use: [sessionMiddleware] },
-        async (ctx) =>
-          security.consume(
-            "verify",
-            ctx.context.session.user.id,
-            ctx.body.code,
-            ctx.context.session.session.id,
-          ),
-      ),
-      requestRecovery: createAuthEndpoint(
-        "/security/request-reset",
-        { method: "POST", body: z.object({ email: emailSchema }) },
-        async (ctx) => security.issue("reset", ctx.body.email),
-      ),
-      resetWithCode: createAuthEndpoint(
-        "/security/reset-password",
-        {
-          method: "POST",
-          body: z.object({ email: emailSchema, code: codeSchema, newPassword: passwordSchema }),
-        },
-        async (ctx) => {
-          const hash = await ctx.context.password.hash(ctx.body.newPassword);
-          return security.consume("reset", ctx.body.email, ctx.body.code, undefined, hash);
-        },
-      ),
-      requestEmailChange: createAuthEndpoint(
-        "/security/request-email-change",
-        {
-          method: "POST",
-          body: z.object({ email: emailSchema, password: passwordSchema }),
-          use: [sessionMiddleware],
-        },
-        async (ctx) => {
-          const identity = ctx.context.session;
-          if (!identity.user.emailVerified)
-            throw new APIError("FORBIDDEN", {
-              code: "EMAIL_NOT_VERIFIED",
-              message: "Verify your email first.",
-            });
-          await security.throttle(`password:${identity.user.id}`, 10);
-          const found = await credential(identity.user.id);
-          if (
-            !found?.password ||
-            !(await ctx.context.password.verify({
-              hash: found.password,
-              password: ctx.body.password,
-            }))
-          )
-            throw new APIError("BAD_REQUEST", { message: "Current password is incorrect." });
-          return security.issue("change-email", ctx.body.email, identity, found.password);
-        },
-      ),
-      confirmEmailChange: createAuthEndpoint(
-        "/security/confirm-email-change",
-        { method: "POST", body: z.object({ code: codeSchema }), use: [sessionMiddleware] },
-        async (ctx) =>
-          security.consume(
-            "change-email",
-            ctx.context.session.user.id,
-            ctx.body.code,
-            ctx.context.session.session.id,
-          ),
-      ),
-      changeAccountPassword: createAuthEndpoint(
-        "/security/change-password",
-        {
-          method: "POST",
-          body: z.object({ currentPassword: passwordSchema, newPassword: passwordSchema }),
-          use: [sessionMiddleware],
-        },
-        async (ctx) => {
-          const identity = ctx.context.session;
-          if (!identity.user.emailVerified)
-            throw new APIError("FORBIDDEN", {
-              code: "EMAIL_NOT_VERIFIED",
-              message: "Verify your email first.",
-            });
-          await security.throttle(`password:${identity.user.id}`, 10);
-          const found = await credential(identity.user.id);
-          if (
-            !found?.password ||
-            !(await ctx.context.password.verify({
-              hash: found.password,
-              password: ctx.body.currentPassword,
-            }))
-          )
-            throw new APIError("BAD_REQUEST", { message: "Current password is incorrect." });
-          const hash = await ctx.context.password.hash(ctx.body.newPassword);
-          const [result] = await db
-            .select({
-              ok: sql<boolean>`index_auth_password(${identity.user.id},${identity.session.id},${found.password},${hash})`,
-            })
-            .from(sql`(select 1) as auth_op`);
-          if (!result?.ok)
-            throw new APIError("BAD_REQUEST", {
-              message: "Your session changed. Sign in and try again.",
-            });
-          return { success: true };
-        },
-      ),
-    },
+    digest,
+    throttle,
+    issue,
+    status,
+    consume,
+    maintain,
+    resendVerification,
+    correctEmail,
+    requestEmailChange,
+    resetPassword,
+    changePassword,
   };
 }
