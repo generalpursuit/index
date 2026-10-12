@@ -5,7 +5,8 @@ import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { bearer, openAPI, username } from "better-auth/plugins";
 import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { securityPlugin, securityService, type SecurityOptions } from "./security";
+import { securityService, type SecurityOptions } from "./security";
+import { securityPlugin } from "./security-plugin";
 import { resendTransport } from "./delivery";
 import { trustedWebOrigins } from "./origins";
 import { isUsernameAvailable } from "./namespace";
@@ -158,7 +159,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
     },
     plugins: [
       bearer({ requireSignature: true }),
-      securityPlugin(database, security),
+      securityPlugin(security),
       openAPI({ disableDefaultReference: true }),
       username({
         displayUsername: false,

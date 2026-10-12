@@ -1,22 +1,20 @@
 import { notificationCapabilities } from "./notifications/config";
 import type { Context as ApiContext } from "@index/api/context";
-import type { Context as HonoContext } from "hono";
 
 import { ENV } from "./env.server";
 import { r2MediaStore } from "./media";
 import { getDb } from "./services";
 import { createAuth } from "./services";
 
-export type CreateContextOptions = {
-  context: HonoContext;
-};
-
-export async function createContext({ context }: CreateContextOptions): Promise<ApiContext> {
+export async function createContext(
+  request: Request,
+  backgroundTask: (task: Promise<unknown>) => void,
+): Promise<ApiContext> {
   const db = getDb();
   const session = await (
-    await createAuth(db)
+    await createAuth(db, backgroundTask)
   ).api.getSession({
-    headers: context.req.raw.headers,
+    headers: request.headers,
   });
   return {
     db,

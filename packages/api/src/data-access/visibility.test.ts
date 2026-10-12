@@ -32,6 +32,17 @@ describe("visibility across profiles, groups and links", () => {
           const canViewProfile =
             viewer === "alice" || profileVisibility === "public" || viewer === "bob";
           assert.equal(profile.canViewContent, canViewProfile);
+          assert.equal(
+            profile.linkCount,
+            viewer === "alice"
+              ? 2
+              : profileVisibility === "private"
+                ? null
+                : visibility === "public"
+                  ? 2
+                  : 1,
+            "Profile counts include visible ungrouped links and exclude locked links",
+          );
           assert.equal("email" in profile, false);
           if (allowed) {
             assert.equal((await client.groups.get({ id: group.id })).id, group.id);

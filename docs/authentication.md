@@ -1,6 +1,6 @@
 # Email verification and account recovery
 
-Index keeps Better Auth 1.7.7 for password authentication, signed cookies/bearer sessions and password hashing. Email codes prove address ownership or authorize a password reset; they never sign a user in. The email-OTP/passwordless plugin is intentionally not installed. The installed plugin's general-purpose sign-in/check/change routes do not implement Index's session ownership and password-confirmation contract, so `@index/auth/security` supplies a focused Better Auth plugin.
+Index keeps Better Auth 1.7.7 for password authentication, signed cookies/bearer sessions and password hashing. Email codes prove address ownership or authorize a password reset; they never sign a user in. The email-OTP/passwordless plugin is intentionally not installed. The installed plugin's general-purpose sign-in/check/change routes do not implement Index's session ownership and password-confirmation contract, so `@index/auth/security-plugin` supplies a focused Better Auth endpoint adapter. `@index/auth/security` owns the account operations, challenge persistence and shared current-password confirmation rule. The exact confirmed credential hash still participates in the atomic database compare-and-set.
 
 ## Session contract
 
@@ -54,7 +54,7 @@ SwiftUI has a restricted root with verification/correction and a recover-passwor
 
 ## Local verification and remaining launch checks
 
-All automated data is disposable PGlite/fixture data. Server tests use real Better Auth handlers, signed cookies and signed bearer tokens, the checked-in SQL migrations, REST and RPC handlers, and the production Hono authentication mounting function with an execution-context `waitUntil` spy. They cover the full verification/recovery/change lifecycle, restricted/legacy/stale sessions, resolver gates, atomic guesses/consumption, correction ownership, namespace reservations, delivery failure, reset enumeration/revocation, and bounded cleanup. This tests the actual Worker delivery wiring, but does not claim a deployed Cloudflare Worker or real Resend delivery was exercised.
+All automated data is disposable PGlite/fixture data. Server tests use real Better Auth handlers, signed cookies and signed bearer tokens, the checked-in SQL migrations, REST and RPC handlers, and the mounted Hono application with an execution-context `waitUntil` spy. They cover the full verification/recovery/change lifecycle, restricted/legacy/stale sessions, resolver gates, atomic guesses/consumption, correction ownership, namespace reservations, delivery failure, reset enumeration/revocation, and bounded cleanup. This tests the actual Worker delivery wiring, but does not claim a deployed Cloudflare Worker or real Resend delivery was exercised.
 
 Run from the repository root with the declared Bun version:
 
