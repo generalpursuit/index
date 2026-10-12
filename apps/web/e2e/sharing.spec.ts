@@ -93,7 +93,11 @@ test("lost response retains input and retry ID; cancellation does not save", asy
   });
   const before = await current(page).locator(".own-links .link-row").count();
   await current(page).getByRole("button", { name: "Save destination: Your links" }).click();
+  // Escape before the picker is open is lost, and the open picker then keeps the field's Enter.
+  const picker = page.getByRole("dialog", { name: "Save to", exact: true });
+  await expect(picker).toBeVisible();
   await page.keyboard.press("Escape");
+  await expect(picker).toHaveCount(0);
   expect(calls).toBe(0);
   await input(page).fill("https://pages.test/calm-software");
   await input(page).press("Enter");
