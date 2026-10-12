@@ -59,7 +59,7 @@ This uses the disposable fixture API and is not a distribution artifact. Normal 
 
 ### Menu bar and notifications
 
-[menu_bar.rs](src-tauri/src/menu_bar.rs) owns the main/panel lifecycle. Main close hides it and clears active-conversation presence while notification delivery continues; hiding the panel does not change main's presence. Quit ends the process and preserves device opt-in. Notification clicks show/create main and require authorized navigation before acknowledgement. Only main mounts the notification lifecycle; [notifications](../../docs/notifications.md) owns delivery rules.
+[menu_bar.rs](src-tauri/src/menu_bar.rs) owns the main/panel lifecycle. Main close hides it and clears active-conversation presence while notification delivery continues; hiding the panel does not change main's presence. The panel never activates Index, so it opens over full-screen apps without switching Spaces; it checks the session on each opening rather than on focus. Quit ends the process and preserves device opt-in. Notification clicks show/create main and require authorized navigation before acknowledgement. Only main mounts the notification lifecycle; [notifications](../../docs/notifications.md) owns delivery rules.
 
 Launch at login reflects `SMAppService` status and changes only on explicit user action. Startup/status reads never register it; OS approval and failures must not appear as enabled. The process lock prevents duplicate apps/pollers. Both windows keep their own native theme synchronization. Ink/Paper Dock preference is device-local and never modifies the signed bundle.
 

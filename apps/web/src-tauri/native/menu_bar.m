@@ -1,5 +1,7 @@
 #import <AppKit/AppKit.h>
 #import <ServiceManagement/ServiceManagement.h>
+#import <objc/message.h>
+#import <objc/runtime.h>
 #include <sys/file.h>
 #include <fcntl.h>
 #include <unistd.h>
@@ -18,6 +20,27 @@ static id reopenObserver;
 - (void)toggle:(id)sender { index_menu_toggle(); }
 @end
 static IndexMenuTarget *menuTarget;
+// Only a nonactivating panel opens over another app's full-screen Space; activating Index
+// would switch to the Space of its main window instead.
+@interface IndexMenuPanel : NSPanel
+@end
+@implementation IndexMenuPanel
+- (BOOL)canBecomeKeyWindow { return YES; }
+- (BOOL)canBecomeMainWindow { return NO; }
+@end
+// Tauri creates an NSWindow, so the panel class replaces it in place. Returns NO, keeping
+// app activation, when AppKit no longer offers the activation tag or the panel does not fit.
+static BOOL index_menu_nonactivating(NSWindow *window) {
+  if ([window isKindOfClass:IndexMenuPanel.class]) return YES;
+  SEL preventsActivation = NSSelectorFromString(@"_setPreventsActivation:");
+  if (class_getInstanceSize(IndexMenuPanel.class) > class_getInstanceSize(object_getClass(window)) ||
+      ![IndexMenuPanel instancesRespondToSelector:preventsActivation]) return NO;
+  object_setClass(window, IndexMenuPanel.class);
+  window.styleMask |= NSWindowStyleMaskNonactivatingPanel;
+  // Replacing the class skips NSPanel initialization, which tags the window for the WindowServer.
+  ((void (*)(id, SEL, BOOL))objc_msgSend)(window, preventsActivation, YES);
+  return YES;
+}
 
 // A per-user lock prevents duplicate UI/pollers, including simultaneous launches.
 // Keep the inode and descriptor: deleting the lock file would permit a second owner.
@@ -66,9 +89,10 @@ void index_menu_present(void *pointer, double width, double height) {
   // A transparent window's shadow follows its drawn shape, which changes with its size.
   [window invalidateShadow];
   window.level = NSPopUpMenuWindowLevel;
-  window.collectionBehavior = NSWindowCollectionBehaviorMoveToActiveSpace | NSWindowCollectionBehaviorFullScreenAuxiliary;
-  [NSApp activateIgnoringOtherApps:YES];
-  [window makeKeyAndOrderFront:nil];
+  window.collectionBehavior = NSWindowCollectionBehaviorCanJoinAllSpaces | NSWindowCollectionBehaviorFullScreenAuxiliary;
+  if (!index_menu_nonactivating(window)) [NSApp activateIgnoringOtherApps:YES];
+  [window orderFrontRegardless];
+  [window makeKeyWindow];
 }
 // Content-fit height while open: the top edge stays under the status item.
 void index_menu_resize(void *pointer, double height) {

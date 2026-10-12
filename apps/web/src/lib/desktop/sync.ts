@@ -168,8 +168,12 @@ export async function installDesktopSync(
   };
   window.addEventListener("index:desktop-stale-window", stale);
   cleanups.push(() => window.removeEventListener("index:desktop-stale-window", stale));
-  window.addEventListener("focus", focus);
-  cleanups.push(() => window.removeEventListener("focus", focus));
+  // The panel checks on every opening and hides on blur, so its focus always follows a
+  // finished check; checking again would replace its visible content with the status.
+  if (!isMenuBar) {
+    window.addEventListener("focus", focus);
+    cleanups.push(() => window.removeEventListener("focus", focus));
+  }
   cleanups.push(
     cache.getMutationCache().subscribe((event) => {
       if (event.type !== "updated" || event.action.type !== "success") return;
