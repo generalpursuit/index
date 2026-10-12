@@ -11,12 +11,9 @@ import type { Group } from "@/lib/types";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { useLibraryActions } from "./hooks/use-links";
+import { categoryMarkClassName } from "./category-mark";
 import { domain, webURL } from "./url";
 import type { SavedLink } from "@/lib/types";
-
-// Shared by instances in this component; markers remain available to scroll hooks/tests.
-export const categoryMarkClassName =
-  "category-mark justify-self-center w-2 h-2 rounded-[2px] bg-category-other [&[data-category='article']]:bg-category-article [&[data-category='video']]:bg-category-video [&[data-category='music']]:bg-category-music [&[data-category='podcast']]:bg-category-podcast [&[data-category='book']]:bg-category-book [&[data-category='tool']]:bg-category-tool [&[data-category='note']]:bg-category-note [&[data-empty]]:bg-transparent [&[data-empty]]:[box-shadow:inset_0_0_0_1px_var(--subtle-foreground)]";
 
 type Pending = { url: string; existing: Set<string> };
 
@@ -30,12 +27,15 @@ export function QuickAdd({
   groupId,
   links,
   label,
+  compact = false,
   onSave,
   onViewExisting,
 }: {
   groupId?: string;
   links: SavedLink[];
   label: string;
+  /** A short, tinted field with desktop text for narrow surfaces that are not phones. */
+  compact?: boolean;
   /** Called as a save starts, before the server has read the page. */
   onSave?: () => void;
   onViewExisting?: (link: SavedLink) => Promise<void>;
@@ -128,7 +128,10 @@ export function QuickAdd({
     <>
       <div
         className={
-          "quick-add grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-x-3 min-h-12 text-subtle-foreground [&_input]:min-w-0 [&_input]:h-12 [&_input]:border-0 [&_input]:[outline:none] [&_input]:bg-transparent [&_input]:text-[14px] [&_input]:text-foreground [&:hover_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&:focus-within_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&_input::placeholder]:text-subtle-foreground [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3 [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_input]:text-[16px]"
+          "quick-add grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-x-3 text-subtle-foreground [&_input]:min-w-0 [&_input]:border-0 [&_input]:[outline:none] [&_input]:bg-transparent [&_input]:text-[14px] [&_input]:text-foreground [&:hover_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&:focus-within_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&_input::placeholder]:text-subtle-foreground " +
+          (compact
+            ? "min-h-9.5 rounded-[10px] bg-foreground/[0.055] pr-1 [&_input]:h-9.5"
+            : "min-h-12 [&_input]:h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3 [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_input]:text-[16px]")
         }
       >
         {/* An empty marker: it takes its color once the page says what the link is. */}
@@ -248,7 +251,10 @@ export function QuickAdd({
       {waiting.map(({ url }, index) => (
         <div
           className={
-            "link-row [&_small]:text-subtle-foreground [--mark-column:32px] grid grid-cols-[var(--mark-column)_minmax(0,_1fr)_auto] items-center gap-x-3 min-w-0 min-h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3"
+            "link-row [&_small]:text-subtle-foreground [--mark-column:32px] grid grid-cols-[var(--mark-column)_minmax(0,_1fr)_auto] items-center gap-x-3 min-w-0 " +
+            (compact
+              ? "min-h-8.5 pr-2"
+              : "min-h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3")
           }
           key={url + index}
           aria-hidden="true"

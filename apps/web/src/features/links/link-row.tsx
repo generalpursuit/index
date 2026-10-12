@@ -27,6 +27,7 @@ import { useLibraryActions } from "./hooks/use-links";
 import { RecipientPicker } from "@/features/messages/recipient-picker";
 import { Confirmation } from "@index/ui/components/confirmation";
 import type { SavedLink } from "@/lib/types";
+import { categoryMarkClassName } from "./category-mark";
 import { domain } from "./url";
 /**
  * `owner` names whose link it is (in Starred, which holds other people's); `locked` marks
@@ -53,9 +54,7 @@ export function LinkRow({
     >
       {/* The color carries the category; its name shows on hover. */}
       <i
-        className={
-          "category-mark justify-self-center w-2 h-2 rounded-[2px] bg-category-other [&[data-category='article']]:bg-category-article [&[data-category='video']]:bg-category-video [&[data-category='music']]:bg-category-music [&[data-category='podcast']]:bg-category-podcast [&[data-category='book']]:bg-category-book [&[data-category='tool']]:bg-category-tool [&[data-category='note']]:bg-category-note [&[data-empty]]:bg-transparent [&[data-empty]]:[box-shadow:inset_0_0_0_1px_var(--subtle-foreground)]"
-        }
+        className={categoryMarkClassName}
         data-category={link.category}
         title={link.category[0]!.toUpperCase() + link.category.slice(1)}
         aria-hidden="true"
