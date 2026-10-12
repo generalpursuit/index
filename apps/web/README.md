@@ -11,7 +11,7 @@ React, TanStack Router/Query and Tauri share one frontend. Run `bun dev` from th
 
 ## Appearance and mobile focus
 
-[src/lib/appearance](src/lib/appearance) owns device preference, subscription and the pre-paint bootstrap; Settings owns its control. `index.theme` is System/Light/Dark, independent of sign-out. [theme-plugin.ts](theme-plugin.ts) serves the same-origin blocking bootstrap before CSS/app startup. Desktop synchronizes this store with native chrome; shared UI receives theme as presentation input. Use semantic foreground/surface pairs from [UI styles](../../packages/ui/src/styles/globals.css), including `primary-foreground` rather than hardcoded white. Artwork/generation belongs to [assets/brand](../../assets/brand/README.md).
+[src/lib/appearance](src/lib/appearance) owns device preference, subscription and the pre-paint bootstrap; Settings owns its control. `index.theme` is System/Light/Dark, independent of sign-out. [theme-plugin.ts](theme-plugin.ts) serves the same-origin blocking bootstrap before CSS/app startup. Desktop synchronizes this store with native chrome and mirrors the last preference natively so a new main window is shown in its final titlebar/background colors; shared UI receives theme as presentation input. Use semantic foreground/surface pairs from [UI styles](../../packages/ui/src/styles/globals.css), including `primary-foreground` rather than hardcoded white. Artwork/generation belongs to [assets/brand](../../assets/brand/README.md).
 
 Preserve these constraints in shared controls, including portals:
 

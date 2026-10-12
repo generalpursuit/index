@@ -1,4 +1,4 @@
-use tauri::{window::Color, Theme, WebviewWindow};
+use tauri::{window::Color, AppHandle, Manager, Theme, WebviewWindow};
 
 fn window_theme(preference: &str) -> Result<Option<Theme>, String> {
     match preference {
@@ -15,6 +15,35 @@ fn background(resolved: &str) -> Result<Color, String> {
         "dark" => Ok(Color(0, 0, 0, 255)),
         _ => Err("Unknown resolved appearance.".into()),
     }
+}
+
+fn stored_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path().app_config_dir().ok().map(|dir| dir.join("appearance"))
+}
+
+/// The last preference the WebView reported, so a new window starts in its final chrome
+/// instead of the default window background (the transparent titlebar shows it) until then.
+pub fn stored_theme(app: &AppHandle) -> Option<Theme> {
+    let preference = std::fs::read_to_string(stored_path(app)?).ok()?;
+    window_theme(&preference).ok().flatten()
+}
+
+/// Paint a window built hidden with `stored_theme` before it is first shown.
+pub fn paint_background(window: &WebviewWindow) {
+    let resolved = match window.theme() {
+        Ok(Theme::Dark) => "dark",
+        _ => "light",
+    };
+    if let Ok(color) = background(resolved) {
+        let _ = window.as_ref().window().set_background_color(Some(color));
+    }
+}
+
+fn remember(app: &AppHandle, preference: &str) {
+    let Some(path) = stored_path(app) else { return };
+    if std::fs::read_to_string(&path).is_ok_and(|stored| stored == preference) { return; }
+    if let Some(dir) = path.parent() { let _ = std::fs::create_dir_all(dir); }
+    let _ = std::fs::write(path, preference);
 }
 
 /// The WebView's local store owns the preference; no account/session data is involved.
@@ -40,6 +69,7 @@ pub fn set_appearance(
             .set_background_color(Some(color))
             .map_err(|_| "Could not update window background.".to_string())?;
     }
+    remember(window.app_handle(), &preference);
     crate::session::share_appearance(&preference);
     Ok(())
 }

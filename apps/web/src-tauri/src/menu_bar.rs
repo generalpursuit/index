@@ -68,8 +68,14 @@ pub extern "C" fn index_menu_toggle() {
 pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     if let Some(window) = app.get_webview_window("main") { return Ok(window); }
     let config = app.config().app.windows.first().expect("main window configuration");
-    let window = crate::restrict_navigation(WebviewWindowBuilder::from_config(app, config)?, app).build()?;
+    // Built hidden so the first frame already has the device appearance's background.
+    let builder = WebviewWindowBuilder::from_config(app, config)?
+        .theme(crate::appearance::stored_theme(app))
+        .visible(false);
+    let window = crate::restrict_navigation(builder, app).build()?;
+    crate::appearance::paint_background(&window);
     attach_lifecycle(&window);
+    if config.visible { window.show()?; }
     Ok(window)
 }
 pub fn show_main(app: &AppHandle) -> tauri::Result<()> {
