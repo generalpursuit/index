@@ -90,7 +90,10 @@ if (targets.has("web") || targets.has("ios")) {
 }
 if (targets.has("web") || targets.has("desktop")) required.add("app-icon/app-icon-rounded.svg");
 if (targets.has("web")) required.add("app-icon/favicon.svg");
-if (targets.has("desktop")) required.add("symbol/symbol-black.svg");
+if (targets.has("desktop")) {
+  required.add("symbol/symbol-black.svg");
+  required.add("app-icon/app-icon-square.svg");
+}
 for (const source of required) readFileSync(join(brand, source));
 
 const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
@@ -113,6 +116,20 @@ const paper = (file: string) => {
     readFileSync(join(brand, "app-icon", file), "utf8").replace(/#0B0B0C|#FFFFFF/g, (color) =>
       color === "#0B0B0C" ? "#FFFFFF" : "#0B0B0C",
     ),
+  );
+  return path;
+};
+const macosCanvas = (source: string, name: string) => {
+  const path = join(scratch, `${name}.svg`);
+  // ICNS and NSApp's Dock image need their own transparent inset and corner mask.
+  // Reuse the square artwork so the supplied symbol geometry and placement stay intact.
+  const artwork = readFileSync(source).toString("base64");
+  writeFileSync(
+    path,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+      <defs><clipPath id="tile"><rect x="100" y="100" width="824" height="824" rx="185.4"/></clipPath></defs>
+      <image x="100" y="100" width="824" height="824" clip-path="url(#tile)" href="data:image/svg+xml;base64,${artwork}"/>
+    </svg>`,
   );
   return path;
 };
@@ -198,22 +215,31 @@ try {
     stage(join(brand, "symbol/symbol-white.svg"), "apps/web/src/assets/brand-symbol.svg");
   }
   if (targets.has("desktop")) {
-    const icns = join(rounded, "icon.icns");
+    const macos = render(
+      macosCanvas(join(brand, "app-icon/app-icon-square.svg"), "macos-ink"),
+      "macos-desktop",
+    );
+    const icns = join(macos, "icon.icns");
     writeFileSync(icns, orderedIcns(readFileSync(icns)));
     const sizes: Record<string, number> = {
       "32x32.png": 32,
       "64x64.png": 64,
       "128x128.png": 128,
       "128x128@2x.png": 256,
-      "icon.png": 512,
       "StoreLogo.png": 50,
     };
     for (const size of [30, 44, 71, 89, 107, 142, 150, 284, 310])
       sizes[`Square${size}x${size}Logo.png`] = size;
     for (const [file, size] of Object.entries(sizes))
       stage(join(rounded, file), `${desktop}/${file}`, size);
-    for (const file of ["icon.icns", "icon.ico"]) stage(join(rounded, file), `${desktop}/${file}`);
-    const alternate = render(paper("app-icon-rounded.svg"), "paper-desktop", [512]);
+    stage(icns, `${desktop}/icon.icns`);
+    stage(join(macos, "icon.png"), `${desktop}/icon.png`, 512);
+    stage(join(rounded, "icon.ico"), `${desktop}/icon.ico`);
+    const alternate = render(
+      macosCanvas(paper("app-icon-square.svg"), "macos-paper"),
+      "paper-desktop",
+      [512],
+    );
     stage(join(alternate, "512x512.png"), `${desktop}/icon-paper.png`, 512);
     const menu = join(scratch, "menu-bar.pdf");
     run("python3", [join(root, "apps/web/scripts/menu-bar-icon.py"), "--output", menu]);

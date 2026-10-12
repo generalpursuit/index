@@ -20,6 +20,8 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
 }) => {
   await request.post(apiURL + "/_test/reset");
   const desktop = new DesktopHarness();
+  desktop.releaseChannel = "staging";
+  desktop.updatesEnabled = true;
   await desktop.attach(page, "main");
   await login(page);
   const panel = await context.newPage();
@@ -27,6 +29,7 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
+  await expect(panel.getByLabel("Index Staging", { exact: true })).toHaveCount(0);
   await expect(
     panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
   ).toBeVisible();

@@ -9,15 +9,15 @@ original typeface licence before reusing it outside this project.
 Ink uses background `#0B0B0C` and symbol `#FFFFFF`. Paper swaps only those colors,
 preserving the exact paths, scale and placement.
 
-| Source                          | Use                                                    |
-| ------------------------------- | ------------------------------------------------------ |
-| `symbol/symbol-white.svg`       | Web Home symbol and shared SwiftUI template image      |
-| `symbol/symbol-black.svg`       | Desktop menu-bar vector PDF                            |
-| `wordmark/wordmark-white.svg`   | Web and shared SwiftUI wordmark                        |
-| `app-icon/app-store-1024.png`   | Opaque square iOS Ink icon; web icons and Ink previews |
-| `app-icon/app-icon-square.svg`  | Paper iOS icon and previews after palette swap         |
-| `app-icon/app-icon-rounded.svg` | Desktop bundle icons and web ICO fallback              |
-| `app-icon/favicon.svg`          | Explicit web SVG favicon                               |
+| Source                          | Use                                                                     |
+| ------------------------------- | ----------------------------------------------------------------------- |
+| `symbol/symbol-white.svg`       | Web Home symbol and shared SwiftUI template image                       |
+| `symbol/symbol-black.svg`       | Desktop menu-bar vector PDF                                             |
+| `wordmark/wordmark-white.svg`   | Web and shared SwiftUI wordmark                                         |
+| `app-icon/app-store-1024.png`   | Opaque square iOS Ink icon; web icons and Ink previews                  |
+| `app-icon/app-icon-square.svg`  | macOS bundle/Dock icons; Paper iOS icon and previews after palette swap |
+| `app-icon/app-icon-rounded.svg` | Windows/Linux bundle icons and web ICO fallback                         |
+| `app-icon/favicon.svg`          | Explicit web SVG favicon                                                |
 
 The other wordmarks, symbols, lockups, PNG sizes and rounded exports remain useful
 brand resources. They are retained even when no current application imports them.
@@ -66,7 +66,10 @@ The iOS icons remain opaque, square 1024px images; the OS supplies the corner
 mask. `opaque-icon.swift` removes the alpha channel in staging without changing
 canonical artwork. Shared SwiftUI previews use `Brand.xcassets`, while the Home
 symbol and wordmark use vector `Assets.xcassets`. Desktop icons retain transparent
-rounded corners.
+rounded corners. macOS ICNS and both runtime Dock PNGs use an 824px rounded tile
+centered in a transparent 1024px canvas, with a 185.4px corner radius. `sync.ts`
+applies this platform mask to the square artwork; it does not change the
+canonical symbol or other platforms' geometry.
 
 iOS Settings changes the actual Home Screen icon through the alternate-icon API.
 macOS saves the choice on the device and reapplies it to the Dock at launch.

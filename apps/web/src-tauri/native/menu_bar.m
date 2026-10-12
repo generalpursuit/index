@@ -41,16 +41,12 @@ int index_menu_init(const unsigned char *image, size_t imageLength) {
   statusItem = [NSStatusBar.systemStatusBar statusItemWithLength:NSSquareStatusItemLength];
   NSImage *icon = [[NSImage alloc] initWithData:[NSData dataWithBytes:image length:imageLength]];
   if (!icon || !statusItem.button) return -1;
-  icon.size = NSMakeSize(14, 18); icon.template = YES;
+  // Keep the vector's aspect ratio within a quieter 14-point menu-bar height.
+  icon.size = NSMakeSize(14 * icon.size.width / icon.size.height, 14); icon.template = YES;
   statusItem.button.image = icon;
   NSString *name = [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleDisplayName"] ?: [NSBundle.mainBundle objectForInfoDictionaryKey:@"CFBundleName"] ?: @"Index";
   statusItem.button.toolTip = name;
   [statusItem.button setAccessibilityLabel:[name stringByAppendingString:@" menu bar"]];
-  if ([bundle hasSuffix:@".staging"]) {
-    statusItem.length = NSVariableStatusItemLength;
-    statusItem.button.title = @"S";
-    statusItem.button.imagePosition = NSImageLeft;
-  }
   menuTarget = [IndexMenuTarget new];
   statusItem.button.target = menuTarget; statusItem.button.action = @selector(toggle:);
   return 1;

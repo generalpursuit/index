@@ -15,7 +15,7 @@ test.beforeEach(async ({ request }) => {
   await request.post(apiURL + "/_test/reset");
 });
 
-test("staging identifies itself, confirms an update, shows progress and recovers from failure", async ({
+test("staging stays unbadged, confirms an update, shows progress and recovers from failure", async ({
   page,
 }) => {
   const desktop = new DesktopHarness();
@@ -24,8 +24,10 @@ test("staging identifies itself, confirms an update, shows progress and recovers
   desktop.updateVersion = "0.1.43";
   await desktop.attach(page, "main");
   await openSettings(page);
-  await expect(page.getByLabel("Index Staging", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Index Staging", { exact: true })).toHaveCount(0);
   const updates = page.getByRole("region", { name: "Desktop updates" });
+  await expect(updates.getByRole("heading", { name: "Index Staging", exact: true })).toBeVisible();
+  await expect(page.getByText("Index 0.1.43 is available", { exact: true })).toBeVisible();
   await expect(updates).toContainText("Version 0.1.42");
   expect(
     desktop.commands.filter(({ command }) => command === "desktop_install_update"),

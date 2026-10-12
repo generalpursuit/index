@@ -12,15 +12,13 @@ function releaseInfo() {
   }));
 }
 
-export function DesktopReleaseIdentity() {
-  const [staging, setStaging] = useState(false);
+export function DesktopUpdateNotifications() {
   useEffect(() => {
-    if (!isDesktop) return;
+    if (!isDesktop || isMenuBar) return;
     let active = true;
     async function check() {
       const value = await releaseInfo();
-      if (active) setStaging(value.channel === "staging");
-      if (!value.updatesEnabled || isMenuBar) return;
+      if (!value.updatesEnabled) return;
       const next = await desktopInvoke<{ version: string } | null>("desktop_check_update");
       if (active && next)
         toast.info(`Index ${next.version} is available`, {
@@ -35,15 +33,7 @@ export function DesktopReleaseIdentity() {
       clearInterval(timer);
     };
   }, []);
-  if (!staging) return null;
-  return (
-    <div
-      className="fixed right-3 top-2 z-50 pointer-events-none rounded-full bg-amber-200 px-2.5 py-1 text-xs font-medium text-amber-950"
-      aria-label="Index Staging"
-    >
-      Staging
-    </div>
-  );
+  return null;
 }
 
 export function DesktopUpdates() {
