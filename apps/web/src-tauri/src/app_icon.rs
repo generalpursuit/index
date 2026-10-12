@@ -32,8 +32,8 @@ mod macos {
 
     pub fn apply(icon: AppIcon, persist: bool) -> Result<(), String> {
         let (bytes, choice): (&[u8], i32) = match icon {
-            AppIcon::Ink => (include_bytes!("../icons/icon.png"), 0),
-            AppIcon::Paper => (include_bytes!("../icons/icon-paper.png"), 1),
+            AppIcon::Ink => (include_bytes!("../icons/macos/icon.png"), 0),
+            AppIcon::Paper => (include_bytes!("../icons/macos/icon-paper.png"), 1),
         };
         if unsafe { index_app_icon_apply(bytes.as_ptr(), bytes.len(), choice, persist) } {
             Ok(())

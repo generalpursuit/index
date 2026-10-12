@@ -24,9 +24,9 @@ pub fn smoke_icon_matches(paper: bool) -> bool {
         fn index_app_icon_matches(bytes: *const u8, length: usize) -> bool;
     }
     let bytes: &[u8] = if paper {
-        include_bytes!("../icons/icon-paper.png")
+        include_bytes!("../icons/macos/icon-paper.png")
     } else {
-        include_bytes!("../icons/icon.png")
+        include_bytes!("../icons/macos/icon.png")
     };
     unsafe { index_app_icon_matches(bytes.as_ptr(), bytes.len()) }
 }

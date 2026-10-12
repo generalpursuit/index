@@ -135,7 +135,9 @@ it("declares existing canonical favicon and 192/512 manifest resources without d
     })
     .parse(JSON.parse(readFileSync(join(root, "apps/web/public/manifest.webmanifest"), "utf8")));
   for (const size of [192, 512]) {
-    const icon = manifest.icons.find((icon) => icon.sizes === `${size}x${size}`);
+    const icon = manifest.icons.find(
+      (icon) => icon.sizes === `${size}x${size}` && icon.purpose === "any",
+    );
     assert.ok(icon);
     assert.equal(icon?.type, "image/png");
     assert.equal(icon?.purpose, "any");

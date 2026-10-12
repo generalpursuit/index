@@ -33,7 +33,7 @@ jobs:
       - name: Verify generated brand assets
         run: |
           bun assets/brand/sync.ts --target web --check
-          bun test assets/brand/sync.test.ts
+          bun test assets/brand
       - name: API, server, and deployment tests
         run: |
           bun run --cwd apps/web test
