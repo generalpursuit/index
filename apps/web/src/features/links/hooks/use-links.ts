@@ -3,10 +3,17 @@ import {
   accountGeneration,
   assertCurrentAccount,
 } from "@/lib/account-boundary";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import type { SavedLink } from "@/lib/types";
 import { linkOptions, weekLinksOptions, weeksOptions, commentsOptions } from "../queries";
+type API = ReturnType<typeof useAPI>;
 export function useLink(id: string) {
   return useQuery(linkOptions(useAPI(), id));
 }
@@ -26,26 +33,28 @@ export function useWeekLinks(
 export function useLibraryWeeks(userId: string, groupId?: string, enabled = true) {
   return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
 }
+/** Everything that lists links or counts them, after the library changes. */
+function refreshLibrary(cache: QueryClient, api: API) {
+  return Promise.all(
+    [
+      api.links.listMine.key(),
+      api.links.listByOwner.key(),
+      api.links.listInGroup.key(),
+      api.links.weeks.key(),
+      api.groups.key(),
+      api.feed.key(),
+      api.favorites.key(),
+      api.stars.key(),
+      api.profiles.key(),
+      api.messages.key(),
+      api.routes.key(),
+    ].map((queryKey) => cache.invalidateQueries({ queryKey })),
+  );
+}
 export function useLibraryActions() {
   const api = useAPI(),
     cache = useQueryClient();
-  const refresh = async () => {
-    await Promise.all(
-      [
-        api.links.listMine.key(),
-        api.links.listByOwner.key(),
-        api.links.listInGroup.key(),
-        api.links.weeks.key(),
-        api.groups.key(),
-        api.feed.key(),
-        api.favorites.key(),
-        api.stars.key(),
-        api.profiles.key(),
-        api.messages.key(),
-        api.routes.key(),
-      ].map((queryKey) => cache.invalidateQueries({ queryKey })),
-    );
-  };
+  const refresh = () => refreshLibrary(cache, api);
   const saved = async (link: SavedLink) => {
     const generation = accountGeneration();
     const queryKey = linkOptions(api, link.id).queryKey;
@@ -67,9 +76,16 @@ export function useLibraryActions() {
       }),
     ),
   );
-  const collect = useMutation(
+  return { update, remove, collect: useCollect() };
+}
+type Collect = { link: SavedLink; own: boolean };
+/** Keeps a link or lets it go: your own are Favorites, other people's are starred. */
+export function useCollect() {
+  const api = useAPI(),
+    cache = useQueryClient();
+  return useMutation(
     accountMutationOptions({
-      mutationFn: async ({ link, own }: { link: SavedLink; own: boolean }) => {
+      mutationFn: async ({ link, own }: Collect) => {
         if (own)
           return link.isFavorite
             ? api.favorites.remove.call({ linkId: link.id })
@@ -95,10 +111,9 @@ export function useLibraryActions() {
         else if (context) cache.removeQueries({ queryKey: context.queryKey, exact: true });
         if (context) void cache.invalidateQueries({ queryKey: context.queryKey, exact: true });
       },
-      onSettled: () => refresh(),
+      onSettled: () => refreshLibrary(cache, api),
     }),
   );
-  return { update, remove, collect };
 }
 export function useComments(linkId: string) {
   const api = useAPI(),
