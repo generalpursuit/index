@@ -171,7 +171,16 @@ jobs:
           PRODUCT_NAME: ${{ needs.version.outputs.stage == 'production' && 'Index' || 'Index Staging' }}
         run: |
           app="apps/web/src-tauri/target/${{ matrix.target }}/release/bundle/macos/$PRODUCT_NAME.app"
-          xcrun stapler validate "$app"
+          # Validation asks Apple's ticket service, whose connection from hosted runners sometimes
+          # drops (exit 68). Retry that; a missing ticket (any other failure) fails at once.
+          for attempt in 1 2 3 4 5; do
+            status=0
+            xcrun stapler validate "$app" || status=$?
+            [ "$status" -eq 0 ] && break
+            if [ "$status" -ne 68 ] || [ "$attempt" -eq 5 ]; then exit "$status"; fi
+            echo "Apple's ticket service was unreachable; retrying in $((attempt * 20))s."
+            sleep $((attempt * 20))
+          done
           spctl --assess --type execute --verbose "$app"
       - name: Collect release files and checksums
         run: bun apps/web/scripts/desktop/artifacts.ts "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
