@@ -186,7 +186,16 @@ struct NotificationSettings: View {
   @State private var preferences: NotificationPreferences?
   @State private var saving = false
   @State private var failure: String?
-  private let labels = [("message", "Messages"), ("comment", "Comments"), ("mention", "Mentions"), ("request", "Follow requests"), ("follow", "New followers"), ("accepted", "Accepted requests"), ("previews", "Show message and comment previews")]
+  // A profile gets a follow request while private and a follow while public, never both for
+  // the same follow, so one row controls both keys and shows on only when both are on.
+  private let rows: [(label: String, description: String, keys: [String])] = [
+    ("Messages", "New messages in your conversations", ["message"]),
+    ("Comments", "When someone comments on your links", ["comment"]),
+    ("Mentions", "When someone mentions you in a comment", ["mention"]),
+    ("Followers", "New followers, or follow requests while your profile is private", ["follow", "request"]),
+    ("Accepted follow requests", "When someone approves your request to follow them", ["accepted"]),
+    ("Show message and comment previews", "Previews are hidden by default. Enabling them may show private text on your lock screen.", ["previews"]),
+  ]
   var body: some View {
     let notifications = NotificationController.shared
     VStack(alignment: .leading, spacing: 12) {
@@ -204,12 +213,16 @@ struct NotificationSettings: View {
       }
       #endif
       if let preferences {
-        ForEach(labels, id: \.0) { key, label in
-          Toggle(label, isOn: Binding(get: { value(preferences, key) }, set: { newValue in
-            Task { await update(key, newValue) }
-          })).disabled(saving)
+        ForEach(rows, id: \.label) { row in
+          Toggle(isOn: Binding(get: { row.keys.allSatisfy { value(preferences, $0) } }, set: { newValue in
+            Task { await update(row.keys, newValue) }
+          })) {
+            VStack(alignment: .leading, spacing: 2) {
+              Text(row.label)
+              Text(row.description).font(.footnote).foregroundStyle(IndexPalette.mutedForeground)
+            }
+          }.disabled(saving)
         }
-        Text("Previews are hidden by default. Enabling them may show private text on your lock screen.").font(.footnote).foregroundStyle(IndexPalette.mutedForeground)
       }
       if let message = failure ?? notifications.error { Text(message).font(.footnote).foregroundStyle(IndexPalette.destructive) }
     }.task {
@@ -220,11 +233,11 @@ struct NotificationSettings: View {
   private func value(_ p: NotificationPreferences, _ key: String) -> Bool {
     switch key { case "message": p.message; case "comment": p.comment; case "mention": p.mention; case "request": p.request; case "follow": p.follow; case "accepted": p.accepted; default: p.previews }
   }
-  private func update(_ key: String, _ value: Bool) async {
+  private func update(_ keys: [String], _ value: Bool) async {
     saving = true; defer { saving = false }
     let account = app.userID, revision = app.verifiedSessionRevision
     do {
-      let next: NotificationPreferences? = try await app.api?.request("/me/notifications/preferences", method: "PATCH", body: [key: .bool(value)])
+      let next: NotificationPreferences? = try await app.api?.request("/me/notifications/preferences", method: "PATCH", body: Dictionary(uniqueKeysWithValues: keys.map { ($0, JSONValue.bool(value)) }))
       guard app.userID == account, app.verifiedSessionRevision == revision else { return }
       preferences = next
     } catch { if app.userID == account { failure = "Could not save notification preferences." } }
