@@ -12,6 +12,12 @@ const PANEL_WIDTH: f64 = 390.0;
 const PANEL_MIN_HEIGHT: f64 = 160.0;
 const PANEL_MAX_HEIGHT: f64 = 560.0;
 static PANEL_HEIGHT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(PANEL_MAX_HEIGHT.to_bits());
+/// The session revision the panel last committed content for (see desktop_panel_ready).
+static PANEL_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(NEVER_COMMITTED);
+const NEVER_COMMITTED: u64 = u64::MAX;
+/// Content committed for the current revision belongs to the current account, so an opening may
+/// show it before revalidating. Any account change advances the revision first.
+fn shows_committed_content(committed: u64, current: u64) -> bool { committed != NEVER_COMMITTED && committed == current }
 fn panel_height(requested: f64) -> f64 {
     if requested.is_finite() { requested.clamp(PANEL_MIN_HEIGHT, PANEL_MAX_HEIGHT) } else { PANEL_MAX_HEIGHT }
 }
@@ -20,6 +26,9 @@ fn panel_height(requested: f64) -> f64 {
 pub struct PendingNavigation { id: u64, path: String, recipient_id: Option<String> }
 #[derive(Clone, Serialize)]
 struct DataChanged { revision: u64, source: String }
+/// Tells the panel whether it is already shown, so it revalidates in place or checks first.
+#[derive(Clone, Serialize)]
+struct MenuOpened { presented: bool }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoginStatus { supported: bool, state: &'static str }
@@ -85,38 +94,48 @@ pub fn show_main(app: &AppHandle) -> tauri::Result<()> {
     window.unminimize()?;
     window.show()?;
     window.set_focus()?;
-    let _ = window.emit("index:desktop-open", ());
+    let _ = window.emit_to("main", "index:desktop-open", ());
     Ok(())
+}
+/// Built hidden at launch, so even the first click shows loaded content at once.
+#[cfg(target_os = "macos")]
+pub fn ensure_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+    if let Some(window) = app.get_webview_window("menu-bar") { return Ok(window); }
+    let builder = WebviewWindowBuilder::new(app, "menu-bar", WebviewUrl::App("menu-bar".into()))
+        .title("Index menu bar").inner_size(PANEL_WIDTH, PANEL_MAX_HEIGHT).resizable(false)
+        .decorations(false).shadow(true).skip_taskbar(true).always_on_top(true)
+        // The WebView draws no background; the native popover material and its rounded
+        // corners show through, following the window appearance set by set_appearance.
+        .transparent(true)
+        .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Popover)
+            .state(tauri::window::EffectState::Active).radius(16.0).build())
+        .visible(false).focused(false)
+        // The page fits whole rows of its list within the panel's maximum height.
+        .initialization_script(&format!("window.__INDEX_MENU_BAR__ = {{ maxHeight: {PANEL_MAX_HEIGHT} }};"));
+    let window = crate::restrict_navigation(builder, app).build()?;
+    attach_lifecycle(&window);
+    Ok(window)
 }
 #[cfg(target_os = "macos")]
 fn toggle(app: &AppHandle) -> tauri::Result<()> {
-    let window = if let Some(window) = app.get_webview_window("menu-bar") {
-        if window.is_visible()? || MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) {
-            MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
-            window.hide()?; return Ok(());
-        }
-        window
-    } else {
-        let builder = WebviewWindowBuilder::new(app, "menu-bar", WebviewUrl::App("menu-bar".into()))
-            .title("Index menu bar").inner_size(PANEL_WIDTH, PANEL_MAX_HEIGHT).resizable(false)
-            .decorations(false).shadow(true).skip_taskbar(true).always_on_top(true)
-            // The WebView draws no background; the native popover material and its rounded
-            // corners show through, following the window appearance set by set_appearance.
-            .transparent(true)
-            .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Popover)
-                .state(tauri::window::EffectState::Active).radius(16.0).build())
-            .visible(false).focused(false)
-            // The page fits whole rows of its list within the panel's maximum height.
-            .initialization_script(&format!("window.__INDEX_MENU_BAR__ = {{ maxHeight: {PANEL_MAX_HEIGHT} }};"));
-        let window = crate::restrict_navigation(builder, app).build()?;
-        attach_lifecycle(&window);
-        window
-    };
-    // Reused webviews may have slept through an account event. Keep the panel
-    // hidden until its session refresh and React commit acknowledge this opening.
+    let window = ensure_panel(app)?;
+    if window.is_visible()? || MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) {
+        MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+        return window.hide();
+    }
     MENU_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-    let _ = window.emit("index:desktop-open", ());
+    // Content committed for this account shows at once and refreshes in place. After an account
+    // change, which the hidden webview may have slept through, or before its first commit, the
+    // panel stays hidden until its session refresh and React commit acknowledge this opening.
+    let presented = shows_committed_content(PANEL_REVISION.load(std::sync::atomic::Ordering::SeqCst), crate::session::visible_revision());
+    if presented { present(&window); }
+    let _ = window.emit_to("menu-bar", "index:menu-open", MenuOpened { presented });
     Ok(())
+}
+#[cfg(target_os = "macos")]
+fn present(window: &WebviewWindow) {
+    let height = f64::from_bits(PANEL_HEIGHT.load(std::sync::atomic::Ordering::SeqCst));
+    if let Ok(pointer) = window.ns_window() { unsafe { os::index_menu_present(pointer, PANEL_WIDTH, height); } }
 }
 pub fn attach_lifecycle(window: &WebviewWindow) {
     #[cfg(all(target_os = "macos", not(feature = "native-smoke")))]
@@ -182,19 +201,19 @@ pub fn hide_on_session_change(app: &AppHandle) {
     }
 }
 /// Called after the UI has checked its session and committed safe content, with that content's height.
+/// Also called while hidden, so the next opening can show that content at once.
 #[tauri::command]
 pub async fn desktop_panel_ready(window: WebviewWindow, expected_revision: u64, height: Option<f64>) -> Result<(), String> {
     if window.label() != "menu-bar" { return Err("Only the menu panel can be presented.".into()); }
-    crate::session::check_revision(expected_revision)?;
+    crate::session::with_revision(expected_revision, || PANEL_REVISION.store(expected_revision, std::sync::atomic::Ordering::SeqCst))?;
     if let Some(height) = height { PANEL_HEIGHT.store(panel_height(height).to_bits(), std::sync::atomic::Ordering::SeqCst); }
     #[cfg(target_os = "macos")]
     {
         let handle = window.clone();
         window.run_on_main_thread(move || {
-            if MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) && crate::session::visible_revision() == expected_revision {
-                let height = f64::from_bits(PANEL_HEIGHT.load(std::sync::atomic::Ordering::SeqCst));
-                if let Ok(pointer) = handle.ns_window() { unsafe { os::index_menu_present(pointer, PANEL_WIDTH, height); } }
-            }
+            // A panel already shown follows its content through desktop_panel_resize.
+            if MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) && crate::session::visible_revision() == expected_revision
+                && !handle.is_visible().unwrap_or(true) { present(&handle); }
         }).map_err(|_| "Could not show the menu panel.".to_string())?;
     }
     Ok(())
@@ -265,6 +284,14 @@ mod tests {
         assert_eq!(panel_height(12.0), PANEL_MIN_HEIGHT);
         assert_eq!(panel_height(4000.0), PANEL_MAX_HEIGHT);
         assert_eq!(panel_height(f64::NAN), PANEL_MAX_HEIGHT);
+    }
+    #[test]
+    fn only_content_committed_for_the_current_revision_shows_at_once() {
+        assert!(!shows_committed_content(NEVER_COMMITTED, 0));
+        assert!(shows_committed_content(3, 3));
+        // Another account signed in, or the same one changed access, since the panel committed.
+        assert!(!shows_committed_content(3, 4));
+        assert_eq!(PANEL_REVISION.load(std::sync::atomic::Ordering::SeqCst), NEVER_COMMITTED);
     }
     #[test]
     fn login_items_reflect_approval_and_support_without_assuming_enabled() {

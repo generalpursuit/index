@@ -162,6 +162,66 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   expect(await panel.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
 });
 
+test("an opening for the same account shows cached links at once and refreshes them in place", async ({
+  page,
+  context,
+  request,
+}) => {
+  await request.post(apiURL + "/_test/reset");
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
+  const panel = await context.newPage();
+  await desktop.attach(panel, "menu-bar");
+  await panel.goto("/menu-bar");
+  const row = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
+  await expect(row).toBeVisible();
+  // Before any opening, the hidden panel tells the host its content is for this account.
+  await expect
+    .poll(() =>
+      desktop.commands.some(
+        (c) =>
+          c.label === "menu-bar" &&
+          c.command === "desktop_panel_ready" &&
+          c.args?.expectedRevision === desktop.revision,
+      ),
+    )
+    .toBe(true);
+  // Each window hears only of its own opening.
+  const listeners = (target: Page, event: string) =>
+    target.evaluate((name) => (window as any).__desktopListeners.get(name)?.size ?? 0, event);
+  expect(await listeners(page, "index:menu-open")).toBe(0);
+  expect(await listeners(panel, "index:desktop-open")).toBe(0);
+  const saved = await request.post(apiURL + "/api/v1/links", {
+    headers: { Authorization: `Bearer ${desktop.token}` },
+    data: { url: "https://pages.test/saved-elsewhere", title: "Saved elsewhere" },
+  });
+  expect(saved.ok()).toBe(true);
+  await row.evaluate((el) => ((el as any).kept = true));
+  await panel.evaluate(() => {
+    (window as any).checked = false;
+    new MutationObserver(() => {
+      if (document.body.textContent?.includes("Checking your session"))
+        (window as any).checked = true;
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+  });
+  // The host has shown the panel; it refreshes without a checking state, keeping its rows.
+  await desktop.emit("index:menu-open", { presented: true }, "menu-bar");
+  await expect(
+    panel.getByRole("button", { name: "Open Saved elsewhere in browser", exact: true }),
+  ).toBeVisible();
+  expect(await row.evaluate((el) => (el as any).kept)).toBe(true);
+  expect(await panel.evaluate(() => (window as any).checked)).toBe(false);
+  // An opening the host could not show at once checks the session before presenting.
+  const before = desktop.commands.length;
+  await desktop.emit("index:menu-open", { presented: false }, "menu-bar");
+  await expect.poll(() => panel.evaluate(() => (window as any).checked)).toBe(true);
+  await expect
+    .poll(() => desktop.commands.slice(before).some((c) => c.command === "desktop_panel_ready"))
+    .toBe(true);
+  await expect(row).toBeVisible();
+});
+
 test("menu session clears drafts and links across sign-out and account switching while cleanup stalls", async ({
   page,
   context,
@@ -454,7 +514,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await input.blur();
   await panel.keyboard.press("Escape");
   await expect.poll(() => desktop.hidden).toContain("menu-bar");
-  await desktop.emit("index:desktop-open", null, "menu-bar");
+  await desktop.emit("index:menu-open", { presented: false }, "menu-bar");
   await expect(input).toHaveValue("https://pages.test/calm-software");
   await input.press("Enter");
   await expect(
