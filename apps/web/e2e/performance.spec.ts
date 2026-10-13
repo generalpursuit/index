@@ -196,3 +196,40 @@ test("Favorites update immediately and roll back when the write fails", async ({
   await expect(favorite).toHaveAttribute("aria-pressed", "false");
   await expect(favorite).toBeEnabled();
 });
+
+test("a row's mark keeps at once, waits for that result, and rolls back when it fails", async ({
+  page,
+}) => {
+  await login(page);
+  const own = page.locator('.week-page[data-active="true"] .own-links');
+  const favorite = own.getByRole("button", { name: "Favorite Are.na", exact: true });
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let writes = 0;
+  await page.route("**/rpc/v1/favorites/**", async (route) => {
+    writes++;
+    await blocked;
+    await route.abort("failed");
+  });
+  try {
+    await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", "true");
+    // The next change is decided from this one's result, so it waits.
+    await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", "true");
+    // The post shows the same change while it is on its way.
+    await own.getByRole("button", { name: "Are.na", exact: true }).click();
+    await expect(
+      page
+        .getByRole("dialog", { name: "Post", exact: true })
+        .getByRole("button", { name: "Favorite", exact: true }),
+    ).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+  } finally {
+    release();
+  }
+  await expect(favorite).toHaveAttribute("aria-pressed", "false");
+  expect(writes).toBe(1);
+});

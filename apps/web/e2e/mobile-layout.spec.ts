@@ -285,3 +285,39 @@ test.describe("software keyboard layout", () => {
     ).toBeFocused();
   });
 });
+
+test.describe("touch link rows", () => {
+  test.use({ viewport: { width: 402, height: 874 }, isMobile: true, hasTouch: true });
+  test("a row's mark shows what you keep, and a tap on it keeps nothing", async ({
+    page,
+    request,
+  }) => {
+    await request.post(apiURL + "/_test/reset");
+    let writes = 0;
+    page.on("request", (r) => {
+      if (/\/rpc\/v1\/(favorites|stars)\//.test(r.url())) writes++;
+    });
+    await login(page);
+    const current = page.locator('.week-page[data-active="true"]');
+    const row = current.locator(".own-links .link-row").filter({ hasText: "Are.na" });
+    await expect(row).toBeVisible();
+    await expect(current.getByRole("button", { name: /^(Favorite|Star) / })).toHaveCount(0);
+    await row.locator(".link-mark").tap();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // People keep links from the post's heart on a phone.
+    await row.getByRole("button", { name: "Are.na", exact: true }).tap();
+    const post = page.getByRole("dialog", { name: "Post", exact: true });
+    const heart = post.getByRole("button", { name: "Favorite", exact: true });
+    await expect(heart).toHaveAttribute("aria-pressed", "false");
+    expect(writes).toBe(0);
+    await heart.tap();
+    await expect(heart).toHaveAttribute("aria-pressed", "true");
+    await page.keyboard.press("Escape");
+    await expect(post).toHaveCount(0);
+    const kept = row.getByRole("img", { name: "Favorite", exact: true });
+    await expect(kept).toBeVisible();
+    await expect(kept.locator("svg")).toHaveCSS("opacity", "1");
+    await expect(kept.locator(".category-mark")).toHaveCSS("opacity", "0");
+    await layout(page, "Kept row");
+  });
+});

@@ -11,8 +11,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
-import { categoryMarkClassName } from "@/features/links/category-mark";
 import { LinkList, scrollToTop } from "@/features/links/link-list";
+import { LinkMark } from "@/features/links/link-mark";
 import { QuickAdd } from "@/features/links/quick-add";
 import { weekLinksOptions } from "@/features/links/queries";
 import { domain } from "@/features/links/url";
@@ -320,7 +320,7 @@ function MenuLink({ link }: { link: SavedLink }) {
       onClick={() => report(open())}
       aria-label={`Open ${link.title} in browser`}
     >
-      <i className={categoryMarkClassName} data-category={link.category} aria-hidden="true" />
+      <LinkMark link={link} />
       <span className="truncate">{link.title}</span>
       <span className="inline-flex max-w-30 min-w-0 items-center gap-1 text-[11.5px] text-subtle-foreground">
         <span className="truncate">{domain(link.url)}</span>

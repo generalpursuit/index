@@ -4,7 +4,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight, LockKeyhole } from "lucide-react";
 import { useAPI } from "@/hooks/use-api";
 import type { SavedLink } from "@/lib/types";
-import { categoryMarkClassName } from "./category-mark";
+import { LinkMark } from "./link-mark";
 import { domain } from "./url";
 /**
  * `owner` names whose link it is (in Starred, which holds other people's); `locked` marks
@@ -29,13 +29,7 @@ export function LinkRow({
         "link-row [&_small]:text-subtle-foreground [--mark-column:32px] grid grid-cols-[var(--mark-column)_minmax(0,_1fr)_auto] items-center gap-x-3 min-w-0 min-h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3"
       }
     >
-      {/* The color carries the category; its name shows on hover. */}
-      <i
-        className={categoryMarkClassName}
-        data-category={link.category}
-        title={link.category[0]!.toUpperCase() + link.category.slice(1)}
-        aria-hidden="true"
-      />
+      <LinkMark link={link} toggle />
       <button
         type="button"
         className={
