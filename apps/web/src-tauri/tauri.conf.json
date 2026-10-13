@@ -13,7 +13,7 @@
       {
         "title": "Index",
         "hiddenTitle": true,
-        "titleBarStyle": "Transparent",
+        "titleBarStyle": "Overlay",
         "width": 1200,
         "height": 860,
         "resizable": true,
