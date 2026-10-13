@@ -19,7 +19,9 @@ export const updateGroup = (db: QueryDatabase, actorId: string, input: UpdateGro
     .andThen((group) =>
       group?.kind === "starred" && input.visibility === "public"
         ? err({ code: "BAD_REQUEST" as const, message: "Starred is always private." })
-        : repository.updateGroup(db, actorId, input),
+        : group?.kind === "favorites" && input.visibility === "private"
+          ? err({ code: "BAD_REQUEST" as const, message: "Favorites can't be locked." })
+          : repository.updateGroup(db, actorId, input),
     )
     .andThen((group) => (group ? ok(group) : err(notFound("Editable group"))));
 export const deleteGroup = (db: QueryDatabase, actorId: string, id: string, deleteLinks: boolean) =>
