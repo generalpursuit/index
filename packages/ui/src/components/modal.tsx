@@ -17,12 +17,9 @@ import { useMediaQuery } from "../hooks/use-media-query";
 export const modalClassName =
   "app-dialog select-none bg-surface text-foreground border-border wrap-anywhere min-w-0 [&_.dialog-title]:font-serif [&_.dialog-title]:text-[26px] [&_.dialog-title]:font-bold [&_.dialog-title]:[font-variation-settings:'opsz'_60] [&_.dialog-title]:tracking-[-0.015em] [&_.dialog-title]:leading-[1.15]";
 
-// Each replaces the dialog primitive's `sm:max-w-sm`, which would cap every size at small.
-const modalSizes = {
-  sm: "w-96 sm:max-w-[calc(100vw_-_32px)]",
-  md: "w-150 sm:max-w-[calc(100vw_-_32px)]",
-  lg: "w-162.5 sm:max-w-[calc(100vw_-_32px)]",
-};
+// Every modal is as wide as a post, within the window. This replaces the dialog primitive's
+// `sm:max-w-sm`, which would cap it at small.
+const modalWidth = "w-162.5 sm:max-w-[calc(100vw_-_32px)]";
 // Centered in the page below any window controls over its top (see --titlebar-inset), and
 // bounded so a dialog's title and actions stay on screen.
 export const modalCenter =
@@ -54,7 +51,6 @@ export function Modal({
   description,
   children,
   className = "",
-  size = "sm",
   position = "center",
   fixedHeight = false,
   returnFocus,
@@ -68,7 +64,6 @@ export function Modal({
   description?: string;
   children: ReactNode;
   className?: string;
-  size?: keyof typeof modalSizes;
   /** Dialogs only; sheets always rise from the bottom. */
   position?: keyof typeof modalPositions;
   /** For a list that loads or filters in place: the frame keeps its size while it changes. */
@@ -130,7 +125,7 @@ export function Modal({
         finalFocus={returnFocus}
         className={
           modalClassName +
-          ` ${modalSizes[size]} ${modalPositions[position]} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-6 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
+          ` ${modalWidth} ${modalPositions[position]} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-6 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
           className
         }
       >

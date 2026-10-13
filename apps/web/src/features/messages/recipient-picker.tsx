@@ -196,11 +196,10 @@ function Recipients({
           .flatMap((p) => p.items)
           .filter((c) => c.participants.length > 2)
           .map((chat) => (
+            // A row like the people above it, opening the chat from its far end.
             <Button
               variant="ghost"
-              className={
-                "person-row flex items-center justify-between gap-4 p-[13px_0] [&>.person-inline]:flex-1 [&_.person-label]:max-w-full [&>button]:shrink-0 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.person-label_small]:max-w-45"
-              }
+              className={recipientRowClassName}
               key={chat.id}
               onClick={() => open(chat)}
             >

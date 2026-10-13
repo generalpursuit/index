@@ -409,7 +409,10 @@ for (const width of [1440, 390]) {
     await page.getByRole("link", { name: "Messages", exact: true }).click();
     await page.getByRole("button", { name: "New message", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "New message", exact: true });
-    const bob = picker.locator(".recipient-row").filter({ hasText: "Bob" });
+    // Bob's own row, not the group chat with him in it.
+    const bob = picker
+      .locator(".recipient-row")
+      .filter({ has: page.getByText("Bob", { exact: true }) });
     await expect(bob.getByRole("checkbox")).toHaveCount(1);
     await bob.hover();
     await expect(bob.getByRole("checkbox")).toHaveCSS("opacity", "1");

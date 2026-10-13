@@ -59,6 +59,8 @@ async function dialogLayout(page: Page, name: string) {
   expect.soft(box!.x, `${name}: left edge`).toBeGreaterThanOrEqual(0);
   expect.soft(box!.x + box!.width, `${name}: right edge`).toBeLessThanOrEqual(width);
   expect.soft(box!.y, `${name}: top edge`).toBeGreaterThanOrEqual(0);
+  // Above phone widths, every modal is as wide as a post.
+  if (width > 700) expect.soft(Math.round(box!.width), `${name}: width`).toBe(650);
   const body = dialog.locator('[data-slot="drawer-body"]');
   if (await body.count()) {
     expect

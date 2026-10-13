@@ -71,7 +71,6 @@ export function LinkDialog() {
       open={open}
       title={top?.title ?? "Post"}
       hideTitle
-      size="lg"
       // Comments grow the post downward instead of re-centering it.
       position="top"
       className={"link-dialog [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"}
