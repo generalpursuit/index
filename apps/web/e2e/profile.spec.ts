@@ -100,9 +100,12 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await expect(chip("Reading")).toHaveAttribute("aria-current", "page");
   await expect(chip("All")).not.toHaveAttribute("aria-current");
   await expect(destination).toHaveAccessibleName("Save destination: Reading");
-  await expect(chip("Notes").locator(".lucide-lock-keyhole")).toHaveCount(1);
-  await chip("Notes").click();
-  await expect(destination).toHaveAccessibleName("Save destination: Notes");
+  // A private list's lock is also spoken.
+  const notes = chip("Notes, only you");
+  await expect(notes.locator(".lucide-lock-keyhole")).toHaveCount(1);
+  await expect(chip("Reading")).toHaveAccessibleName("Reading");
+  await notes.click();
+  await expect(destination).toHaveAccessibleName("Save destination: Notes, only you");
   // Starred (others' links you kept) and Favorites are not destinations, so they have no add row.
   await chip("Starred").click();
   await expect(chip("Starred")).toHaveAttribute("aria-current", "page");

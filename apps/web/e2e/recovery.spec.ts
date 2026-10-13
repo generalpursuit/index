@@ -72,7 +72,7 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(page.getByText("Only you will see this link.")).toBeVisible();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.goto("/people/" + data.people.Alice);
-  await lists.getByRole("link", { name: "Research", exact: true }).click();
+  await lists.getByRole("link", { name: "Research, only you", exact: true }).click();
   // The chip turns current as navigation starts; the Research list's add row shows it arrived.
   await expect(page.getByRole("button", { name: "Save destination: Research" })).toBeVisible();
   await expect(page.locator(".profile-links")).toContainText("Are.na");

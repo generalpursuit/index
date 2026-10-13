@@ -2,6 +2,7 @@ import { groupPath, profilePath } from "@index/api/routes";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
 import { LockKeyhole, Plus } from "lucide-react";
+import { groupLabel } from "@/features/groups/group-lock-control";
 import { useAllGroups } from "@/features/groups/use-groups";
 import { useScrollEdges } from "@/features/links/hooks/use-scroll-edges";
 
@@ -71,6 +72,7 @@ export function ListDock({
               to={groupPath(username, group.slug)}
               userId={userId}
               groupId={group.id}
+              label={groupLabel(group)}
             >
               {group.name}
               {group.visibility === "private" && <LockKeyhole aria-hidden="true" />}
@@ -106,11 +108,14 @@ function ListChip({
   to,
   userId,
   groupId,
+  label,
   children,
 }: {
   to: string;
   userId: string;
   groupId?: string;
+  /** Spoken instead of the chip's text, when that alone leaves something unsaid. */
+  label?: string;
   children: ReactNode;
 }) {
   return (
@@ -118,6 +123,7 @@ function ListChip({
       to={to}
       state={{ userId, groupId }}
       activeOptions={{ exact: true, includeSearch: false }}
+      aria-label={label}
       className={chipClassName + " gap-1 px-3 [&_svg]:size-3"}
     >
       {children}

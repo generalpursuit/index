@@ -40,7 +40,9 @@ for (const width of [1440, 390]) {
       name: "Save destination: Shared reading",
     });
     await expect(chosen).toBeFocused();
+    // The lock is drawn for sight and spoken for screen readers.
     await expect(chosen.locator(".lucide-lock-keyhole")).toHaveCount(1);
+    await expect(chosen).toHaveAccessibleName("Save destination: Shared reading, only you");
     const requests: {
       requestId: string;
       groupId: string | null;
@@ -147,9 +149,13 @@ test("selected group refreshes rename/privacy and deletion requires a fresh choi
   await launcher.click();
   const row = menu.getByRole("menuitemradio", { name: "Share destination" });
   await expect(row.locator(".lucide-lock-keyhole")).toHaveCount(1);
+  await expect(row).toHaveAccessibleName("Share destination, only you");
+  await expect(menu.getByRole("menuitemradio", { name: "Your links" })).toHaveAccessibleName(
+    "Your links",
+  );
   await row.click();
   await expect(menu).toHaveCount(0);
-  await expect(launcher).toHaveAttribute("aria-label", "Save destination: Share destination");
+  await expect(launcher).toHaveAccessibleName("Save destination: Share destination, only you");
   const renamed = await page.request.patch(apiURL + `/api/v1/groups/${group.id}`, {
     data: { name: "Renamed collection", visibility: "public" },
   });
@@ -158,6 +164,7 @@ test("selected group refreshes rename/privacy and deletion requires a fresh choi
   const changed = menu.getByRole("menuitemradio", { name: "Renamed collection" });
   await expect(changed).toBeChecked();
   await expect(changed.locator(".lucide-lock-keyhole")).toHaveCount(0);
+  await expect(changed).toHaveAccessibleName("Renamed collection");
   await page.keyboard.press("Escape");
   await expect(launcher).toHaveAttribute("aria-label", "Save destination: Renamed collection");
   await expect(launcher.locator(".lucide-lock-keyhole")).toHaveCount(0);

@@ -380,7 +380,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
-  await panel.getByRole("menuitemradio", { name: "Notes", exact: true }).click();
+  await panel.getByRole("menuitemradio", { name: "Notes, only you", exact: true }).click();
   const receipts: string[] = [];
   await panel.route("**/rpc/v1/links/share", async (route) => {
     receipts.push(route.request().postDataJSON().json.requestId);

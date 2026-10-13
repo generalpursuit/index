@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from "@index/ui/components/dropdown-menu";
 import { CreateGroup } from "@/features/groups/create-group";
+import { groupLabel } from "@/features/groups/group-lock-control";
 import { reconcileGroup } from "@/features/groups/selection";
 import { useAllGroups } from "@/features/groups/use-groups";
 import { useViewer } from "@/hooks/use-api";
@@ -67,7 +68,9 @@ export function DestinationMenu({
   const { current, unavailable, groups, choose } = destination;
   const trigger = useRef<HTMLButtonElement>(null);
   const [creating, setCreating] = useState(false);
-  const name = unavailable ? "Unavailable group" : (current?.name ?? "Your links");
+  const name = unavailable ? "Unavailable group" : (current?.name ?? "Your links"),
+    locked = !unavailable && current?.visibility === "private";
+  const label = unavailable || !current ? name : groupLabel(current);
   return (
     <>
       <DropdownMenu
@@ -79,11 +82,11 @@ export function DestinationMenu({
         <DropdownMenuTrigger
           ref={trigger}
           disabled={disabled}
-          aria-label={"Save destination: " + name}
+          aria-label={"Save destination: " + label}
           className="destination-menu relative flex max-w-44 min-w-0 shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[12px] text-subtle-foreground after:absolute after:inset-x-0 after:-inset-y-2 after:content-[''] enabled:hover:bg-muted enabled:hover:text-foreground disabled:opacity-50 aria-expanded:bg-muted aria-expanded:text-foreground [&_svg]:size-3 [&_svg]:shrink-0 [&>svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']>svg:last-child]:[transform:rotate(180deg)]"
         >
           <span className="truncate">{name}</span>
-          {!unavailable && current?.visibility === "private" && <LockKeyhole aria-hidden="true" />}
+          {locked && <LockKeyhole aria-hidden="true" />}
           <ChevronDown aria-hidden="true" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -101,12 +104,11 @@ export function DestinationMenu({
                 value={group.id}
                 closeOnClick
                 className={itemClassName}
+                aria-label={groupLabel(group)}
               >
-                <span className="flex min-w-0 items-center gap-1.5">
+                <span className="flex min-w-0 items-center gap-1.5 [&_svg]:size-3 [&_svg]:text-subtle-foreground">
                   <span className="truncate">{group.name}</span>
-                  {group.visibility === "private" && (
-                    <LockKeyhole size={12} className="text-subtle-foreground" aria-hidden="true" />
-                  )}
+                  {group.visibility === "private" && <LockKeyhole aria-hidden="true" />}
                 </span>
               </DropdownMenuRadioItem>
             ))}
