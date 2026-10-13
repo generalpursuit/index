@@ -161,11 +161,9 @@ for (const viewport of [
       await dialogLayout(page, "New message");
     });
 
-    test("settings and nested profile and group sheets fit", async ({ page }) => {
+    test("settings and its profile and group sheets fit", async ({ page }) => {
       await login(page);
-      await page.goto("/u/alice?settings=true");
-      if (viewport.width <= 700) await dialogLayout(page, "Settings");
-      else await page.goto("/settings");
+      await page.goto("/settings");
       await page.getByRole("button", { name: "Edit profile", exact: true }).click();
       await dialogLayout(page, "Edit profile");
       await page.keyboard.press("Escape");

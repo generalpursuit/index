@@ -12,7 +12,7 @@ async function login(page: Page) {
 test.beforeEach(async ({ request }) => {
   await request.post(apiURL + "/_test/reset");
 });
-// A page asks in a dialog; inside a modal, such as the phone Settings sheet, it asks in place.
+// A page asks in a dialog; inside a modal, such as Edit group, it asks in place.
 const question = (page: Page, title: string) =>
   page
     .getByRole("alertdialog", { name: title, exact: true })
@@ -28,7 +28,7 @@ for (const scheme of ["light", "dark"] as const) {
       await page.setViewportSize({ width, height: width === 390 ? 844 : 960 });
       await page.addInitScript((theme) => localStorage.setItem("index.theme", theme), scheme);
       await login(page);
-      await page.goto(width === 390 ? "/u/alice?settings=true" : "/settings");
+      await page.goto("/settings");
       const trigger = page.getByRole("button", { name: "New group", exact: true });
       await trigger.click();
       const form = page.getByRole("dialog", { name: "New group", exact: true });
@@ -249,7 +249,7 @@ test("management errors preserve privacy and edits without overflowing phone set
   const name = "x".repeat(100);
   const created = await page.request.post(apiURL + "/api/v1/groups", { data: { name } });
   expect(created.ok()).toBeTruthy();
-  await page.goto("/u/alice?settings=true");
+  await page.goto("/settings");
   const row = page
     .locator(".settings-group")
     .filter({ has: page.getByText(name, { exact: true }) });

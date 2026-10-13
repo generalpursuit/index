@@ -135,22 +135,17 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await expect(row).toContainText("Follow request accepted.");
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
-  // Visibility lives in Settings, behind a confirmation.
+  // Visibility lives in Settings, behind a confirmation. On phones Settings is a page as well,
+  // with Back to the profile.
   await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
   await page.getByRole("button", { name: /^Profile visibility/ }).click();
   await page.getByRole("menuitemradio", { name: "Public", exact: true }).click();
-  // The Settings sheet asks in place, instead of opening a dialog over itself.
-  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("alert")).toContainText(
-    "Make profile public?",
-  );
+  await expect(page.getByRole("alertdialog", { name: "Make profile public?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
-  await expect(page.getByRole("button", { name: /^Profile visibility/ })).toBeFocused();
   await expect(page.getByRole("button", { name: /^Profile visibility/ })).toContainText("Private");
-  // On phones Settings is a sheet over the profile; ✕ closes it.
-  await page
-    .getByRole("dialog", { name: "Settings" })
-    .getByRole("button", { name: "Close" })
-    .click();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /followers?$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("mia");
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();

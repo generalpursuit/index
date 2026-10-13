@@ -61,7 +61,29 @@ export function GroupSettings({ userId }: { userId: string }) {
       >
         <ul className="settings-group-list">
           {all.map((g) => (
-            <GroupRow key={g.id} group={g} />
+            <li
+              key={g.id}
+              className={
+                "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
+              }
+            >
+              <span
+                className={
+                  "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
+                }
+              >
+                {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
+                {g.name}
+              </span>
+              <span
+                className={
+                  "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
+                }
+              >
+                {g.linkCount === 1 ? "1 link" : g.linkCount + " links"}
+              </span>
+              <GroupActions group={g} />
+            </li>
           ))}
         </ul>
         <More
@@ -80,9 +102,8 @@ export function GroupSettings({ userId }: { userId: string }) {
     </section>
   );
 }
-// Only custom groups can be renamed/deleted. Starred never offers an unlock action. In the
-// Settings sheet, a change that needs confirming is asked in place of the row.
-function GroupRow({ group }: { group: Group & { linkCount: number } }) {
+// Only custom groups can be renamed/deleted. Starred never offers an unlock action.
+function GroupActions({ group }: { group: Group }) {
   const actions = useGroupActions(),
     [edit, setEdit] = useState(false),
     [remove, setRemove] = useState(false),
@@ -90,7 +111,7 @@ function GroupRow({ group }: { group: Group & { linkCount: number } }) {
     [error, setError] = useState<string>(),
     locked = group.kind === "starred" || group.visibility === "private";
   const submitting = useRef(false);
-  const menuTrigger = useRef<HTMLButtonElement>(null);
+  const editTrigger = useRef<HTMLButtonElement>(null);
   const busy = actions.updateGroup.isPending || actions.deleteGroup.isPending;
   const changePrivacy = async () => {
     if (submitting.current || privacy === undefined || group.kind === "starred") return;
@@ -109,22 +130,86 @@ function GroupRow({ group }: { group: Group & { linkCount: number } }) {
     }
   };
   return (
-    <li
-      className={
-        "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
-      }
-    >
-      <Confirmation
-        open={privacy !== undefined}
-        onOpenChange={(open) => {
-          if (!open && !busy) setPrivacy(undefined);
-        }}
-        title={privacy ? "Lock group?" : "Unlock group?"}
-        description={groupPrivacyDescription(privacy ?? locked)}
-        label={privacy ? "Lock group" : "Unlock group"}
-        pending={busy}
-        onConfirm={() => void changePrivacy()}
-      >
+    <>
+      <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
+        <GroupLockControl
+          name={group.name}
+          locked={locked}
+          alwaysPrivate={group.kind === "starred"}
+          disabled={busy}
+          onChange={(next) => {
+            setError(undefined);
+            setPrivacy(next);
+          }}
+        />
+        <Confirmation
+          open={privacy !== undefined}
+          onOpenChange={(open) => {
+            if (!open && !busy) setPrivacy(undefined);
+          }}
+          title={privacy ? "Lock group?" : "Unlock group?"}
+          description={groupPrivacyDescription(privacy ?? locked)}
+          label={privacy ? "Lock group" : "Unlock group"}
+          pending={busy}
+          onConfirm={() => void changePrivacy()}
+        />
+        {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
+        {group.kind === "custom" && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  ref={editTrigger}
+                  variant="ghost"
+                  size="icon"
+                  aria-label={"Actions for " + group.name}
+                />
+              }
+            >
+              <EllipsisVertical />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => {
+                  setEdit(true);
+                }}
+              >
+                <Pencil />
+                Edit group
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  setError(undefined);
+                  setRemove(true);
+                }}
+              >
+                <Trash />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+        {edit && (
+          <Modal
+            open
+            onOpenChange={(open) => {
+              if (!open && !busy) setEdit(false);
+            }}
+            title="Edit group"
+            returnFocus={editTrigger}
+          >
+            <GroupForm
+              group={group}
+              pending={actions.updateGroup.isPending}
+              onClose={() => setEdit(false)}
+              onSave={async (value) => {
+                await actions.updateGroup.mutateAsync({ id: group.id, ...value });
+                setEdit(false);
+              }}
+            />
+          </Modal>
+        )}
         <Confirmation
           open={remove}
           onOpenChange={(open) => {
@@ -138,7 +223,7 @@ function GroupRow({ group }: { group: Group & { linkCount: number } }) {
           }
           destructive
           label="Delete group"
-          returnFocus={menuTrigger}
+          returnFocus={editTrigger}
           pending={actions.deleteGroup.isPending}
           onConfirm={async () => {
             if (submitting.current) return;
@@ -152,100 +237,13 @@ function GroupRow({ group }: { group: Group & { linkCount: number } }) {
               setRemove(false);
             }
           }}
-        >
-          <span
-            className={
-              "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
-            }
-          >
-            {group.kind === "starred" && <Star size={14} aria-hidden="true" />}
-            {group.name}
-          </span>
-          <span
-            className={
-              "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
-            }
-          >
-            {group.linkCount === 1 ? "1 link" : group.linkCount + " links"}
-          </span>
-          <div className="settings-group-actions flex items-center gap-0.5 -mr-2">
-            <GroupLockControl
-              name={group.name}
-              locked={locked}
-              alwaysPrivate={group.kind === "starred"}
-              disabled={busy}
-              onChange={(next) => {
-                setError(undefined);
-                setPrivacy(next);
-              }}
-            />
-            {group.kind !== "custom" && (
-              <span className="settings-group-slot w-8" aria-hidden="true" />
-            )}
-            {group.kind === "custom" && (
-              <DropdownMenu>
-                <DropdownMenuTrigger
-                  render={
-                    <Button
-                      ref={menuTrigger}
-                      variant="ghost"
-                      size="icon"
-                      aria-label={"Actions for " + group.name}
-                    />
-                  }
-                >
-                  <EllipsisVertical />
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => {
-                      setEdit(true);
-                    }}
-                  >
-                    <Pencil />
-                    Edit group
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    variant="destructive"
-                    onClick={() => {
-                      setError(undefined);
-                      setRemove(true);
-                    }}
-                  >
-                    <Trash />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-            {edit && (
-              <Modal
-                open
-                onOpenChange={(open) => {
-                  if (!open && !busy) setEdit(false);
-                }}
-                title="Edit group"
-                returnFocus={menuTrigger}
-              >
-                <GroupForm
-                  group={group}
-                  pending={actions.updateGroup.isPending}
-                  onClose={() => setEdit(false)}
-                  onSave={async (value) => {
-                    await actions.updateGroup.mutateAsync({ id: group.id, ...value });
-                    setEdit(false);
-                  }}
-                />
-              </Modal>
-            )}
-          </div>
-        </Confirmation>
-      </Confirmation>
+        />
+      </div>
       {error && (
         <p className="col-span-3 min-w-0 text-sm text-destructive wrap-anywhere" role="alert">
           {error}
         </p>
       )}
-    </li>
+    </>
   );
 }

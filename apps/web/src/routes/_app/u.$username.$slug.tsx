@@ -1,9 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { z } from "zod";
 import { ProfilePage } from "@/features/profiles/profile-page";
 import { resolveLocation, preloadProfile, routeHint } from "@/lib/routes";
 export const Route = createFileRoute("/_app/u/$username/$slug")({
-  validateSearch: z.object({ settings: z.boolean().optional().catch(undefined) }),
   loader: async ({ context, location }) => {
     const hint = routeHint(context, location);
     if (hint.userId && hint.groupId)
@@ -14,10 +12,6 @@ export const Route = createFileRoute("/_app/u/$username/$slug")({
     return result;
   },
   component: () => (
-    <ProfilePage
-      userId={Route.useLoaderData().userId}
-      group={Route.useLoaderData().groupId}
-      settings={Route.useSearch().settings}
-    />
+    <ProfilePage userId={Route.useLoaderData().userId} group={Route.useLoaderData().groupId} />
   ),
 });

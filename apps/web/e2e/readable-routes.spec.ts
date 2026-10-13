@@ -18,9 +18,7 @@ async function login(page: import("@playwright/test").Page) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   await expect(page).toHaveURL(/\/$/);
 }
-test("legacy profile/group/post URLs redirect while retaining settings and post state", async ({
-  page,
-}) => {
+test("legacy profile/group/post URLs redirect while retaining post state", async ({ page }) => {
   await login(page);
   await page.goto(
     `/people/${fixture.people.Alice}?group=${fixture.reading.id}&post=${fixture.links[0]!.id}`,
@@ -37,8 +35,6 @@ test("legacy profile/group/post URLs redirect while retaining settings and post 
   );
   await lists.getByRole("link", { name: "Favorites", exact: true }).click();
   await expect(page).toHaveURL(/\/u\/alice\/favorites$/);
-  await page.goto(`/people/${fixture.people.Alice}?settings=true`);
-  await expect(page).toHaveURL(/\/u\/alice\?settings=true$/);
 });
 test("short link and conversation addresses resolve legacy IDs and preserve queued attachments", async ({
   page,
