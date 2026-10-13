@@ -242,6 +242,39 @@ test("editing a saved link changes its details, and a new address its category",
   await expect(edited.locator(".category-mark")).toHaveAttribute("data-category", "uncategorized");
 });
 
+test("the editor goes back to the post it was opened from; closing closes both", async ({
+  page,
+}) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    editor = page.getByRole("dialog", { name: "Edit link", exact: true }),
+    edit = post.getByRole("link", { name: "Edit", exact: true });
+  await edit.click();
+  // Focus moves into the editor, and back to Edit with the post.
+  await expect(editor.getByRole("button", { name: /^Group:/ })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await editor.getByLabel("Title", { exact: true }).fill("Are.na, renamed");
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(post.getByRole("heading", { name: "Are.na, renamed", exact: true })).toBeVisible();
+  await edit.click();
+  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+  // Opened on its own, the editor goes back to the page.
+  await page.goto("/?edit=" + data.links[1]!.id);
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+});
 test("the editor's title field shows whole letters, however many lines it takes", async ({
   page,
 }) => {

@@ -29,9 +29,18 @@ import type { Group, SavedLink } from "@/lib/types";
 /**
  * Edits a saved link: its address, title, note and group, laid out like the post itself, and
  * deletes it. Links are added by pasting them into the "Enter a link" field, so this is the
- * only form for a link. Calls `onDone` to close after saving or deleting.
+ * only form for a link. Calls `onDone` after saving or cancelling, and `onClose` to leave the
+ * link as it is deleted.
  */
-export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
+export function LinkEditor({
+  id,
+  onDone,
+  onClose,
+}: {
+  id: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
   const api = useAPI(),
     existing = useQuery(api.links.get.queryOptions({ input: { id } }));
   return (
@@ -41,14 +50,24 @@ export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
       error={existing.error}
       retry={() => void existing.refetch()}
     >
-      {existing.data && <LinkForm key={id} existing={existing.data} onDone={onDone} />}
+      {existing.data && (
+        <LinkForm key={id} existing={existing.data} onDone={onDone} onClose={onClose} />
+      )}
     </QueryState>
   );
 }
 // Fields show their frame only when hovered or focused, around the text rather than beside it.
 const quietField =
   "min-h-0 rounded-md border-0 bg-transparent p-0 hover:bg-muted hover:ring-8 hover:ring-muted focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-8 focus-visible:ring-offset-background";
-function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => void }) {
+function LinkForm({
+  existing,
+  onDone,
+  onClose,
+}: {
+  existing: SavedLink;
+  onDone: () => void;
+  onClose: () => void;
+}) {
   const viewer = useViewer()!,
     groups = useAllGroups(viewer.id),
     actions = useLibraryActions(),
@@ -102,7 +121,7 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
     actions.remove.mutate({ id: existing.id });
     if (path === "/links/" + existing.id || path === "/l/" + existing.shortId)
       void navigate({ to: "/u/$username", params: { username: viewer.username! }, replace: true });
-    else onDone();
+    else onClose();
   };
   return (
     <>

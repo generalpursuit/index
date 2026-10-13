@@ -345,10 +345,10 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
         </IconButton>
       )}
       {own && (
-        // Editing replaces the open post rather than stacking a second modal.
+        // The editor takes the post's place in its dialog, and goes back to it.
         <Link
           to="."
-          search={(old) => ({ ...old, post: undefined, edit: link.shortId })}
+          search={(old) => ({ ...old, edit: link.shortId })}
           className={cn(buttonVariants({ variant: "outline", size: "icon-lg" }), "ml-auto")}
           aria-label="Edit"
           title="Edit"

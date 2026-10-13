@@ -163,7 +163,10 @@ test("saved link edits reopen with the saved values; failed edits keep unsaved i
   await editor.getByLabel("Title", { exact: true }).fill("Updated title");
   await editor.getByLabel("Note", { exact: true }).fill("Updated note");
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(editor).toHaveCount(0);
+  // Saving goes back to the post, which shows the change.
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.getByRole("heading", { name: "Updated title", exact: true })).toBeVisible();
+  await post.getByRole("button", { name: "Close", exact: true }).click();
   await openEditor("Updated title");
   await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("Updated title");
   await expect(editor.getByLabel("Note", { exact: true })).toHaveValue("Updated note");

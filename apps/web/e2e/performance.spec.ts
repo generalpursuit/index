@@ -119,6 +119,28 @@ test("a post opens at its full width", async ({ page }) => {
   await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
   expect(await post.evaluate((element) => (element as HTMLElement).offsetWidth)).toBe(650);
 });
+test("editing a post keeps its dialog in place", async ({ page }) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
+  // Measured once it has finished opening.
+  await expect
+    .poll(() => post.evaluate((element) => element.getAnimations({ subtree: true }).length))
+    .toBe(0);
+  const before = (await post.boundingBox())!;
+  await post.evaluate((element) => element.setAttribute("data-opened-as", "Post"));
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit link", exact: true });
+  // The same dialog, rather than one closing as another opens.
+  await expect(editor).toHaveAttribute("data-opened-as", "Post");
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  const after = (await editor.boundingBox())!;
+  expect([after.x, after.y, after.width]).toEqual([before.x, before.y, before.width]);
+});
 test("a post keeps its size while its comments load", async ({ page }) => {
   await login(page);
   let release!: () => void;

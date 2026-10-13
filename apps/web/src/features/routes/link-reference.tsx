@@ -1,20 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useAPI } from "@/hooks/use-api";
 import { linkReferencePath, isUUID } from "@/lib/routes";
-import { LinkDetail } from "@/features/links/link-detail";
-import { LinkEditor } from "@/features/links/link-editor";
 import { QueryState } from "@/components/app/query-state";
 /** Search parameters contain short references; only resolved UUIDs reach data hooks. */
 export function LinkReference({
   value,
   mode,
-  onDone,
+  children,
 }: {
   value: string;
   mode: "post" | "edit";
-  onDone: () => void;
+  children: (linkId: string) => ReactNode;
 }) {
   const api = useAPI(),
     navigate = useNavigate();
@@ -40,12 +38,7 @@ export function LinkReference({
       error={resolved.error}
       retry={() => void resolved.refetch()}
     >
-      {target &&
-        (mode === "post" ? (
-          <LinkDetail id={target.linkId} />
-        ) : (
-          <LinkEditor id={target.linkId} onDone={onDone} />
-        ))}
+      {target && children(target.linkId)}
     </QueryState>
   );
 }
