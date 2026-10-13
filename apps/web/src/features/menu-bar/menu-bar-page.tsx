@@ -297,11 +297,6 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
             </button>
           </div>
         )}
-        {query.isSuccess && !links.length && (
-          <p className="py-6 text-center text-subtle-foreground">
-            Save your first link for this week.
-          </p>
-        )}
         {/* A refresh after opening changes rows in place, without flicker. */}
         <CalmRows items={links} rowKey={(link) => link.id}>
           {(link) => <MenuLink link={link} />}

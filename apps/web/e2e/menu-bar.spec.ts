@@ -544,7 +544,9 @@ test("restricted menu keeps application data hidden and reflects same-account em
   await page.getByLabel("Verification code").fill(code!);
   await page.getByRole("button", { name: "Verify email", exact: true }).click();
   await expect(panel.getByRole("textbox", { name: "Add a link to this week" })).toBeVisible();
-  await expect(panel.getByText("Save your first link for this week.")).toBeVisible();
+  // An empty week shows the field and nothing under it.
+  await expect(panel.getByText("Loading your links…")).toHaveCount(0);
+  await expect(panel.locator(".link-list")).toHaveText("");
 });
 
 test("menu retry survives hide/focus with its receipt and never substitutes a deleted destination", async ({
