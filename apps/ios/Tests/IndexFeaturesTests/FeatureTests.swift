@@ -115,6 +115,49 @@ final class MessagingTests: XCTestCase {
     XCTAssertNotEqual(oldID, newID)
   }
 
+  func testUncertainReplyRetriesTheSameRepliedMessage() async throws {
+    let api = FeatureStub()
+    let drafts = MessageDrafts()
+    let original: Message = try decode(message("original"))
+    let other: Message = try decode(message("other"))
+    drafts.reply(to: original, in: "chat")
+    drafts.edit("Agreed", in: "chat")
+    await api.fail("/conversations/chat/messages", URLError(.timedOut))
+    do { try await drafts.send(in: "chat", api: api); XCTFail("Expected uncertain response") } catch {}
+    let pending = try XCTUnwrap(drafts.draft(for: "chat").pending)
+    XCTAssertEqual(pending.replyToMessageID, "original")
+    // Neither another reply nor cancelling can retarget a possibly committed send.
+    drafts.reply(to: other, in: "chat")
+    drafts.reply(to: nil, in: "chat")
+    XCTAssertEqual(drafts.draft(for: "chat").replyTo?.id, "original")
+    XCTAssertEqual(drafts.draft(for: "chat").pending, pending)
+    await api.enqueue("/conversations/chat/messages", message("sent"))
+    try await drafts.send(in: "chat", api: api)
+    let calls = await api.recorded()
+    let firstPayload = try JSONSerialization.jsonObject(with: payload(calls[0])) as? NSDictionary
+    let retryPayload = try JSONSerialization.jsonObject(with: payload(calls[1])) as? NSDictionary
+    XCTAssertEqual(firstPayload?["replyToMessageId"] as? String, "original")
+    XCTAssertEqual(firstPayload, retryPayload)
+    XCTAssertNil(drafts.draft(for: "chat").replyTo)
+  }
+
+  func testRejectedReplyCanStopQuotingBeforeTheNextAttempt() async throws {
+    let api = FeatureStub()
+    let drafts = MessageDrafts()
+    let original: Message = try decode(message("original"))
+    drafts.reply(to: original, in: "chat")
+    drafts.edit("Agreed", in: "chat")
+    await api.fail("/conversations/chat/messages", APIError.server(422, "Invalid"))
+    do { try await drafts.send(in: "chat", api: api); XCTFail("Expected rejection") } catch {}
+    XCTAssertEqual(drafts.draft(for: "chat").replyTo?.excerpt, "hello")
+    drafts.reply(to: nil, in: "chat")
+    await api.enqueue("/conversations/chat/messages", message("sent"))
+    try await drafts.send(in: "chat", api: api)
+    let calls = await api.recorded()
+    XCTAssertNotNil(calls[0].body?["replyToMessageId"])
+    XCTAssertNil(calls[1].body?["replyToMessageId"])
+  }
+
   func testAccountClearRejectsLateSendWithoutErasingNewAccountDraft() async throws {
     let api = FeatureStub()
     let drafts = MessageDrafts()

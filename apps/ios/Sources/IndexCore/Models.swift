@@ -140,6 +140,13 @@ public struct MessageReply: Codable, Hashable, Sendable {
   public let senderId: String
   public let excerpt: String
   public let hasAttachment: Bool
+  /// How a draft quotes `message` until the server returns the sent reply's own excerpt.
+  public init(quoting message: Message) {
+    id = message.id
+    senderId = message.senderId
+    excerpt = message.body
+    hasAttachment = message.hasAttachment
+  }
 }
 public struct Message: Codable, Identifiable, Sendable {
   public let id: String

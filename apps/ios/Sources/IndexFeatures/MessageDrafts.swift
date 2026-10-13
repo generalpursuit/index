@@ -6,9 +6,11 @@ public struct PendingMessage: Equatable, Sendable {
   public let clientID: String
   public let body: String
   public let linkID: String?
+  public let replyToMessageID: String?
   var payload: [String: JSONValue] {
     var value: [String: JSONValue] = ["clientId": .string(clientID), "body": .string(body)]
     if let linkID { value["linkId"] = .string(linkID) }
+    if let replyToMessageID { value["replyToMessageId"] = .string(replyToMessageID) }
     return value
   }
 }
@@ -16,6 +18,7 @@ public struct PendingMessage: Equatable, Sendable {
 public struct MessageDraft: Sendable {
   public private(set) var body = ""
   public private(set) var attachment: SavedLink?
+  public private(set) var replyTo: MessageReply?
   public private(set) var pending: PendingMessage?
   public var isEmpty: Bool { body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachment == nil }
   public init() {}
@@ -28,10 +31,16 @@ public struct MessageDraft: Sendable {
     guard pending == nil else { throw DraftError.pendingMessage }
     attachment = link
   }
+  mutating func reply(to message: MessageReply?) {
+    guard pending == nil else { return }
+    replyTo = message
+  }
   mutating func prepare() throws -> PendingMessage {
     if let pending { return pending }
     guard !isEmpty else { throw DraftError.emptyMessage }
-    let value = PendingMessage(clientID: UUID().uuidString, body: body.trimmingCharacters(in: .whitespacesAndNewlines), linkID: attachment?.id)
+    let value = PendingMessage(
+      clientID: UUID().uuidString, body: body.trimmingCharacters(in: .whitespacesAndNewlines),
+      linkID: attachment?.id, replyToMessageID: replyTo?.id)
     pending = value
     return value
   }
@@ -63,6 +72,11 @@ public final class MessageDrafts {
   public func edit(_ body: String, in conversationID: String) { values[conversationID, default: MessageDraft()].edit(body) }
   public func attach(_ link: SavedLink?, to conversationID: String) throws {
     try values[conversationID, default: MessageDraft()].attach(link)
+  }
+  /// Quotes `message` in the next send, or stops quoting with nil. Like the text, the quote
+  /// cannot change while a send is pending.
+  public func reply(to message: Message?, in conversationID: String) {
+    values[conversationID, default: MessageDraft()].reply(to: message.map(MessageReply.init(quoting:)))
   }
   public func clear() {
     generation += 1
