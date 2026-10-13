@@ -137,6 +137,10 @@ for (const phone of [false, true]) {
       await editor.getByRole("button", { name: "Save", exact: true }).click();
       await expect(editor).toHaveCount(0);
       await expect(page.locator(".settings-identity strong")).toHaveText("Theme test name");
+      // Toasts are quiet cards in the app's type and surface colors.
+      const toast = page.locator("[data-sonner-toast]").filter({ hasText: "Profile saved" });
+      await expect(toast).toHaveCSS("font-family", /Geist/);
+      await assertContrast(page, "[data-sonner-toast]");
       await page.goto("/");
       await expect(page.locator('.week-page[data-active="true"] .link-row').first()).toBeVisible();
       await assertContrast(page, '.week-page[data-active="true"] .link-open');
