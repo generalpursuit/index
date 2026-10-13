@@ -126,7 +126,7 @@ function MenuPanel() {
       </div>
       {/* Ends the panel like the items at the end of a native menu. */}
       <footer className="mt-auto shrink-0">
-        <hr className="mx-2 border-foreground/10" />
+        <hr className="mx-2 border-(--panel-separator)" />
         <div className="pt-1.5">
           <MenuItem
             hint={<ArrowUpRight className="size-3.5" />}
@@ -156,7 +156,7 @@ function MenuItem({
 }) {
   return (
     <button
-      className="flex h-7 w-full items-center justify-between gap-3 rounded-[6px] px-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
+      className="flex h-7 w-full items-center justify-between gap-3 rounded-[6px] px-2 text-left hover:bg-(--panel-fill) focus-visible:outline-offset-[-2px]"
       aria-keyshortcuts={shortcut}
       onClick={onClick}
     >
@@ -316,7 +316,7 @@ function MenuLink({ link }: { link: SavedLink }) {
   }
   return (
     <button
-      className="grid h-[var(--row)] w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
+      className="grid h-[var(--row)] w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-(--panel-fill) focus-visible:outline-offset-[-2px]"
       onClick={() => report(open())}
       aria-label={`Open ${link.title} in browser`}
     >
