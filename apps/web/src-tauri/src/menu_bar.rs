@@ -106,7 +106,8 @@ fn toggle(app: &AppHandle) -> tauri::Result<()> {
             .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Popover)
                 .state(tauri::window::EffectState::Active).radius(16.0).build())
             .visible(false).focused(false)
-            .initialization_script("window.__INDEX_MENU_BAR__ = true;");
+            // The page fits whole rows of its list within the panel's maximum height.
+            .initialization_script(&format!("window.__INDEX_MENU_BAR__ = {{ maxHeight: {PANEL_MAX_HEIGHT} }};"));
         let window = crate::restrict_navigation(builder, app).build()?;
         attach_lifecycle(&window);
         window

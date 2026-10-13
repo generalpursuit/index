@@ -4,10 +4,11 @@ import { ENV } from "@/env.public";
 import { createNativeSessionFetch, type NativeSessionSnapshot } from "./session-fetch";
 
 export const isDesktop = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-export const isMenuBar = isDesktop && window.__INDEX_MENU_BAR__ === true;
+export const isMenuBar = isDesktop && !!window.__INDEX_MENU_BAR__;
 declare global {
   interface Window {
-    __INDEX_MENU_BAR__?: boolean;
+    /** Set by the desktop host in the menu panel, with the panel's tallest height. */
+    __INDEX_MENU_BAR__?: { maxHeight: number };
     __TAURI__?: {
       event: {
         listen<T>(event: string, handler: (event: { payload: T }) => void): Promise<() => void>;

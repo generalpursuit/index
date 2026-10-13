@@ -99,6 +99,63 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   ).toBe(true);
 });
 
+test("only the menu panel's links scroll, by whole rows, loading more near their end", async ({
+  page,
+  context,
+  request,
+}) => {
+  await request.post(apiURL + "/_test/reset");
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
+  // More than a page of links this week.
+  for (let i = 1; i <= 36; i++) {
+    const created = await request.post(apiURL + "/api/v1/links", {
+      headers: { Authorization: `Bearer ${desktop.token}` },
+      data: { url: `https://pages.test/long-week-${i}`, title: `Long week ${i}` },
+    });
+    expect(created.ok()).toBe(true);
+  }
+  const panel = await context.newPage();
+  await panel.setViewportSize({ width: 390, height: 560 });
+  await desktop.attach(panel, "menu-bar");
+  await panel.goto("/menu-bar");
+  const rows = panel.getByRole("button", { name: /Open .*in browser/ });
+  await expect(rows).toHaveCount(30);
+  // At its maximum height the panel shows whole rows; the native window takes that height.
+  await expect
+    .poll(() =>
+      desktop.commands.findLast(
+        (c) => c.label === "menu-bar" && c.command === "desktop_panel_resize",
+      ),
+    )
+    .toBeTruthy();
+  const height = desktop.commands.findLast(
+    (c) => c.label === "menu-bar" && c.command === "desktop_panel_resize",
+  )!.args!.height as number;
+  expect(height).toBeLessThanOrEqual(560);
+  expect(height).toBeGreaterThan(560 - 34);
+  await panel.setViewportSize({ width: 390, height });
+  const list = panel.locator(".link-list");
+  await expect.poll(() => list.evaluate((el) => Math.round(el.clientHeight) % 34)).toBe(0);
+  expect(await list.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("none");
+  await expect(list).toHaveAttribute("data-fade-end", "true");
+  await expect(list).not.toHaveAttribute("data-fade-start");
+  const field = panel.getByRole("textbox", { name: "Add a link to this week" });
+  const footer = panel.locator("footer");
+  const heading = panel.getByRole("heading", { level: 1 });
+  const fixed = async () =>
+    [heading, field, footer].map(async (part) => (await part.boundingBox())!.y);
+  const before = await Promise.all(await fixed());
+  // Reaching the end loads the next page by itself.
+  await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
+  await expect(rows).toHaveCount(41);
+  await expect(panel.getByRole("button", { name: "Load more" })).toHaveCount(0);
+  await expect(list).toHaveAttribute("data-fade-start", "true");
+  expect(await Promise.all(await fixed())).toEqual(before);
+  expect(await panel.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+});
+
 test("menu session clears drafts and links across sign-out and account switching while cleanup stalls", async ({
   page,
   context,

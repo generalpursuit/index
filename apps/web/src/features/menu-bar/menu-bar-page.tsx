@@ -4,10 +4,10 @@ import { ArrowUpRight, Power } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
 import { categoryMarkClassName } from "@/features/links/category-mark";
+import { LinkList, scrollToTop } from "@/features/links/link-list";
 import { QuickAdd } from "@/features/links/quick-add";
 import { weekLinksOptions } from "@/features/links/queries";
 import { domain } from "@/features/links/url";
-import { More } from "@/components/app/query-state";
 import { useAPI } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { desktopInvoke, isMenuBar } from "@/lib/desktop";
@@ -30,9 +30,9 @@ function MenuPanel() {
   const user = session.data?.user;
   const [checking, setChecking] = useState(false);
   const panel = useRef<HTMLElement>(null),
-    scroller = useRef<HTMLDivElement>(null),
-    content = useRef<HTMLDivElement>(null);
-  useFittedPanel(panel, scroller, content);
+    content = useRef<HTMLDivElement>(null),
+    footer = useRef<HTMLElement>(null);
+  useFittedPanel(panel, content, footer);
   useLayoutEffect(() => {
     // A transparent page lets the window's native glass show through.
     document.documentElement.classList.add("menu-bar-surface");
@@ -68,45 +68,49 @@ function MenuPanel() {
   return (
     <main
       ref={panel}
-      className="flex h-dvh min-h-0 flex-col gap-2 rounded-[16px] p-2.5 text-[13px] text-foreground shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.14)] dark:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.14)]"
+      className="flex h-dvh min-h-0 flex-col rounded-[16px] p-2.5 text-[13px] text-foreground shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.14)] dark:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.14)]"
       aria-label="Index menu bar"
     >
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
-        <div ref={content}>
-          {checking || session.isPending ? (
-            <p role="status" className="py-8 text-center text-subtle-foreground">
-              Checking your session…
+      {/* Takes its natural height; when the panel is shorter, only the link list gives way. */}
+      <div ref={content} className="flex min-h-0 flex-col pb-2">
+        {checking || session.isPending ? (
+          <p role="status" className="py-8 text-center text-subtle-foreground">
+            Checking your session…
+          </p>
+        ) : session.isError ? (
+          <div className="flex flex-col items-center gap-3 py-8 text-center">
+            <p role="alert">Could not check your session.</p>
+            <Button variant="outline" onClick={() => void session.refetch()}>
+              Retry session
+            </Button>
+          </div>
+        ) : !user?.emailVerified ? (
+          <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
+            <h1 className="font-serif text-[21px] leading-[1.15] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
+              {user ? "Verify your email" : "Your week, close at hand"}
+            </h1>
+            <p className="max-w-60 text-subtle-foreground">
+              {user
+                ? "Finish verification in Index to see and save links."
+                : "Sign in to Index to see and save your links here."}
             </p>
-          ) : session.isError ? (
-            <div className="flex flex-col items-center gap-3 py-8 text-center">
-              <p role="alert">Could not check your session.</p>
-              <Button variant="outline" onClick={() => void session.refetch()}>
-                Retry session
-              </Button>
-            </div>
-          ) : !user?.emailVerified ? (
-            <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
-              <h1 className="font-serif text-[21px] leading-[1.15] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
-                {user ? "Verify your email" : "Your week, close at hand"}
-              </h1>
-              <p className="max-w-60 text-subtle-foreground">
-                {user
-                  ? "Finish verification in Index to see and save links."
-                  : "Sign in to Index to see and save your links here."}
-              </p>
-              <Button className="mt-2 px-4" onClick={() => report(openIndex("/login"))}>
-                {user ? "Verify in Index" : "Sign in to Index"}
-              </Button>
-            </div>
-          ) : null}
-          {user?.emailVerified && (
-            <div hidden={checking || session.isPending || session.isError}>
-              <OwnWeek key={user.id + ":" + accountGeneration()} userId={user.id} />
-            </div>
-          )}
-        </div>
+            <Button className="mt-2 px-4" onClick={() => report(openIndex("/login"))}>
+              {user ? "Verify in Index" : "Sign in to Index"}
+            </Button>
+          </div>
+        ) : null}
+        {user?.emailVerified && (
+          <OwnWeek
+            key={user.id + ":" + accountGeneration()}
+            userId={user.id}
+            hidden={checking || session.isPending || session.isError}
+          />
+        )}
       </div>
-      <footer className="flex shrink-0 items-center gap-2 border-t border-foreground/10 pt-2">
+      <footer
+        ref={footer}
+        className="mt-auto flex shrink-0 items-center gap-2 border-t border-foreground/10 pt-2"
+      >
         <Button className="h-8 flex-1 text-[13px]" onClick={() => report(openIndex())}>
           Open Index <ArrowUpRight data-icon="inline-end" className="size-3.5" />
         </Button>
@@ -123,19 +127,33 @@ function MenuPanel() {
   );
 }
 /**
- * The native panel follows the content's natural height (the window clamps it), and opens fully
- * while a dialog sheet is shown.
+ * The native panel follows the content's natural height, showing whole rows of the list when it
+ * reaches its maximum, and opens fully while a dialog sheet is shown.
  */
 function useFittedPanel(
   panel: RefObject<HTMLElement | null>,
-  scroller: RefObject<HTMLElement | null>,
   content: RefObject<HTMLElement | null>,
+  footer: RefObject<HTMLElement | null>,
 ) {
   useLayoutEffect(() => {
     const measure = () => {
       if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
-      const chrome = panel.current!.offsetHeight - scroller.current!.clientHeight;
-      return Math.ceil(chrome + content.current!.getBoundingClientRect().height);
+      const page = panel.current!.getBoundingClientRect();
+      // A hidden list (while the session is checked) has no offset parent.
+      const list = content.current!.querySelector<HTMLElement>(".link-list");
+      const shown = list?.offsetParent ? list : null;
+      // The footer keeps to the bottom, so leave out any space between it and the content.
+      const natural =
+        content.current!.getBoundingClientRect().bottom -
+        page.top +
+        (shown ? shown.scrollHeight - shown.clientHeight : 0) +
+        page.bottom -
+        footer.current!.getBoundingClientRect().top;
+      const max = window.__INDEX_MENU_BAR__!.maxHeight;
+      if (!shown || natural <= max) return Math.ceil(natural);
+      const row = parseFloat(getComputedStyle(shown).getPropertyValue("--row"));
+      const around = natural - shown.scrollHeight;
+      return Math.ceil(around + Math.floor((max - around) / row) * row);
     };
     const stop = measureMenuPanel(measure);
     let frame = 0,
@@ -150,20 +168,19 @@ function useFittedPanel(
       });
     };
     const sizes = new ResizeObserver(update);
-    for (const element of [panel.current!, scroller.current!, content.current!])
-      sizes.observe(element);
-    // Dialogs are portaled outside the panel.
-    const dialogs = new MutationObserver(update);
-    dialogs.observe(document.body, { childList: true, subtree: true });
+    for (const element of [panel.current!, content.current!]) sizes.observe(element);
+    // Dialogs are portaled outside the panel, and the list's content changes without its size.
+    const changes = new MutationObserver(update);
+    changes.observe(document.body, { childList: true, subtree: true });
     return () => {
       stop();
       cancelAnimationFrame(frame);
       sizes.disconnect();
-      dialogs.disconnect();
+      changes.disconnect();
     };
-  }, [panel, scroller, content]);
+  }, [panel, content, footer]);
 }
-function OwnWeek({ userId }: { userId: string }) {
+function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
   const api = useAPI();
   const [week, setWeek] = useState(() => monday());
   useEffect(() => {
@@ -178,15 +195,14 @@ function OwnWeek({ userId }: { userId: string }) {
   }, []);
   const query = useInfiniteQuery(weekLinksOptions(api, userId, week));
   const links = query.data?.pages.flatMap((page) => page.items) ?? [];
-  async function openSaved(link: SavedLink) {
-    const generation = accountGeneration();
-    // Access and URL may have changed since the row was loaded.
-    const current = await client.links.get({ id: link.id });
-    assertCurrentAccount(generation);
-    await desktopInvoke("open_website", { url: current.url });
-  }
+  const scroller = useRef<HTMLDivElement>(null);
   return (
-    <section aria-label="This week's links" className="flex flex-col gap-2">
+    // Kept while hidden, so a draft survives the session check of the next opening.
+    <section
+      hidden={hidden}
+      aria-label="This week's links"
+      className="flex min-h-0 flex-col gap-2 [--row:34px]"
+    >
       {/* Every opening already refreshes it, and changes elsewhere arrive as they happen. */}
       <div className="pt-1.5 pb-1 pl-2">
         <h1 className="font-serif text-[23px] leading-[1.05] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
@@ -200,55 +216,60 @@ function OwnWeek({ userId }: { userId: string }) {
         compact
         links={links}
         label="Add a link to this week"
+        onSave={() => scrollToTop(scroller)}
         onViewExisting={(link) => openIndex("/l/" + link.shortId, userId)}
       />
-      {query.isPending && (
-        <p role="status" className="px-2 py-3 text-subtle-foreground">
-          Loading your links…
-        </p>
-      )}
-      {query.isError && (
-        <div role="alert" className="px-2 py-3 text-destructive">
-          Could not load your links.{" "}
-          <button className="underline" onClick={() => void query.refetch()}>
-            Retry links
-          </button>
-        </div>
-      )}
-      {query.isSuccess && !links.length && (
-        <p className="py-6 text-center text-subtle-foreground">
-          Save your first link for this week.
-        </p>
-      )}
-      {links.length > 0 && (
-        <ul>
-          {links.map((link) => (
-            <li key={link.id}>
-              <button
-                className="grid h-8.5 w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
-                onClick={() => report(openSaved(link))}
-                aria-label={`Open ${link.title} in browser`}
-              >
-                <i
-                  className={categoryMarkClassName}
-                  data-category={link.category}
-                  aria-hidden="true"
-                />
-                <span className="truncate">{link.title}</span>
-                <span className="inline-flex max-w-30 min-w-0 items-center gap-1 text-[11.5px] text-subtle-foreground">
-                  <span className="truncate">{domain(link.url)}</span>
-                  <ArrowUpRight className="size-3 shrink-0" />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      <More
-        hasNext={query.hasNextPage}
-        isFetching={query.isFetchingNextPage}
-        fetch={query.fetchNextPage}
-      />
+      <LinkList list={query} label={"Links in " + weekLabel(week)} scroller={scroller}>
+        {query.isPending && (
+          // Hidden for the first 300ms, so a quick load goes straight to its links.
+          <p
+            role="status"
+            className="px-2 py-3 text-subtle-foreground [animation:loading-reveal_1ms_300ms_backwards]"
+          >
+            Loading your links…
+          </p>
+        )}
+        {query.isError && (
+          <div role="alert" className="px-2 py-3 text-destructive">
+            Could not load your links.{" "}
+            <button className="underline" onClick={() => void query.refetch()}>
+              Retry links
+            </button>
+          </div>
+        )}
+        {query.isSuccess && !links.length && (
+          <p className="py-6 text-center text-subtle-foreground">
+            Save your first link for this week.
+          </p>
+        )}
+        {links.map((link) => (
+          <MenuLink key={link.id} link={link} />
+        ))}
+      </LinkList>
     </section>
+  );
+}
+/** Opens the link in the browser; the panel is for glancing at and adding links. */
+function MenuLink({ link }: { link: SavedLink }) {
+  async function open() {
+    const generation = accountGeneration();
+    // Access and URL may have changed since the row was loaded.
+    const current = await client.links.get({ id: link.id });
+    assertCurrentAccount(generation);
+    await desktopInvoke("open_website", { url: current.url });
+  }
+  return (
+    <button
+      className="grid h-[var(--row)] w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
+      onClick={() => report(open())}
+      aria-label={`Open ${link.title} in browser`}
+    >
+      <i className={categoryMarkClassName} data-category={link.category} aria-hidden="true" />
+      <span className="truncate">{link.title}</span>
+      <span className="inline-flex max-w-30 min-w-0 items-center gap-1 text-[11.5px] text-subtle-foreground">
+        <span className="truncate">{domain(link.url)}</span>
+        <ArrowUpRight className="size-3 shrink-0" />
+      </span>
+    </button>
   );
 }
