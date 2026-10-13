@@ -147,6 +147,8 @@ public struct MessageReply: Codable, Hashable, Sendable {
     excerpt = message.body
     hasAttachment = message.hasAttachment
   }
+  /// The quoted text. A replied message without text was a shared post.
+  public var preview: String { excerpt.isEmpty && hasAttachment ? "Shared post" : excerpt }
 }
 public struct Message: Codable, Identifiable, Sendable {
   public let id: String
@@ -176,6 +178,13 @@ public struct Conversation: Codable, Identifiable, Sendable {
     return others.map {
       others.count > 1 ? String($0.name.split(separator: " ").first ?? Substring($0.name)) : $0.name
     }.joined(separator: ", ")
+  }
+  /// Who a reply answers, from the point of view of the person reading it.
+  public func replyLabel(viewerId: String, from sender: String, to original: String) -> String {
+    if original != viewerId {
+      return "Replying to " + (participants.first { $0.id == original }?.name ?? "a former participant")
+    }
+    return sender == viewerId ? "Replying to yourself" : "Replying to you"
   }
 }
 /// API timestamps are ISO 8601, with or without fractional seconds.

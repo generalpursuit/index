@@ -338,4 +338,16 @@ struct APIClientTests {
     #expect(unread.lastMessage?.replyTo == nil)
     #expect(unread.readReceiptMessageId == nil)
   }
+  @Test func replyLabelsNameWhoIsAnsweredForTheReader() throws {
+    let json =
+      #"{"id":"conversation","participants":[{"id":"alice","name":"Alice Doe","profileVisibility":"public"},{"id":"bob","name":"Bob Roe","profileVisibility":"public"}],"canSend":true,"unreadCount":0,"updatedAt":"2026-10-13T09:00:00.000Z"}"#
+    let conversation = try JSONDecoder().decode(Conversation.self, from: Data(json.utf8))
+    #expect(conversation.replyLabel(viewerId: "alice", from: "alice", to: "bob") == "Replying to Bob Roe")
+    #expect(conversation.replyLabel(viewerId: "alice", from: "bob", to: "alice") == "Replying to you")
+    #expect(conversation.replyLabel(viewerId: "alice", from: "alice", to: "alice") == "Replying to yourself")
+    #expect(conversation.replyLabel(viewerId: "alice", from: "bob", to: "gone") == "Replying to a former participant")
+    let post = try JSONDecoder().decode(
+      MessageReply.self, from: Data(#"{"id":"m","senderId":"bob","excerpt":"","hasAttachment":true}"#.utf8))
+    #expect(post.preview == "Shared post")
+  }
 }
