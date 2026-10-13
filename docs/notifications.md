@@ -20,7 +20,7 @@ Installation proof is distinct from login: every device operation also needs the
 
 ## Configuration
 
-[Server environment schema](../apps/server/.env.schema) owns input formats. `NOTIFICATIONS_ENABLED=true` enables remote providers. Web Push requires the VAPID public/private pair and subject; APNs requires its key, team, topic and matching sandbox/production environment. Missing providers remain unavailable independently. Malformed/partial groups produce a fixed warning naming settings without exposing values. Local key validation cannot establish provider authorization. Desktop polling does not require remote-provider credentials.
+[Server environment schema](../apps/server/.env.schema) owns input formats. `NOTIFICATIONS_ENABLED=true` enables remote providers. Web Push requires the VAPID public/private pair and subject; APNs requires its key, team, topic and matching sandbox/production environment. Missing providers remain unavailable independently. Malformed/partial groups produce a fixed warning naming settings without exposing values. Local key validation cannot establish provider authorization. Desktop polling does not require remote-provider credentials. [Local development](deployment.md#local-development) shows how to enable Web Push for a personal stage.
 
 [Alchemy](../packages/infra/alchemy.run.ts) accepts these inputs, but the checked-in [release workflow](../.github/workflows/release.yml) does not forward notification settings. Merely adding GitHub environment secrets will not enable remote delivery; arrange their deployment bindings before enabling it. Private keys must stay server-only. The browser receives only capability status and the VAPID public key.
 
