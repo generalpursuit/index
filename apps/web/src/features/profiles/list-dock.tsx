@@ -1,7 +1,7 @@
 import { groupPath, profilePath } from "@index/api/routes";
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Heart, LockKeyhole, Plus, Star } from "lucide-react";
+import { LockKeyhole, Plus } from "lucide-react";
 import { groupLabel } from "@/features/groups/group-lock-control";
 import { useAllGroups } from "@/features/groups/use-groups";
 import { useScrollEdges } from "@/features/links/hooks/use-scroll-edges";
@@ -67,42 +67,26 @@ export function ListDock({
           <ListChip to={profilePath(username)} userId={userId}>
             All
           </ListChip>
-          {lists.map((group) =>
-            // Favorites shows as the heart that marks them elsewhere; groups keep their names.
-            group.kind === "favorites" ? (
-              <ListChip
-                key={group.id}
-                to={groupPath(username, group.slug)}
-                userId={userId}
-                groupId={group.id}
-                label={groupLabel(group)}
-                icon
-              >
-                <Heart aria-hidden="true" />
-              </ListChip>
-            ) : (
-              <ListChip
-                key={group.id}
-                to={groupPath(username, group.slug)}
-                userId={userId}
-                groupId={group.id}
-                label={groupLabel(group)}
-              >
-                {group.name}
-                {group.visibility === "private" && <LockKeyhole aria-hidden="true" />}
-              </ListChip>
-            ),
-          )}
+          {lists.map((group) => (
+            <ListChip
+              key={group.id}
+              to={groupPath(username, group.slug)}
+              userId={userId}
+              groupId={group.id}
+              label={groupLabel(group)}
+            >
+              {group.name}
+              {group.visibility === "private" && <LockKeyhole aria-hidden="true" />}
+            </ListChip>
+          ))}
           {own && (
             <>
               <ListChip
                 to={groupPath(username, starred?.slug ?? "starred")}
                 userId={userId}
                 groupId={starred?.id}
-                label="Starred"
-                icon
               >
-                <Star aria-hidden="true" />
+                Starred
               </ListChip>
               <button
                 type="button"
@@ -126,7 +110,6 @@ function ListChip({
   userId,
   groupId,
   label,
-  icon = false,
   children,
 }: {
   to: string;
@@ -134,8 +117,6 @@ function ListChip({
   groupId?: string;
   /** Spoken instead of the chip's text, when that alone leaves something unsaid. */
   label?: string;
-  /** Shows only an icon, named by `label` (also its tooltip). */
-  icon?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -144,13 +125,7 @@ function ListChip({
       state={{ userId, groupId }}
       activeOptions={{ exact: true, includeSearch: false }}
       aria-label={label}
-      title={icon ? label : undefined}
-      className={
-        chipClassName +
-        (icon
-          ? " w-8 justify-center [&_svg]:size-4 [&_svg]:text-foreground"
-          : " gap-1 px-3.5 [&_svg]:size-3")
-      }
+      className={chipClassName + " gap-1 px-3.5 [&_svg]:size-3"}
     >
       {children}
     </Link>
