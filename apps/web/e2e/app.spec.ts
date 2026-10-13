@@ -242,6 +242,19 @@ test("editing a saved link changes its details, and a new address its category",
   await expect(edited.locator(".category-mark")).toHaveAttribute("data-category", "uncategorized");
 });
 
+test("the editor's title field shows whole letters, however many lines it takes", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/?edit=" + data.links[0]!.id);
+  const title = page.getByLabel("Title", { exact: true });
+  // A field that scrolls at all clips its letters; ascenders and descenders reach past the
+  // serif's tight line height.
+  for (const value of ["Ågjpqy", "A title long enough to wrap onto a second line, with gjpqy"]) {
+    await title.fill(value);
+    expect(await title.evaluate((field) => field.scrollHeight - field.clientHeight)).toBe(0);
+  }
+});
 test("deleting a link from its editor closes it, or leaves the link's own page", async ({
   page,
 }) => {

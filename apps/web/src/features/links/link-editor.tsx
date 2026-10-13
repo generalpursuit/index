@@ -164,13 +164,16 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
               <FieldLabel className="sr-only" htmlFor="link-title">
                 Title
               </FieldLabel>
+              {/* The serif's ascenders and descenders reach about 0.134em past its 1.1 line
+                  height, which a field clips. Padding holds them; the margin keeps the text in
+                  place. */}
               <Textarea
                 id="link-title"
                 rows={1}
                 placeholder="Title"
                 className={
                   quietField +
-                  " text-[length:inherit] font-serif font-bold [font-variation-settings:'opsz'_60] tracking-[-0.015em] leading-[1.1] text-foreground"
+                  " -my-[0.14em] py-[0.14em] text-[length:inherit] font-serif font-bold [font-variation-settings:'opsz'_60] tracking-[-0.015em] leading-[1.1] text-foreground"
                 }
                 value={field.state.value}
                 onBlur={field.handleBlur}
