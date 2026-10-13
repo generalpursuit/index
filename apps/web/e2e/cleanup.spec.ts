@@ -22,9 +22,8 @@ async function attachFromHome(page: Page) {
   await row.getByRole("button", { name: "Are.na", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Post", exact: true })
-    .getByRole("button", { name: "Actions for Are.na", exact: true })
+    .getByRole("button", { name: "Forward", exact: true })
     .click();
-  await page.getByRole("menuitem", { name: "Forward", exact: true }).click();
   await page.getByRole("checkbox", { name: "Bob", exact: true }).click();
   await page.getByRole("checkbox", { name: "Lena", exact: true }).click();
   await page.getByRole("button", { name: "Next (2)", exact: true }).click();
@@ -156,9 +155,8 @@ test("saved link edits reopen with the saved values; failed edits keep unsaved i
     await row.getByRole("button", { name: title, exact: true }).click();
     await page
       .getByRole("dialog", { name: "Post", exact: true })
-      .getByRole("button", { name: "Actions for " + title, exact: true })
+      .getByRole("link", { name: "Edit", exact: true })
       .click();
-    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
   };
   await openEditor("Are.na");
   const editor = page.getByRole("dialog", { name: "Edit link", exact: true });

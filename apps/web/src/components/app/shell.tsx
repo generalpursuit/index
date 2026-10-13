@@ -27,6 +27,10 @@ const navItemClassName =
   "nav-item [&.nav-settings]:absolute [&.nav-settings]:bottom-7 relative flex items-center justify-center w-11 h-11 text-subtle-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] [&[data-status='active']]:text-foreground [&:hover]:text-foreground [&[data-status='active']_.nav-brand]:opacity-[1] [&:hover_.nav-brand]:opacity-[1]";
 const unreadDotClassName =
   "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]";
+// The post and its editor show their own heading; the dialog title only names them for
+// assistive technology.
+const hiddenTitleClassName =
+  "[&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)]";
 
 export function AppShell() {
   const viewer = useViewer(),
@@ -169,8 +173,12 @@ export function AppShell() {
             open={!!search.post}
             title="Post"
             size="lg"
+            // Comments grow the post downward instead of re-centering it; its editor opens in
+            // the same place.
+            position="top"
             className={
-              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] flex flex-col pb-5 overflow-hidden [&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)] [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1"
+              "post-dialog flex flex-col overflow-hidden [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1 " +
+              hiddenTitleClassName
             }
             onOpenChange={(v) => {
               if (!v)
@@ -192,7 +200,8 @@ export function AppShell() {
             open={!!search.edit}
             title="Edit link"
             size="md"
-            className="editor-dialog"
+            position="top"
+            className={"editor-dialog " + hiddenTitleClassName}
             onOpenChange={(v) => {
               if (!v) closeEditor();
             }}

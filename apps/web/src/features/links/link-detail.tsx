@@ -1,24 +1,41 @@
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { Link } from "@tanstack/react-router";
-import { ArrowUp, ArrowUpRight, MoreHorizontal, Reply, Trash } from "lucide-react";
-import { Button } from "@index/ui/components/button";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ArrowUp,
+  ArrowUpRight,
+  Forward,
+  Heart,
+  LockKeyhole,
+  MoreHorizontal,
+  Pencil,
+  Reply,
+  Star,
+  Trash,
+} from "lucide-react";
+import { Button, buttonVariants } from "@index/ui/components/button";
+import { IconButton } from "@index/ui/components/icon-button";
 import { Input } from "@index/ui/components/input";
+import { cn } from "@index/ui/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
 } from "@index/ui/components/dropdown-menu";
-import { useViewer } from "@/hooks/use-api";
+import { useAPI, useViewer } from "@/hooks/use-api";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
-import { useLink, useComments } from "./hooks/use-links";
-import { LinkActions } from "./link-row";
+import { groupOptions } from "@/features/groups/queries";
+import { RecipientPicker, prefetchRecipients } from "@/features/messages/recipient-picker";
+import { useLink, useComments, useLibraryActions } from "./hooks/use-links";
+import { categoryMarkClassName } from "./category-mark";
 import { domain } from "./url";
 import { QueryState, More } from "@/components/app/query-state";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { Back } from "@/components/app/navigation";
 import { timeAgo } from "@/lib/weeks";
+import type { Group, SavedLink } from "@/lib/types";
 export function LinkDetail({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const link = useLink(id);
   const comments = useComments(id);
@@ -44,56 +61,57 @@ function Post({
 }) {
   const link = useLink(id).data!,
     author = useProfile(link.ownerId),
-    viewer = useViewer();
+    viewer = useViewer(),
+    group = useQuery(groupOptions(useAPI(), link.groupId)).data;
   const { list, create, remove } = comments,
     [text, setText] = useState(""),
     input = useRef<HTMLInputElement>(null);
   return (
     <article
       className={
-        "post-detail [&_h1]:select-text [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[36px] [&_h1]:m-[0_0_24px] [&_h1]:wrap-anywhere [&_small]:text-subtle-foreground flex flex-col min-h-[70dvh] [@media(width<=700px)]:[&_h1]:text-[32px]"
+        "post-detail flex flex-col min-h-0 [&_.post-title]:select-text [&_.post-title]:font-serif [&_.post-title]:font-bold [&_.post-title]:[font-variation-settings:'opsz'_60] [&_.post-title]:tracking-[-0.015em] [&_.post-title]:leading-[1.1] [&_.post-title]:text-[40px] [&_.post-title]:m-[12px_0_0] [&_.post-title]:wrap-anywhere [@media(width<=700px)]:[&_.post-title]:text-[32px] [&_small]:text-subtle-foreground"
       }
     >
+      {/* Clear of the dialog's close button, which shares this row. */}
+      <div className={"post-top flex items-center gap-2 min-h-8 pr-10"}>
+        {standalone && <Back />}
+        <PostLabel link={link} group={group} />
+      </div>
+      <h1 className="post-title">{link.title}</h1>
       <header
         className={
-          "post-author flex items-center gap-3 pr-6 mb-7.5 min-h-7.5 text-[13px] [&_.user-avatar]:w-7.5 [&_.user-avatar]:h-7.5"
+          "post-author flex items-center gap-2 min-h-6 mt-3.5 text-[13px] text-subtle-foreground [&_.user-avatar]:w-5.5 [&_.user-avatar]:h-5.5 [&_[data-slot='avatar-fallback']]:text-[10px]"
         }
       >
-        {standalone && <Back />}
         {author.data && (
-          <ProfileLink
-            person={author.data}
-            className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
-          >
-            <UserAvatar person={author.data} />
-            <strong>{author.data.username ?? author.data.name}</strong>
-          </ProfileLink>
+          <>
+            <ProfileLink
+              person={author.data}
+              className={
+                "person-inline flex items-center gap-2 min-w-0 font-medium text-foreground"
+              }
+            >
+              <UserAvatar person={author.data} />
+              <span className="truncate">{author.data.username ?? author.data.name}</span>
+            </ProfileLink>
+            <span aria-hidden="true">·</span>
+          </>
         )}
-        <small>{timeAgo(link.createdAt)}</small>
+        <time dateTime={link.createdAt}>{timeAgo(link.createdAt)}</time>
       </header>
-      <h1>{link.title}</h1>
-      <div
-        className={
-          "post-meta [&>a]:select-text [&>a]:flex [&>a]:items-center [&>a]:gap-1.5 flex items-center justify-between text-muted-foreground mb-6"
-        }
-      >
-        <a href={link.url} target="_blank" rel="noreferrer">
-          {domain(link.url)} <ArrowUpRight size={16} />
-        </a>
-        <LinkActions link={link} />
-      </div>
       {link.description && (
         <p
           className={
-            "post-description select-text whitespace-pre-wrap wrap-anywhere mb-6 max-h-[20dvh] overflow-auto"
+            "post-description select-text whitespace-pre-wrap wrap-anywhere mt-5.5 pl-3.5 border-l-2 border-border text-[16px] leading-[1.55] max-h-[20dvh] overflow-auto"
           }
         >
           {link.description}
         </p>
       )}
+      <PostActions link={link} group={group} />
       <div
         className={
-          "comments border-t border-t-border pt-6 min-h-0 overflow-auto flex-1 [&_h2]:text-[14px] [&_h2]:mb-5"
+          "comments border-t border-t-border mt-7 pt-5 min-h-0 overflow-auto [&_h2]:text-[13px] [&_h2]:font-medium [&_h2]:mb-2"
         }
       >
         <h2>Comments</h2>
@@ -178,38 +196,154 @@ function Post({
       </div>
       {viewer ? (
         <form
-          className={"composer flex gap-2.5 items-center pt-4"}
+          className={
+            "composer flex gap-2.5 items-center pt-4 [&_.user-avatar]:w-8 [&_.user-avatar]:h-8"
+          }
           onSubmit={(e) => {
             e.preventDefault();
             if (text.trim())
               create.mutate({ linkId: id, body: text }, { onSuccess: () => setText("") });
           }}
         >
-          <Input
-            variant="composer"
-            ref={input}
-            disabled={create.isPending}
-            aria-label="Comment"
-            placeholder="Comment"
-            maxLength={5000}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-          />
-          <Button
-            type="submit"
-            size="icon"
-            className="size-10 flex-none"
-            aria-label="Post comment"
-            disabled={!text.trim() || create.isPending}
-          >
-            <ArrowUp />
-          </Button>
+          <UserAvatar person={viewer} />
+          <div className={"relative flex-1 min-w-0"}>
+            <Input
+              variant="composer"
+              className="pr-12"
+              ref={input}
+              disabled={create.isPending}
+              aria-label="Comment"
+              placeholder="Add a comment…"
+              maxLength={5000}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+            />
+            <Button
+              type="submit"
+              size="icon"
+              className="absolute top-1.5 right-1.5 size-8.5"
+              aria-label="Post comment"
+              disabled={!text.trim() || create.isPending}
+            >
+              <ArrowUp />
+            </Button>
+          </div>
         </form>
       ) : (
-        <Link to="/login" className="sign-in-link">
+        <Link to="/login" className="sign-in-link pt-4">
           Sign in to join the conversation
         </Link>
       )}
     </article>
+  );
+}
+/**
+ * What the link is, where it lives, and whether you keep it: your own links are Favorites
+ * (a heart), other people's are starred.
+ */
+function PostLabel({ link, group }: { link: SavedLink; group?: Group }) {
+  const viewer = useViewer(),
+    own = viewer?.id === link.ownerId,
+    { collect } = useLibraryActions();
+  const kept = own ? link.isFavorite : link.isStarred;
+  const parts = [
+    link.category !== "uncategorized" && (
+      <span className={"inline-flex items-center gap-2"}>
+        <i className={categoryMarkClassName} data-category={link.category} aria-hidden="true" />
+        {link.category}
+      </span>
+    ),
+    group && (
+      <span className={"inline-flex items-center gap-1.5 min-w-0"}>
+        {group.visibility === "private" && (
+          <LockKeyhole className="size-3 flex-none" aria-label="Locked" />
+        )}
+        <span className="truncate">{group.name}</span>
+      </span>
+    ),
+    viewer && (
+      <IconButton
+        label={own ? "Favorite" : "Star"}
+        size="icon-sm"
+        className={
+          "-my-1.5 -mx-1.5 text-subtle-foreground aria-pressed:text-foreground disabled:opacity-100"
+        }
+        aria-pressed={kept}
+        // One change at a time: the next one is decided from this one's result.
+        disabled={collect.isPending}
+        onClick={() => collect.mutate({ link, own })}
+      >
+        {own ? (
+          <Heart className={cn("size-3.5", kept && "fill-current")} />
+        ) : (
+          <Star className={cn("size-3.5", kept && "fill-current")} />
+        )}
+      </IconButton>
+    ),
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return (
+    <div
+      className={
+        "post-label flex items-center gap-2 min-w-0 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
+      }
+    >
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && <span aria-hidden="true">·</span>}
+          {part}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+/** Reading is the main thing to do with a link; sharing and editing sit beside it. */
+function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
+  const viewer = useViewer(),
+    own = viewer?.id === link.ownerId,
+    api = useAPI(),
+    cache = useQueryClient();
+  const [forward, setForward] = useState(false);
+  // Only links in locked groups stay private to their owner.
+  const forwardable = !!viewer && (!link.groupId || group?.visibility === "public");
+  const site = domain(link.url);
+  return (
+    <div className={"post-actions flex items-center gap-2 mt-6"}>
+      <a
+        className={cn(buttonVariants({ size: "lg" }), "min-w-0 px-4 text-[13.5px]")}
+        href={link.url}
+        target="_blank"
+        rel="noreferrer"
+        aria-label={"Open " + site}
+      >
+        <span className="truncate">{site}</span>
+        <ArrowUpRight aria-hidden="true" />
+      </a>
+      {forwardable && (
+        <IconButton
+          label="Forward"
+          variant="outline"
+          size="icon-lg"
+          onPointerEnter={() => prefetchRecipients(cache, api, viewer.id)}
+          onFocus={() => prefetchRecipients(cache, api, viewer.id)}
+          onClick={() => setForward(true)}
+        >
+          <Forward />
+        </IconButton>
+      )}
+      {own && (
+        // Editing replaces the open post rather than stacking a second modal.
+        <Link
+          to="."
+          search={(old) => ({ ...old, post: undefined, edit: link.shortId })}
+          className={cn(buttonVariants({ variant: "outline", size: "icon-lg" }), "ml-auto")}
+          aria-label="Edit"
+          title="Edit"
+        >
+          <Pencil />
+        </Link>
+      )}
+      {forward && <RecipientPicker link={link} onClose={() => setForward(false)} />}
+    </div>
   );
 }
