@@ -215,6 +215,91 @@ test("reduced motion keeps explicit week navigation usable", async ({ page }) =>
   await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
 });
 
+test("a row's mark favorites your links and stars others' without opening them", async ({
+  page,
+}) => {
+  await login(page, "alice");
+  const current = page.locator('.week-page[data-active="true"]');
+  const favorite = current.getByRole("button", { name: "Favorite Are.na", exact: true });
+  const square = favorite.locator(".category-mark"),
+    heart = favorite.locator("svg");
+  // The heart takes the color of the square it replaces.
+  const filledInCategoryColor = () =>
+    favorite.evaluate((button) => {
+      const svg = getComputedStyle(button.querySelector("svg")!),
+        square = getComputedStyle(button.querySelector(".category-mark")!);
+      return svg.fill === svg.color && svg.color === square.backgroundColor;
+    });
+  await expect(favorite).toHaveAttribute("aria-pressed", "false");
+  await expect(square).toHaveCSS("opacity", "1");
+  await expect(heart).toHaveCSS("opacity", "0");
+  await expect(heart).toHaveCSS("transition-duration", /0\.15s/);
+  // Pointing at the square shows the outline heart.
+  await favorite.hover();
+  await expect(heart).toHaveCSS("opacity", "1");
+  await expect(square).toHaveCSS("opacity", "0");
+  await expect(heart).toHaveCSS("fill", "rgba(0, 0, 0, 0)");
+  // The whole mark column is the target, and keeping a link does not open it.
+  const column = (await favorite.boundingBox())!;
+  expect(column.width).toBe(32);
+  expect(column.height).toBeGreaterThanOrEqual(46);
+  await page.mouse.click(column.x + 2, column.y + 2);
+  await expect(favorite).toHaveAttribute("aria-pressed", "true");
+  await expect.poll(filledInCategoryColor).toBe(true);
+  await page.mouse.move(0, 0);
+  await expect(heart).toHaveCSS("opacity", "1");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).not.toHaveURL(/post=/);
+  // Other people's links are starred instead (in a card in view; one peeking in scrolls).
+  const star = current
+    .locator(".friend-card")
+    .first()
+    .getByRole("button", { name: /^Star / })
+    .first();
+  const starred = (await star.getAttribute("aria-label"))!;
+  await star.click();
+  await expect(star).toHaveAttribute("aria-pressed", "true");
+  // Keyboard focus shows the heart too, and Space keeps the link.
+  await current.getByRole("button", { name: "In Rainbows", exact: true }).focus();
+  await page.keyboard.press("Shift+Tab");
+  const rainbows = current.getByRole("button", { name: "Favorite In Rainbows", exact: true });
+  await expect(rainbows).toBeFocused();
+  await expect(rainbows.locator("svg")).toHaveCSS("opacity", "1");
+  await page.keyboard.press("Space");
+  await expect(rainbows).toHaveAttribute("aria-pressed", "true");
+  // Every list shows what you keep, and lets it go from there.
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  const lists = page.getByRole("navigation", { name: "Lists" });
+  await lists.getByRole("link", { name: "Favorites", exact: true }).click();
+  const profile = page.locator(".profile-links");
+  await expect(
+    profile.getByRole("button", { name: "Favorite Are.na", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  const kept = profile.getByRole("button", { name: "Favorite In Rainbows", exact: true });
+  await expect(kept).toHaveAttribute("aria-pressed", "true");
+  await kept.click();
+  await expect(kept).toHaveCount(0);
+  await lists.getByRole("link", { name: "Starred", exact: true }).click();
+  await expect(profile.getByRole("button", { name: starred, exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  // The post's heart is the same toggle.
+  await lists.getByRole("link", { name: "Favorites", exact: true }).click();
+  await profile.getByRole("button", { name: "Are.na", exact: true }).click();
+  await expect(
+    page
+      .getByRole("dialog", { name: "Post", exact: true })
+      .getByRole("button", { name: "Favorite", exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  // Reduced motion swaps square and heart without the fade.
+  await page.keyboard.press("Escape");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await expect(
+    profile.getByRole("button", { name: "Favorite Are.na", exact: true }).locator("svg"),
+  ).toHaveCSS("transition-duration", "0s");
+});
+
 for (const viewport of [
   { width: 1440, height: 960 },
   { width: 390, height: 844 },

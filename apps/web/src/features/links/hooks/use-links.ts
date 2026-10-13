@@ -6,6 +6,7 @@ import {
 import {
   useInfiniteQuery,
   useMutation,
+  useMutationState,
   useQuery,
   useQueryClient,
   type QueryClient,
@@ -79,12 +80,17 @@ export function useLibraryActions() {
   return { update, remove, collect: useCollect() };
 }
 type Collect = { link: SavedLink; own: boolean };
-/** Keeps a link or lets it go: your own are Favorites, other people's are starred. */
+const collectKey = ["collect"];
+/**
+ * Keeps a link or lets it go: your own are Favorites, other people's are starred. The post
+ * shows the change at once, and `useKept` shows it wherever else the link is listed.
+ */
 export function useCollect() {
   const api = useAPI(),
     cache = useQueryClient();
   return useMutation(
     accountMutationOptions({
+      mutationKey: collectKey,
       mutationFn: async ({ link, own }: Collect) => {
         if (own)
           return link.isFavorite
@@ -111,9 +117,27 @@ export function useCollect() {
         else if (context) cache.removeQueries({ queryKey: context.queryKey, exact: true });
         if (context) void cache.invalidateQueries({ queryKey: context.queryKey, exact: true });
       },
+      // Settling waits for the lists, so `useKept` shows the change until they have it.
       onSettled: () => refreshLibrary(cache, api),
     }),
   );
+}
+/**
+ * Whether you keep the link, as a Favorite when it is your own and starred otherwise. A change
+ * from any view counts while it is on its way; `changing` holds off the next one, which is
+ * decided from this one's result.
+ */
+export function useKept(link: SavedLink, own: boolean) {
+  const change = useMutationState({
+    filters: {
+      mutationKey: collectKey,
+      status: "pending",
+      predicate: (mutation) => (mutation.state.variables as Collect).link.id === link.id,
+    },
+    select: (mutation) => mutation.state.variables as Collect,
+  }).at(-1);
+  const kept = (of: SavedLink) => (own ? of.isFavorite : of.isStarred);
+  return { kept: change ? !kept(change.link) : kept(link), changing: !!change };
 }
 export function useComments(linkId: string) {
   const api = useAPI(),
