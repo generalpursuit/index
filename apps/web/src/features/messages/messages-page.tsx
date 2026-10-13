@@ -131,6 +131,9 @@ export function MessagesPage() {
     </div>
   );
 }
+/** Whether the reader is at the newest message, measured against a given thread height. */
+const atNewest = (thread: HTMLElement, height = thread.clientHeight) =>
+  thread.scrollHeight - thread.scrollTop - height < 80;
 export function ConversationPage({ id, attach }: { id: string; attach?: string }) {
   const { detail, list } = useConversation(id),
     actions = useMessageActions(),
@@ -179,8 +182,15 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
   useEffect(() => {
     const thread = scroller.current;
     if (!thread) return;
+    let height = thread.clientHeight;
     const observer = new ResizeObserver(() => {
-      if (nearBottom.current) thread.scrollTop = thread.scrollHeight;
+      // Judged by the height before this change: a scroll reported in the same frame has
+      // already measured the smaller thread and counted the reader as scrolled away.
+      if (atNewest(thread, height)) {
+        nearBottom.current = true;
+        thread.scrollTop = thread.scrollHeight;
+      }
+      height = thread.clientHeight;
     });
     observer.observe(thread);
     return () => observer.disconnect();
@@ -272,7 +282,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             onScroll={() => {
               const el = scroller.current;
               if (el) {
-                nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                nearBottom.current = atNewest(el);
                 if (nearBottom.current && lastId && detail.data?.unreadCount && !document.hidden)
                   markRead({ conversationId: id, messageId: lastId });
               }

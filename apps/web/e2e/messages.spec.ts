@@ -238,11 +238,32 @@ test("the newest message stays in view while the composer grows", async ({ page 
   }
   const thread = page.locator(".chat-scroller"),
     newest = page.locator(".message-bubble").last();
-  await field.fill("A\nlonger\ndraft\nthat\ngrows\nthe\nfield");
-  await expect
-    .poll(async () => {
-      const [view, message] = [(await thread.boundingBox())!, (await newest.boundingBox())!];
-      return message.y + message.height <= view.y + view.height + 1;
-    })
-    .toBe(true);
+  const inView = async () => {
+    const [view, message] = [(await thread.boundingBox())!, (await newest.boundingBox())!];
+    return message.y + message.height <= view.y + view.height + 1;
+  };
+  const draft = "A\nlonger\ndraft\nthat\ngrows\nthe\nfield";
+  await field.fill(draft);
+  await expect.poll(inView).toBe(true);
+  await field.fill("");
+  await expect.poll(inView).toBe(true);
+  // A scroll is reported in the frame after it happens. When the composer grows before then,
+  // that report already measures the smaller thread; the reader must still stay at the end.
+  await field.evaluate(
+    (textarea: HTMLTextAreaElement, text) =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => {
+          document.querySelector(".chat-scroller")!.scrollTop -= 1;
+          setTimeout(() => {
+            const value = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!;
+            value.set!.call(textarea, text);
+            textarea.dispatchEvent(new Event("input", { bubbles: true }));
+            resolve();
+          });
+        }),
+      ),
+    draft,
+  );
+  await expect(field).toHaveValue(draft);
+  await expect.poll(inView).toBe(true);
 });
