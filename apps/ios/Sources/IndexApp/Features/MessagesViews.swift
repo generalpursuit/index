@@ -254,48 +254,40 @@ struct ConversationView: View {
         }
       }
   }
+  /// One rounded field: the attached post, then the text with its send button.
   private var composer: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      if let attachment = draft.attachment {
-        HStack {
-          Image(systemName: attachment.category.symbol)
-          VStack(alignment: .leading, spacing: 4) {
-            Text(attachment.title).font(IndexFont.sans(14)).lineLimit(1)
-            Text(attachment.domain).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
-          }
-          Spacer()
-          if draft.pending == nil {
-            Button {
-              do { try app.drafts.attach(nil, to: conversationID) } catch { app.handle(error) }
-            } label: {
-              Image(systemName: "xmark").frame(width: 32, height: 32)
-            }.accessibilityLabel("Remove attachment")
-          }
-        }.padding(14).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 14))
-      }
+    VStack(alignment: .leading, spacing: 8) {
       if draft.pending != nil && !sending {
         Text("Send not confirmed. Retry to check or complete this same message.").font(IndexFont.sans(12))
           .foregroundStyle(IndexPalette.subtleForeground)
       }
-      HStack {
-        TextField("Message", text: text, axis: .vertical).lineLimit(1...5).focused($focused)
-          .font(IndexFont.sans(16)).padding(.horizontal, 14).padding(.vertical, 10)
-          .overlay(Capsule().stroke(IndexPalette.border, lineWidth: 1))
-          .disabled(draft.pending != nil)
-        AsyncButton(action: send) {
-          Image(systemName: draft.pending == nil ? "arrow.up" : "arrow.clockwise").frame(
-            width: 42, height: 42
-          ).background(IndexPalette.primary, in: Circle()).foregroundStyle(IndexPalette.primaryForeground)
+      VStack(alignment: .leading, spacing: 6) {
+        if let attachment = draft.attachment {
+          ComposerChip(symbol: "link", title: attachment.title, detail: "· " + attachment.domain, removal: "Remove attachment") {
+            do { try app.drafts.attach(nil, to: conversationID) } catch { app.handle(error) }
+          }.disabled(draft.pending != nil)
         }
-        .disabled(
-          conversation?.canSend != true
-            || (draft.body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-              && draft.attachment == nil)
-        )
-        .accessibilityLabel(draft.pending == nil ? "Send message" : "Retry message")
+        HStack(alignment: .bottom, spacing: 6) {
+          // A vertical field breaks the line on Return, as in Messages; only the button sends.
+          TextField("Message", text: text, axis: .vertical).lineLimit(1...6).focused($focused)
+            .font(IndexFont.sans(16)).padding(.leading, 10).padding(.vertical, 7)
+            .disabled(draft.pending != nil)
+          AsyncButton(action: send) {
+            Image(systemName: draft.pending == nil ? "arrow.up" : "arrow.clockwise")
+              .font(.system(size: 15, weight: .semibold)).frame(width: 34, height: 34)
+              .background(IndexPalette.primary, in: Circle()).foregroundStyle(IndexPalette.primaryForeground)
+              .opacity(canSend ? 1 : 0.4)
+          }
+          .disabled(!canSend)
+          .accessibilityLabel(draft.pending == nil ? "Send message" : "Retry message")
+        }
       }
-    }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.background)
+      .padding(6)
+      .background(IndexPalette.background, in: RoundedRectangle(cornerRadius: 22))
+      .overlay(RoundedRectangle(cornerRadius: 22).stroke(focused ? IndexPalette.input : IndexPalette.border))
+    }.padding(.horizontal, 20).padding(.vertical, 10).background(IndexPalette.background)
   }
+  private var canSend: Bool { conversation?.canSend == true && !draft.isEmpty }
   private func send() async throws {
     guard let api = app.api else { return }
     try await app.drafts.send(in: conversationID, api: api)
@@ -313,6 +305,28 @@ struct ConversationView: View {
   private func more() async throws {
     guard let api = app.api else { return }
     try await model.load(api: api, id: conversationID, more: true)
+  }
+}
+/// What the next message carries, shown inside the composer.
+private struct ComposerChip: View {
+  let symbol: String
+  let title: String
+  let detail: String
+  let removal: String
+  let remove: () -> Void
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: symbol).font(.system(size: 13)).foregroundStyle(IndexPalette.subtleForeground)
+        .accessibilityHidden(true)
+      Text("\(Text(title).font(IndexFont.sans(13, weight: .medium))) \(Text(detail).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground))")
+        .lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+      Button(action: remove) {
+        Image(systemName: "xmark").font(.system(size: 12, weight: .medium)).frame(width: 28, height: 28)
+          .contentShape(Rectangle())
+      }.buttonStyle(.plain).foregroundStyle(IndexPalette.subtleForeground).accessibilityLabel(removal)
+    }
+    .padding(.leading, 10).padding(2).frame(minHeight: 36)
+    .background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 14))
   }
 }
 /// A message in its sender's run, as iMessage shows it: a stamp when it opens a section, and in
