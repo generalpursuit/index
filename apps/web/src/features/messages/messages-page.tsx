@@ -174,6 +174,17 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
   useEffect(() => {
     input.current?.focus();
   }, [id]);
+  // Replies, attachments and longer text grow the composer; the newest message stays in view.
+  const shown = !!detail.data;
+  useEffect(() => {
+    const thread = scroller.current;
+    if (!thread) return;
+    const observer = new ResizeObserver(() => {
+      if (nearBottom.current) thread.scrollTop = thread.scrollHeight;
+    });
+    observer.observe(thread);
+    return () => observer.disconnect();
+  }, [shown]);
   useEffect(() => {
     const read = () => {
       if (lastId && nearBottom.current && !document.hidden)

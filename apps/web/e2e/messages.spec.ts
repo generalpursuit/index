@@ -107,3 +107,24 @@ test("the composer holds its attachment, grows with Shift+Enter and ignores IME 
   await expect(sent.locator(".message-bubble")).toHaveText("Same, and this one too\nSecond line");
   await expect(sent.locator(".shared-post")).toContainText(link.title);
 });
+
+test("the newest message stays in view while the composer grows", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 520 });
+  await login(page);
+  await page.goto("/messages/" + data.conversationId);
+  const field = page.getByLabel("Message", { exact: true });
+  for (const body of ["One", "Two", "Three"]) {
+    await field.fill(body);
+    await field.press("Enter");
+    await expect(page.locator(".message-bubble").last()).toHaveText(body);
+  }
+  const thread = page.locator(".chat-scroller"),
+    newest = page.locator(".message-bubble").last();
+  await field.fill("A\nlonger\ndraft\nthat\ngrows\nthe\nfield");
+  await expect
+    .poll(async () => {
+      const [view, message] = [(await thread.boundingBox())!, (await newest.boundingBox())!];
+      return message.y + message.height <= view.y + view.height + 1;
+    })
+    .toBe(true);
+});
