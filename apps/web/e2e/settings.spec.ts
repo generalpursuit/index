@@ -126,11 +126,16 @@ for (const viewport of [
     await page.getByRole("button", { name: "Edit profile", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit profile" });
     await expect(editor.getByLabel("Name", { exact: true })).toBeVisible();
+    // Settled: a sheet mounts in its starting style, off screen, and slides in a frame later.
     await expect
       .poll(() =>
-        editor.evaluate((el) => el.getAnimations().filter((a) => a.playState === "running").length),
+        editor.evaluate(
+          (el) =>
+            el.hasAttribute("data-starting-style") ||
+            el.getAnimations().some((a) => a.playState === "running"),
+        ),
       )
-      .toBe(0);
+      .toBe(false);
     const title = editor.getByRole("heading", { name: "Edit profile", exact: true });
     const save = editor.getByRole("button", { name: "Save", exact: true });
     // Sticky placement can land on a fractional pixel once the body scrolls.
