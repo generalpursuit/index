@@ -1,4 +1,13 @@
-import { Children, createContext, useContext, type ReactNode, type RefObject } from "react";
+import {
+  Children,
+  createContext,
+  useContext,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./dialog";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "./drawer";
@@ -47,6 +56,7 @@ export function Modal({
   position = "center",
   fixedHeight = false,
   returnFocus,
+  onBack,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -62,8 +72,14 @@ export function Modal({
   /** For a list that loads or filters in place: the frame keeps its size while it changes. */
   fixedHeight?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
+  /** While set, Escape calls it instead of closing: a stacked view goes back to the one under it. */
+  onBack?: () => void;
 }) {
   const phone = useMediaQuery("(max-width: 700px)");
+  const change = (next: boolean, { reason }: { reason: string }) => {
+    if (!next && onBack && (reason === "escape-key" || reason === "close-watcher")) onBack();
+    else onOpenChange(next);
+  };
   const Title = phone ? DrawerTitle : DialogTitle;
   const Description = phone ? DrawerDescription : DialogDescription;
   // The insets are variables so the footer can reach the frame's edges from inside the body.
@@ -90,7 +106,7 @@ export function Modal({
   );
   if (phone)
     return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
+      <Drawer open={open} onOpenChange={change}>
         <DrawerContent
           finalFocus={returnFocus}
           className={
@@ -107,7 +123,7 @@ export function Modal({
       </Drawer>
     );
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={change}>
       <DialogContent
         finalFocus={returnFocus}
         className={
@@ -152,6 +168,112 @@ export function ModalFooter({
         </Button>
       )}
       {children}
+    </div>
+  );
+}
+
+/** One of the views a modal switches between; see `ModalViews`. */
+export type ModalView = { id: string; content: ReactNode };
+// The curve sheets move with.
+const switchTiming = { duration: 220, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+const control =
+  "a[href], button:not(:disabled), input:not(:disabled):not([type='hidden']), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
+
+/**
+ * Views stacked in one modal, the last one shown. The ones under it stay mounted but hidden, so
+ * they come back as they were. Switching crossfades while the frame takes the new view's height.
+ * Focus moves into the shown view (its first control in a dialog, the sheet itself on phones),
+ * or back to where it was in a view shown again.
+ */
+export function ModalViews({ views }: { views: ModalView[] }) {
+  const sheet = useContext(ModalPresentation) === "sheet",
+    shown = views.at(-1)?.id;
+  // The view shown before a switch fades out over the next; one that left the stack keeps its
+  // last content until then.
+  const [previous, setPrevious] = useState(views);
+  const [leaving, setLeaving] = useState<ModalView & { stays: boolean }>();
+  if (previous !== views) {
+    setPrevious(views);
+    const last = previous.at(-1);
+    if (last && last.id !== shown)
+      setLeaving({ ...last, stays: views.some((view) => view.id === last.id) });
+  }
+  const frame = useRef<HTMLDivElement>(null),
+    height = useRef(0),
+    focused = useRef(new Map<string, HTMLElement>());
+  // The height a switch starts from.
+  useLayoutEffect(() => {
+    const element = frame.current!;
+    const observer = new ResizeObserver(() => {
+      height.current = element.offsetHeight;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  useLayoutEffect(() => {
+    const element = frame.current!;
+    const next = element.querySelector<HTMLElement>(":scope > [data-view='shown']"),
+      fading = element.querySelector<HTMLElement>(":scope > [data-view='leaving']");
+    if (!leaving || !shown || !next || !fading) return;
+    // A covered view keeps what had focus in it, to get it back when it is shown again.
+    const active = document.activeElement;
+    if (leaving.stays && active instanceof HTMLElement && fading.contains(active))
+      focused.current.set(leaving.id, active);
+    const back = focused.current.get(shown);
+    focused.current.delete(shown);
+    const target =
+      back?.isConnected && next.contains(back)
+        ? back
+        : sheet
+          ? element.closest<HTMLElement>("[role='dialog']")
+          : next.querySelector<HTMLElement>(control);
+    target?.focus({ preventScroll: true });
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setLeaving(undefined);
+      return;
+    }
+    // Until it has resized, the frame clips the views, and the shown one keeps its final height
+    // instead of being squeezed or stretched along with the frame.
+    const to = element.offsetHeight;
+    Object.assign(element.style, { flex: "none", overflow: "clip" });
+    Object.assign(next.style, { flex: "none", height: `${to}px` });
+    const animations = [
+      element.animate({ height: [`${height.current}px`, `${to}px`] }, switchTiming),
+      next.animate({ opacity: [0, 1] }, switchTiming),
+      fading.animate({ opacity: [1, 0] }, { ...switchTiming, fill: "forwards" }),
+    ];
+    Promise.all(animations.map((animation) => animation.finished)).then(
+      () => setLeaving(undefined),
+      () => {},
+    );
+    return () => {
+      for (const style of [element.style, next.style])
+        Object.assign(style, { flex: "", overflow: "", height: "" });
+      for (const animation of animations) animation.cancel();
+    };
+  }, [leaving, shown, sheet]);
+  const rendered = leaving && !leaving.stays ? [...views, leaving] : views;
+  return (
+    <div ref={frame} data-slot="modal-views" className="relative flex min-h-0 flex-1 flex-col">
+      {rendered.map((view) => {
+        const state = view.id === shown ? "shown" : view.id === leaving?.id ? "leaving" : "covered";
+        return (
+          <div
+            key={view.id}
+            data-view={state}
+            inert={state !== "shown"}
+            className={
+              state === "shown"
+                ? "flex min-h-0 flex-1 flex-col"
+                : state === "leaving"
+                  ? "absolute inset-x-0 top-0"
+                  : "hidden"
+            }
+          >
+            {view.content}
+          </div>
+        );
+      })}
     </div>
   );
 }
