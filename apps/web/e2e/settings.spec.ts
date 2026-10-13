@@ -22,17 +22,14 @@ for (const viewport of [
   { width: 390, height: 844 },
 ]) {
   test(`settings edits and signs out at ${viewport.width}px`, async ({ page }) => {
-    // Larger screens open Settings from the foot of the rail as a page; phones open it from
-    // the profile's gear as a sheet with ✕.
+    // The same page: larger screens open it from the foot of the rail, phones from the
+    // profile's gear, with Back to the profile.
     const phone = viewport.width <= 700;
     await page.setViewportSize(viewport);
     await login(page);
     const leave = () =>
       phone
-        ? page
-            .getByRole("dialog", { name: "Settings" })
-            .getByRole("button", { name: "Close" })
-            .click()
+        ? page.getByRole("button", { name: "Back", exact: true }).click()
         : page.getByRole("link", { name: "Your profile", exact: true }).click();
     const font = await page
       .getByRole("heading", { level: 1 })
@@ -43,13 +40,15 @@ for (const viewport of [
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toHaveCount(0);
     await page.getByRole("link", { name: "Settings", exact: true }).click();
-    await expect(page).toHaveURL(phone ? /settings=true/ : /\/settings$/);
+    await expect(page).toHaveURL(/\/settings$/);
     await expect(page.getByRole("heading", { name: "Settings", exact: true })).toHaveCSS(
       "font-family",
       font,
     );
-    await expect(page.getByRole("dialog", { name: "Settings" })).toHaveCount(phone ? 1 : 0);
-    await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Back", exact: true })).toHaveCount(
+      phone ? 1 : 0,
+    );
     // Settings shows who you are; name, username and photo are edited in one modal.
     await expect(page.locator(".settings-identity strong")).toHaveText("Alice");
     await expect(page.getByRole("textbox")).toHaveCount(0);
@@ -95,8 +94,8 @@ for (const viewport of [
     await editor.getByRole("button", { name: "Remove photo", exact: true }).click();
     await editor.getByRole("button", { name: "Save", exact: true }).click();
     await expect(editor).toHaveCount(0);
-    // Closing a nested sheet restores focus and can scroll its parent on a later
-    // frame. Wait for that restoration before clicking the footer's Sign out.
+    // Closing a sheet restores focus and can scroll the page on a later frame. Wait for
+    // that restoration before clicking the footer's Sign out.
     await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeFocused();
     await expect(page.locator(".settings-profile img")).toHaveCount(0);
     const profile = await (await page.request.get(apiURL + "/api/v1/me/profile")).json();
@@ -123,7 +122,7 @@ for (const viewport of [
   }) => {
     await page.setViewportSize(viewport);
     await login(page);
-    await page.goto(viewport.width <= 700 ? "/u/alice?settings=true" : "/settings");
+    await page.goto("/settings");
     await page.getByRole("button", { name: "Edit profile", exact: true }).click();
     const editor = page.getByRole("dialog", { name: "Edit profile" });
     await expect(editor.getByLabel("Name", { exact: true })).toBeVisible();

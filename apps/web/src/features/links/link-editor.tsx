@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
@@ -29,9 +29,18 @@ import type { Group, SavedLink } from "@/lib/types";
 /**
  * Edits a saved link: its address, title, note and group, laid out like the post itself, and
  * deletes it. Links are added by pasting them into the "Enter a link" field, so this is the
- * only form for a link. Calls `onDone` to close after saving or deleting.
+ * only form for a link. Calls `onDone` after saving or cancelling, and `onClose` to leave the
+ * link as it is deleted.
  */
-export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
+export function LinkEditor({
+  id,
+  onDone,
+  onClose,
+}: {
+  id: string;
+  onDone: () => void;
+  onClose: () => void;
+}) {
   const api = useAPI(),
     existing = useQuery(api.links.get.queryOptions({ input: { id } }));
   return (
@@ -41,20 +50,31 @@ export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
       error={existing.error}
       retry={() => void existing.refetch()}
     >
-      {existing.data && <LinkForm key={id} existing={existing.data} onDone={onDone} />}
+      {existing.data && (
+        <LinkForm key={id} existing={existing.data} onDone={onDone} onClose={onClose} />
+      )}
     </QueryState>
   );
 }
 // Fields show their frame only when hovered or focused, around the text rather than beside it.
 const quietField =
   "min-h-0 rounded-md border-0 bg-transparent p-0 hover:bg-muted hover:ring-8 hover:ring-muted focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-8 focus-visible:ring-offset-background";
-function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => void }) {
+function LinkForm({
+  existing,
+  onDone,
+  onClose,
+}: {
+  existing: SavedLink;
+  onDone: () => void;
+  onClose: () => void;
+}) {
   const viewer = useViewer()!,
     groups = useAllGroups(viewer.id),
     actions = useLibraryActions(),
     navigate = useNavigate(),
     path = useRouterState({ select: (s) => s.location.pathname });
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving] = useState(false),
+    deleteLink = useRef<HTMLButtonElement>(null);
   const saved: LinkDraft = {
     url: existing.url,
     title: existing.title,
@@ -102,175 +122,188 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
     actions.remove.mutate({ id: existing.id });
     if (path === "/links/" + existing.id || path === "/l/" + existing.shortId)
       void navigate({ to: "/u/$username", params: { username: viewer.username! }, replace: true });
-    else onDone();
+    else onClose();
   };
   return (
-    <>
-      <form
-        className={"link-form flex flex-col"}
-        onSubmit={(e) => {
-          e.preventDefault();
-          void form.handleSubmit();
-        }}
+    <form
+      className={"link-form flex flex-col"}
+      onSubmit={(e) => {
+        e.preventDefault();
+        void form.handleSubmit();
+      }}
+    >
+      {/* The dialog's own title names it for assistive technology. */}
+      <p
+        className={
+          "link-form-heading flex items-center min-h-8 pr-10 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
+        }
+        aria-hidden="true"
       >
-        {/* The dialog's own title names it for assistive technology. */}
-        <p
-          className={
-            "link-form-heading flex items-center min-h-8 pr-10 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
-          }
-          aria-hidden="true"
-        >
-          Edit link
-        </p>
-        <div
-          className={
-            "link-form-label flex items-center gap-2 mt-4 min-h-7 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
-          }
-        >
-          {existing.category !== "uncategorized" && (
-            <>
-              <span className={"inline-flex items-center gap-2"}>
-                <i
-                  className={categoryMarkClassName}
-                  data-category={existing.category}
-                  aria-hidden="true"
-                />
-                {existing.category}
-              </span>
-              <span aria-hidden="true">·</span>
-            </>
-          )}
-          <form.Field name="groupId">
-            {(field) => (
-              <GroupMenu
-                value={field.state.value}
-                groups={customGroups}
-                loading={!groups.complete}
-                onChange={(id) => {
-                  field.handleChange(id);
-                  change("groupId", id);
-                }}
+        Edit link
+      </p>
+      <div
+        className={
+          "link-form-label flex items-center gap-2 mt-4 min-h-7 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
+        }
+      >
+        {existing.category !== "uncategorized" && (
+          <>
+            <span className={"inline-flex items-center gap-2"}>
+              <i
+                className={categoryMarkClassName}
+                data-category={existing.category}
+                aria-hidden="true"
               />
-            )}
-          </form.Field>
-        </div>
-        <form.Field name="title">
+              {existing.category}
+            </span>
+            <span aria-hidden="true">·</span>
+          </>
+        )}
+        <form.Field name="groupId">
           {(field) => (
-            // The size is set here: narrow screens size fields from their parent (see globals.css).
-            <Field
-              data-invalid={field.state.meta.errors.length > 0}
-              className="mt-4.5 gap-3 text-[38px] [@media(width<=700px)]:text-[30px]"
-            >
-              <FieldLabel className="sr-only" htmlFor="link-title">
-                Title
-              </FieldLabel>
-              <Textarea
-                id="link-title"
-                rows={1}
-                placeholder="Title"
-                className={
-                  quietField +
-                  " text-[length:inherit] font-serif font-bold [font-variation-settings:'opsz'_60] tracking-[-0.015em] leading-[1.1] text-foreground"
-                }
-                value={field.state.value}
-                onBlur={field.handleBlur}
-                // A title is one line; Return saves, as in any single-line field.
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter") return;
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\s*\n\s*/g, " ");
-                  field.handleChange(value);
-                  change("title", value);
-                }}
-              />
-              <FieldError className="text-[13px]" errors={field.state.meta.errors} />
-            </Field>
+            <GroupMenu
+              value={field.state.value}
+              groups={customGroups}
+              loading={!groups.complete}
+              onChange={(id) => {
+                field.handleChange(id);
+                change("groupId", id);
+              }}
+            />
           )}
         </form.Field>
-        <form.Field name="url">
-          {(field) => (
-            <Field data-invalid={field.state.meta.errors.length > 0} className="mt-4 gap-2">
-              <FieldLabel className="sr-only" htmlFor="link-url">
-                Link
-              </FieldLabel>
-              <div className={"relative"}>
-                <Globe
-                  className={
-                    "absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-subtle-foreground pointer-events-none"
-                  }
-                  aria-hidden="true"
-                />
-                <Input
-                  id="link-url"
-                  type="url"
-                  className={
-                    "min-h-10 rounded-[10px] border-dashed border-border bg-transparent py-2 pl-9 pr-3 font-mono text-[13px] text-muted-foreground focus-visible:border-solid focus-visible:bg-background focus-visible:text-foreground"
-                  }
-                  value={field.state.value}
-                  onBlur={field.handleBlur}
-                  onChange={(e) => {
-                    field.handleChange(e.target.value);
-                    change("url", e.target.value);
-                  }}
-                />
-              </div>
-              <FieldError errors={field.state.meta.errors} />
-            </Field>
-          )}
-        </form.Field>
-        <form.Field name="description">
-          {(field) => (
-            <Field
-              data-invalid={field.state.meta.errors.length > 0}
-              className="mt-5.5 gap-2 text-[16px]"
-            >
-              <FieldLabel className="sr-only" htmlFor="link-note">
-                Note
-              </FieldLabel>
-              <Textarea
-                id="link-note"
+      </div>
+      <form.Field name="title">
+        {(field) => (
+          // The size is set here: narrow screens size fields from their parent (see globals.css).
+          <Field
+            data-invalid={field.state.meta.errors.length > 0}
+            className="mt-4.5 gap-3 text-[38px] [@media(width<=700px)]:text-[30px]"
+          >
+            <FieldLabel className="sr-only" htmlFor="link-title">
+              Title
+            </FieldLabel>
+            {/* The serif's ascenders and descenders reach about 0.134em past its 1.1 line
+                  height, which a field clips. Padding holds them; the margin keeps the text in
+                  place. */}
+            <Textarea
+              id="link-title"
+              rows={1}
+              placeholder="Title"
+              className={
+                quietField +
+                " -my-[0.14em] py-[0.14em] text-[length:inherit] font-serif font-bold [font-variation-settings:'opsz'_60] tracking-[-0.015em] leading-[1.1] text-foreground"
+              }
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              // A title is one line; Return saves, as in any single-line field.
+              onKeyDown={(e) => {
+                if (e.key !== "Enter") return;
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }}
+              onChange={(e) => {
+                const value = e.target.value.replace(/\s*\n\s*/g, " ");
+                field.handleChange(value);
+                change("title", value);
+              }}
+            />
+            <FieldError className="text-[13px]" errors={field.state.meta.errors} />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="url">
+        {(field) => (
+          <Field data-invalid={field.state.meta.errors.length > 0} className="mt-4 gap-2">
+            <FieldLabel className="sr-only" htmlFor="link-url">
+              Link
+            </FieldLabel>
+            <div className={"relative"}>
+              <Globe
                 className={
-                  "min-h-16 max-h-60 rounded-none border-0 border-l-2 border-border bg-transparent py-1 pr-0 pl-3.5 text-[length:inherit] leading-[1.55] focus-visible:border-l-foreground focus-visible:ring-0"
+                  "absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-subtle-foreground pointer-events-none"
                 }
-                rows={2}
-                placeholder="Anything worth remembering?"
+                aria-hidden="true"
+              />
+              <Input
+                id="link-url"
+                type="url"
+                className={
+                  "min-h-10 rounded-[10px] border-dashed border-border bg-transparent py-2 pl-9 pr-3 font-mono text-[13px] text-muted-foreground focus-visible:border-solid focus-visible:bg-background focus-visible:text-foreground"
+                }
                 value={field.state.value}
                 onBlur={field.handleBlur}
                 onChange={(e) => {
                   field.handleChange(e.target.value);
-                  change("description", e.target.value);
+                  change("url", e.target.value);
                 }}
               />
-              <FieldError errors={field.state.meta.errors} />
-            </Field>
-          )}
-        </form.Field>
-        <form.Subscribe selector={(s) => s.values.groupId}>
-          {(groupId) => {
-            const locked = customGroups.find((g) => g.id === groupId)?.visibility === "private";
-            return (
-              <p
-                className={
-                  "link-form-visibility flex items-center gap-2 mt-4 text-[13px] text-subtle-foreground [&_svg]:size-3.5 [&_svg]:flex-none"
-                }
-              >
-                {locked ? <LockKeyhole aria-hidden="true" /> : <Globe aria-hidden="true" />}
-                {locked
-                  ? "Only you will see this link."
-                  : "Visible to everyone who can see your profile."}
-              </p>
-            );
-          }}
-        </form.Subscribe>
-        <div
-          className={
-            "link-form-footer flex items-center gap-2 mt-6 pt-4.5 border-t border-border [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
-          }
+            </div>
+            <FieldError errors={field.state.meta.errors} />
+          </Field>
+        )}
+      </form.Field>
+      <form.Field name="description">
+        {(field) => (
+          <Field
+            data-invalid={field.state.meta.errors.length > 0}
+            className="mt-5.5 gap-2 text-[16px]"
+          >
+            <FieldLabel className="sr-only" htmlFor="link-note">
+              Note
+            </FieldLabel>
+            <Textarea
+              id="link-note"
+              className={
+                "min-h-16 max-h-60 rounded-none border-0 border-l-2 border-border bg-transparent py-1 pr-0 pl-3.5 text-[length:inherit] leading-[1.55] focus-visible:border-l-foreground focus-visible:ring-0"
+              }
+              rows={2}
+              placeholder="Anything worth remembering?"
+              value={field.state.value}
+              onBlur={field.handleBlur}
+              onChange={(e) => {
+                field.handleChange(e.target.value);
+                change("description", e.target.value);
+              }}
+            />
+            <FieldError errors={field.state.meta.errors} />
+          </Field>
+        )}
+      </form.Field>
+      <form.Subscribe selector={(s) => s.values.groupId}>
+        {(groupId) => {
+          const locked = customGroups.find((g) => g.id === groupId)?.visibility === "private";
+          return (
+            <p
+              className={
+                "link-form-visibility flex items-center gap-2 mt-4 text-[13px] text-subtle-foreground [&_svg]:size-3.5 [&_svg]:flex-none"
+              }
+            >
+              {locked ? <LockKeyhole aria-hidden="true" /> : <Globe aria-hidden="true" />}
+              {locked
+                ? "Only you will see this link."
+                : "Visible to everyone who can see your profile."}
+            </p>
+          );
+        }}
+      </form.Subscribe>
+      <div
+        className={
+          "link-form-footer flex items-center gap-2 mt-6 pt-4.5 border-t border-border [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
+        }
+      >
+        {/* The footer turns into the question. */}
+        <Confirmation
+          open={removing}
+          onOpenChange={setRemoving}
+          title="Delete the link, its comments and saved references?"
+          destructive
+          label="Delete"
+          onConfirm={remove}
+          returnFocus={deleteLink}
         >
           <Button
+            ref={deleteLink}
             type="button"
             variant="ghost"
             className="-ml-4.5 text-destructive hover:text-destructive"
@@ -286,18 +319,9 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
               Save changes
             </Button>
           </div>
-        </div>
-      </form>
-      <Confirmation
-        open={removing}
-        onOpenChange={setRemoving}
-        title="Delete link?"
-        description="This removes the original post, its comments, and saved references."
-        destructive
-        label="Delete"
-        onConfirm={remove}
-      />
-    </>
+        </Confirmation>
+      </div>
+    </form>
   );
 }
 /** Your groups, and who will see the link in each; "No group" follows your profile. */

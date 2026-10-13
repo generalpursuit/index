@@ -124,7 +124,7 @@ export function WeekPicker({
     <Modal open={open} onOpenChange={onOpenChange} title="Weeks" fixedHeight>
       <ul
         className={
-          "week-picker flex flex-col [&_button]:grid [&_button]:grid-cols-[auto_1fr_auto] [&_button]:[align-items:baseline] [&_button]:gap-3 [&_button]:w-full [&_button]:min-h-11 [&_button]:text-left [&_strong]:font-serif [&_strong]:text-[18px] [&_strong]:font-bold [&_span]:font-mono [&_span]:text-[11px] [&_span]:tracking-[0.06em] [&_span]:uppercase [&_span]:text-subtle-foreground [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_button:hover_strong]:underline [&_button:hover_strong]:underline-offset-[4px]"
+          "week-picker flex flex-col [&_button]:grid [&_button]:grid-cols-[auto_1fr_auto] [&_button]:[align-items:baseline] [&_button]:gap-3 [&_button]:w-full [&_button]:min-h-12 [&_button]:text-left [&_strong]:font-serif [&_strong]:text-[18px] [&_strong]:font-bold [&_span]:font-mono [&_span]:text-[11px] [&_span]:tracking-[0.06em] [&_span]:uppercase [&_span]:text-subtle-foreground [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_button:hover_strong]:underline [&_button:hover_strong]:underline-offset-[4px]"
         }
       >
         {weeks.map((w) => (

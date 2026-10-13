@@ -59,6 +59,8 @@ async function dialogLayout(page: Page, name: string) {
   expect.soft(box!.x, `${name}: left edge`).toBeGreaterThanOrEqual(0);
   expect.soft(box!.x + box!.width, `${name}: right edge`).toBeLessThanOrEqual(width);
   expect.soft(box!.y, `${name}: top edge`).toBeGreaterThanOrEqual(0);
+  // Above phone widths, every modal is as wide as a post.
+  if (width > 700) expect.soft(Math.round(box!.width), `${name}: width`).toBe(650);
   const body = dialog.locator('[data-slot="drawer-body"]');
   if (await body.count()) {
     expect
@@ -161,11 +163,9 @@ for (const viewport of [
       await dialogLayout(page, "New message");
     });
 
-    test("settings and nested profile and group sheets fit", async ({ page }) => {
+    test("settings and its profile and group sheets fit", async ({ page }) => {
       await login(page);
-      await page.goto("/u/alice?settings=true");
-      if (viewport.width <= 700) await dialogLayout(page, "Settings");
-      else await page.goto("/settings");
+      await page.goto("/settings");
       await page.getByRole("button", { name: "Edit profile", exact: true }).click();
       await dialogLayout(page, "Edit profile");
       await page.keyboard.press("Escape");

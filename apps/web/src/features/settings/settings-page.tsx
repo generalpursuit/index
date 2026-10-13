@@ -22,6 +22,8 @@ import { Confirmation } from "@index/ui/components/confirmation";
 import { IconButton } from "@index/ui/components/icon-button";
 import { Modal, ModalFooter } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
+import { Back } from "@/components/app/navigation";
+import { profilePath } from "@/lib/routes";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
 import { useProfile, useProfileActions } from "@/features/profiles/hooks/use-profiles";
@@ -36,7 +38,7 @@ import { LaunchAtLoginSettings } from "./launch-at-login";
 const settingsPhotoClassName =
   "settings-photo rounded-full [&:focus-visible]:[outline:2px_solid_var(--foreground)] [&:focus-visible]:outline-offset-[3px]";
 
-/** Settings as a page: reached from the navigation rail on larger screens. */
+/** Settings as a page: from the navigation rail on larger screens, and your profile on phones. */
 export function SettingsPage() {
   const viewer = useViewer();
   return (
@@ -50,6 +52,12 @@ export function SettingsPage() {
           "page-heading flex items-center gap-3 mb-8 min-w-0 [&_h1]:flex-1 [&_h1]:min-w-0 [&_h1]:self-start [@media(width<=700px)]:mb-6.5 [@media(width<=700px)]:gap-1"
         }
       >
+        {/* Phones come here from the profile; larger screens from the rail, which stays in view. */}
+        {viewer?.username && (
+          <span className="settings-back [@media(width>=701px)]:hidden">
+            <Back fallback={profilePath(viewer.username)} />
+          </span>
+        )}
         <h1>Settings</h1>
       </header>
       {viewer ? <SettingsContent userId={viewer.id} /> : <QueryState pending />}
@@ -57,8 +65,8 @@ export function SettingsPage() {
   );
 }
 
-/** Everything in Settings; phones show it in a sheet over the profile. */
-export function SettingsContent({ userId }: { userId: string }) {
+/** Everything in Settings, once your profile has loaded. */
+function SettingsContent({ userId }: { userId: string }) {
   const profile = useProfile(userId);
   return (
     <QueryState
@@ -388,6 +396,7 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
             ? "Only approved followers will see your links. Existing followers keep access. Locked groups remain only yours."
             : "Anyone can see your links. Pending follow requests will be accepted. Locked groups remain only yours."
         }
+        label={next === "private" ? "Make private" : "Make public"}
         pending={update.isPending}
         onConfirm={() =>
           next && update.mutate({ profileVisibility: next }, { onSuccess: () => setNext(null) })

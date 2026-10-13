@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   Link,
   Outlet,
@@ -6,13 +6,11 @@ import {
   useNavigate,
   useRouter,
   useRouterState,
-  useSearch,
 } from "@tanstack/react-router";
 import { Search, Bell, User, MessageCircle, Settings } from "lucide-react";
-import { Modal } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
 import brandSymbol from "@/assets/brand-symbol.svg";
-import { LinkReference } from "@/features/routes/link-reference";
+import { LinkDialog } from "@/features/links/link-dialog";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
@@ -36,7 +34,6 @@ export function AppShell() {
     navigate = useNavigate(),
     router = useRouter();
   const path = useRouterState({ select: (s) => s.location.pathname }),
-    search = useSearch({ strict: false }),
     prior = useRef(viewer?.id);
   const back = useBack(),
     swipe = useEdgeBack(back);
@@ -65,18 +62,6 @@ export function AppShell() {
     if (!viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
   }, [viewer, protectedPage, navigate, router]);
-  // A closing dialog keeps showing its link. Removing its focused content mid-close makes it
-  // refocus itself a frame later, taking focus from a dialog opened in its place (Edit, from Post).
-  const post = useRetained(search.post),
-    edit = useRetained(search.edit);
-  // Closing returns to exactly where the editor was opened.
-  const closeEditor = () =>
-    void navigate({
-      to: ".",
-      search: (old) => ({ ...old, edit: undefined }),
-      replace: true,
-      resetScroll: false,
-    });
   return (
     <MessageDraftProvider key={viewer?.id ?? "guest"}>
       <LinkDraftProvider>
@@ -171,48 +156,9 @@ export function AppShell() {
               </div>
             </div>
           </main>
-          <Modal
-            open={!!search.post}
-            title="Post"
-            hideTitle
-            size="lg"
-            // Comments grow the post downward instead of re-centering it; its editor opens in
-            // the same place.
-            position="top"
-            className={"post-dialog [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"}
-            onOpenChange={(v) => {
-              if (!v)
-                void navigate({
-                  to: ".",
-                  search: (old) => ({ ...old, post: undefined }),
-                  replace: true,
-                  resetScroll: false,
-                });
-            }}
-          >
-            {post && <LinkReference key={post} value={post} mode="post" onDone={() => {}} />}
-          </Modal>
-          <Modal
-            open={!!search.edit}
-            title="Edit link"
-            hideTitle
-            size="md"
-            position="top"
-            className="editor-dialog"
-            onOpenChange={(v) => {
-              if (!v) closeEditor();
-            }}
-          >
-            {edit && <LinkReference key={edit} value={edit} mode="edit" onDone={closeEditor} />}
-          </Modal>
+          <LinkDialog />
         </div>
       </LinkDraftProvider>
     </MessageDraftProvider>
   );
-}
-/** The latest value, kept after it is cleared. */
-function useRetained<T>(value: T | undefined) {
-  const [retained, setRetained] = useState(value);
-  if (value !== undefined && value !== retained) setRetained(value);
-  return value ?? retained;
 }

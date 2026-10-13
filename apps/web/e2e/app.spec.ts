@@ -135,18 +135,17 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await expect(row).toContainText("Follow request accepted.");
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
-  // Visibility lives in Settings, behind a confirmation.
+  // Visibility lives in Settings, behind a confirmation. On phones Settings is a page as well,
+  // with Back to the profile.
   await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
   await page.getByRole("button", { name: /^Profile visibility/ }).click();
   await page.getByRole("menuitemradio", { name: "Public", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Make profile public?" })).toBeVisible();
+  await expect(page.getByRole("alertdialog", { name: "Make profile public?" })).toBeVisible();
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(page.getByRole("button", { name: /^Profile visibility/ })).toContainText("Private");
-  // On phones Settings is a sheet over the profile; ✕ closes it.
-  await page
-    .getByRole("dialog", { name: "Settings" })
-    .getByRole("button", { name: "Close" })
-    .click();
+  await page.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(page.getByRole("img", { name: "Private profile", exact: true })).toBeVisible();
   await page.getByRole("button", { name: /followers?$/ }).click();
   await expect(page.getByRole("dialog")).toContainText("mia");
   await page.getByRole("dialog").getByRole("button", { name: "Close", exact: true }).click();
@@ -242,29 +241,136 @@ test("editing a saved link changes its details, and a new address its category",
   await expect(edited.locator(".category-mark")).toHaveAttribute("data-category", "uncategorized");
 });
 
+test("the editor goes back to the post it was opened from; closing closes both", async ({
+  page,
+}) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    editor = page.getByRole("dialog", { name: "Edit link", exact: true }),
+    edit = post.getByRole("link", { name: "Edit", exact: true });
+  await edit.click();
+  // Focus moves into the editor, and back to Edit with the post.
+  await expect(editor.getByRole("button", { name: /^Group:/ })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(edit).toBeFocused();
+  await edit.click();
+  await editor.getByLabel("Title", { exact: true }).fill("Are.na, renamed");
+  await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+  await expect(post.getByRole("heading", { name: "Are.na, renamed", exact: true })).toBeVisible();
+  await edit.click();
+  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+  // Opened on its own, the editor goes back to the page.
+  await page.goto("/?edit=" + data.links[1]!.id);
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/$/);
+});
+test("Send link takes the post's place in its dialog and goes back to it", async ({ page }) => {
+  await login(page);
+  const row = page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true });
+  await row.click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    send = page.getByRole("dialog", { name: "Send link", exact: true }),
+    forward = post.getByRole("button", { name: "Forward", exact: true });
+  await forward.click();
+  await expect(
+    send.locator(".send-link").getByRole("heading", { name: "Send link", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(send.getByRole("button", { name: "Back", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(forward).toBeFocused();
+  await forward.click();
+  await send.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(forward).toBeFocused();
+  await forward.click();
+  await send.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // The next opening starts at the post.
+  await row.click();
+  await expect(forward).toBeVisible();
+});
+test("the editor's title field shows whole letters, however many lines it takes", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/?edit=" + data.links[0]!.id);
+  const title = page.getByLabel("Title", { exact: true });
+  // A field that scrolls at all clips its letters; ascenders and descenders reach past the
+  // serif's tight line height.
+  for (const value of ["Ågjpqy", "A title long enough to wrap onto a second line, with gjpqy"]) {
+    await title.fill(value);
+    expect(await title.evaluate((field) => field.scrollHeight - field.clientHeight)).toBe(0);
+  }
+});
+test("Escape anywhere in the editor answers its question before leaving it", async ({ page }) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    editor = page.getByRole("dialog", { name: "Edit link", exact: true });
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  const deleteLink = editor.getByRole("button", { name: "Delete link", exact: true });
+  await deleteLink.click();
+  await expect(editor.getByRole("alert")).toBeVisible();
+  // The rest of the editor waits: its fields don't take focus.
+  await editor.getByLabel("Title", { exact: true }).click({ force: true });
+  await expect(editor.getByLabel("Title", { exact: true })).not.toBeFocused();
+  // From wherever focus is, the first Escape cancels the question and the second leaves.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("Escape");
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(deleteLink).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(post.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
+});
 test("deleting a link from its editor closes it, or leaves the link's own page", async ({
   page,
 }) => {
   await login(page);
   const own = page.locator('.week-page[data-active="true"] .own-links');
+  const editor = page.getByRole("dialog", { name: "Edit link", exact: true }),
+    deleteLink = editor.getByRole("button", { name: "Delete link", exact: true });
   const remove = async () => {
-    await page
-      .getByRole("dialog", { name: "Edit link", exact: true })
-      .getByRole("button", { name: "Delete link", exact: true })
-      .click();
-    await page
-      .getByRole("alertdialog", { name: "Delete link?" })
-      .getByRole("button", { name: "Delete", exact: true })
-      .click();
+    await deleteLink.click();
+    await editor.getByRole("button", { name: "Delete", exact: true }).click();
   };
   await own.getByRole("button", { name: "Are.na", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Post", exact: true })
     .getByRole("link", { name: "Edit", exact: true })
     .click();
+  // The footer turns into the question, rather than a dialog opening on top.
+  await deleteLink.click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    "Delete the link, its comments and saved references?",
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(editor.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(deleteLink).toBeFocused();
+  await deleteLink.click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(deleteLink).toBeFocused();
+  await expect(editor.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
   await remove();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(own.getByRole("button", { name: "Are.na", exact: true })).toHaveCount(0);
+  // The post under the editor outlives its link while the dialog closes, without failing.
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
   await page.goto("/links/" + data.locked.id);
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await remove();
@@ -326,7 +432,10 @@ for (const width of [1440, 390]) {
     await page.getByRole("link", { name: "Messages", exact: true }).click();
     await page.getByRole("button", { name: "New message", exact: true }).click();
     const picker = page.getByRole("dialog", { name: "New message", exact: true });
-    const bob = picker.locator(".recipient-row").filter({ hasText: "Bob" });
+    // Bob's own row, not the group chat with him in it.
+    const bob = picker
+      .locator(".recipient-row")
+      .filter({ has: page.getByText("Bob", { exact: true }) });
     await expect(bob.getByRole("checkbox")).toHaveCount(1);
     await bob.hover();
     await expect(bob.getByRole("checkbox")).toHaveCSS("opacity", "1");

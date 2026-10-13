@@ -3,6 +3,7 @@ import type { apiFor } from "@/utils/orpc";
 import type { SavedLink } from "@/lib/types";
 import { seedLinkRoute } from "@/lib/routes";
 import { groupOptions } from "@/features/groups/queries";
+import { profileOptions } from "@/features/profiles/queries";
 type API = ReturnType<typeof apiFor>;
 
 export const linkOptions = (api: API, id: string) => api.links.get.queryOptions({ input: { id } });
@@ -51,4 +52,21 @@ export function preparePostReference(
   seedLinkRoute(cache, api, link);
   void cache.prefetchQuery(linkOptions(api, link.id));
   void cache.prefetchInfiniteQuery(commentsOptions(api, link.id));
+}
+/**
+ * Everything a post shows when it opens, for a loader: the link, its comments, and the group
+ * and author it names. The post still opens if the group or author can't be read.
+ */
+export async function loadPost(cache: QueryClient, api: API, linkId: string) {
+  await Promise.all([
+    cache
+      .ensureQueryData(linkOptions(api, linkId))
+      .then((link) =>
+        Promise.all([
+          link.groupId && cache.prefetchQuery(groupOptions(api, link.groupId)),
+          cache.prefetchQuery(profileOptions(api, link.ownerId)),
+        ]),
+      ),
+    cache.ensureInfiniteQueryData(commentsOptions(api, linkId)),
+  ]);
 }

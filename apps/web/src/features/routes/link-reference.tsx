@@ -1,26 +1,46 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, type ReactNode } from "react";
 import { useAPI } from "@/hooks/use-api";
 import { linkReferencePath, isUUID } from "@/lib/routes";
-import { LinkDetail } from "@/features/links/link-detail";
-import { LinkEditor } from "@/features/links/link-editor";
 import { QueryState } from "@/components/app/query-state";
+import { linkOptions, loadPost } from "@/features/links/queries";
+import type { apiFor } from "@/utils/orpc";
+type API = ReturnType<typeof apiFor>;
+const referenceOptions = (api: API, value: string) =>
+  api.routes.resolve.queryOptions({ input: { path: linkReferencePath(value) } });
+/**
+ * Loads what a `post` or `edit` reference shows, so its dialog opens complete. Failures are
+ * left to the dialog, which shows and retries them.
+ */
+export async function loadLinkReference(
+  cache: QueryClient,
+  api: API,
+  value: string,
+  mode: "post" | "edit",
+) {
+  try {
+    const target = await cache.ensureQueryData(referenceOptions(api, value));
+    if (target.kind !== "link") return;
+    if (mode === "post") await loadPost(cache, api, target.linkId);
+    else await cache.ensureQueryData(linkOptions(api, target.linkId));
+  } catch {
+    // Shown by the dialog.
+  }
+}
 /** Search parameters contain short references; only resolved UUIDs reach data hooks. */
 export function LinkReference({
   value,
   mode,
-  onDone,
+  children,
 }: {
   value: string;
   mode: "post" | "edit";
-  onDone: () => void;
+  children: (linkId: string) => ReactNode;
 }) {
   const api = useAPI(),
     navigate = useNavigate();
-  const resolved = useQuery(
-    api.routes.resolve.queryOptions({ input: { path: linkReferencePath(value) }, staleTime: 0 }),
-  );
+  const resolved = useQuery({ ...referenceOptions(api, value), staleTime: 0 });
   const target = resolved.data?.kind === "link" ? resolved.data : undefined;
   useEffect(() => {
     if (target && isUUID(value))
@@ -40,12 +60,7 @@ export function LinkReference({
       error={resolved.error}
       retry={() => void resolved.refetch()}
     >
-      {target &&
-        (mode === "post" ? (
-          <LinkDetail id={target.linkId} />
-        ) : (
-          <LinkEditor id={target.linkId} onDone={onDone} />
-        ))}
+      {target && children(target.linkId)}
     </QueryState>
   );
 }

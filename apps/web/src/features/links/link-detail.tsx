@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useRef, useState } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +36,8 @@ import { UserAvatar } from "@/components/app/user-avatar";
 import { Back } from "@/components/app/navigation";
 import { timeAgo } from "@/lib/weeks";
 import type { Group, SavedLink } from "@/lib/types";
+/** In the post's own dialog, Forward shows the recipients there instead of opening another. */
+export const ForwardInPlace = createContext<((link: SavedLink) => void) | undefined>(undefined);
 export function LinkDetail({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const link = useLink(id);
   const comments = useComments(id);
@@ -46,21 +48,22 @@ export function LinkDetail({ id, standalone = false }: { id: string; standalone?
       error={link.error}
       retry={() => void link.refetch()}
     >
-      {link.data && <Post id={id} standalone={standalone} comments={comments} />}
+      {/* Given the link rather than reading it again: deleting it from its editor, over this
+          post in the same dialog, removes it before the dialog has closed. */}
+      {link.data && <Post link={link.data} standalone={standalone} comments={comments} />}
     </QueryState>
   );
 }
 function Post({
-  id,
+  link,
   standalone,
   comments,
 }: {
-  id: string;
+  link: SavedLink;
   standalone: boolean;
   comments: ReturnType<typeof useComments>;
 }) {
-  const link = useLink(id).data!,
-    author = useProfile(link.ownerId),
+  const author = useProfile(link.ownerId),
     viewer = useViewer(),
     group = useQuery(groupOptions(useAPI(), link.groupId)).data;
   const { list, create, remove } = comments,
@@ -215,7 +218,7 @@ function Post({
           onSubmit={(e) => {
             e.preventDefault();
             if (text.trim())
-              create.mutate({ linkId: id, body: text }, { onSuccess: () => setText("") });
+              create.mutate({ linkId: link.id, body: text }, { onSuccess: () => setText("") });
           }}
         >
           <UserAvatar person={viewer} />
@@ -316,7 +319,8 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
     own = viewer?.id === link.ownerId,
     api = useAPI(),
     cache = useQueryClient();
-  const [forward, setForward] = useState(false);
+  const [forward, setForward] = useState(false),
+    forwardInPlace = useContext(ForwardInPlace);
   // Only links in locked groups stay private to their owner.
   const forwardable = !!viewer && (!link.groupId || group?.visibility === "public");
   const site = domain(link.url);
@@ -339,16 +343,16 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
           size="icon-lg"
           onPointerEnter={() => prefetchRecipients(cache, api, viewer.id)}
           onFocus={() => prefetchRecipients(cache, api, viewer.id)}
-          onClick={() => setForward(true)}
+          onClick={() => (forwardInPlace ? forwardInPlace(link) : setForward(true))}
         >
           <Forward />
         </IconButton>
       )}
       {own && (
-        // Editing replaces the open post rather than stacking a second modal.
+        // The editor takes the post's place in its dialog, and goes back to it.
         <Link
           to="."
-          search={(old) => ({ ...old, post: undefined, edit: link.shortId })}
+          search={(old) => ({ ...old, edit: link.shortId })}
           className={cn(buttonVariants({ variant: "outline", size: "icon-lg" }), "ml-auto")}
           aria-label="Edit"
           title="Edit"

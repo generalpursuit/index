@@ -6,8 +6,6 @@ import { Button } from "@index/ui/components/button";
 import { LockKeyhole, Earth, Settings } from "lucide-react";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
-import { Modal } from "@index/ui/components/modal";
-import { SettingsContent } from "@/features/settings/settings-page";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { useQueryClient } from "@tanstack/react-query";
 import { connectionsOptions } from "./queries";
@@ -80,15 +78,7 @@ export function FollowButton({
   );
 }
 const followLabels = ["Follow", "Request", "Requested", "Following"];
-export function ProfilePage({
-  userId,
-  group = "all",
-  settings = false,
-}: {
-  userId: string;
-  group?: string;
-  settings?: boolean;
-}) {
+export function ProfilePage({ userId, group = "all" }: { userId: string; group?: string }) {
   const profile = useProfile(userId);
   return (
     <QueryState
@@ -97,21 +87,11 @@ export function ProfilePage({
       error={profile.error}
       retry={() => void profile.refetch()}
     >
-      {profile.data && (
-        <ProfileContent key={userId} profile={profile.data} filter={group} settings={settings} />
-      )}
+      {profile.data && <ProfileContent key={userId} profile={profile.data} filter={group} />}
     </QueryState>
   );
 }
-function ProfileContent({
-  profile,
-  filter,
-  settings,
-}: {
-  profile: Profile;
-  filter: string;
-  settings: boolean;
-}) {
+function ProfileContent({ profile, filter }: { profile: Profile; filter: string }) {
   const viewer = useViewer(),
     own = viewer?.id === profile.id,
     navigate = useNavigate();
@@ -193,8 +173,7 @@ function ProfileContent({
           {own ? (
             // Phones only: larger screens have Settings at the foot of the navigation rail.
             <Link
-              to="."
-              search={(old) => ({ ...old, settings: true })}
+              to="/settings"
               className={
                 "icon-link [@media(width>=701px)]:[&.profile-settings]:hidden relative flex items-center justify-center w-11 h-11 text-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] profile-settings"
               }
@@ -245,24 +224,6 @@ function ProfileContent({
         </>
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
-      {own && (
-        <Modal
-          open={settings}
-          title="Settings"
-          className="settings-sheet"
-          onOpenChange={(open) => {
-            if (!open)
-              void navigate({
-                to: ".",
-                search: (old) => ({ ...old, settings: undefined }),
-                replace: true,
-                resetScroll: false,
-              });
-          }}
-        >
-          <SettingsContent userId={profile.id} />
-        </Modal>
-      )}
       {newGroup && (
         <CreateGroup
           returnFocus={groupReturnFocus}

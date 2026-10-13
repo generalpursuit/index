@@ -223,6 +223,7 @@ function GroupActions({ group }: { group: Group }) {
           }
           destructive
           label="Delete group"
+          returnFocus={editTrigger}
           pending={actions.deleteGroup.isPending}
           onConfirm={async () => {
             if (submitting.current) return;
