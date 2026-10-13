@@ -567,7 +567,7 @@ function ListFilter({
   onNewGroup: (trigger?: HTMLButtonElement | null) => void;
 }) {
   const trigger = useRef<HTMLButtonElement>(null);
-  // Favorites first, then the person's groups, like Settings.
+  // Favorites first, then the person's groups.
   const lists = groups
       .filter((g) => g.kind !== "starred")
       .sort((a, b) => Number(b.kind === "favorites") - Number(a.kind === "favorites")),
