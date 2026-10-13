@@ -17,7 +17,7 @@ export const groupSelection = {
   kind: groups.kind,
   visibility: sql<
     "private" | "public"
-  >`case when ${groups.kind}='starred' then 'private' else ${groups.visibility} end`,
+  >`case ${groups.kind} when 'starred' then 'private' when 'favorites' then 'public' else ${groups.visibility} end`,
   createdAt: timestamp(groups.createdAt),
   updatedAt: timestamp(groups.updatedAt),
 };

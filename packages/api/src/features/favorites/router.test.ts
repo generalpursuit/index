@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { sql } from "drizzle-orm";
 import { setupApiTests } from "../../testing/api";
 describe("Favorites and profile privacy", () => {
   const api = setupApiTests();
@@ -31,6 +32,16 @@ describe("Favorites and profile privacy", () => {
     await assert.rejects(alice.groups.update({ id: favorites.id, name: "Rename" }), {
       code: "NOT_FOUND",
     });
+    assert.equal((await bob.links.listInGroup({ groupId: favorites.id })).items.length, 1);
+    // Favorites can't be locked, even when an older row says private; each link follows its group.
+    assert.equal(favorites.visibility, "public");
+    await assert.rejects(alice.groups.update({ id: favorites.id, visibility: "private" }), {
+      code: "BAD_REQUEST",
+    });
+    await api.db.execute(
+      sql`update groups set visibility='private' where id=${favorites.id}::uuid`,
+    );
+    assert.equal((await alice.favorites.group()).visibility, "public");
     assert.equal((await bob.links.listInGroup({ groupId: favorites.id })).items.length, 1);
     await alice.groups.update({ id: group.id, visibility: "private" });
     assert.equal((await bob.links.listInGroup({ groupId: favorites.id })).items.length, 0);

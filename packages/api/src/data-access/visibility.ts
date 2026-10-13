@@ -17,7 +17,7 @@ export function profileContentVisible(viewerId: string | SQLWrapper | null, owne
 
 export function groupVisible(viewerId: string | SQLWrapper | null) {
   return sql<boolean>`(${groups.ownerId} = ${viewerId} or (
-    ${groups.kind} <> 'starred' and ${groups.visibility} = 'public' and ${profileContentVisible(viewerId, groups.ownerId)}
+    ${groups.kind} <> 'starred' and (${groups.kind} = 'favorites' or ${groups.visibility} = 'public') and ${profileContentVisible(viewerId, groups.ownerId)}
   ))`;
 }
 

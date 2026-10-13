@@ -116,21 +116,17 @@ for (const scheme of ["light", "dark"] as const) {
       await expect(
         page.getByRole("button", { name: "Lock Weekend reading", exact: true }),
       ).toHaveAttribute("aria-pressed", "true");
-      await expect(
-        page.getByRole("button", { name: "Starred: Always private", exact: true }),
-      ).toBeDisabled();
-      await expect(
-        page.getByRole("button", { name: "Starred: Always private", exact: true }),
-      ).toHaveAttribute("aria-pressed", "true");
-      // Favorites uses the same lock, with the same confirmation, without rename/delete actions.
-      await page.getByRole("button", { name: "Lock Favorites", exact: true }).click();
-      await page
-        .getByRole("alertdialog", { name: "Lock group?" })
-        .getByRole("button", { name: "Lock group", exact: true })
-        .click();
-      await expect(
-        page.getByRole("button", { name: "Lock Favorites", exact: true }),
-      ).toHaveAttribute("aria-pressed", "true");
+      // Favorites and Starred come first, without a lock or actions; your groups follow.
+      const names = page.locator(".settings-group-name");
+      await expect(names.nth(0)).toHaveText("Favorites");
+      await expect(names.nth(1)).toHaveText("Starred");
+      await expect(page.getByRole("heading", { name: "Your groups", exact: true })).toBeVisible();
+      for (const name of ["Favorites", "Starred"]) {
+        const pinned = page
+          .locator(".settings-group")
+          .filter({ has: page.getByText(name, { exact: true }) });
+        await expect(pinned.getByRole("button")).toHaveCount(0);
+      }
     });
   }
 }
