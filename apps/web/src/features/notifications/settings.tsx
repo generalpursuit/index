@@ -113,9 +113,10 @@ export function NotificationSettings() {
     }
   }
   const permission = status?.permission;
-  const checking = !status || (status.supported && capabilities.isPending);
+  // Capabilities only decide whether a device can be enabled. A registered device keeps its
+  // button while they load, so it can always be turned off.
+  const checking = !status || (status.supported && !status.registered && capabilities.isPending);
   // Only an explicit answer means push is off; after a failed check, enabling reports the cause.
-  // A registered device keeps its button so it can still be turned off.
   const serverOff = configured === false && !status?.registered;
   return (
     <section
