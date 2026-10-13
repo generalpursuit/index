@@ -3,6 +3,7 @@ mod menu_bar;
 mod session_revision;
 mod appearance;
 mod app_icon;
+mod titlebar;
 mod session;
 mod updates;
 #[cfg(feature = "native-smoke")]

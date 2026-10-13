@@ -22,7 +22,8 @@ fn stored_path(app: &AppHandle) -> Option<std::path::PathBuf> {
 }
 
 /// The last preference the WebView reported, so a new window starts in its final chrome
-/// instead of the default window background (the transparent titlebar shows it) until then.
+/// instead of the default window background, which shows until the WebView first paints
+/// and while it catches up with a native resize.
 pub fn stored_theme(app: &AppHandle) -> Option<Theme> {
     let preference = std::fs::read_to_string(stored_path(app)?).ok()?;
     window_theme(&preference).ok().flatten()

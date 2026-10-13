@@ -67,7 +67,7 @@ function NavigationProgress() {
   return loading && slow ? (
     <div
       aria-hidden="true"
-      className="navigation-progress fixed inset-x-0 top-0 z-100 h-0.5 origin-left bg-foreground/50 [animation:navigation-progress_8s_cubic-bezier(0.1,0.7,0.2,1)_both]"
+      className="navigation-progress fixed inset-x-0 top-[var(--titlebar-inset)] z-100 h-0.5 origin-left bg-foreground/50 [animation:navigation-progress_8s_cubic-bezier(0.1,0.7,0.2,1)_both]"
     />
   ) : null;
 }
