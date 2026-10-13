@@ -40,6 +40,7 @@ mod os {
     use std::ffi::c_void;
     unsafe extern "C" {
         pub fn index_menu_init(image: *const u8, length: usize) -> i32;
+        pub fn index_menu_prepare(window: *mut c_void);
         pub fn index_menu_present(window: *mut c_void, width: f64, height: f64);
         pub fn index_menu_resize(window: *mut c_void, height: f64);
         pub fn index_menu_unwatch();
@@ -122,15 +123,14 @@ pub fn ensure_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let builder = WebviewWindowBuilder::new(app, "menu-bar", WebviewUrl::App("menu-bar".into()))
         .title("Index menu bar").inner_size(PANEL_WIDTH, PANEL_MAX_HEIGHT).resizable(false)
         .decorations(false).shadow(true).skip_taskbar(true).always_on_top(true)
-        // The WebView draws no background; the native popover material and its rounded
-        // corners show through, following the window appearance set by set_appearance.
+        // The WebView draws no background; the native surface (index_menu_prepare) and its
+        // rounded corners show through, following the window appearance set by set_appearance.
         .transparent(true)
-        .effects(tauri::window::EffectsBuilder::new().effect(tauri::window::Effect::Popover)
-            .state(tauri::window::EffectState::Active).radius(16.0).build())
         .visible(false).focused(false)
         // The page fits whole rows of its list within the panel's maximum height.
         .initialization_script(&format!("window.__INDEX_MENU_BAR__ = {{ maxHeight: {PANEL_MAX_HEIGHT} }};"));
     let window = crate::restrict_navigation(builder, app).build()?;
+    if let Ok(pointer) = window.ns_window() { unsafe { os::index_menu_prepare(pointer); } }
     attach_lifecycle(&window);
     Ok(window)
 }

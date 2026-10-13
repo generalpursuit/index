@@ -9,6 +9,14 @@ html.menu-bar-surface body {
   background: transparent;
   overflow: hidden;
 }
+/* Glass is lighter or darker than a page depending on what is behind it, so the panel's subtle
+   text keeps 4.5:1 down to a mid-grey glass in light mode, and on a light grey one in dark mode. */
+html.menu-bar-surface {
+  --subtle-foreground: #595959;
+}
+html.menu-bar-surface.dark {
+  --subtle-foreground: #a3a3a3;
+}
 html.menu-bar-surface
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
   font-size: revert-layer;
