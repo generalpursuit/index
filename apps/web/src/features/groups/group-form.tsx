@@ -43,6 +43,8 @@ export function GroupForm({
   );
   const [error, setError] = useState<string>();
   const [confirmation, setConfirmation] = useState<CreateGroupInput>();
+  const locking = confirmation?.visibility === "private",
+    submit = useRef<HTMLButtonElement>(null);
   const save = async (value: CreateGroupInput) => {
     if (submitting.current) return;
     submitting.current = true;
@@ -135,9 +137,11 @@ export function GroupForm({
           onOpenChange={(open) => {
             if (!open && !pending) setConfirmation(undefined);
           }}
-          title={locked ? "Lock group?" : "Unlock group?"}
-          description={groupPrivacyDescription(locked)}
-          label={locked ? "Lock and save" : "Unlock and save"}
+          // Worded from the change it saves, taken as Save was pressed.
+          title={locking ? "Lock group?" : "Unlock group?"}
+          description={groupPrivacyDescription(locking)}
+          label={locking ? "Lock and save" : "Unlock and save"}
+          returnFocus={submit}
           pending={pending}
           onConfirm={() => {
             if (confirmation) void save(confirmation);
@@ -147,7 +151,7 @@ export function GroupForm({
           <Button type="button" variant="ghost" disabled={pending} onClick={onClose}>
             Cancel
           </Button>
-          <Button type="submit" disabled={pending}>
+          <Button ref={submit} type="submit" disabled={pending}>
             {pending ? (group ? "Saving…" : "Creating…") : group ? "Save" : "Create"}
           </Button>
         </Confirmation>

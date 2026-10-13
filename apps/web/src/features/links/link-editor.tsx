@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
@@ -73,7 +73,8 @@ function LinkForm({
     actions = useLibraryActions(),
     navigate = useNavigate(),
     path = useRouterState({ select: (s) => s.location.pathname });
-  const [removing, setRemoving] = useState(false);
+  const [removing, setRemoving] = useState(false),
+    deleteLink = useRef<HTMLButtonElement>(null);
   const saved: LinkDraft = {
     url: existing.url,
     title: existing.title,
@@ -299,8 +300,10 @@ function LinkForm({
           destructive
           label="Delete"
           onConfirm={remove}
+          returnFocus={deleteLink}
         >
           <Button
+            ref={deleteLink}
             type="button"
             variant="ghost"
             className="-ml-4.5 text-destructive hover:text-destructive"

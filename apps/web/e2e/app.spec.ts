@@ -314,6 +314,29 @@ test("the editor's title field shows whole letters, however many lines it takes"
     expect(await title.evaluate((field) => field.scrollHeight - field.clientHeight)).toBe(0);
   }
 });
+test("Escape anywhere in the editor answers its question before leaving it", async ({ page }) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    editor = page.getByRole("dialog", { name: "Edit link", exact: true });
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  const deleteLink = editor.getByRole("button", { name: "Delete link", exact: true });
+  await deleteLink.click();
+  await expect(editor.getByRole("alert")).toBeVisible();
+  // The rest of the editor waits: its fields don't take focus.
+  await editor.getByLabel("Title", { exact: true }).click({ force: true });
+  await expect(editor.getByLabel("Title", { exact: true })).not.toBeFocused();
+  // From wherever focus is, the first Escape cancels the question and the second leaves.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("Escape");
+  await expect(editor.getByRole("alert")).toHaveCount(0);
+  await expect(deleteLink).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(post.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
+});
 test("deleting a link from its editor closes it, or leaves the link's own page", async ({
   page,
 }) => {

@@ -6,7 +6,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "./alert-dialog";
-import { useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { useEffectEvent, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { Button } from "./button";
 import { modalCenter, modalClassName, useModalPresentation } from "./modal";
 
@@ -81,9 +81,11 @@ export function Confirmation(props: ConfirmationProps) {
 }
 
 /**
- * The question as a row in place of what it asks about, with the footer's buttons. It is
- * announced as it appears, and focus moves to its Cancel; once answered, focus goes back to
- * where it was, unless it has moved on. Escape cancels it rather than closing the modal.
+ * The question as a row in place of what it asks about, with the footer's buttons. The rest of
+ * the modal waits for the answer: it is inert, so nothing the question is about can change and
+ * focus stays with it, and Escape anywhere cancels the question before the modal hears another.
+ * It is announced as it appears and focus moves to its Cancel; once answered, focus goes back to
+ * what asked, unless it has moved on.
  */
 function ConfirmationInPlace({
   open,
@@ -98,14 +100,40 @@ function ConfirmationInPlace({
   returnFocus,
 }: ConfirmationProps) {
   const content = useRef<HTMLDivElement>(null),
+    question = useRef<HTMLDivElement>(null),
     cancel = useRef<HTMLButtonElement>(null),
     // Where focus was when the question appeared, while it is asked.
     returnTo = useRef<Element>(undefined);
+  const escape = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    if (!pending) onOpenChange(false);
+  });
   useLayoutEffect(() => {
     if (open) {
       returnTo.current = document.activeElement ?? document.body;
-      cancel.current?.focus();
-      return;
+      const asked = question.current!,
+        modal = asked.closest<HTMLElement>('[role="dialog"]');
+      const waiting = modal ? waitFor(asked, modal) : [];
+      let focused: HTMLElement | null = cancel.current;
+      focused?.focus();
+      // Focus stays with the question, such as after a click on the inert rest of the modal;
+      // it can still leave the modal, which closing it does.
+      const focusin = (event: FocusEvent) => {
+        const target = event.target as HTMLElement;
+        if (asked.contains(target)) focused = target;
+        else if (modal?.contains(target)) focused?.focus();
+      };
+      // Captured on the window, ahead of the modal's own Escape, wherever focus is.
+      const keydown = (event: KeyboardEvent) => escape(event);
+      document.addEventListener("focusin", focusin);
+      window.addEventListener("keydown", keydown, true);
+      return () => {
+        document.removeEventListener("focusin", focusin);
+        window.removeEventListener("keydown", keydown, true);
+        for (const element of waiting) element.inert = false;
+      };
     }
     const back = returnTo.current;
     returnTo.current = undefined;
@@ -126,12 +154,8 @@ function ConfirmationInPlace({
       )}
       {open && (
         <div
+          ref={question}
           className="confirmation-in-place col-span-full flex w-full flex-wrap items-center gap-x-4 gap-y-3"
-          onKeyDown={(event) => {
-            if (event.key !== "Escape") return;
-            event.stopPropagation();
-            if (!pending) onOpenChange(false);
-          }}
         >
           <div role="alert" className="min-w-0 flex-[1_1_16rem]">
             <p className="text-[14px] font-medium text-foreground">{title}</p>
@@ -162,4 +186,24 @@ function ConfirmationInPlace({
       )}
     </>
   );
+}
+
+/**
+ * Makes everything in `modal` around `question` inert, apart from the modal's title, which still
+ * names it. Returns what it changed, to be released once the question is answered.
+ */
+function waitFor(question: HTMLElement, modal: HTMLElement) {
+  const waiting: HTMLElement[] = [];
+  for (let node = question; node.parentElement && node !== modal; node = node.parentElement)
+    for (const sibling of Array.from(node.parentElement.children))
+      if (
+        sibling !== node &&
+        sibling instanceof HTMLElement &&
+        !sibling.inert &&
+        !sibling.matches('[data-slot="modal-header"]')
+      ) {
+        sibling.inert = true;
+        waiting.push(sibling);
+      }
+  return waiting;
 }
