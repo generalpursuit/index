@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { ArrowUp, SquarePen, X, Link2, LockKeyhole, Search } from "lucide-react";
+import { SquarePen, X, Search } from "lucide-react";
 import { Heading, Back } from "@/components/app/navigation";
 import { IconButton } from "@index/ui/components/icon-button";
 import { Confirmation } from "@index/ui/components/confirmation";
@@ -16,8 +16,8 @@ import { useAPI, useViewer } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useMessageDraft } from "./drafts";
 import type { MessageDraft } from "./draft";
-import { domain } from "@/features/links/url";
-import { preparePost } from "@/features/links/queries";
+import { MessageThread } from "./message-thread";
+import { Composer } from "./composer";
 import { timeAgo } from "@/lib/weeks";
 import type { Message, SavedLink } from "@/lib/types";
 
@@ -131,6 +131,9 @@ export function MessagesPage() {
     </div>
   );
 }
+/** Whether the reader is at the newest message, measured against a given thread height. */
+const atNewest = (thread: HTMLElement, height = thread.clientHeight) =>
+  thread.scrollHeight - thread.scrollTop - height < 80;
 export function ConversationPage({ id, attach }: { id: string; attach?: string }) {
   const { detail, list } = useConversation(id),
     actions = useMessageActions(),
@@ -139,15 +142,13 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
     navigate = useNavigate();
   const { draft, owner: draftOwner } = useMessageDraft(id);
   const [recovery, setRecovery] = useState<MessageDraft>();
-  const sending = draft.status === "sending";
-  const locked = sending || draft.status === "uncertain";
   const attached = useQuery(
     api.links.get.queryOptions({
       input: { id: attach ?? "00000000-0000-4000-8000-000000000000" },
       enabled: !!attach,
     }),
   );
-  const input = useRef<HTMLInputElement>(null),
+  const input = useRef<HTMLTextAreaElement>(null),
     end = useRef<HTMLDivElement>(null),
     scroller = useRef<HTMLDivElement>(null),
     nearBottom = useRef(true);
@@ -176,6 +177,24 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
   useEffect(() => {
     input.current?.focus();
   }, [id]);
+  // Replies, attachments and longer text grow the composer; the newest message stays in view.
+  const shown = !!detail.data;
+  useEffect(() => {
+    const thread = scroller.current;
+    if (!thread) return;
+    let height = thread.clientHeight;
+    const observer = new ResizeObserver(() => {
+      // Judged by the height before this change: a scroll reported in the same frame has
+      // already measured the smaller thread and counted the reader as scrolled away.
+      if (atNewest(thread, height)) {
+        nearBottom.current = true;
+        thread.scrollTop = thread.scrollHeight;
+      }
+      height = thread.clientHeight;
+    });
+    observer.observe(thread);
+    return () => observer.disconnect();
+  }, [shown]);
   useEffect(() => {
     const read = () => {
       if (lastId && nearBottom.current && !document.hidden)
@@ -192,6 +211,15 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       .flatMap((p) => p.items)
       .slice()
       .reverse() ?? [];
+  function reply(message: Message) {
+    draftOwner.reply({
+      id: message.id,
+      senderId: message.senderId,
+      excerpt: message.body,
+      hasAttachment: message.hasAttachment,
+    });
+    input.current?.focus();
+  }
   async function send() {
     const attempt = draftOwner.prepare();
     if (!attempt) return;
@@ -254,7 +282,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             onScroll={() => {
               const el = scroller.current;
               if (el) {
-                nearBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+                nearBottom.current = atNewest(el);
                 if (nearBottom.current && lastId && detail.data?.unreadCount && !document.hidden)
                   markRead({ conversationId: id, messageId: lastId });
               }
@@ -278,58 +306,19 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               error={list.error}
               retry={() => void list.refetch()}
             >
-              {messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={
-                    "message [&>small]:text-subtle-foreground [&>small]:text-[10px] [&>small]:p-[0_4px] flex flex-col items-start m-[8px_0_20px] max-w-[82%] w-max gap-1.5 [&.outgoing]:ml-auto [&.outgoing]:items-end [@media(width<=700px)]:max-w-[88%] " +
-                    (message.senderId === viewer.id
-                      ? "outgoing [&_.message-bubble]:bg-primary [&_.message-bubble]:text-primary-foreground [&_.message-bubble]:rounded-[19px_19px_5px_19px]"
-                      : "incoming")
-                  }
-                >
-                  {detail.data!.participants.length > 2 && message.senderId !== viewer.id && (
-                    <small>
-                      {detail.data!.participants.find((p) => p.id === message.senderId)?.name ??
-                        "Former participant"}
-                    </small>
-                  )}
-                  <div
-                    className={
-                      "message-bubble [&>p]:select-text [&>p]:whitespace-pre-wrap [&>p]:wrap-anywhere [&>p]:p-[12px_16px] rounded-[19px_19px_19px_5px] bg-muted text-foreground overflow-hidden min-w-0 max-w-full [@media(width<=700px)]:[&>p]:p-[11px_14px]"
-                    }
-                  >
-                    <SharedPost message={message} />
-                    {message.body && <p>{message.body}</p>}
-                  </div>
-                  <small>{timeAgo(message.createdAt)}</small>
-                </div>
-              ))}
+              <MessageThread
+                messages={messages}
+                chat={detail.data}
+                viewerId={viewer.id}
+                canReply={draft.status !== "sending" && draft.status !== "uncertain"}
+                onReply={reply}
+                composer={input}
+              />
             </QueryState>
             <div ref={end} />
           </div>
           <div className={"chat-composer-area flex-none"}>
             {attached.error && <p role="alert">This attachment is unavailable.</p>}
-            {draft.attachment && (
-              <div
-                className={
-                  "draft-attachment flex items-center gap-3 bg-surface border border-border rounded-[14px] p-[12px_14px] mt-3 [&>.person-label]:flex-1 [&_strong]:whitespace-nowrap [&_strong]:text-ellipsis"
-                }
-              >
-                <Link2 />
-                <div className={personLabelClassName}>
-                  <strong>{draft.attachment.title}</strong>
-                  <small>{domain(draft.attachment.url)}</small>
-                </div>
-                <IconButton
-                  label="Remove attachment"
-                  disabled={locked}
-                  onClick={() => draftOwner.removeAttachment()}
-                >
-                  <X />
-                </IconButton>
-              </div>
-            )}
             {(draft.status === "uncertain" || draft.status === "rejected") && (
               <p className={"field-error select-text text-[12px] text-destructive"} role="alert">
                 {draft.status === "uncertain"
@@ -368,96 +357,17 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                 setRecovery(undefined);
               }}
             />
-            <form
-              className={"composer flex gap-2.5 items-center pt-4"}
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send();
-              }}
-            >
-              <Input
-                variant="composer"
-                className="h-10"
-                ref={input}
-                disabled={locked}
-                aria-label="Message"
-                placeholder="Message"
-                maxLength={10000}
-                value={draft.body}
-                onChange={(e) => draftOwner.editBody(e.target.value)}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                className="size-10 flex-none"
-                aria-label="Send message"
-                disabled={sending || (!draft.body.trim() && !draft.attachment)}
-              >
-                <ArrowUp />
-              </Button>
-            </form>
+            <Composer
+              chat={detail.data}
+              viewerId={viewer.id}
+              draft={draft}
+              owner={draftOwner}
+              input={input}
+              onSend={() => void send()}
+            />
           </div>
         </div>
       )}
     </QueryState>
   );
-}
-function SharedPost({ message }: { message: Message }) {
-  const navigate = useNavigate(),
-    cache = useQueryClient(),
-    api = useAPI();
-  if (message.attachment) {
-    const prepare = () => preparePost(cache, api, message.attachment!);
-    return (
-      <Button
-        variant="ghost"
-        onPointerEnter={prepare}
-        onFocus={prepare}
-        className={
-          "shared-post [&[data-slot='button']]:flex [&[data-slot='button']]:items-center [&[data-slot='button']]:gap-3 [&[data-slot='button']]:p-[18px_16px] [&[data-slot='button']]:w-full [&[data-slot='button']]:h-auto [&[data-slot='button']]:bg-surface [&[data-slot='button']]:rounded-none! [&[data-slot='button']]:whitespace-normal [&[data-slot='button']]:text-left flex items-center gap-3 p-[18px_16px] w-full h-auto bg-surface rounded-none! whitespace-normal text-left [&>svg]:flex-none [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[11px] [&_small]:opacity-[0.7] [&_small]:wrap-anywhere [&.restricted>span>span]:text-[12px] [&.restricted>span>span]:underline [&.restricted>span>span]:underline-offset-[3px] [&.restricted>span>span]:mt-1.5"
-        }
-        onClick={() => {
-          prepare();
-          void navigate({
-            to: ".",
-            search: (old) => ({ ...old, post: message.attachment!.shortId }),
-          });
-        }}
-      >
-        <Link2 />
-        <span>
-          <strong>{message.attachment.title}</strong>
-          <small>{domain(message.attachment.url)}</small>
-        </span>
-      </Button>
-    );
-  }
-  if (message.restrictedAuthor)
-    return (
-      <ProfileLink
-        className={
-          "shared-post [&[data-slot='button']]:flex [&[data-slot='button']]:items-center [&[data-slot='button']]:gap-3 [&[data-slot='button']]:p-[18px_16px] [&[data-slot='button']]:w-full [&[data-slot='button']]:h-auto [&[data-slot='button']]:bg-surface [&[data-slot='button']]:rounded-none! [&[data-slot='button']]:whitespace-normal [&[data-slot='button']]:text-left flex items-center gap-3 p-[18px_16px] w-full h-auto bg-surface rounded-none! whitespace-normal text-left [&>svg]:flex-none [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[11px] [&_small]:opacity-[0.7] [&_small]:wrap-anywhere [&.restricted>span>span]:text-[12px] [&.restricted>span>span]:underline [&.restricted>span>span]:underline-offset-[3px] [&.restricted>span>span]:mt-1.5 restricted"
-        }
-        person={message.restrictedAuthor}
-      >
-        <LockKeyhole />
-        <span>
-          <strong>
-            Private post from @{message.restrictedAuthor.username ?? message.restrictedAuthor.name}
-          </strong>
-          <small>Only approved followers can view this post.</small>
-          <span>View profile</span>
-        </span>
-      </ProfileLink>
-    );
-  return message.hasAttachment ? (
-    <div
-      className={
-        "shared-post [&[data-slot='button']]:flex [&[data-slot='button']]:items-center [&[data-slot='button']]:gap-3 [&[data-slot='button']]:p-[18px_16px] [&[data-slot='button']]:w-full [&[data-slot='button']]:h-auto [&[data-slot='button']]:bg-surface [&[data-slot='button']]:rounded-none! [&[data-slot='button']]:whitespace-normal [&[data-slot='button']]:text-left flex items-center gap-3 p-[18px_16px] w-full h-auto bg-surface rounded-none! whitespace-normal text-left [&>svg]:flex-none [&>span]:flex [&>span]:flex-col [&>span]:gap-1 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[11px] [&_small]:opacity-[0.7] [&_small]:wrap-anywhere [&.restricted>span>span]:text-[12px] [&.restricted>span>span]:underline [&.restricted>span>span]:underline-offset-[3px] [&.restricted>span>span]:mt-1.5 unavailable"
-      }
-    >
-      <LockKeyhole />
-      <span>Post unavailable</span>
-    </div>
-  ) : null;
 }

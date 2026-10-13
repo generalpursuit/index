@@ -1,5 +1,5 @@
 import { UserAvatar } from "@/components/app/user-avatar";
-import type { Conversation } from "@/lib/types";
+import type { Conversation, MessageReply } from "@/lib/types";
 
 export function conversationName(chat: Conversation, viewerId: string) {
   return (
@@ -8,6 +8,18 @@ export function conversationName(chat: Conversation, viewerId: string) {
       .map((p) => (chat.participants.length > 2 ? p.name.split(" ")[0] : p.name))
       .join(", ") || "Conversation"
   );
+}
+/** Who a reply answers, from the point of view of the person reading it. */
+export function replyLabel(chat: Conversation, viewerId: string, from: string, to: string) {
+  if (to !== viewerId)
+    return (
+      "Replying to " + (chat.participants.find((p) => p.id === to)?.name ?? "a former participant")
+    );
+  return from === viewerId ? "Replying to yourself" : "Replying to you";
+}
+/** A replied message without text was a shared post. */
+export function replyExcerpt(reply: MessageReply) {
+  return reply.excerpt || (reply.hasAttachment ? "Shared post" : "");
 }
 export function ChatAvatars({ chat, viewerId }: { chat: Conversation; viewerId: string }) {
   return (

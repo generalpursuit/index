@@ -2,7 +2,7 @@ import { conversationMembers, conversations, messages, links } from "@index/db/s
 import type { z } from "zod";
 import type { publicUserSchema } from "../profiles/schemas";
 import { user } from "@index/db/schema/auth";
-import { and, desc, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
+import { and, desc, eq, inArray, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { timestamp } from "../../data-access/timestamp";
@@ -11,7 +11,7 @@ import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import { linkSelection, collectionSelection } from "../links/repository";
 import { publicUserSelection } from "../profiles/repository";
-import type { SendMessageInput } from "./schemas";
+import type { messageReplySchema, SendMessageInput } from "./schemas";
 
 function isMember(actorId: string, conversationId: SQLWrapper) {
   return sql<boolean>`exists(select 1 from conversation_members member where member.conversation_id=${conversationId} and member.user_id=${actorId})`;
@@ -52,6 +52,12 @@ const conversationSelection = (actorId: string) => ({
   unreadCount: sql<number>`(select count(*)::int from messages m join conversation_members cm on cm.conversation_id=m.conversation_id and cm.user_id=${actorId}
  where m.conversation_id="conversations"."id" and m.sender_id<>${actorId}
  and (cm.read_at is null or (m.created_at,m.id)>(cm.read_at,cm.read_message_id)))`,
+  // The actor's newest message at or below every other member's read watermark.
+  readReceiptMessageId: sql<string | null>`(select m.id from messages m
+ where m.conversation_id="conversations"."id" and m.sender_id=${actorId}
+ and (m.created_at,m.id) <= all (select o.read_at,o.read_message_id from conversation_members o
+   where o.conversation_id=m.conversation_id and o.user_id<>${actorId})
+ order by m.created_at desc,m.id desc limit 1)`,
 });
 export function findConversation(db: QueryDatabase, actorId: string, id: string) {
   return ResultAsync.fromPromise(
@@ -125,6 +131,14 @@ const messageSelection = (actorId: string) => ({
     where original.id=${messages.linkId} and ${links.id} is null
       and (g.id is null or g.visibility='public') and u.profile_visibility='private'
   )`,
+  // A reply quotes its own conversation, which the actor can already read, while the
+  // replied message exists.
+  replyTo: sql<z.output<typeof messageReplySchema> | null>`(
+    select jsonb_build_object('id',reply.id,'senderId',reply.sender_id,
+      'excerpt',left(reply.body,200),'hasAttachment',reply.has_attachment)
+    from messages reply
+    where reply.id=${messages.replyToMessageId} and reply.conversation_id=${messages.conversationId}
+  )`,
 });
 
 export function listMessages(
@@ -163,22 +177,44 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
       and not ${linkLocked()}
     )`
     : sql`true`;
-  const inserted = db.$with("sent_message", { id: sql<string>`id`.as("id") }).as(sql`
- insert into messages(conversation_id,sender_id,client_id,body,link_id,has_attachment)
- select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${!!input.linkId}
- where ${canSend(actorId, sql`${input.conversationId}::uuid`)} and ${attachmentAllowed}
+  const replyAllowed = input.replyToMessageId
+    ? sql`exists (
+      select 1 from messages reply where reply.id=${input.replyToMessageId}::uuid
+      and reply.conversation_id=${input.conversationId}::uuid
+    )`
+    : sql`true`;
+  // A retry must repeat the whole payload, including what it replies to.
+  const samePayload = (row: SQL) => sql`${row}.conversation_id=${input.conversationId}::uuid
+   and ${row}.body=${input.body} and ${row}.link_id is not distinct from ${input.linkId ?? null}::uuid
+   and ${row}.reply_to_message_id is not distinct from ${input.replyToMessageId ?? null}::uuid`;
+  // A retry is answered by the message it committed before anything is checked again, so a
+  // reply target deleted since cannot turn a delivered message into a rejection.
+  const previous = db.$with("previous_send", {}).as(sql`
+ select id,conversation_id,created_at,body,link_id,reply_to_message_id from messages
+ where sender_id=${actorId} and client_id=${input.clientId}::uuid
+ `);
+  const inserted = db.$with("inserted_message", {}).as(sql`
+ insert into messages(conversation_id,sender_id,client_id,body,link_id,has_attachment,reply_to_message_id)
+ select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${!!input.linkId},${input.replyToMessageId ?? null}::uuid
+ where not exists (select 1 from previous_send)
+   and ${canSend(actorId, sql`${input.conversationId}::uuid`)} and ${attachmentAllowed} and ${replyAllowed}
  on conflict(sender_id,client_id) do update set client_id=excluded.client_id
- where messages.conversation_id=excluded.conversation_id and messages.body=excluded.body and messages.link_id is not distinct from excluded.link_id
+ where ${samePayload(sql`messages`)}
  returning id,conversation_id,created_at
+ `);
+  const sent = db.$with("sent_message", { id: sql<string>`id`.as("id") }).as(sql`
+ select id,conversation_id,created_at from inserted_message
+ union all
+ select id,conversation_id,created_at from previous_send where ${samePayload(sql`previous_send`)}
  `);
   const touched = db.$with("touched_conversation", {}).as(sql`
  update conversations c set updated_at=greatest(c.updated_at,m.created_at) from sent_message m where c.id=m.conversation_id returning c.id
  `);
   return ResultAsync.fromPromise(
     db
-      .with(inserted, touched)
+      .with(previous, inserted, sent, touched)
       .select({ id: sql<string>`id` })
-      .from(inserted)
+      .from(sent)
       .then((rows) => rows[0]),
     databaseError,
   );

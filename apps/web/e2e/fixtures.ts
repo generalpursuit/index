@@ -137,6 +137,34 @@ export async function seedFixture(database: Database, registerFixture: RegisterF
     body: "Adding it to my list.",
     clientId: crypto.randomUUID(),
   });
+  await api("Lena").messages.send({
+    conversationId: chat.id,
+    body: "Same here.",
+    clientId: crypto.randomUUID(),
+  });
+  // A 1:1 chat spanning two days, which Bob has read up to Alice's latest message.
+  const direct = await api("Alice").messages.createConversation({ recipientIds: [people.Bob] });
+  const directMessages = [];
+  for (const [sender, body] of [
+    ["Alice", "Did you see the new Are.na update?"],
+    ["Bob", "Not yet. Send it over?"],
+    ["Alice", "Tonight, promise."],
+  ] as const)
+    directMessages.push(
+      await api(sender).messages.send({
+        conversationId: direct.id,
+        body,
+        clientId: crypto.randomUUID(),
+      }),
+    );
+  await database.client.query(
+    "update messages set created_at = created_at - interval '1 day' where id = any($1)",
+    [directMessages.slice(0, 2).map((message) => message.id)],
+  );
+  await api("Bob").messages.markRead({
+    conversationId: direct.id,
+    messageId: directMessages.at(-1)!.id,
+  });
   await api("Lena").follows.follow({ userId: people.Alice });
   await api("Alice").follows.accept({ userId: people.Lena });
   await api("Lena").comments.create({
@@ -158,6 +186,7 @@ export async function seedFixture(database: Database, registerFixture: RegisterF
     locked,
     conversationId: chat.id,
     conversationShortId: chat.shortId,
+    directConversationId: direct.id,
   };
 }
 // [title, url] per category, as people would save them; the category is stored as given.

@@ -286,6 +286,9 @@ export const messages = pgTable(
     hasAttachment: boolean("has_attachment").notNull().default(false),
     body: text("body").notNull().default(""),
     linkId: uuid("link_id").references(() => links.id, { onDelete: "set null" }),
+    // The replied message as sent, and part of the retry identity. It is not a reference:
+    // sending checks it, and reading quotes it only while it exists in the same conversation.
+    replyToMessageId: uuid("reply_to_message_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [

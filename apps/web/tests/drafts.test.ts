@@ -2,9 +2,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MessageDraft } from "../src/features/messages/draft";
 import { LinkDrafts } from "../src/features/links/draft";
-import type { SavedLink } from "../src/lib/types";
+import type { MessageReply, SavedLink } from "../src/lib/types";
 
 const attachment = { id: "link", title: "Next link" } as SavedLink;
+const quote = (id: string): MessageReply => ({
+  id,
+  senderId: "bob",
+  excerpt: "Quoted",
+  hasAttachment: false,
+});
 test("a lost successful send retries the exact payload and identity after edits or attachment navigation", () => {
   const draft = new MessageDraft("conversation");
   draft.editBody("Original");
@@ -22,6 +28,41 @@ test("a lost successful send retries the exact payload and identity after edits 
   assert.equal(serverMessages.size, 1);
   assert.equal(draft.getSnapshot().attachment, attachment);
   assert.equal(draft.getSnapshot().body, "");
+});
+
+test("the reply target is frozen into an uncertain attempt and cleared once it completes", () => {
+  const draft = new MessageDraft("conversation");
+  draft.reply(quote("first"));
+  draft.removeReply();
+  draft.reply(quote("second"));
+  draft.editBody("Answer");
+  const sent = draft.prepare()!;
+  assert.equal(sent.replyToMessageId, "second");
+  draft.fail(sent, new Error("response lost"));
+  draft.reply(quote("third"));
+  draft.removeReply();
+  assert.equal(draft.getSnapshot().replyTo?.id, "second");
+  const retry = draft.prepare()!;
+  assert.equal(retry, sent);
+  draft.complete(retry);
+  assert.equal(draft.getSnapshot().replyTo, undefined);
+  draft.editBody("Not a reply");
+  assert.equal(draft.prepare()!.replyToMessageId, undefined);
+});
+
+test("a rejected reply stays editable and an abandoned one is dropped", () => {
+  const draft = new MessageDraft("conversation");
+  draft.reply(quote("first"));
+  draft.editBody("Answer");
+  draft.fail(draft.prepare()!, { status: 400 });
+  draft.reply(quote("second"));
+  assert.equal(draft.prepare()!.replyToMessageId, "second");
+  const uncertain = new MessageDraft("conversation");
+  uncertain.reply(quote("first"));
+  uncertain.editBody("Answer");
+  uncertain.fail(uncertain.prepare()!, new Error("response lost"));
+  uncertain.abandonUnconfirmed();
+  assert.equal(uncertain.getSnapshot().replyTo, undefined);
 });
 
 test("attachment arriving during send survives completion for the next message", () => {

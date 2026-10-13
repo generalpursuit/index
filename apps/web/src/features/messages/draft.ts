@@ -1,15 +1,17 @@
-import type { SavedLink } from "@/lib/types";
+import type { MessageReply, SavedLink } from "@/lib/types";
 
 export type MessageAttempt = Readonly<{
   conversationId: string;
   clientId: string;
   body: string;
   linkId?: string;
+  replyToMessageId?: string;
 }>;
 type Draft = Readonly<{
   body: string;
   attachment?: SavedLink;
   queuedAttachment?: SavedLink;
+  replyTo?: MessageReply;
   status: "editing" | "sending" | "uncertain" | "rejected";
 }>;
 
@@ -49,6 +51,12 @@ export class MessageDraft {
   removeQueuedAttachment() {
     this.change({ ...this.value, queuedAttachment: undefined });
   }
+  reply(replyTo: MessageReply) {
+    if (!this.attempt) this.change({ ...this.value, replyTo, status: "editing" });
+  }
+  removeReply() {
+    if (!this.attempt) this.change({ ...this.value, replyTo: undefined, status: "editing" });
+  }
   prepare(): MessageAttempt | undefined {
     if (
       !this.active ||
@@ -61,6 +69,7 @@ export class MessageDraft {
       clientId: crypto.randomUUID(),
       body: this.value.body,
       linkId: this.value.attachment?.id,
+      replyToMessageId: this.value.replyTo?.id,
     });
     this.change({ ...this.value, status: "sending" });
     return this.attempt;

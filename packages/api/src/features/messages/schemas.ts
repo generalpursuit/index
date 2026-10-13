@@ -10,6 +10,13 @@ export const createConversationSchema = z.strictObject({
     .max(19)
     .refine((ids) => new Set(ids).size === ids.length, "Choose each recipient once."),
 });
+/** The start of a replied message; its attachment stays behind its own visibility rules. */
+export const messageReplySchema = z.object({
+  id: z.uuid(),
+  senderId: userIdSchema,
+  excerpt: z.string(),
+  hasAttachment: z.boolean(),
+});
 export const messageSchema = z.object({
   id: z.uuid(),
   conversationId: z.uuid(),
@@ -20,6 +27,7 @@ export const messageSchema = z.object({
   attachment: linkSchema.nullable(),
   hasAttachment: z.boolean(),
   restrictedAuthor: publicUserSchema.nullable(),
+  replyTo: messageReplySchema.nullable(),
 });
 export const conversationSchema = z.object({
   id: z.uuid(),
@@ -27,6 +35,8 @@ export const conversationSchema = z.object({
   participants: z.array(publicUserSchema),
   canSend: z.boolean(),
   unreadCount: z.number().int().nonnegative(),
+  /** The viewer's newest message that every other member has read. */
+  readReceiptMessageId: z.uuid().nullable(),
   lastMessage: messageSchema.nullable(),
   updatedAt: z.iso.datetime(),
 });
@@ -45,6 +55,7 @@ export const sendMessageSchema = z
     clientId: z.uuid(),
     body: z.string().trim().max(10000).default(""),
     linkId: z.uuid().optional(),
+    replyToMessageId: z.uuid().optional(),
   })
   .refine((input) => !!input.body || !!input.linkId, "Provide text or a link.");
 export const readMessageSchema = z.strictObject({ conversationId: z.uuid(), messageId: z.uuid() });
