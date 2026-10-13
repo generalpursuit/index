@@ -1,10 +1,11 @@
 import { ChatAvatars, conversationName } from "./conversation-presentation";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Checkbox } from "@index/ui/components/checkbox";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { IconButton } from "@index/ui/components/icon-button";
 import { Modal, ModalFooter } from "@index/ui/components/modal";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
@@ -32,7 +33,57 @@ export function prefetchRecipients(
   void cache.prefetchInfiniteQuery(connectionsOptions(api, viewerId, "following"));
   void cache.prefetchInfiniteQuery(conversationsOptions(api));
 }
+/** New message, or sending a link from a page: the recipients in a modal of their own. */
 export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: () => void }) {
+  return (
+    <Modal
+      open
+      onOpenChange={(v) => {
+        if (!v) onClose();
+      }}
+      title={link ? "Send link" : "New message"}
+      fixedHeight
+    >
+      <Recipients
+        link={link}
+        onOpen={onClose}
+        footer={(next) => <ModalFooter onCancel={onClose}>{next}</ModalFooter>}
+      />
+    </Modal>
+  );
+}
+/** Sending a link from its post's dialog: the recipients take the post's place there. */
+export function SendLink({ link, onBack }: { link: SavedLink; onBack: () => void }) {
+  return (
+    // Keeps its height while the list loads or filters, as the picker's own modal does.
+    <div className={"send-link flex h-146 min-h-0 flex-col gap-5"}>
+      {/* Clear of the dialog's close button, which shares this row. */}
+      <div className={"flex min-h-8 items-center gap-1 pr-10 -ml-2"}>
+        <IconButton label="Back" onClick={onBack}>
+          <ChevronLeft />
+        </IconButton>
+        <h2 className="dialog-title">Send link</h2>
+      </div>
+      <Recipients
+        link={link}
+        footer={(next) => next && <div className={"modal-actions flex justify-end"}>{next}</div>}
+      />
+    </div>
+  );
+}
+/**
+ * Search, the people you follow and your group chats. Choosing opens the chat, with `link`
+ * attached; `footer` places the Next action for picking several people.
+ */
+function Recipients({
+  link,
+  onOpen,
+  footer,
+}: {
+  link?: SavedLink;
+  onOpen?: () => void;
+  footer: (next: ReactNode) => ReactNode;
+}) {
   const viewer = useViewer()!,
     navigate = useNavigate(),
     api = useAPI();
@@ -50,7 +101,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
   const recipients = people.data?.pages.flatMap((page) => page.items) ?? [];
   const singleRecipient = recipients.length === 1 && !people.hasNextPage && !selected.length;
   const open = (chat: { id: string; shortId: string }) => {
-    onClose();
+    onOpen?.();
     void navigate({
       to: "/messages/$conversationId",
       params: { conversationId: chat.shortId },
@@ -59,14 +110,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
     });
   };
   return (
-    <Modal
-      open
-      onOpenChange={(v) => {
-        if (!v) onClose();
-      }}
-      title={link ? "Send link" : "New message"}
-      fixedHeight
-    >
+    <>
       {link && author.data?.profileVisibility === "private" && (
         <p className={"muted text-subtle-foreground"}>
           Only approved followers can view this post. Other recipients will see a link to the
@@ -171,8 +215,8 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           fetch={conversations.fetchNextPage}
         />
       </div>
-      <ModalFooter onCancel={onClose}>
-        {!singleRecipient && (
+      {footer(
+        !singleRecipient && (
           <Button
             disabled={!selected.length || start.isPending || selected.length > 19}
             onClick={() => start.mutate({ recipientIds: selected }, { onSuccess: open })}
@@ -181,8 +225,8 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
               ? "Opening…"
               : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
           </Button>
-        )}
-      </ModalFooter>
-    </Modal>
+        ),
+      )}
+    </>
   );
 }

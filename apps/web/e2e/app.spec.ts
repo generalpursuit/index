@@ -275,6 +275,33 @@ test("the editor goes back to the post it was opened from; closing closes both",
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/$/);
 });
+test("Send link takes the post's place in its dialog and goes back to it", async ({ page }) => {
+  await login(page);
+  const row = page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true });
+  await row.click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    send = page.getByRole("dialog", { name: "Send link", exact: true }),
+    forward = post.getByRole("button", { name: "Forward", exact: true });
+  await forward.click();
+  await expect(
+    send.locator(".send-link").getByRole("heading", { name: "Send link", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(send.getByRole("button", { name: "Back", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(forward).toBeFocused();
+  await forward.click();
+  await send.getByRole("button", { name: "Back", exact: true }).click();
+  await expect(forward).toBeFocused();
+  await forward.click();
+  await send.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  // The next opening starts at the post.
+  await row.click();
+  await expect(forward).toBeVisible();
+});
 test("the editor's title field shows whole letters, however many lines it takes", async ({
   page,
 }) => {

@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState } from "react";
+import { createContext, Fragment, useContext, useRef, useState } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -36,6 +36,8 @@ import { UserAvatar } from "@/components/app/user-avatar";
 import { Back } from "@/components/app/navigation";
 import { timeAgo } from "@/lib/weeks";
 import type { Group, SavedLink } from "@/lib/types";
+/** In the post's own dialog, Forward shows the recipients there instead of opening another. */
+export const ForwardInPlace = createContext<((link: SavedLink) => void) | undefined>(undefined);
 export function LinkDetail({ id, standalone = false }: { id: string; standalone?: boolean }) {
   const link = useLink(id);
   const comments = useComments(id);
@@ -317,7 +319,8 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
     own = viewer?.id === link.ownerId,
     api = useAPI(),
     cache = useQueryClient();
-  const [forward, setForward] = useState(false);
+  const [forward, setForward] = useState(false),
+    forwardInPlace = useContext(ForwardInPlace);
   // Only links in locked groups stay private to their owner.
   const forwardable = !!viewer && (!link.groupId || group?.visibility === "public");
   const site = domain(link.url);
@@ -340,7 +343,7 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
           size="icon-lg"
           onPointerEnter={() => prefetchRecipients(cache, api, viewer.id)}
           onFocus={() => prefetchRecipients(cache, api, viewer.id)}
-          onClick={() => setForward(true)}
+          onClick={() => (forwardInPlace ? forwardInPlace(link) : setForward(true))}
         >
           <Forward />
         </IconButton>

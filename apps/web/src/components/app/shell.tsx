@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   Link,
   Outlet,
@@ -6,15 +6,11 @@ import {
   useNavigate,
   useRouter,
   useRouterState,
-  useSearch,
 } from "@tanstack/react-router";
 import { Search, Bell, User, MessageCircle, Settings } from "lucide-react";
-import { Modal, ModalViews, type ModalView } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
 import brandSymbol from "@/assets/brand-symbol.svg";
-import { LinkReference } from "@/features/routes/link-reference";
-import { LinkDetail } from "@/features/links/link-detail";
-import { LinkEditor } from "@/features/links/link-editor";
+import { LinkDialog } from "@/features/links/link-dialog";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useViewer } from "@/hooks/use-api";
 import { useUnread } from "@/features/activity/hooks/use-activity";
@@ -162,67 +158,5 @@ export function AppShell() {
         </div>
       </LinkDraftProvider>
     </MessageDraftProvider>
-  );
-}
-/**
- * A post and its editor share one dialog, so editing doesn't move or resize it. The URL decides
- * what it shows: `edit` alongside `post` is the editor opened from that post, over it.
- */
-function LinkDialog() {
-  const search = useSearch({ strict: false }),
-    navigate = useNavigate();
-  const open = !!(search.post || search.edit);
-  // While it closes, the dialog keeps showing what it showed.
-  const [last, setLast] = useState({ post: search.post, edit: search.edit });
-  if (open && (last.post !== search.post || last.edit !== search.edit))
-    setLast({ post: search.post, edit: search.edit });
-  const { post, edit } = open ? search : last;
-  const leave = (cleared: { post?: undefined; edit: undefined }) =>
-    void navigate({
-      to: ".",
-      search: (old) => ({ ...old, ...cleared }),
-      replace: true,
-      resetScroll: false,
-    });
-  const close = () => leave({ post: undefined, edit: undefined });
-  // Back to where the editor was opened: its post, or the page.
-  const closeEditor = () => leave({ edit: undefined });
-  const views: (ModalView & { title: string })[] = [];
-  if (post)
-    views.push({
-      id: "post",
-      title: "Post",
-      content: (
-        <LinkReference key={post} value={post} mode="post">
-          {(id) => <LinkDetail id={id} />}
-        </LinkReference>
-      ),
-    });
-  if (edit)
-    views.push({
-      id: "edit",
-      title: "Edit link",
-      content: (
-        <LinkReference key={edit} value={edit} mode="edit">
-          {(id) => <LinkEditor id={id} onDone={closeEditor} onClose={close} />}
-        </LinkReference>
-      ),
-    });
-  return (
-    <Modal
-      open={open}
-      title={views.at(-1)?.title ?? "Post"}
-      hideTitle
-      size="lg"
-      // Comments grow the post downward instead of re-centering it.
-      position="top"
-      className={"link-dialog [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"}
-      onOpenChange={(v) => {
-        if (!v) close();
-      }}
-      onBack={post && edit ? closeEditor : undefined}
-    >
-      <ModalViews views={views} />
-    </Modal>
   );
 }
