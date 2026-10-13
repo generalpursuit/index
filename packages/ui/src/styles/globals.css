@@ -58,6 +58,9 @@
   --chart-4: var(--category-podcast);
   --chart-5: var(--category-book);
   --radius: 0.625rem;
+  /* Window controls over the top of the page, set by the macOS desktop host. Backdrops and
+     backgrounds extend under them; content and anything interactive stays below. */
+  --titlebar-inset: 0px;
 }
 
 .dark {

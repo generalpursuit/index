@@ -1,6 +1,6 @@
 # Notifications
 
-Account preferences select message/comment/mention/follow events; each device opts in separately. Categories default on, previews default off. Permission is requested only on explicit enablement. Notification settings do not remove in-app activity, and notifications do not send email.
+Account preferences select message/comment/mention/follow events; each device opts in separately. Categories default on, previews default off. A profile gets a follow `request` while private and a `follow` while public, never both for one follow, so clients show both as one Followers setting that writes both keys and is on only when both are. Permission is requested only on explicit enablement. Notification settings do not remove in-app activity, and notifications do not send email.
 
 ## Delivery and privacy
 
@@ -20,7 +20,7 @@ Installation proof is distinct from login: every device operation also needs the
 
 ## Configuration
 
-[Server environment schema](../apps/server/.env.schema) owns input formats. `NOTIFICATIONS_ENABLED=true` enables remote providers. Web Push requires the VAPID public/private pair and subject; APNs requires its key, team, topic and matching sandbox/production environment. Missing providers remain unavailable independently. Malformed/partial groups produce a fixed warning naming settings without exposing values. Local key validation cannot establish provider authorization. Desktop polling does not require remote-provider credentials.
+[Server environment schema](../apps/server/.env.schema) owns input formats. `NOTIFICATIONS_ENABLED=true` enables remote providers. Web Push requires the VAPID public/private pair and subject; APNs requires its key, team, topic and matching sandbox/production environment. Missing providers remain unavailable independently. Malformed/partial groups produce a fixed warning naming settings without exposing values. Local key validation cannot establish provider authorization. Desktop polling does not require remote-provider credentials. [Local development](deployment.md#local-development) shows how to enable Web Push for a personal stage.
 
 [Alchemy](../packages/infra/alchemy.run.ts) accepts these inputs, but the checked-in [release workflow](../.github/workflows/release.yml) does not forward notification settings. Merely adding GitHub environment secrets will not enable remote delivery; arrange their deployment bindings before enabling it. Private keys must stay server-only. The browser receives only capability status and the VAPID public key.
 

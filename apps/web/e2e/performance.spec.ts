@@ -152,7 +152,7 @@ test("Favorites update immediately and roll back when the write fails", async ({
     .getByRole("button", { name: "Are.na", exact: true })
     .click();
   const post = page.getByRole("dialog", { name: "Post", exact: true });
-  const actions = post.getByRole("button", { name: "Actions for Are.na", exact: true });
+  const favorite = post.getByRole("button", { name: "Favorite", exact: true });
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
@@ -162,14 +162,11 @@ test("Favorites update immediately and roll back when the write fails", async ({
     await route.abort("failed");
   });
   try {
-    await actions.click();
-    await page.getByRole("menuitem", { name: "Add to Favorites", exact: true }).click();
-    await actions.click();
-    await expect(
-      page.getByRole("menuitem", { name: "Remove from Favorites", exact: true }),
-    ).toBeVisible();
+    await favorite.click();
+    await expect(favorite).toHaveAttribute("aria-pressed", "true");
   } finally {
     release();
   }
-  await expect(page.getByRole("menuitem", { name: "Add to Favorites", exact: true })).toBeEnabled();
+  await expect(favorite).toHaveAttribute("aria-pressed", "false");
+  await expect(favorite).toBeEnabled();
 });

@@ -13,6 +13,19 @@ bun run alchemy profile edit
 
 Set a development `BETTER_AUTH_SECRET` of at least 32 characters in the ignored `packages/infra/.env.local`. Set `RESEND_API_KEY` and `AUTH_EMAIL_FROM` there for verification email. Consult the [infra schema](../packages/infra/.env.schema) and [server schema](../apps/server/.env.schema) for inputs. Bun's automatic dotenv loading is disabled; Varlock loads the owning package's files, not a root `.env.local`. Restart development after changes.
 
+To try browser notifications, also set `NOTIFICATIONS_ENABLED=true`, a VAPID key pair and a `VAPID_SUBJECT` such as `mailto:you@example.com` there. Create the pair once with Bun's WebCrypto and keep it; a new pair means enabling notifications again in each browser:
+
+```sh
+bun -e '
+const { publicKey, privateKey } = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+const raw = Buffer.from(await crypto.subtle.exportKey("raw", publicKey));
+const { d } = await crypto.subtle.exportKey("jwk", privateKey);
+console.log(`VAPID_PUBLIC_KEY=${raw.toString("base64url")}\nVAPID_PRIVATE_KEY=${d}`);
+'
+```
+
+Browsers treat `http://localhost` as secure, and development runs the one-minute delivery cron locally. Leave the `APNS_*` inputs unset: Apple push needs a real Apple key and a signed app with the push entitlement, so a local stage reports it unavailable.
+
 From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, supplying database, auth URL, media and frontend API bindings. Use a personal stage for development; never run Alchemy development against a release stage. [Browser fixtures](../apps/web/README.md#checks) provide a disposable backend for tests without these cloud credentials.
 
 ## Release deployment

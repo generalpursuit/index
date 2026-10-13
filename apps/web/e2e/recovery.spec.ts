@@ -65,7 +65,8 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(confirmation).toHaveCount(0);
   await expect(lock).toHaveAttribute("aria-pressed", "true");
   await page.goto("/?edit=" + data.links[0]!.id);
-  await page.getByRole("radio", { name: "Research", exact: true }).click();
+  await page.getByRole("button", { name: /^Group:/ }).click();
+  await page.getByRole("menuitemradio", { name: "Research", exact: true }).click();
   await expect(page.getByText("Only you will see this link.")).toBeVisible();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.goto("/people/" + data.people.Alice);

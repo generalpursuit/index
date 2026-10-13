@@ -144,86 +144,88 @@ struct LinkRow: View {
     }
   }
 }
-struct LinkActions: View {
+/// What the link is, where it lives, and whether you keep it: your own links are Favorites
+/// (a heart), other people's are starred.
+struct LinkLabel: View {
   let link: SavedLink
+  let group: LinkGroup?
   @Environment(AppModel.self) private var app
   private var own: Bool { link.ownerId == app.userID }
-  private var selected: Bool { own ? link.isFavorite : link.isStarred }
+  private var kept: Bool { own ? link.isFavorite : link.isStarred }
   var body: some View {
-    HStack(spacing: 0) {
+    HStack(spacing: 8) {
+      if link.category != .uncategorized {
+        CategoryMark(category: link.category)
+        Text(link.category.rawValue.uppercased())
+        Text("·").accessibilityHidden(true)
+      }
+      if let group {
+        HStack(spacing: 5) {
+          if group.visibility == .private {
+            Image(systemName: "lock").font(.system(size: 10)).accessibilityLabel("Locked")
+          }
+          Text(group.name.uppercased()).lineLimit(1)
+        }
+        Text("·").accessibilityHidden(true)
+      }
       AsyncButton {
         let path = own ? "favorite" : "star"
         let _: Success? = try await app.api?.request("/links/\(link.id)/\(path)",
-          method: selected ? "DELETE" : "PUT", body: [:])
+          method: kept ? "DELETE" : "PUT", body: [:])
         app.changed()
       } label: {
-        Image(systemName: (own ? "heart" : "star") + (selected ? ".fill" : ""))
-          .font(.system(size: 20)).frame(width: 44, height: 44)
-      }.buttonStyle(.plain).accessibilityLabel(own
-        ? (selected ? "Remove from Favorites" : "Add to Favorites") : (selected ? "Unstar" : "Star"))
-      AsyncButton {
-        // A locked group cannot be forwarded, even when its owner's profile is public.
-        if let groupID = link.groupId {
-          let group: LinkGroup? = try await app.api?.request("/groups/\(groupID)")
-          guard group?.visibility == .public else {
-            app.error = "Links in locked groups cannot be forwarded."
-            return
-          }
-        }
-        app.present(.recipients(link))
-      } label: {
-        Image(systemName: "arrowshape.turn.up.right").font(.system(size: 20)).frame(width: 44, height: 44)
-      }.buttonStyle(.plain).accessibilityLabel("Forward")
-      LinkMenu(link: link)
-    }.foregroundStyle(IndexPalette.subtleForeground)
+        Image(systemName: (own ? "heart" : "star") + (kept ? ".fill" : "")).font(.system(size: 14))
+          .foregroundStyle(kept ? IndexPalette.foreground : IndexPalette.subtleForeground)
+          // A full touch target that doesn't make the row taller.
+          .frame(width: 44, height: 44).contentShape(Rectangle()).padding(.vertical, -12)
+          .padding(.horizontal, -12)
+      }.buttonStyle(.plain).accessibilityLabel(own ? "Favorite" : "Star")
+        .accessibilityAddTraits(kept ? [.isToggle, .isSelected] : .isToggle)
+    }.font(IndexFont.mono(11)).tracking(0.66).foregroundStyle(IndexPalette.subtleForeground)
   }
 }
 
-struct LinkMenu: View {
+/// Reading is the main thing to do with a link; sharing and editing sit beside it.
+struct LinkActions: View {
   let link: SavedLink
+  let group: LinkGroup?
   @Environment(AppModel.self) private var app
-  @Environment(\.openURL) private var openURL
-  @State private var deleting = false
-  var own: Bool { app.userID == link.ownerId }
+  private var own: Bool { link.ownerId == app.userID }
+  // Only links in locked groups stay private to their owner.
+  private var forwardable: Bool { link.groupId == nil || group?.visibility == .public }
   var body: some View {
-    Menu {
-      Button {
-        if let url = URL(string: link.url) { openURL(url) }
-      } label: {
-        Label("Open website", systemImage: "arrow.up.right")
+    HStack(spacing: 8) {
+      if let url = URL(string: link.url) {
+        Link(destination: url) {
+          HStack(spacing: 6) {
+            Text(link.domain).lineLimit(1).truncationMode(.tail)
+            Image(systemName: "arrow.up.right").font(.system(size: 12, weight: .medium))
+          }.font(IndexFont.sans(13, weight: .medium)).padding(.horizontal, 16).frame(minHeight: 44)
+            .foregroundStyle(IndexPalette.primaryForeground).background(IndexPalette.primary, in: Capsule())
+        }.accessibilityLabel("Open \(link.domain)")
+      }
+      if forwardable {
+        Button { app.present(.recipients(link)) } label: { ActionIcon(systemName: "arrowshape.turn.up.right") }
+          .buttonStyle(.plain).accessibilityLabel("Forward")
       }
       if let shortID = link.shortId, let url = app.webURL?.appendingPathComponent(ReadableRoutes.link(shortID)) {
-        ShareLink(item: url) { Label("Share post", systemImage: "square.and.arrow.up") }
+        ShareLink(item: url) { ActionIcon(systemName: "square.and.arrow.up") }
+          .buttonStyle(.plain).accessibilityLabel("Share post")
       }
+      Spacer(minLength: 0)
       if own {
-        Button {
-          app.present(.add(Week.monday(Week.date(link.savedOn)), link.groupId, link))
-        } label: {
-          Label("Edit", systemImage: "pencil")
-        }
-        Button(role: .destructive) {
-          deleting = true
-        } label: {
-          Label("Delete", systemImage: "trash")
-        }
-      }
-    } label: {
-      Image(systemName: "ellipsis").frame(width: 44, height: 44).foregroundStyle(IndexPalette.subtleForeground)
-    }
-    .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Actions for \(link.title)")
-    .confirmationDialog(
-      "Delete link and its comments?", isPresented: $deleting, titleVisibility: .visible
-    ) {
-      Button("Delete link", role: .destructive) {
-        Task {
-          do {
-            let _: Success? = try await app.api?.request("/links/\(link.id)", method: "DELETE")
-            if app.navigation.sheet == .link(link.id) { app.navigation.sheet = nil }
-            if app.navigation.path.last == .link(link.id) { app.navigation.path.removeLast() }
-            app.changed()
-          } catch { app.handle(error) }
-        }
+        Button { app.present(.edit(link)) } label: { ActionIcon(systemName: "pencil") }
+          .buttonStyle(.plain).accessibilityLabel("Edit")
       }
     }
+  }
+}
+
+private struct ActionIcon: View {
+  let systemName: String
+  var body: some View {
+    Image(systemName: systemName).font(.system(size: 15)).foregroundStyle(IndexPalette.foreground)
+      .frame(width: 44, height: 44).background(IndexPalette.card, in: Circle())
+      .overlay(Circle().stroke(IndexPalette.border, lineWidth: 1)).contentShape(Circle())
   }
 }

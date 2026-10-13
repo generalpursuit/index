@@ -148,11 +148,7 @@ for (const viewport of [
       await page.keyboard.press("Escape");
       await page.locator('.week-page[data-active="true"] .own-links .link-open').first().click();
       dialog = await dialogLayout(page, "Post");
-      await dialog
-        .getByRole("button", { name: /Actions for/ })
-        .first()
-        .click();
-      await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+      await dialog.getByRole("link", { name: "Edit", exact: true }).click();
       await dialogLayout(page, "Edit link");
       await page.goto("/messages");
       await page.getByRole("button", { name: "New message", exact: true }).click();
@@ -193,11 +189,7 @@ for (const viewport of [
       await page.keyboard.press("Escape");
       await current.locator(".own-links .link-open").first().click();
       const post = await dialogLayout(page, "Post");
-      await post
-        .getByRole("button", { name: /Actions for/ })
-        .first()
-        .click();
-      await page.getByRole("menuitem", { name: "Forward", exact: true }).click();
+      await post.getByRole("button", { name: "Forward", exact: true }).click();
       await dialogLayout(page, "Send link");
       await page.keyboard.press("Escape");
       await page.goto("/settings");

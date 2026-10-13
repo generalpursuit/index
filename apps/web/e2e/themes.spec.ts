@@ -152,12 +152,17 @@ for (const phone of [false, true]) {
       await page.screenshot({
         path: `test-results/themes-${appearance}-${viewport.width}-feed.png`,
       });
-      // Post menus remain readable when portaled out of the application shell.
+      // Post labels and menus remain readable when portaled out of the application shell.
       await page.locator('.week-page[data-active="true"] .own-links .link-open').first().click();
       const post = page.getByRole("dialog", { name: "Post", exact: true });
-      await post.getByRole("button", { name: /^Actions for/ }).click();
+      await assertContrast(page, ".post-label");
+      await post.getByRole("link", { name: "Edit", exact: true }).click();
+      await page
+        .getByRole("dialog", { name: "Edit link", exact: true })
+        .getByRole("button", { name: /^Group:/ })
+        .click();
       await expect(page.getByRole("menu")).toBeVisible();
-      await assertContrast(page, '[data-slot="dropdown-menu-item"]');
+      await assertContrast(page, '[data-slot="dropdown-menu-radio-item"]');
       await page.screenshot({
         path: `test-results/themes-${appearance}-${viewport.width}-menu.png`,
       });

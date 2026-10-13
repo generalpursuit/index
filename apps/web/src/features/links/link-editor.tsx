@@ -1,24 +1,35 @@
+import { useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Input } from "@index/ui/components/input";
 import { Textarea } from "@index/ui/components/textarea";
 import { Button } from "@index/ui/components/button";
+import { Confirmation } from "@index/ui/components/confirmation";
 import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
-import { ModalFooter } from "@index/ui/components/modal";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@index/ui/components/dropdown-menu";
 import { createLinkInputSchema } from "@index/api/features/links/schemas";
-import { LockKeyhole } from "lucide-react";
+import { ChevronDown, Globe, LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
-import { QueryState, More } from "@/components/app/query-state";
+import { QueryState } from "@/components/app/query-state";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { useLinkDrafts } from "./drafts";
 import type { LinkDraft } from "./draft";
 import { useLibraryActions } from "./hooks/use-links";
-import { useGroups } from "@/features/groups/use-groups";
-import type { SavedLink } from "@/lib/types";
+import { categoryMarkClassName } from "./category-mark";
+import { useAllGroups } from "@/features/groups/use-groups";
+import type { Group, SavedLink } from "@/lib/types";
 /**
- * Edits a saved link: its address, title, note and group. Links are added by pasting them into
- * the "Enter a link" field, so this is the only form for a link. Calls `onDone` after saving.
+ * Edits a saved link: its address, title, note and group, laid out like the post itself, and
+ * deletes it. Links are added by pasting them into the "Enter a link" field, so this is the
+ * only form for a link. Calls `onDone` to close after saving or deleting.
  */
 export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
   const api = useAPI(),
@@ -34,10 +45,16 @@ export function LinkEditor({ id, onDone }: { id: string; onDone: () => void }) {
     </QueryState>
   );
 }
+// Fields show their frame only when hovered or focused, around the text rather than beside it.
+const quietField =
+  "min-h-0 rounded-md border-0 bg-transparent p-0 hover:bg-muted hover:ring-8 hover:ring-muted focus-visible:bg-background focus-visible:ring-1 focus-visible:ring-ring focus-visible:ring-offset-8 focus-visible:ring-offset-background";
 function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => void }) {
   const viewer = useViewer()!,
-    groups = useGroups(viewer.id),
-    actions = useLibraryActions();
+    groups = useAllGroups(viewer.id),
+    actions = useLibraryActions(),
+    navigate = useNavigate(),
+    path = useRouterState({ select: (s) => s.location.pathname });
+  const [removing, setRemoving] = useState(false);
   const saved: LinkDraft = {
     url: existing.url,
     title: existing.title,
@@ -79,159 +96,256 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
     groups.data?.pages.flatMap((p) => p.items).filter((g) => g.kind === "custom") ?? [];
   const change = (name: keyof LinkDraft, value: string | null) =>
     drafts.edit(existing.id, { ...form.state.values, [name]: value });
+  // Leaves before the link is gone: the refresh that follows a deletion would otherwise show
+  // this editor, or the link's own page, as missing. A failed deletion is reported as a toast.
+  const remove = () => {
+    actions.remove.mutate({ id: existing.id });
+    if (path === "/links/" + existing.id || path === "/l/" + existing.shortId)
+      void navigate({ to: "/u/$username", params: { username: viewer.username! }, replace: true });
+    else onDone();
+  };
   return (
-    <form
-      className={
-        "link-form flex flex-col gap-6 max-w-140 [&_label.link-form-label]:font-mono [&_label.link-form-label]:text-[11px] [&_label.link-form-label]:font-normal [&_label.link-form-label]:tracking-[0.06em] [&_label.link-form-label]:uppercase [&_label.link-form-label]:text-subtle-foreground"
-      }
-      onSubmit={(e) => {
-        e.preventDefault();
-        void form.handleSubmit();
-      }}
-    >
-      <form.Field name="url">
-        {(field) => (
-          <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel
-              className={
-                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
-              }
-              htmlFor="link-url"
-            >
-              Link
-            </FieldLabel>
-            <Input
-              variant="surface"
-              id="link-url"
-              type="url"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => {
-                field.handleChange(e.target.value);
-                change("url", e.target.value);
-              }}
-            />
-            <FieldError errors={field.state.meta.errors} />
-          </Field>
-        )}
-      </form.Field>
-      <form.Field name="title">
-        {(field) => (
-          <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel
-              className={
-                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
-              }
-              htmlFor="link-title"
-            >
-              Title
-            </FieldLabel>
-            <Input
-              variant="surface"
-              id="link-title"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => {
-                field.handleChange(e.target.value);
-                change("title", e.target.value);
-              }}
-            />
-            <FieldError errors={field.state.meta.errors} />
-          </Field>
-        )}
-      </form.Field>
-      <form.Field name="description">
-        {(field) => (
-          <Field data-invalid={field.state.meta.errors.length > 0}>
-            <FieldLabel
-              className={
-                "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
-              }
-              htmlFor="link-note"
-            >
-              Note
-            </FieldLabel>
-            <Textarea
-              variant="surface"
-              className="max-h-60"
-              id="link-note"
-              rows={1}
-              placeholder="Why it caught your eye (optional)"
-              value={field.state.value}
-              onBlur={field.handleBlur}
-              onChange={(e) => {
-                field.handleChange(e.target.value);
-                change("description", e.target.value);
-              }}
-            />
-            <FieldError errors={field.state.meta.errors} />
-          </Field>
-        )}
-      </form.Field>
-      <form.Field name="groupId">
-        {(field) => {
-          const chosen = customGroups.find((g) => g.id === field.state.value);
-          const choose = (id: string | null) => {
-            field.handleChange(id);
-            change("groupId", id);
-          };
-          return (
-            <div className={"link-form-group flex flex-col gap-2.5 [&_.muted]:text-[13px]"}>
-              <span
-                className={
-                  "link-form-label font-mono text-[11px] font-normal tracking-[0.06em] uppercase text-subtle-foreground"
-                }
-                id="link-group-label"
-              >
-                Group
+    <>
+      <form
+        className={"link-form flex flex-col"}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void form.handleSubmit();
+        }}
+      >
+        {/* The dialog's own title names it for assistive technology. */}
+        <p
+          className={
+            "link-form-heading flex items-center min-h-8 pr-10 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
+          }
+          aria-hidden="true"
+        >
+          Edit link
+        </p>
+        <div
+          className={
+            "link-form-label flex items-center gap-2 mt-4 min-h-7 font-mono text-[11px] uppercase tracking-[0.06em] text-subtle-foreground"
+          }
+        >
+          {existing.category !== "uncategorized" && (
+            <>
+              <span className={"inline-flex items-center gap-2"}>
+                <i
+                  className={categoryMarkClassName}
+                  data-category={existing.category}
+                  aria-hidden="true"
+                />
+                {existing.category}
               </span>
-              <div
+              <span aria-hidden="true">·</span>
+            </>
+          )}
+          <form.Field name="groupId">
+            {(field) => (
+              <GroupMenu
+                value={field.state.value}
+                groups={customGroups}
+                loading={!groups.complete}
+                onChange={(id) => {
+                  field.handleChange(id);
+                  change("groupId", id);
+                }}
+              />
+            )}
+          </form.Field>
+        </div>
+        <form.Field name="title">
+          {(field) => (
+            // The size is set here: narrow screens size fields from their parent (see globals.css).
+            <Field
+              data-invalid={field.state.meta.errors.length > 0}
+              className="mt-4.5 gap-3 text-[38px] [@media(width<=700px)]:text-[30px]"
+            >
+              <FieldLabel className="sr-only" htmlFor="link-title">
+                Title
+              </FieldLabel>
+              <Textarea
+                id="link-title"
+                rows={1}
+                placeholder="Title"
                 className={
-                  "link-group-choices flex flex-wrap items-center gap-[6px_22px] [&_[role='radio']]:inline-flex [&_[role='radio']]:items-center [&_[role='radio']]:gap-1.5 [&_[role='radio']]:h-8 [&_[role='radio']]:[border-bottom:2px_solid_transparent] [&_[role='radio']]:text-[14px] [&_[role='radio']]:text-subtle-foreground [&_[role='radio']:hover]:text-foreground [&_[aria-checked='true']]:border-b-foreground [&_[aria-checked='true']]:text-foreground"
+                  quietField +
+                  " text-[length:inherit] font-serif font-bold [font-variation-settings:'opsz'_60] tracking-[-0.015em] leading-[1.1] text-foreground"
                 }
-                role="radiogroup"
-                aria-labelledby="link-group-label"
-              >
-                <button
-                  type="button"
-                  role="radio"
-                  aria-checked={!field.state.value}
-                  onClick={() => choose(null)}
-                >
-                  No group
-                </button>
-                {customGroups.map((g) => (
-                  <button
-                    type="button"
-                    role="radio"
-                    key={g.id}
-                    aria-checked={field.state.value === g.id}
-                    onClick={() => choose(g.id)}
-                  >
-                    {g.visibility === "private" && <LockKeyhole size={12} aria-hidden="true" />}
-                    {g.name}
-                  </button>
-                ))}
-                <More
-                  hasNext={groups.hasNextPage}
-                  isFetching={groups.isFetchingNextPage}
-                  fetch={groups.fetchNextPage}
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                // A title is one line; Return saves, as in any single-line field.
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter") return;
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }}
+                onChange={(e) => {
+                  const value = e.target.value.replace(/\s*\n\s*/g, " ");
+                  field.handleChange(value);
+                  change("title", value);
+                }}
+              />
+              <FieldError className="text-[13px]" errors={field.state.meta.errors} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="url">
+          {(field) => (
+            <Field data-invalid={field.state.meta.errors.length > 0} className="mt-4 gap-2">
+              <FieldLabel className="sr-only" htmlFor="link-url">
+                Link
+              </FieldLabel>
+              <div className={"relative"}>
+                <Globe
+                  className={
+                    "absolute left-3 top-1/2 -translate-y-1/2 size-3.5 text-subtle-foreground pointer-events-none"
+                  }
+                  aria-hidden="true"
+                />
+                <Input
+                  id="link-url"
+                  type="url"
+                  className={
+                    "min-h-10 rounded-[10px] border-dashed border-border bg-transparent py-2 pl-9 pr-3 font-mono text-[13px] text-muted-foreground focus-visible:border-solid focus-visible:bg-background focus-visible:text-foreground"
+                  }
+                  value={field.state.value}
+                  onBlur={field.handleBlur}
+                  onChange={(e) => {
+                    field.handleChange(e.target.value);
+                    change("url", e.target.value);
+                  }}
                 />
               </div>
-              <p className={"muted text-subtle-foreground"}>
-                {chosen?.visibility === "private"
+              <FieldError errors={field.state.meta.errors} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Field name="description">
+          {(field) => (
+            <Field
+              data-invalid={field.state.meta.errors.length > 0}
+              className="mt-5.5 gap-2 text-[16px]"
+            >
+              <FieldLabel className="sr-only" htmlFor="link-note">
+                Note
+              </FieldLabel>
+              <Textarea
+                id="link-note"
+                className={
+                  "min-h-16 max-h-60 rounded-none border-0 border-l-2 border-border bg-transparent py-1 pr-0 pl-3.5 text-[length:inherit] leading-[1.55] focus-visible:border-l-foreground focus-visible:ring-0"
+                }
+                rows={2}
+                placeholder="Anything worth remembering?"
+                value={field.state.value}
+                onBlur={field.handleBlur}
+                onChange={(e) => {
+                  field.handleChange(e.target.value);
+                  change("description", e.target.value);
+                }}
+              />
+              <FieldError errors={field.state.meta.errors} />
+            </Field>
+          )}
+        </form.Field>
+        <form.Subscribe selector={(s) => s.values.groupId}>
+          {(groupId) => {
+            const locked = customGroups.find((g) => g.id === groupId)?.visibility === "private";
+            return (
+              <p
+                className={
+                  "link-form-visibility flex items-center gap-2 mt-4 text-[13px] text-subtle-foreground [&_svg]:size-3.5 [&_svg]:flex-none"
+                }
+              >
+                {locked ? <LockKeyhole aria-hidden="true" /> : <Globe aria-hidden="true" />}
+                {locked
                   ? "Only you will see this link."
                   : "Visible to everyone who can see your profile."}
               </p>
-            </div>
-          );
-        }}
-      </form.Field>
-      <ModalFooter onCancel={onDone}>
-        <Button type="submit" disabled={saving}>
-          Save changes
-        </Button>
-      </ModalFooter>
-    </form>
+            );
+          }}
+        </form.Subscribe>
+        <div
+          className={
+            "link-form-footer flex items-center gap-2 mt-6 pt-4.5 border-t border-border [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
+          }
+        >
+          <Button
+            type="button"
+            variant="ghost"
+            className="-ml-4.5 text-destructive hover:text-destructive"
+            onClick={() => setRemoving(true)}
+          >
+            Delete link
+          </Button>
+          <div className={"modal-actions flex flex-1 items-center justify-end gap-2"}>
+            <Button type="button" variant="ghost" className="modal-cancel" onClick={onDone}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              Save changes
+            </Button>
+          </div>
+        </div>
+      </form>
+      <Confirmation
+        open={removing}
+        onOpenChange={setRemoving}
+        title="Delete link?"
+        description="This removes the original post, its comments, and saved references."
+        destructive
+        label="Delete"
+        onConfirm={remove}
+      />
+    </>
+  );
+}
+/** Your groups, and who will see the link in each; "No group" follows your profile. */
+function GroupMenu({
+  value,
+  groups,
+  loading,
+  onChange,
+}: {
+  value: string | null;
+  groups: Group[];
+  loading: boolean;
+  onChange: (id: string | null) => void;
+}) {
+  const chosen = groups.find((g) => g.id === value);
+  // Until every page has loaded, a chosen group may not be known by name yet.
+  const name = chosen?.name ?? (value && loading ? "Group" : "No group");
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="outline"
+            className={
+              "link-group h-7 gap-1.5 rounded-md px-2 font-mono text-[11px] font-normal uppercase tracking-[0.06em] text-foreground [&_svg:last-child]:text-subtle-foreground [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
+            }
+            aria-label={"Group: " + name}
+          />
+        }
+      >
+        {chosen?.visibility === "private" && <LockKeyhole className="size-3" aria-hidden="true" />}
+        {name}
+        <ChevronDown className="size-3" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start">
+        <DropdownMenuRadioGroup
+          value={value ?? "none"}
+          onValueChange={(next) => onChange(next === "none" ? null : String(next))}
+        >
+          <DropdownMenuRadioItem value="none">No group</DropdownMenuRadioItem>
+          {groups.map((g) => (
+            <DropdownMenuRadioItem key={g.id} value={g.id}>
+              {g.visibility === "private" && <LockKeyhole aria-hidden="true" />}
+              {g.name}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

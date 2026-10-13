@@ -14,9 +14,20 @@ const modalSizes = {
   md: "w-150 sm:max-w-[calc(100vw_-_32px)]",
   lg: "w-162.5 sm:max-w-[calc(100vw_-_32px)]",
 };
-// Dialogs stay vertically centered; a bounded height keeps the header and actions on screen.
-const dialogHeight = "max-h-[min(640px,_calc(100dvh_-_80px))]";
-const fixedDialogHeight = "h-[min(640px,_calc(100dvh_-_80px))]";
+// Centered in the page below any window controls over its top (see --titlebar-inset), and
+// bounded so a dialog's title and actions stay on screen.
+export const modalCenter =
+  "top-[calc(50%_+_var(--titlebar-inset)_/_2)] max-h-[min(640px,_calc(100dvh_-_80px_-_var(--titlebar-inset)))]";
+const modalPositions = {
+  center: modalCenter,
+  // Content that grows as it loads extends downward from here instead of re-centering.
+  top: "top-[calc(12dvh_+_var(--titlebar-inset))] translate-y-0 max-h-[calc(88dvh_-_20px_-_var(--titlebar-inset))]",
+};
+const fixedDialogHeight = "h-[min(640px,_calc(100dvh_-_80px_-_var(--titlebar-inset)))]";
+// Content with its own action row marks it `modal-actions` and its Cancel `modal-cancel`; on
+// sheets they behave like a ModalFooter's: Cancel hides and the actions fill the row.
+const sheetActionRow =
+  "[&_.modal-cancel]:hidden [&_.modal-actions_[data-slot=button]]:flex-1 [&_.modal-actions_[data-slot=button]]:min-h-11.5";
 
 const ModalPresentation = createContext<"dialog" | "sheet">("dialog");
 
@@ -33,6 +44,7 @@ export function Modal({
   children,
   className = "",
   size = "sm",
+  position = "center",
   fixedHeight = false,
   returnFocus,
 }: {
@@ -45,6 +57,8 @@ export function Modal({
   children: ReactNode;
   className?: string;
   size?: keyof typeof modalSizes;
+  /** Dialogs only; sheets always rise from the bottom. */
+  position?: keyof typeof modalPositions;
   /** For a list that loads or filters in place: the frame keeps its size while it changes. */
   fixedHeight?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
@@ -57,7 +71,9 @@ export function Modal({
     <ModalPresentation.Provider value={phone ? "sheet" : "dialog"}>
       <div
         data-slot="modal-header"
-        className={hideTitle ? "sr-only" : "flex flex-none flex-col gap-3 px-(--modal-inset) pb-4"}
+        className={
+          hideTitle ? "sr-only" : "flex flex-none flex-col gap-3 px-(--modal-inset) pt-1 pb-4"
+        }
       >
         <Title className="dialog-title pr-10">{title}</Title>
         <Description className={description ? "muted text-subtle-foreground" : "sr-only"}>
@@ -79,7 +95,9 @@ export function Modal({
           finalFocus={returnFocus}
           className={
             modalClassName +
-            " app-sheet relative flex min-h-0 w-full! max-w-full! flex-col gap-5 overflow-hidden rounded-t-[22px] border-t border-border [outline:0] pt-2.5 [--modal-inset:20px] [--modal-bottom:calc(20px_+_env(safe-area-inset-bottom,_0px))] max-h-full! [transform:translateY(var(--drawer-swipe-movement-y,_0px))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] [&[data-starting-style]]:[transform:translateY(100%)] [&[data-ending-style]]:[transform:translateY(100%)] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot=drawer-close]]:absolute [&_[data-slot=drawer-close]]:top-7.5 [&_[data-slot=drawer-close]]:right-3.5 " +
+            " app-sheet relative flex min-h-0 w-full! max-w-full! flex-col gap-4 overflow-hidden rounded-t-[22px] border-t border-border [outline:0] pt-2.5 [--modal-inset:20px] [--modal-bottom:calc(20px_+_env(safe-area-inset-bottom,_0px))] max-h-full! [transform:translateY(var(--drawer-swipe-movement-y,_0px))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] [&[data-starting-style]]:[transform:translateY(100%)] [&[data-ending-style]]:[transform:translateY(100%)] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot=drawer-close]]:absolute [&_[data-slot=drawer-close]]:top-7.5 [&_[data-slot=drawer-close]]:right-3.5 " +
+            sheetActionRow +
+            " " +
             (fixedHeight ? "h-full " : "") +
             className
           }
@@ -94,7 +112,7 @@ export function Modal({
         finalFocus={returnFocus}
         className={
           modalClassName +
-          ` ${modalSizes[size]} ${dialogHeight} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-7 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
+          ` ${modalSizes[size]} ${modalPositions[position]} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-6 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
           className
         }
       >

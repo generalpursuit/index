@@ -6,7 +6,7 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "./alert-dialog";
-import { modalClassName } from "./modal";
+import { modalCenter, modalClassName } from "./modal";
 
 export function Confirmation({
   open,
@@ -32,7 +32,7 @@ export function Confirmation({
       <AlertDialogContent
         className={
           modalClassName +
-          " rounded-[22px] max-h-[calc(100dvh_-_40px)] max-w-[calc(100vw_-_24px)] overflow-y-auto p-7 [@media(width<=700px)]:p-6.25 gap-5"
+          ` ${modalCenter} rounded-[22px] max-w-[calc(100vw_-_24px)] overflow-y-auto p-7 [@media(width<=700px)]:p-6.25 gap-5`
         }
       >
         <AlertDialogTitle

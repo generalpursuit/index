@@ -76,20 +76,20 @@ export function AppShell() {
       <LinkDraftProvider>
         <div
           className={
-            "index-app select-none bg-background text-foreground text-[14px] leading-[1.5] h-dvh overflow-hidden [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[clamp(34px,_4vw,_56px)] [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_h1]:text-[40px]"
+            "index-app select-none bg-background text-foreground text-[14px] leading-[1.5] h-dvh pt-[var(--titlebar-inset)] overflow-hidden [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[clamp(34px,_4vw,_56px)] [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_h1]:text-[40px]"
           }
         >
           <a
             href="#app-content"
             className={
-              "skip-link fixed top-[-100px] left-5 z-100 bg-foreground text-background p-3 [&:focus]:top-3"
+              "skip-link fixed top-[-100px] left-5 z-100 bg-foreground text-background p-3 [&:focus]:top-[calc(var(--titlebar-inset)_+_12px)]"
             }
           >
             Skip navigation
           </a>
           <nav
             className={
-              "app-nav fixed left-6 top-0 bottom-0 flex flex-col justify-center gap-5.5 z-20 items-center [@media(width<=700px)]:top-auto [@media(width<=700px)]:bottom-0 [@media(width<=700px)]:left-0 [@media(width<=700px)]:right-0 [@media(width<=700px)]:[transform:none] [@media(width<=700px)]:flex-row [@media(width<=700px)]:justify-around [@media(width<=700px)]:gap-0 [@media(width<=700px)]:p-[8px_8px_calc(8px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:h-[calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:bg-background [@media(width<=700px)]:z-30"
+              "app-nav fixed left-6 top-[var(--titlebar-inset)] bottom-0 flex flex-col justify-center gap-5.5 z-20 items-center [@media(width<=700px)]:top-auto [@media(width<=700px)]:bottom-0 [@media(width<=700px)]:left-0 [@media(width<=700px)]:right-0 [@media(width<=700px)]:[transform:none] [@media(width<=700px)]:flex-row [@media(width<=700px)]:justify-around [@media(width<=700px)]:gap-0 [@media(width<=700px)]:p-[8px_8px_calc(8px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:h-[calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:bg-background [@media(width<=700px)]:z-30"
             }
             aria-label="Main navigation"
           >
@@ -170,9 +170,10 @@ export function AppShell() {
             title="Post"
             hideTitle
             size="lg"
-            className={
-              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] max-h-[min(820px,_calc(100dvh_-_40px))] [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"
-            }
+            // Comments grow the post downward instead of re-centering it; its editor opens in
+            // the same place.
+            position="top"
+            className={"post-dialog [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"}
             onOpenChange={(v) => {
               if (!v)
                 void navigate({
@@ -192,7 +193,9 @@ export function AppShell() {
           <Modal
             open={!!search.edit}
             title="Edit link"
+            hideTitle
             size="md"
+            position="top"
             className="editor-dialog"
             onOpenChange={(v) => {
               if (!v) closeEditor();
