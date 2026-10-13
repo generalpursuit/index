@@ -173,20 +173,24 @@ export function ModalFooter({
 export type ModalView = { id: string; content: ReactNode };
 // The curve sheets move with.
 const switchTiming = { duration: 220, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+// The views fade through rather than across: one fades steadily out before the next settles in,
+// so their headings, at different heights, never show together.
+const fadeOut = { duration: 80, fill: "forwards" } as const,
+  fadeIn = { ...switchTiming, delay: 80, duration: 140, fill: "backwards" } as const;
 const control =
   "a[href], button:not(:disabled), input:not(:disabled):not([type='hidden']), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /**
  * Views stacked in one modal, the last one shown. The ones under it stay mounted but hidden, so
- * they come back as they were. Switching crossfades while the frame takes the new view's height.
- * Focus moves into the shown view (its first control in a dialog, the sheet itself on phones),
- * or back to where it was in a view shown again.
+ * they come back as they were. Switching fades one view out and the next in while the frame
+ * takes the new view's height. Focus moves into the shown view (its first control in a dialog,
+ * the sheet itself on phones), or back to where it was in a view shown again.
  */
 export function ModalViews({ views }: { views: ModalView[] }) {
   const sheet = useContext(ModalPresentation) === "sheet",
     shown = views.at(-1)?.id;
-  // The view shown before a switch fades out over the next; one that left the stack keeps its
-  // last content until then.
+  // The view shown before a switch fades out as the next comes in; one that left the stack keeps
+  // its last content until it has gone.
   const [previous, setPrevious] = useState(views);
   const [leaving, setLeaving] = useState<ModalView & { stays: boolean }>();
   if (previous !== views) {
@@ -236,8 +240,8 @@ export function ModalViews({ views }: { views: ModalView[] }) {
     Object.assign(next.style, { flex: "none", height: `${to}px` });
     const animations = [
       element.animate({ height: [`${height.current}px`, `${to}px`] }, switchTiming),
-      next.animate({ opacity: [0, 1] }, switchTiming),
-      fading.animate({ opacity: [1, 0] }, { ...switchTiming, fill: "forwards" }),
+      fading.animate({ opacity: [1, 0] }, fadeOut),
+      next.animate({ opacity: [0, 1] }, fadeIn),
     ];
     Promise.all(animations.map((animation) => animation.finished)).then(
       () => setLeaving(undefined),
