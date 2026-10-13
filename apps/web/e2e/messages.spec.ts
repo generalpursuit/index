@@ -136,6 +136,22 @@ test("the composer holds its attachment, grows with Shift+Enter and ignores IME 
   await expect(sent.locator(".shared-post")).toContainText(link.title);
 });
 
+test("on touch screens Return adds a line and only the button sends", async ({ browser }) => {
+  const page = await phone(browser, "no-preference");
+  expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
+  await page.goto("/messages/" + data.conversationId);
+  const field = page.getByLabel("Message", { exact: true });
+  await field.fill("First line");
+  await field.press("Enter");
+  await field.pressSequentially("Second line");
+  await expect(field).toHaveValue("First line\nSecond line");
+  await expect(page.locator(".message-bubble").last()).toHaveText("Same here.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page.locator(".message-bubble").last()).toHaveText("First line\nSecond line");
+  await expect(field).toHaveValue("");
+  await page.context().close();
+});
+
 test("the message menu replies and copies, and a quote leads back to its original", async ({
   page,
   context,

@@ -84,7 +84,6 @@ export function Composer({
           disabled={locked}
           aria-label="Message"
           placeholder="Message"
-          enterKeyHint="send"
           maxLength={10000}
           className={
             "flex-1 min-w-0 max-h-40 p-[6px_4px_6px_10px] bg-transparent leading-5 resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50"
@@ -92,12 +91,14 @@ export function Composer({
           value={draft.body}
           onChange={(e) => owner.editBody(e.target.value)}
           onKeyDown={(e) => {
+            // With a keyboard and pointer, Enter sends and Shift+Enter breaks the line. On touch
+            // screens Return breaks the line, as in iMessage, and only the button sends.
             // Safari ends IME composition before this Enter, reporting it only as key 229.
             const composing = e.nativeEvent.isComposing || e.keyCode === 229;
-            if (e.key === "Enter" && !e.shiftKey && !composing) {
-              e.preventDefault();
-              e.currentTarget.form?.requestSubmit();
-            }
+            if (e.key !== "Enter" || e.shiftKey || composing) return;
+            if (matchMedia("(pointer: coarse)").matches) return;
+            e.preventDefault();
+            e.currentTarget.form?.requestSubmit();
           }}
         />
         <Button
