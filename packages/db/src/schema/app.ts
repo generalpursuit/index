@@ -5,7 +5,6 @@ import {
   foreignKey,
   index,
   pgTable,
-  boolean,
   primaryKey,
   text,
   timestamp,
@@ -283,9 +282,11 @@ export const messages = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     // Client-generated retry key, scoped to the sender.
     clientId: uuid("client_id").notNull(),
-    hasAttachment: boolean("has_attachment").notNull().default(false),
     body: text("body").notNull().default(""),
-    linkId: uuid("link_id").references(() => links.id, { onDelete: "set null" }),
+    // The forwarded link as sent, and part of the retry identity. It is not a reference:
+    // sending checks it, and reading shows it only while the reader can see it, so a deleted
+    // link still marks an unavailable attachment.
+    linkId: uuid("link_id"),
     // The replied message as sent, and part of the retry identity. It is not a reference:
     // sending checks it, and reading quotes it only while it exists in the same conversation.
     replyToMessageId: uuid("reply_to_message_id"),

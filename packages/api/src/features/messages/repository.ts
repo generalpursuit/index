@@ -122,7 +122,8 @@ const messageSelection = (actorId: string) => ({
   body: messages.body,
   createdAt: timestamp(messages.createdAt),
   attachment: { ...linkSelection, ...collectionSelection(actorId) },
-  hasAttachment: messages.hasAttachment,
+  // Marks a forwarded link even after it is deleted, so clients can show it unavailable.
+  hasAttachment: sql<boolean>`${messages.linkId} is not null`,
   // Only public profile identity is exposed, never original-link metadata.
   restrictedAuthor: sql<z.output<typeof publicUserSchema> | null>`(
     select jsonb_build_object('id',u.id,'name',u.name,'username',u.username,
@@ -135,7 +136,7 @@ const messageSelection = (actorId: string) => ({
   // replied message exists.
   replyTo: sql<z.output<typeof messageReplySchema> | null>`(
     select jsonb_build_object('id',reply.id,'senderId',reply.sender_id,
-      'excerpt',left(reply.body,200),'hasAttachment',reply.has_attachment)
+      'excerpt',left(reply.body,200),'hasAttachment',reply.link_id is not null)
     from messages reply
     where reply.id=${messages.replyToMessageId} and reply.conversation_id=${messages.conversationId}
   )`,
@@ -188,14 +189,14 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
    and ${row}.body=${input.body} and ${row}.link_id is not distinct from ${input.linkId ?? null}::uuid
    and ${row}.reply_to_message_id is not distinct from ${input.replyToMessageId ?? null}::uuid`;
   // A retry is answered by the message it committed before anything is checked again, so a
-  // reply target deleted since cannot turn a delivered message into a rejection.
+  // link or reply target deleted since cannot turn a delivered message into a rejection.
   const previous = db.$with("previous_send", {}).as(sql`
  select id,conversation_id,created_at,body,link_id,reply_to_message_id from messages
  where sender_id=${actorId} and client_id=${input.clientId}::uuid
  `);
   const inserted = db.$with("inserted_message", {}).as(sql`
- insert into messages(conversation_id,sender_id,client_id,body,link_id,has_attachment,reply_to_message_id)
- select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${!!input.linkId},${input.replyToMessageId ?? null}::uuid
+ insert into messages(conversation_id,sender_id,client_id,body,link_id,reply_to_message_id)
+ select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${input.replyToMessageId ?? null}::uuid
  where not exists (select 1 from previous_send)
    and ${canSend(actorId, sql`${input.conversationId}::uuid`)} and ${attachmentAllowed} and ${replyAllowed}
  on conflict(sender_id,client_id) do update set client_id=excluded.client_id

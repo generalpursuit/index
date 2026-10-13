@@ -3,13 +3,40 @@
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu";
 import { cn } from "@index/ui/lib/utils";
 
-/** Opens on right click or long press anywhere in its trigger. */
+/**
+ * Opens on right click or long press anywhere in its trigger, and on the ContextMenu key or
+ * Shift+F10 while a focusable trigger has focus.
+ */
 function ContextMenu({ ...props }: ContextMenuPrimitive.Root.Props) {
   return <ContextMenuPrimitive.Root data-slot="context-menu" {...props} />;
 }
 
-function ContextMenuTrigger({ ...props }: ContextMenuPrimitive.Trigger.Props) {
-  return <ContextMenuPrimitive.Trigger data-slot="context-menu-trigger" {...props} />;
+function ContextMenuTrigger({ onKeyDown, ...props }: ContextMenuPrimitive.Trigger.Props) {
+  return (
+    <ContextMenuPrimitive.Trigger
+      data-slot="context-menu-trigger"
+      onKeyDown={(event) => {
+        onKeyDown?.(event);
+        const menuKey =
+          event.key === "ContextMenu" ||
+          (event.key === "F10" && event.shiftKey && !event.altKey && !event.ctrlKey);
+        if (!menuKey || event.defaultPrevented || event.target !== event.currentTarget) return;
+        // Base UI opens only from a menu event, which macOS never sends for these keys, so
+        // the trigger sends its own from its corner, where browsers open a keyboard's menu.
+        event.preventDefault();
+        const corner = event.currentTarget.getBoundingClientRect();
+        event.currentTarget.dispatchEvent(
+          new MouseEvent("contextmenu", {
+            bubbles: true,
+            cancelable: true,
+            clientX: corner.left,
+            clientY: corner.bottom,
+          }),
+        );
+      }}
+      {...props}
+    />
+  );
 }
 
 function ContextMenuContent({ className, ...props }: ContextMenuPrimitive.Popup.Props) {
@@ -23,6 +50,8 @@ function ContextMenuContent({ className, ...props }: ContextMenuPrimitive.Popup.
             "z-50 max-h-(--available-height) origin-(--transform-origin) overflow-x-hidden overflow-y-auto duration-100 outline-none data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:overflow-hidden data-closed:fade-out-0 data-closed:zoom-out-95 min-w-40 max-w-[min(320px,_var(--available-width))] p-1.5 border border-border rounded-[12px] bg-card text-muted-foreground [box-shadow:var(--menu-shadow)]",
             className,
           )}
+          // On Windows the ContextMenu key sends its own menu event on key up, into this menu.
+          onContextMenu={(event) => event.preventDefault()}
           {...props}
         />
       </ContextMenuPrimitive.Positioner>

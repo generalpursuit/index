@@ -193,6 +193,75 @@ test("the message menu replies and copies, and a quote leads back to its origina
   await bob.close();
 });
 
+test("the keyboard moves through messages as one tab stop and opens their menus and posts", async ({
+  page,
+}) => {
+  await login(page);
+  const link = data.links[2]!;
+  await page.goto(`/messages/${data.conversationId}?attach=${link.id}`);
+  const field = page.getByLabel("Message", { exact: true });
+  await expect(page.locator(".draft-attachment")).toContainText(link.title);
+  await field.fill("Look");
+  await field.press("Enter");
+  await expect(page.locator(".draft-attachment")).toHaveCount(0);
+  const focused = page.locator(":focus"),
+    at = String.raw` \w+,? \d+ \w+ \d{4} at \d\d:\d\d$`;
+  const message = (text: string) =>
+    page.getByRole("listitem").filter({ has: page.locator(".message-bubble", { hasText: text }) });
+  // The list is entered at its newest message, which names its sender, content and time.
+  await field.press("Shift+Tab");
+  await expect(focused).toHaveAccessibleName(new RegExp(`^You Look ${link.title} .+${at}`));
+  await page.keyboard.press("ArrowUp");
+  await expect(focused).toHaveAccessibleName(new RegExp(`^Lena Same here\\.${at}`));
+  await page.keyboard.press("Home");
+  await expect(message("A place for good finds.")).toBeFocused();
+  await page.keyboard.press("ArrowUp");
+  await expect(message("A place for good finds.")).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(message("Look")).toBeFocused();
+  // Enter opens the post a message carries.
+  await page.keyboard.press("Enter");
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.getByRole("heading", { name: link.title, exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(post).toHaveCount(0);
+
+  // Shift+F10 opens the focused message's menu; replying hands focus to the composer.
+  await message("Adding it to my list.").focus();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Reply", exact: true })).toBeVisible();
+  await page.keyboard.press("ArrowDown");
+  await expect(menu.getByRole("menuitem", { name: "Reply", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("form.composer .draft-reply")).toContainText("Replying to Bob");
+  await expect(field).toBeFocused();
+  await field.fill("Keyboard reply");
+  await field.press("Enter");
+  await expect(page.locator(".message-bubble").last()).toHaveText("Keyboard reply");
+
+  // The list returns to the message focused last; Enter on a reply leads to its original.
+  await field.press("Shift+Tab");
+  await expect(message("Adding it to my list.")).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(focused).toHaveAccessibleName(
+    new RegExp(`^You Replying to Bob Adding it to my list\\. Keyboard reply${at}`),
+  );
+  await page.keyboard.press("Enter");
+  await expect(message("Adding it to my list.")).toBeFocused();
+  await expect(page.locator(".message[data-highlighted]")).toContainText("Adding it to my list.");
+
+  // The ContextMenu key opens the menu too, and Escape returns to the message.
+  await page.keyboard.press("ContextMenu");
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  await expect(message("Adding it to my list.")).toBeFocused();
+  // Tab leaves the list, past its quotes and posts, for the composer.
+  await page.keyboard.press("Tab");
+  await expect(field).toBeFocused();
+});
+
 test("swiping a message right replies on touch screens, leaving the edge to back", async ({
   browser,
 }) => {
