@@ -1,11 +1,13 @@
 @import "@index/ui/globals.css";
 @source "./**/*.{ts,tsx}";
 
-/* The menu panel's window is transparent so its native glass shows through. It is narrow but
-   never a phone, so fields keep their designed size instead of the 16px focus-zoom reset. */
+/* The menu panel's window is transparent so its native glass shows through, and the page never
+   scrolls; only its link list does. It is narrow but never a phone, so fields keep their designed
+   size instead of the 16px focus-zoom reset. */
 html.menu-bar-surface,
 html.menu-bar-surface body {
   background: transparent;
+  overflow: hidden;
 }
 html.menu-bar-surface
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {

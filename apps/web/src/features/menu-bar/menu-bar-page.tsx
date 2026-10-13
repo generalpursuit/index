@@ -40,9 +40,8 @@ function MenuPanel() {
   const user = session.data?.user;
   const [checking, setChecking] = useState(false);
   const panel = useRef<HTMLElement>(null),
-    content = useRef<HTMLDivElement>(null),
-    footer = useRef<HTMLElement>(null);
-  useFittedPanel(panel, content, footer);
+    content = useRef<HTMLDivElement>(null);
+  useFittedPanel(panel, content);
   useLayoutEffect(() => {
     // A transparent page lets the window's native glass show through.
     document.documentElement.classList.add("menu-bar-surface");
@@ -84,11 +83,13 @@ function MenuPanel() {
   return (
     <main
       ref={panel}
-      className="flex h-dvh min-h-0 flex-col rounded-[16px] p-2.5 text-[13px] text-foreground shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.14)] dark:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.14)]"
+      // The window's own size, never scrolling: only the link list scrolls.
+      className="fixed inset-0 flex flex-col overflow-clip rounded-[16px] p-2.5 text-[13px] text-foreground shadow-[inset_0_0_0_0.5px_rgb(0_0_0/0.14)] dark:shadow-[inset_0_0_0_0.5px_rgb(255_255_255/0.14)]"
       aria-label="Index menu bar"
     >
-      {/* Takes its natural height; when the panel is shorter, only the link list gives way. */}
-      <div ref={content} className="flex min-h-0 flex-col pb-1.5">
+      {/* Takes its natural height. In a window that is too short the link list gives way, and past
+          that the content is cut at the footer rather than covering it. */}
+      <div ref={content} className="flex min-h-0 flex-col overflow-y-clip pb-1.5">
         {checking || session.isPending ? (
           <p role="status" className="py-8 text-center text-subtle-foreground">
             Checking your session…
@@ -124,7 +125,7 @@ function MenuPanel() {
         )}
       </div>
       {/* Ends the panel like the items at the end of a native menu. */}
-      <footer ref={footer} className="mt-auto shrink-0">
+      <footer className="mt-auto shrink-0">
         <hr className="mx-2 border-foreground/10" />
         <div className="pt-1.5">
           <MenuItem
@@ -176,25 +177,24 @@ const menuMargin = 16;
 function useFittedPanel(
   panel: RefObject<HTMLElement | null>,
   content: RefObject<HTMLElement | null>,
-  footer: RefObject<HTMLElement | null>,
 ) {
   useLayoutEffect(() => {
     const fitted = () => {
-      const page = panel.current!.getBoundingClientRect();
+      const page = panel.current!;
       // A hidden list (while the session is checked) has no offset parent.
-      const list = content.current!.querySelector<HTMLElement>(".link-list");
+      const list = page.querySelector<HTMLElement>(".link-list");
       const shown = list?.offsetParent ? list : null;
-      // The footer keeps to the bottom, so leave out any space between it and the content.
-      const natural =
-        content.current!.getBoundingClientRect().bottom -
-        page.top +
-        (shown ? shown.scrollHeight - shown.clientHeight : 0) +
-        page.bottom -
-        footer.current!.getBoundingClientRect().top;
+      // The page's own height, whatever the window's. Measuring it in a window that is too short
+      // reads the squeezed layout, which asks for the same short window again. It takes its own
+      // height only within this task, so that layout is never drawn.
+      page.style.bottom = "auto";
+      const natural = page.getBoundingClientRect().height,
+        listed = shown?.getBoundingClientRect().height ?? 0;
+      page.style.bottom = "";
       const max = window.__INDEX_MENU_BAR__!.maxHeight;
       if (!shown || natural <= max) return natural;
       const row = parseFloat(getComputedStyle(shown).getPropertyValue("--row"));
-      const around = natural - shown.scrollHeight;
+      const around = natural - listed;
       return around + Math.floor((max - around) / row) * row;
     };
     const measure = () => {
@@ -226,7 +226,7 @@ function useFittedPanel(
       sizes.disconnect();
       changes.disconnect();
     };
-  }, [panel, content, footer]);
+  }, [panel, content]);
 }
 function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
   const api = useAPI();

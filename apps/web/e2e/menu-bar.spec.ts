@@ -189,6 +189,117 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   await expect(list).not.toHaveAttribute("data-fade-start");
 });
 
+test("the panel window always fits its content and its page never scrolls", async ({
+  page,
+  context,
+  request,
+}) => {
+  const fixture = await (await request.post(apiURL + "/_test/reset")).json();
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
+  const headers = { Authorization: `Bearer ${desktop.token}` };
+  const week = new Date();
+  week.setUTCHours(0, 0, 0, 0);
+  week.setUTCDate(week.getUTCDate() - ((week.getUTCDay() + 6) % 7));
+  const listed = await request.get(
+    `${apiURL}/api/v1/profiles/${fixture.people.Alice}/links?weekStart=${week.toISOString().slice(0, 10)}&limit=100`,
+    { headers },
+  );
+  for (const link of (await listed.json()).items)
+    await request.delete(`${apiURL}/api/v1/links/${link.id}`, { headers });
+  const panel = await context.newPage();
+  await panel.setViewportSize({ width: 390, height: 560 });
+  await desktop.attach(panel, "menu-bar");
+  await panel.goto("/menu-bar");
+  const field = panel.getByRole("textbox", { name: "Add a link to this week" });
+  await expect(field).toBeVisible();
+  const rows = panel.getByRole("button", { name: /Open .*in browser/ });
+  // The window is the height the page asked for, which is exactly its content: nothing cut or
+  // covered, no space left over, and no scrolling page.
+  const fits = () =>
+    expect
+      .poll(async () => ({
+        window: (await panel.evaluate(() => innerHeight)) === desktop.panel.height,
+        ...(await panel.evaluate(() => {
+          const page = document.scrollingElement!,
+            list = document.querySelector<HTMLElement>(".link-list"),
+            content = document.querySelector("main > div")!.getBoundingClientRect(),
+            footer = document.querySelector("footer")!.getBoundingClientRect();
+          // The bottom of everything in the content, the list's rows aside.
+          let extent = content.top;
+          for (const element of document.querySelectorAll("main > div *")) {
+            if (element.parentElement?.closest(".link-list")) continue;
+            const box = element.getBoundingClientRect();
+            if (box.height) extent = Math.max(extent, box.bottom);
+          }
+          return {
+            pageScrolls: page.scrollHeight > page.clientHeight || page.scrollTop > 0,
+            contentCut: Math.round(extent - content.bottom) > 0,
+            listHides: !!list && list.scrollHeight > list.clientHeight + 1,
+            aboveFooter: Math.round(footer.top - content.bottom),
+            belowFooter: Math.round(innerHeight - footer.bottom),
+          };
+        })),
+      }))
+      .toEqual({
+        window: true,
+        pageScrolls: false,
+        contentCut: false,
+        listHides: false,
+        aboveFooter: 0,
+        belowFooter: 10,
+      });
+  const refresh = () =>
+    desktop.emit("index:desktop-data", { revision: desktop.revision, source: "main" });
+  // An empty week shows only the header, the field and the footer.
+  await desktop.togglePanel();
+  await expect(rows).toHaveCount(0);
+  await fits();
+  // Links added and removed while the panel is closed or open.
+  await desktop.togglePanel();
+  const added = [];
+  for (const i of [1, 2, 3]) {
+    const created = await request.post(apiURL + "/api/v1/links", {
+      headers,
+      data: { url: `https://pages.test/fit-${i}`, title: `Fit ${i}` },
+    });
+    added.push((await created.json()).id);
+  }
+  await refresh();
+  await desktop.togglePanel();
+  await expect(rows).toHaveCount(3);
+  await fits();
+  await desktop.togglePanel();
+  for (const id of added) await request.delete(`${apiURL}/api/v1/links/${id}`, { headers });
+  await refresh();
+  await desktop.togglePanel();
+  await expect(rows).toHaveCount(0);
+  await fits();
+  // Growth outside the list, which an empty list cannot make room for.
+  await field.fill("not a link");
+  await field.press("Enter");
+  await expect(panel.getByText("Enter a web link (https://…)")).toBeVisible();
+  await fits();
+  // A save in an empty week grows the panel by a row outside the list, then into the list.
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
+  await expect(rows).toHaveCount(1);
+  await fits();
+  // An opening the host cannot show at once goes through the session check while hidden.
+  await desktop.togglePanel();
+  desktop.panel.committed = undefined;
+  await desktop.togglePanel();
+  await expect.poll(() => desktop.panel.shown).toBe(true);
+  await fits();
+  // The destination menu grows the panel while open, then gives the room back.
+  await panel.getByRole("button", { name: "Save destination: Your links" }).click();
+  await expect(panel.getByRole("menu")).toBeVisible();
+  await panel.keyboard.press("Escape");
+  await expect(panel.getByRole("menu")).toHaveCount(0);
+  await fits();
+});
+
 test("an opening for the same account shows cached links at once and refreshes them calmly in place", async ({
   page,
   context,
