@@ -320,4 +320,22 @@ struct APIClientTests {
     #expect(message.hasAttachment)
     #expect(message.restrictedAuthor?.id == "iris")
   }
+  @Test func replyCarriesOnlyItsQuoteAndConversationItsReadReceipt() throws {
+    let json =
+      #"{"id":"conversation","shortId":"AbCdEfGhIjKlMnOp","participants":[],"canSend":true,"unreadCount":0,"readReceiptMessageId":"reply","lastMessage":{"id":"reply","conversationId":"conversation","senderId":"alice","clientId":"client","body":"Yes","createdAt":"2026-10-13T09:00:00.000Z","attachment":null,"hasAttachment":false,"restrictedAuthor":null,"replyTo":{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true}},"updatedAt":"2026-10-13T09:00:00.000Z"}"#
+    let conversation = try JSONDecoder().decode(Conversation.self, from: Data(json.utf8))
+    #expect(conversation.readReceiptMessageId == "reply")
+    let quote = try #require(conversation.lastMessage?.replyTo)
+    #expect(quote.id == "original")
+    #expect(quote.senderId == "bob")
+    #expect(quote.excerpt.isEmpty)
+    #expect(quote.hasAttachment)
+    // A deleted original is no longer quoted, and nothing has been read yet.
+    let unquoted = json.replacingOccurrences(
+      of: #"{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true}"#, with: "null"
+    ).replacingOccurrences(of: #""readReceiptMessageId":"reply""#, with: #""readReceiptMessageId":null"#)
+    let unread = try JSONDecoder().decode(Conversation.self, from: Data(unquoted.utf8))
+    #expect(unread.lastMessage?.replyTo == nil)
+    #expect(unread.readReceiptMessageId == nil)
+  }
 }

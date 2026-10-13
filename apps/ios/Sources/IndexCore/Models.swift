@@ -133,6 +133,14 @@ public struct ActivityPage: Codable, Sendable {
   public let nextCursor: String?
   public let unreadCount: Int
 }
+/// The start of a replied message. Its attachment stays behind its own visibility rules,
+/// so a reply only learns that there was one.
+public struct MessageReply: Codable, Hashable, Sendable {
+  public let id: String
+  public let senderId: String
+  public let excerpt: String
+  public let hasAttachment: Bool
+}
 public struct Message: Codable, Identifiable, Sendable {
   public let id: String
   public let conversationId: String
@@ -143,6 +151,8 @@ public struct Message: Codable, Identifiable, Sendable {
   public let attachment: SavedLink?
   public let hasAttachment: Bool
   public let restrictedAuthor: Person?
+  /// Null once the replied message is deleted.
+  public let replyTo: MessageReply?
 }
 public struct Conversation: Codable, Identifiable, Sendable {
   public let id: String
@@ -150,6 +160,8 @@ public struct Conversation: Codable, Identifiable, Sendable {
   public let participants: [Person]
   public let canSend: Bool
   public let unreadCount: Int
+  /// The viewer's newest message that every other member has read.
+  public let readReceiptMessageId: String?
   public let lastMessage: Message?
   public let updatedAt: String
   public func title(viewerId: String) -> String {
