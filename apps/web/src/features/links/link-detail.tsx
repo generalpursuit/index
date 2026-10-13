@@ -120,6 +120,19 @@ function Post({
           hasData={!!list.data}
           error={list.error}
           retry={() => void list.refetch()}
+          // The post fits its content, so the usual loading blocks would open it tall and shrink it.
+          // One line, like "No comments yet.", lets comments only grow it; hidden for the first
+          // 300ms, so a quick load goes straight to them.
+          placeholder={
+            <p
+              className={
+                "muted text-subtle-foreground [animation:loading-reveal_1ms_300ms_backwards]"
+              }
+              role="status"
+            >
+              Loading comments…
+            </p>
+          }
         >
           {list.data?.pages
             .flatMap((p) => p.items)
