@@ -231,6 +231,18 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
   const query = useInfiniteQuery(weekLinksOptions(api, userId, week));
   const links = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data]);
   const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // Each opening starts at the top, where the newest links are; scrolling while open stays.
+    const reset = () => {
+      const list = scroller.current;
+      if (!list) return;
+      list.scrollTo({ top: 0, behavior: "instant" });
+      // A hidden panel fires scroll only on its next frame; update the edge fades before then.
+      list.dispatchEvent(new Event("scroll"));
+    };
+    window.addEventListener("index:menu-closed", reset);
+    return () => window.removeEventListener("index:menu-closed", reset);
+  }, []);
   return (
     // Kept while hidden, so a draft survives the session check of the next opening.
     <section

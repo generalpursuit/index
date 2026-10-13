@@ -86,6 +86,9 @@ fn hide_panel(window: &WebviewWindow) -> tauri::Result<()> {
     MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
     #[cfg(target_os = "macos")]
     unsafe { os::index_menu_unwatch(); }
+    // Like a native menu, the next opening starts at the top, where the newest links are. The page
+    // goes there while hidden, so a cached opening shows no jump.
+    let _ = window.emit_to("menu-bar", "index:menu-closed", ());
     window.hide()
 }
 pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {

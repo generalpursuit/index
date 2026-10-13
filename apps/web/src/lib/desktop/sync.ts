@@ -162,6 +162,12 @@ export async function installDesktopSync(
         ? listen<MenuOpened>("index:menu-open", ({ payload }) => void focus(payload.presented))
         : listen("index:desktop-open", () => void focus())),
     );
+    if (isMenuBar)
+      cleanups.push(
+        await listen("index:menu-closed", () =>
+          window.dispatchEvent(new Event("index:menu-closed")),
+        ),
+      );
     const initial = await desktopInvoke<number>("session_revision");
     revision = Math.max(revision, initial);
   } catch (error) {

@@ -160,6 +160,19 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   await expect(list).toHaveAttribute("data-fade-start", "true");
   expect(await Promise.all(await fixed())).toEqual(before);
   expect(await panel.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
+  // Scrolling while open stays through the refresh of an opening.
+  const scrolled = await list.evaluate((el) => el.scrollTop);
+  expect(scrolled).toBeGreaterThan(0);
+  const commands = desktop.commands.length;
+  await desktop.emit("index:menu-open", { presented: true }, "menu-bar");
+  await expect
+    .poll(() => desktop.commands.slice(commands).some((c) => c.command === "desktop_panel_ready"))
+    .toBe(true);
+  expect(await list.evaluate((el) => el.scrollTop)).toBe(scrolled);
+  // Closing goes back to the top at once, so the next opening starts there.
+  await desktop.emit("index:menu-closed", null, "menu-bar");
+  expect(await list.evaluate((el) => el.scrollTop)).toBe(0);
+  await expect(list).not.toHaveAttribute("data-fade-start");
 });
 
 test("an opening for the same account shows cached links at once and refreshes them calmly in place", async ({
