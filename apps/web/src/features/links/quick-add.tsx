@@ -3,8 +3,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { DestinationMenu, useDestination } from "@/features/sharing/destination-menu";
 import { useShareSave } from "@/features/sharing/use-share-save";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
-import { Modal } from "@index/ui/components/modal";
-import { Button } from "@index/ui/components/button";
+import { dayLabel, monday } from "@/lib/weeks";
+import { useMediaQuery } from "@index/ui/hooks/use-media-query";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { useLibraryActions } from "./hooks/use-links";
@@ -13,13 +13,14 @@ import { domain, webURL } from "./url";
 import type { SavedLink } from "@/lib/types";
 
 type Pending = { url: string; existing: Set<string> };
-const unavailableMessage = "This group is unavailable. Choose a destination before saving.";
+const hintClassName = "quick-add-hint m-[-4px_0_8px_44px] text-[12px]";
 
 /**
  * A list row that is also a field: pasting a link (or typing one and pressing Enter) saves it
  * right away, and the server reads its title and category from the page. It is the only way
  * to add a link; details are edited afterwards. `links` is the list shown below, used to hand
- * over seamlessly.
+ * over seamlessly. A link saved before stays in the field with a note under it, and Enter then
+ * saves it again.
  */
 export function QuickAdd({
   groupId,
@@ -60,29 +61,40 @@ export function QuickAdd({
   const [hint, setHint] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [announcement, setAnnouncement] = useState("");
-  const save = async (url: string, saveAgain = false) => {
+  // Disabled while saving, the field loses focus. A link handed back to it (already saved, or
+  // not sent) brings focus back for the Enter that answers, unless focus has moved elsewhere.
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (share.pending || !refocus.current) return;
+    refocus.current = false;
+    if (document.activeElement === document.body) inputRef.current?.focus();
+  });
+  /** `again` is the earlier save of `url` when this is an explicit Save again. */
+  const save = async (url: string, again: SavedLink | null = null) => {
     if (busy.current || destination.blocked) return;
     busy.current = true;
     if (successToast.current !== undefined) toast.dismiss(successToast.current);
-    const generation = accountGeneration();
+    const generation = accountGeneration(),
+      focused = document.activeElement === inputRef.current;
     setFailure(null);
     const entry: Pending = { url, existing: new Set(links.map((link) => link.id)) };
     setText("");
     setHint(false);
+    setDuplicate(null);
     setPending((old) => [entry, ...old]);
     onSave?.();
     const target = destination.current;
     try {
-      const result = await share.save(url, target?.id ?? null, saveAgain);
+      const result = await share.save(url, target?.id ?? null, !!again);
       assertCurrentAccount(generation);
       if (!active.current) return;
       if (result.status === "existing") {
         setDuplicate(result.link);
         setText(url);
+        refocus.current = focused;
         return;
       }
       const link = result.link;
-      setDuplicate(null);
       setAnnouncement("Added " + link.title);
       // Named, because the link may land outside the list being viewed.
       successToast.current = toast.success("Link added to " + (target?.name ?? "Your links"), {
@@ -96,6 +108,9 @@ export function QuickAdd({
     } catch (error) {
       if (generation !== accountGeneration() || !active.current) return;
       setText(url);
+      refocus.current = focused;
+      // Still a Save again, so that retrying repeats the same request.
+      setDuplicate(again);
       setFailure(error instanceof Error ? error.message : "Could not save. Try again.");
     } finally {
       busy.current = false;
@@ -107,6 +122,13 @@ export function QuickAdd({
   const waiting = pending.filter(
     (entry) => !links.some((link) => link.url === entry.url && !entry.existing.has(link.id)),
   );
+  const viewExisting = (link: SavedLink) => {
+    if (onViewExisting)
+      void onViewExisting(link).catch(() =>
+        toast.error("Could not open this Index destination. Try again."),
+      );
+    else void navigate({ to: "/l/$shortId", params: { shortId: link.shortId } });
+  };
   return (
     <>
       <div
@@ -127,12 +149,13 @@ export function QuickAdd({
           autoComplete="off"
           spellCheck={false}
           aria-label={label}
-          aria-describedby={hint ? hintId : undefined}
+          aria-describedby={hint || duplicate ? hintId : undefined}
           placeholder="Enter a link"
           value={text}
           onChange={(e) => {
             setText(e.target.value);
             setHint(false);
+            setDuplicate(null);
           }}
           onPaste={(e) => {
             const pasted = e.clipboardData.getData("text").trim();
@@ -144,11 +167,12 @@ export function QuickAdd({
             if (e.key === "Escape") {
               setText("");
               setHint(false);
+              setDuplicate(null);
               e.currentTarget.blur();
             } else if (e.key === "Enter") {
               e.preventDefault();
               const url = text.trim();
-              if (webURL(url)) void save(url);
+              if (webURL(url)) void save(url, duplicate);
               else if (url) setHint(true);
             }
           }}
@@ -157,7 +181,7 @@ export function QuickAdd({
       </div>
       {destination.unavailable && (
         <p role="alert" className="ml-11 text-sm text-destructive">
-          {unavailableMessage}
+          This group is unavailable. Choose a destination before saving.
         </p>
       )}
       {failure && (
@@ -165,64 +189,19 @@ export function QuickAdd({
           {failure}
         </p>
       )}
-      <Modal
-        open={!!duplicate}
-        onOpenChange={(open) => {
-          if (!open && !share.pending) setDuplicate(null);
-        }}
-        title="Already saved"
-        returnFocus={inputRef}
-      >
-        <div className="flex flex-col gap-4">
-          <p>You already saved {duplicate?.title}. Save again to add it to this week.</p>
-          <div className="-my-1 flex items-center gap-1 text-[12px] text-subtle-foreground">
-            Save to
-            <DestinationMenu destination={destination} disabled={share.pending} />
-          </div>
-          {destination.unavailable && (
-            <p role="alert" className="text-sm text-destructive">
-              {unavailableMessage}
-            </p>
-          )}
-          <div className="flex flex-wrap justify-end gap-2">
-            <Button variant="ghost" disabled={share.pending} onClick={() => setDuplicate(null)}>
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              disabled={share.pending}
-              onClick={() => {
-                if (!duplicate) return;
-                if (onViewExisting) {
-                  void onViewExisting(duplicate)
-                    .then(() => {
-                      if (active.current) setDuplicate(null);
-                    })
-                    .catch(() => toast.error("Could not open this Index destination. Try again."));
-                } else {
-                  void navigate({ to: "/l/$shortId", params: { shortId: duplicate.shortId } });
-                  setDuplicate(null);
-                }
-              }}
-            >
-              View existing
-            </Button>
-            <Button
-              disabled={share.pending || destination.blocked}
-              onClick={() => void save(text, true)}
-            >
-              Save again
-            </Button>
-          </div>
-        </div>
-      </Modal>
       {hint && (
-        <p
-          className={"quick-add-hint m-[-4px_0_8px_44px] text-[12px] text-destructive"}
-          id={hintId}
-        >
+        <p className={hintClassName + " text-destructive"} id={hintId}>
           Enter a web link (https://…)
         </p>
+      )}
+      {duplicate && (
+        <AlreadySaved
+          id={hintId}
+          link={duplicate}
+          disabled={share.pending || destination.blocked}
+          onSaveAgain={() => void save(text.trim(), duplicate)}
+          onView={() => viewExisting(duplicate)}
+        />
       )}
       {waiting.map(({ url }, index) => (
         <div
@@ -258,5 +237,52 @@ export function QuickAdd({
         {announcement}
       </span>
     </>
+  );
+}
+
+/**
+ * One quiet line under the field for a link saved before. Saving again adds another original to
+ * the destination in the row; the earlier save stays where it is.
+ */
+function AlreadySaved({
+  id,
+  link,
+  disabled,
+  onSaveAgain,
+  onView,
+}: {
+  id: string;
+  link: SavedLink;
+  disabled: boolean;
+  onSaveAgain: () => void;
+  onView: () => void;
+}) {
+  // Touch keyboards may have no Return key to point at, so the action itself is offered.
+  const touch = useMediaQuery("(pointer: coarse)");
+  const saved =
+    monday(new Date(link.savedOn)) === monday()
+      ? "Already saved this week"
+      : "Saved on " + dayLabel(link.savedOn);
+  const action =
+    "relative text-foreground underline-offset-[3px] after:absolute after:inset-x-0 after:-inset-y-2 after:content-[''] enabled:hover:underline disabled:opacity-50";
+  return (
+    <p id={id} role="status" className={hintClassName + " text-subtle-foreground"}>
+      {saved}
+      {touch ? (
+        " · "
+      ) : (
+        <>
+          . <kbd aria-hidden="true">↵</kbd>
+          <span className="sr-only">Enter</span> to{" "}
+        </>
+      )}
+      <button type="button" className={action} disabled={disabled} onClick={onSaveAgain}>
+        {touch ? "Save again" : "save again"}
+      </button>
+      {" · "}
+      <button type="button" className={action} onClick={onView}>
+        View
+      </button>
+    </p>
   );
 }

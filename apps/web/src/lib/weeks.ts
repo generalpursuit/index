@@ -27,6 +27,16 @@ export function weekRange(value: string) {
     timeZone: "UTC",
   }).formatRange(start, end);
 }
+/** "12 Oct" for a date, with the year when it falls outside the current one. */
+export function dayLabel(value: string) {
+  const date = new Date(value + "T00:00:00Z");
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: date.getUTCFullYear() === new Date().getUTCFullYear() ? undefined : "numeric",
+    timeZone: "UTC",
+  }).format(date);
+}
 export function timeAgo(value: string) {
   const minutes = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 60000));
   return minutes < 1

@@ -94,14 +94,17 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
       .first(),
   ).toBeVisible();
   await add(panel, "https://pages.test/calm-software");
-  await expect(panel.getByRole("dialog", { name: "Already saved" })).toBeVisible();
-  await panel.getByRole("button", { name: "View existing", exact: true }).click();
+  // A line under the field rather than a sheet over the panel.
+  const saved = panel.getByRole("status").filter({ hasText: "Already saved this week" });
+  await expect(saved).toBeVisible();
+  await expect(panel.getByRole("dialog")).toHaveCount(0);
+  await panel.screenshot({ path: "test-results/menu-bar-already-saved.png" });
+  await saved.getByRole("button", { name: "View", exact: true }).click();
   await expect(page).toHaveURL(/\/l\/[A-Za-z0-9_-]+$/);
   await expect(panel).toHaveURL(/\/menu-bar$/);
   await expect.poll(() => desktop.pending).toBeNull();
-  await add(panel, "https://pages.test/calm-software");
-  await panel.getByRole("button", { name: "Save again", exact: true }).click();
-  await expect(panel.getByRole("dialog", { name: "Already saved" })).not.toBeVisible();
+  await panel.getByRole("textbox", { name: "Add a link to this week" }).press("Enter");
+  await expect(saved).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toHaveCount(2);
   await panel.screenshot({ path: "test-results/menu-bar-compact.png" });
   await page.goto("/settings");
@@ -285,6 +288,15 @@ test("the panel window always fits its content and its page never scrolls", asyn
   await field.fill("https://pages.test/calm-software");
   await field.press("Enter");
   await expect(rows).toHaveCount(1);
+  await fits();
+  // So does the line under the field for a link saved before.
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
+  const saved = panel.getByRole("status").filter({ hasText: "Already saved this week" });
+  await expect(saved).toBeVisible();
+  await fits();
+  await field.fill("");
+  await expect(saved).toHaveCount(0);
   await fits();
   // An opening the host cannot show at once goes through the session check while hidden.
   await desktop.togglePanel();
