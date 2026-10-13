@@ -67,13 +67,11 @@ function MenuPanel() {
         event.preventDefault();
         quit();
       }
-      // A dialog or menu that is animating closed has already handled its own Escape.
+      // A menu that is animating closed has already handled its own Escape.
       else if (
         event.key === "Escape" &&
         !event.defaultPrevented &&
-        !document.querySelector(
-          '[role="dialog"]:not([data-closed]), [role="menu"]:not([data-closed])',
-        )
+        !document.querySelector('[role="menu"]:not([data-closed])')
       )
         report(desktopInvoke("desktop_hide"));
     };
@@ -171,8 +169,7 @@ function MenuItem({
 const menuMargin = 16;
 /**
  * The native panel follows the content's natural height, showing whole rows of the list when it
- * reaches its maximum, grows to show an open menu whole, and opens fully while a dialog sheet is
- * shown.
+ * reaches its maximum, and grows to show an open menu whole. It shows no dialogs.
  */
 function useFittedPanel(
   panel: RefObject<HTMLElement | null>,
@@ -198,7 +195,6 @@ function useFittedPanel(
       return around + Math.floor((max - around) / row) * row;
     };
     const measure = () => {
-      if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
       // Measured from its trigger: until the panel is tall enough, the menu may sit elsewhere.
       const trigger = document.querySelector('[aria-haspopup="menu"][aria-expanded="true"]'),
         menu = document.querySelector('[role="menu"]:not([data-closed])');
@@ -218,7 +214,7 @@ function useFittedPanel(
     };
     const sizes = new ResizeObserver(update);
     for (const element of [panel.current!, content.current!]) sizes.observe(element);
-    // Dialogs are portaled outside the panel, and the list's content changes without its size.
+    // Menus are portaled outside the panel, and the list's content changes without its size.
     const changes = new MutationObserver(update);
     changes.observe(document.body, { childList: true, subtree: true });
     return () => {
@@ -272,8 +268,10 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
           {weekRange(week)} · Your links
         </p>
       </div>
+      {/* Groups are created in the main app. */}
       <QuickAdd
         compact
+        canCreateGroup={false}
         links={links}
         label="Add a link to this week"
         onSave={() => scrollToTop(scroller)}

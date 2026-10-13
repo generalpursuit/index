@@ -27,6 +27,7 @@ export function QuickAdd({
   links,
   label,
   compact = false,
+  canCreateGroup = true,
   onSave,
   onViewExisting,
 }: {
@@ -36,6 +37,8 @@ export function QuickAdd({
   label: string;
   /** Shorter rows with desktop text, for narrow surfaces that are not phones. */
   compact?: boolean;
+  /** Offers New group… in the destination menu. */
+  canCreateGroup?: boolean;
   /** Called as a save starts, before the server has read the page. */
   onSave?: () => void;
   onViewExisting?: (link: SavedLink) => Promise<void>;
@@ -177,7 +180,11 @@ export function QuickAdd({
             }
           }}
         />
-        <DestinationMenu destination={destination} disabled={share.pending} />
+        <DestinationMenu
+          destination={destination}
+          disabled={share.pending}
+          canCreateGroup={canCreateGroup}
+        />
       </div>
       {destination.unavailable && (
         <p role="alert" className="ml-11 text-sm text-destructive">

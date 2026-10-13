@@ -56,14 +56,16 @@ const itemClassName = "pl-3";
 
 /**
  * The destination as quiet text at the end of an add row, opening a short menu of Your links and
- * your groups. New group creates one and selects it.
+ * your groups. New group, where the host offers it, creates one and selects it.
  */
 export function DestinationMenu({
   destination,
   disabled = false,
+  canCreateGroup = true,
 }: {
   destination: Destination;
   disabled?: boolean;
+  canCreateGroup?: boolean;
 }) {
   const { current, unavailable, groups, choose } = destination;
   const trigger = useRef<HTMLButtonElement>(null);
@@ -127,14 +129,18 @@ export function DestinationMenu({
               Retry loading groups
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="gap-1.5 pl-3 [&>svg]:static"
-            onClick={() => setCreating(true)}
-          >
-            <Plus aria-hidden="true" />
-            New group…
-          </DropdownMenuItem>
+          {canCreateGroup && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                className="gap-1.5 pl-3 [&>svg]:static"
+                onClick={() => setCreating(true)}
+              >
+                <Plus aria-hidden="true" />
+                New group…
+              </DropdownMenuItem>
+            </>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
       {creating && (
