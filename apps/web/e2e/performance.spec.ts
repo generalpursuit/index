@@ -119,6 +119,32 @@ test("a post opens at its full width", async ({ page }) => {
   await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
   expect(await post.evaluate((element) => (element as HTMLElement).offsetWidth)).toBe(650);
 });
+test("a post keeps its size while its comments load", async ({ page }) => {
+  await login(page);
+  let release!: () => void;
+  const blocked = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/rpc/v1/comments/list**", async (route) => {
+    await blocked;
+    await route.continue();
+  });
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  const height = () => post.evaluate((element) => (element as HTMLElement).offsetHeight);
+  let loading: number;
+  try {
+    await page
+      .locator('.week-page[data-active="true"] .own-links')
+      .getByRole("button", { name: "In Rainbows", exact: true })
+      .click();
+    await expect(post.getByRole("heading", { name: "In Rainbows", exact: true })).toBeVisible();
+    loading = await height();
+  } finally {
+    release();
+  }
+  await expect(post.locator(".comments")).toContainText("No comments yet.");
+  expect(await height()).toBe(loading);
+});
 test("Discover follow buttons do not fetch every person's full profile", async ({ page }) => {
   await login(page);
   let profiles = 0;
