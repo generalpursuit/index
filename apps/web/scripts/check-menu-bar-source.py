@@ -20,7 +20,7 @@ class MenuBarPackaging(unittest.TestCase):
         windows = (TAURI / 'src/menu_bar.rs').read_text()
         self.assertIn('WebviewWindowBuilder::from_config(app, config)', windows)
         # Both the main window and the panel are built through the navigation guard.
-        self.assertEqual(windows.count('crate::restrict_navigation(builder, app).build()'), 2)
+        self.assertEqual(windows.count('crate::restrict_navigation('), 2)
         library = (TAURI / 'src/lib.rs').read_text()
         self.assertIn('NewWindowResponse::Deny', library)
         for command in ['session_snapshot', 'session_compare_write', 'session_touch',
@@ -100,6 +100,23 @@ class MenuBarPackaging(unittest.TestCase):
         lifecycle = menu.split('pub fn attach_lifecycle', 1)[1].split('fn valid_navigation', 1)[0]
         self.assertEqual(lifecycle.count('hide_panel(&handle)'), 2)
         self.assertIn('hide_panel(&panel)', menu.split('pub fn show_main', 1)[1].split('\n}\n', 1)[0])
+
+    def test_panel_draws_one_native_surface_with_glass_where_available(self):
+        menu = (TAURI / 'src/menu_bar.rs').read_text()
+        panel = menu.split('pub fn ensure_panel', 1)[1].split('fn toggle', 1)[0]
+        # One blur layer: the native surface replaces Tauri's window effect.
+        self.assertNotIn('.effects(', panel)
+        self.assertIn('.transparent(true)', panel)
+        self.assertIn('os::index_menu_prepare(pointer)', panel)
+        native = (TAURI / 'native/menu_bar.m').read_text()
+        surface = native.split('@implementation IndexPanelSurface', 1)[1].split('void index_menu_prepare', 1)[0]
+        # Looked up at run time, so older SDKs and macOS versions still build and run.
+        self.assertIn('NSClassFromString(@"NSGlassEffectView")', surface)
+        self.assertNotIn('[NSGlassEffectView', native)
+        self.assertIn('accessibilityDisplayShouldReduceTransparency', surface)
+        self.assertIn('NSViewWidthSizable | NSViewHeightSizable', surface)
+        self.assertIn('NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification', native)
+        self.assertEqual(native.count('static const CGFloat kPanelWhiteTint'), 1)
 
     def test_revision_guards_cover_native_notification_mutations(self):
         notifications = (TAURI / 'src/notifications.rs').read_text()

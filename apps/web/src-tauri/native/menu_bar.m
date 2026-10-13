@@ -22,6 +22,95 @@ static id reopenObserver;
 - (void)toggle:(id)sender { index_menu_toggle(); }
 @end
 static IndexMenuTarget *menuTarget;
+// The panel's surface behind its transparent WebView: Liquid Glass where macOS has it (26 and
+// later), the menu material otherwise, and opaque while Reduce transparency is on, as macOS draws
+// menus then. Light glass reads grey over most wallpapers, so it is tinted toward white by this
+// much (0 to 1); dark mode keeps the system's own glass.
+static const CGFloat kPanelWhiteTint = 0.4;
+static const CGFloat kPanelCornerRadius = 16;
+
+static BOOL index_dark(NSAppearance *appearance) {
+  return [[appearance bestMatchFromAppearancesWithNames:@[NSAppearanceNameAqua, NSAppearanceNameDarkAqua]] isEqualToString:NSAppearanceNameDarkAqua];
+}
+static NSColor *index_panel_color(NSColor *light, NSColor *dark) {
+  return [NSColor colorWithName:nil dynamicProvider:^NSColor *(NSAppearance *appearance) { return index_dark(appearance) ? dark : light; }];
+}
+// A rounded fill with the hairline edge the panel draws where it has no glass rim.
+@interface IndexPanelFill : NSView
+@property(copy) NSColor *color;
+@end
+@implementation IndexPanelFill
+- (void)drawRect:(__unused NSRect)dirty {
+  NSBezierPath *shape = [NSBezierPath bezierPathWithRoundedRect:NSInsetRect(self.bounds, 0.25, 0.25) xRadius:kPanelCornerRadius yRadius:kPanelCornerRadius];
+  [self.color setFill];
+  [shape fill];
+  shape.lineWidth = 0.5;
+  [index_panel_color([NSColor colorWithWhite:0 alpha:0.14], [NSColor colorWithWhite:1 alpha:0.14]) setStroke];
+  [shape stroke];
+}
+@end
+@interface IndexPanelSurface : NSView
+@end
+@implementation IndexPanelSurface
+- (void)rebuild {
+  for (NSView *view in [self.subviews copy]) [view removeFromSuperview];
+  NSView *surface;
+  Class glass = NSClassFromString(@"NSGlassEffectView");
+  if (NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceTransparency) {
+    IndexPanelFill *fill = [[IndexPanelFill alloc] initWithFrame:self.bounds];
+    fill.color = NSColor.windowBackgroundColor;
+    surface = fill;
+  } else if (glass) {
+    // Looked up at run time, so older macOS and SDKs build and run without it.
+    surface = [[glass alloc] initWithFrame:self.bounds];
+    [surface setValue:@(kPanelCornerRadius) forKey:@"cornerRadius"];
+  } else {
+    NSVisualEffectView *effect = [[NSVisualEffectView alloc] initWithFrame:self.bounds];
+    effect.material = NSVisualEffectMaterialMenu;
+    effect.blendingMode = NSVisualEffectBlendingModeBehindWindow;
+    effect.state = NSVisualEffectStateActive;
+    NSImage *mask = [NSImage imageWithSize:NSMakeSize(2 * kPanelCornerRadius + 1, 2 * kPanelCornerRadius + 1) flipped:NO drawingHandler:^BOOL(NSRect rect) {
+      [NSColor.blackColor setFill];
+      [[NSBezierPath bezierPathWithRoundedRect:rect xRadius:kPanelCornerRadius yRadius:kPanelCornerRadius] fill];
+      return YES;
+    }];
+    mask.capInsets = NSEdgeInsetsMake(kPanelCornerRadius, kPanelCornerRadius, kPanelCornerRadius, kPanelCornerRadius);
+    mask.resizingMode = NSImageResizingModeStretch;
+    effect.maskImage = mask;
+    IndexPanelFill *tint = [[IndexPanelFill alloc] initWithFrame:effect.bounds];
+    tint.color = index_panel_color([NSColor colorWithWhite:1 alpha:kPanelWhiteTint], NSColor.clearColor);
+    tint.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+    [effect addSubview:tint];
+    surface = effect;
+  }
+  // Follows the window's frame, and with it the height animation.
+  surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  [self addSubview:surface];
+  [self viewDidChangeEffectiveAppearance];
+  [self.window invalidateShadow];
+}
+- (void)viewDidChangeEffectiveAppearance {
+  [super viewDidChangeEffectiveAppearance];
+  NSView *surface = self.subviews.firstObject;
+  // The glass takes a plain color, so it is chosen again for each appearance.
+  Class glass = NSClassFromString(@"NSGlassEffectView");
+  if (glass && [surface isKindOfClass:glass])
+    [surface setValue:index_dark(self.effectiveAppearance) ? nil : [NSColor colorWithWhite:1 alpha:kPanelWhiteTint] forKey:@"tintColor"];
+  for (NSView *view in surface.subviews) view.needsDisplay = YES;
+  surface.needsDisplay = YES;
+}
+@end
+static id transparencyChanged;
+// Once, when the panel is built: the surface goes behind the WebView and follows Reduce
+// transparency while Index runs.
+void index_menu_prepare(void *pointer) {
+  NSView *content = ((__bridge NSWindow *)pointer).contentView;
+  IndexPanelSurface *surface = [[IndexPanelSurface alloc] initWithFrame:content.bounds];
+  surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
+  [content addSubview:surface positioned:NSWindowBelow relativeTo:nil];
+  [surface rebuild];
+  transparencyChanged = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) { [surface rebuild]; }];
+}
 // Only a nonactivating panel opens over another app's full-screen Space; activating Index
 // would switch to the Space of its main window instead.
 @interface IndexMenuPanel : NSPanel
