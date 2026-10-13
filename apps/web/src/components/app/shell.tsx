@@ -23,8 +23,10 @@ import { queryClient } from "@/utils/orpc";
 import { useWarmUp } from "@/hooks/use-warm-up";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
+// The current page's icon is ink with a small square beside it, like the category marks; the
+// others recede (at least 3:1 against the page). On phones the square sits below the icon.
 const navItemClassName =
-  "nav-item [&.nav-settings]:absolute [&.nav-settings]:bottom-7 relative flex items-center justify-center w-11 h-11 text-subtle-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] [&[data-status='active']]:text-foreground [&:hover]:text-foreground [&[data-status='active']_.nav-brand]:opacity-[1] [&:hover_.nav-brand]:opacity-[1]";
+  "nav-item [&.nav-settings]:absolute [&.nav-settings]:bottom-7 relative flex items-center justify-center w-11 h-11 text-foreground/50 rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] [&[data-status='active']]:text-foreground [&[data-status='active']_svg]:stroke-2 [&:hover]:text-foreground [&[data-status='active']_.nav-brand]:opacity-[1] [&:hover_.nav-brand]:opacity-[1] before:absolute before:-left-1.5 before:top-1/2 before:size-1.25 before:-translate-y-1/2 before:rounded-[1.5px] before:bg-foreground before:opacity-0 before:content-[''] [&[data-status='active']::before]:opacity-100 [@media(width<=700px)]:before:top-auto [@media(width<=700px)]:before:bottom-0 [@media(width<=700px)]:before:left-1/2 [@media(width<=700px)]:before:-translate-x-1/2 [@media(width<=700px)]:before:translate-y-0";
 const unreadDotClassName =
   "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]";
 
