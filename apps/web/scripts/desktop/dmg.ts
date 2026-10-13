@@ -63,18 +63,28 @@ export function dmgSettings(app: string, productName: string) {
   };
 }
 
-export function buildDmg(args: string[], productName: string, version: string) {
+function buildTarget(args: string[]) {
   const index = args.findIndex((arg) => ["--target", "-t"].includes(arg));
-  const target =
-    index >= 0 ? args[index + 1] : args.find((arg) => arg.startsWith("--target="))?.split("=")[1];
-  const arch = target ? archs[target] : process.arch === "arm64" ? "aarch64" : "x64";
-  if (!arch) throw new Error("Unsupported DMG target.");
-  const bundle = join(
+  return index >= 0
+    ? args[index + 1]
+    : args.find((arg) => arg.startsWith("--target="))?.split("=")[1];
+}
+
+/** Where Tauri writes this build's bundles. */
+export function bundleDir(args: string[]) {
+  return join(
     resolve(process.env.CARGO_TARGET_DIR ?? "src-tauri/target"),
-    target ?? "",
+    buildTarget(args) ?? "",
     args.includes("--debug") ? "debug" : "release",
     "bundle",
   );
+}
+
+export function buildDmg(args: string[], productName: string, version: string) {
+  const target = buildTarget(args);
+  const arch = target ? archs[target] : process.arch === "arm64" ? "aarch64" : "x64";
+  if (!arch) throw new Error("Unsupported DMG target.");
+  const bundle = bundleDir(args);
   // Match Tauri's output so artifact collection finds exactly this version's image.
   const output = join(bundle, "dmg");
   rmSync(output, { recursive: true, force: true });

@@ -2,7 +2,9 @@ import { apiScope } from "./api-scope.ts";
 import { prepareShareExtension, verifyShareExtension } from "./share-extension.ts";
 import { spawnSync } from "node:child_process";
 import { channels, isChannel, readBaseConfig, releaseConfig } from "./channels.ts";
-import { buildDmg, deferDmg, requireDmgbuild } from "./dmg.ts";
+import { buildDmg, bundleDir, deferDmg, requireDmgbuild } from "./dmg.ts";
+import { stapleApp } from "./staple.ts";
+import { join } from "node:path";
 
 const argsIn = process.argv.slice(2);
 const channelIndex = argsIn.indexOf("--channel");
@@ -103,5 +105,8 @@ const args = [
 const result = spawnSync("bun", args, { stdio: "inherit", env: process.env });
 const productName = config.productName || base.productName;
 if (result.status === 0 && sharing) verifyShareExtension(argsIn, productName);
+// Notarized builds carry their ticket before anything is packaged from the app.
+if (result.status === 0 && process.platform === "darwin" && process.env.APPLE_API_KEY_PATH)
+  stapleApp(join(bundleDir(argsIn), "macos", `${productName}.app`));
 if (result.status === 0 && tauri.dmg) buildDmg(argsIn, productName, config.version || base.version);
 process.exit(result.status ?? 1);
