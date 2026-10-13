@@ -22,25 +22,25 @@ for (const width of [1440, 390]) {
       name: "Save destination: Your links",
       exact: true,
     });
+    // Your links never shows a lock, even though Alice's profile is private.
+    await expect(launcher.locator(".lucide-lock-keyhole")).toHaveCount(0);
     await launcher.click();
-    const picker = page.getByRole("dialog", { name: "Save to", exact: true });
-    await expect(picker.getByRole("button", { name: /Starred|Favorites/ })).toHaveCount(0);
-    await picker.getByRole("textbox", { name: "Search destinations" }).fill("no matching name");
-    await picker.getByRole("button", { name: "Create group", exact: true }).click();
-    const creation = page.getByRole("dialog", { name: "Create group", exact: true });
+    const menu = page.getByRole("menu");
+    await expect(menu.getByRole("menuitemradio", { name: "Your links" })).toBeChecked();
+    await expect(menu.getByRole("menuitemradio", { name: /Starred|Favorites/ })).toHaveCount(0);
+    await expect(menu.getByRole("textbox")).toHaveCount(0);
+    await page.screenshot({ path: `test-results/sharing-menu-${width}.png` });
+    await menu.getByRole("menuitem", { name: "New group…", exact: true }).click();
+    const creation = page.getByRole("dialog", { name: "New group", exact: true });
     await creation.getByRole("textbox", { name: "Name", exact: true }).fill("Shared reading");
     await creation.getByRole("button", { name: "Lock group", exact: true }).click();
     await creation.getByRole("button", { name: "Create", exact: true }).click();
-    await expect(picker).toBeVisible();
-    await expect(picker.getByRole("button", { name: /Shared reading/ })).toHaveAttribute(
-      "aria-pressed",
-      "true",
-    );
-    await page.screenshot({ path: `test-results/sharing-picker-${width}.png` });
-    await picker.getByRole("button", { name: "Done", exact: true }).click();
-    await expect(
-      current(page).getByRole("button", { name: "Save destination: Shared reading" }),
-    ).toBeFocused();
+    await expect(creation).toHaveCount(0);
+    const chosen = current(page).getByRole("button", {
+      name: "Save destination: Shared reading",
+    });
+    await expect(chosen).toBeFocused();
+    await expect(chosen.locator(".lucide-lock-keyhole")).toHaveCount(1);
     const requests: {
       requestId: string;
       groupId: string | null;
@@ -63,6 +63,9 @@ for (const width of [1440, 390]) {
     await input(page).press("Enter");
     const duplicate = page.getByRole("dialog", { name: "Already saved", exact: true });
     await expect(duplicate.getByRole("button", { name: "View existing" })).toBeVisible();
+    await expect(
+      duplicate.getByRole("button", { name: "Save destination: Shared reading" }),
+    ).toBeVisible();
     await duplicate.getByRole("button", { name: "Save again" }).click();
     await expect(duplicate).toHaveCount(0);
     await expect(
@@ -93,11 +96,11 @@ test("lost response retains input and retry ID; cancellation does not save", asy
   });
   const before = await current(page).locator(".own-links .link-row").count();
   await current(page).getByRole("button", { name: "Save destination: Your links" }).click();
-  // Escape before the picker is open is lost, and the open picker then keeps the field's Enter.
-  const picker = page.getByRole("dialog", { name: "Save to", exact: true });
-  await expect(picker).toBeVisible();
+  // Escape before the menu is open is lost, and the open menu then keeps the field's Enter.
+  const menu = page.getByRole("menu");
+  await expect(menu).toBeVisible();
   await page.keyboard.press("Escape");
-  await expect(picker).toHaveCount(0);
+  await expect(menu).toHaveCount(0);
   expect(calls).toBe(0);
   await input(page).fill("https://pages.test/calm-software");
   await input(page).press("Enter");
@@ -138,39 +141,38 @@ test("selected group refreshes rename/privacy and deletion requires a fresh choi
   const group = await created.json();
   expect(created.ok()).toBe(true);
   const launcher = current(page).getByRole("button", { name: /^Save destination:/ });
+  const menu = page.getByRole("menu");
   await launcher.click();
-  let picker = page.getByRole("dialog", { name: "Save to", exact: true });
-  await picker.getByRole("button", { name: /Share destination/ }).click();
+  const row = menu.getByRole("menuitemradio", { name: "Share destination" });
+  await expect(row.locator(".lucide-lock-keyhole")).toHaveCount(1);
+  await row.click();
+  await expect(menu).toHaveCount(0);
   await expect(launcher).toHaveAttribute("aria-label", "Save destination: Share destination");
   const renamed = await page.request.patch(apiURL + `/api/v1/groups/${group.id}`, {
     data: { name: "Renamed collection", visibility: "public" },
   });
   expect(renamed.ok()).toBe(true);
   await launcher.click();
-  picker = page.getByRole("dialog", { name: "Save to", exact: true });
-  const row = picker.getByRole("button", { name: /Renamed collection/ });
-  await expect(row).toHaveAttribute("aria-pressed", "true");
-  await expect(row).toContainText("Visible to anyone who can see your profile");
-  await expect(row.getByLabel("Locked")).toHaveCount(0);
-  await picker.getByRole("button", { name: "Done" }).click();
+  const changed = menu.getByRole("menuitemradio", { name: "Renamed collection" });
+  await expect(changed).toBeChecked();
+  await expect(changed.locator(".lucide-lock-keyhole")).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await expect(launcher).toHaveAttribute("aria-label", "Save destination: Renamed collection");
+  await expect(launcher.locator(".lucide-lock-keyhole")).toHaveCount(0);
   await input(page).fill("https://pages.test/calm-software");
   const deleted = await page.request.delete(apiURL + `/api/v1/groups/${group.id}`, {
     data: { deleteLinks: false },
   });
   expect(deleted.ok()).toBe(true);
   await launcher.click();
-  picker = page.getByRole("dialog", { name: "Save to", exact: true });
-  await expect(picker.getByRole("alert")).toContainText("unavailable");
-  await picker.getByRole("button", { name: "Done" }).click();
+  await expect(current(page).getByRole("alert")).toContainText("unavailable");
+  await expect(menu.getByRole("menuitemradio", { checked: true })).toHaveCount(0);
+  await page.keyboard.press("Escape");
   await expect(launcher).toHaveAttribute("aria-label", "Save destination: Unavailable group");
   await expect(input(page)).toBeDisabled();
   await expect(input(page)).toHaveValue("https://pages.test/calm-software");
   await launcher.click();
-  await page
-    .getByRole("dialog", { name: "Save to" })
-    .getByRole("button", { name: /Your links/ })
-    .click();
+  await menu.getByRole("menuitemradio", { name: "Your links" }).click();
   await expect(input(page)).toBeEnabled();
   await input(page).press("Enter");
   await expect(

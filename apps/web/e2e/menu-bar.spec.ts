@@ -46,12 +46,26 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await expect.poll(() => desktop.opened).toContain("https://are.na/");
   await expect(panel).toHaveURL(/\/menu-bar$/);
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
+  // The menu opens inside the panel; Escape closes it and leaves the panel open.
+  const menu = panel.getByRole("menu");
+  await expect(menu).toBeVisible();
+  await expect
+    .poll(async () => {
+      const box = (await menu.boundingBox())!;
+      return box.x >= 0 && box.x + box.width <= 390 && box.y + box.height <= 560;
+    })
+    .toBe(true);
+  const menuBottom = await menu.evaluate((element) => element.getBoundingClientRect().bottom);
+  await expect.poll(() => panelHeight("desktop_panel_resize")).toBeGreaterThan(menuBottom);
+  await panel.keyboard.press("Escape");
+  await expect(menu).toHaveCount(0);
+  expect(desktop.hidden).not.toContain("menu-bar");
+  await panel.getByRole("button", { name: "Save destination: Your links" }).click();
+  await menu.getByRole("menuitem", { name: "New group…", exact: true }).click();
   await expect.poll(() => panelHeight("desktop_panel_resize")).toBeGreaterThan(fitted);
-  await panel.getByRole("button", { name: "Create group", exact: true }).click();
   await panel.getByRole("textbox", { name: "Name", exact: true }).fill("Menu reading");
   await panel.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(panel.getByRole("dialog")).toHaveAccessibleName("Save to");
-  await panel.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(panel.getByRole("dialog")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Save destination: Menu reading" })).toBeFocused();
   await add(panel, "https://pages.test/calm-software");
   await expect(panel.getByText("Link added", { exact: true })).toBeVisible();
@@ -366,10 +380,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
-  await panel
-    .getByRole("dialog", { name: "Save to", exact: true })
-    .getByRole("button", { name: /Notes Only you/ })
-    .click();
+  await panel.getByRole("menuitemradio", { name: "Notes", exact: true }).click();
   const receipts: string[] = [];
   await panel.route("**/rpc/v1/links/share", async (route) => {
     receipts.push(route.request().postDataJSON().json.requestId);
