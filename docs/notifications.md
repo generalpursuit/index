@@ -1,6 +1,6 @@
 # Notifications
 
-Account preferences select message/comment/mention/follow events; each device opts in separately. Categories default on, previews default off. Permission is requested only on explicit enablement. Notification settings do not remove in-app activity, and notifications do not send email.
+Account preferences select message/comment/mention/follow events; each device opts in separately. Categories default on, previews default off. A profile gets a follow `request` while private and a `follow` while public, never both for one follow, so clients show both as one Followers setting that writes both keys and is on only when both are. Permission is requested only on explicit enablement. Notification settings do not remove in-app activity, and notifications do not send email.
 
 ## Delivery and privacy
 
