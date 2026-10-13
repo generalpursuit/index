@@ -63,7 +63,7 @@ extension AppModel {
           let link: SavedLink = try await api.request("/links/\(id)")
           guard !Task.isCancelled, userID == account else { return }
           if key == "edit", link.ownerId == account {
-            destinations.append(.add(Week.monday(Week.date(link.savedOn)), link.groupId, link))
+            destinations.append(.edit(link))
           } else if key == "attach", let chat = target.conversationId {
             try drafts.attach(link, to: chat)
           }
@@ -76,7 +76,7 @@ extension AppModel {
       navigation.sheet = nil
       if let last = destinations.last {
         switch last {
-        case .link, .add, .settings:
+        case .link, .edit, .settings:
           navigation.sheet = destinations.removeLast()
         default: break
         }
