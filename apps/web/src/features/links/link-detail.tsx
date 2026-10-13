@@ -46,21 +46,22 @@ export function LinkDetail({ id, standalone = false }: { id: string; standalone?
       error={link.error}
       retry={() => void link.refetch()}
     >
-      {link.data && <Post id={id} standalone={standalone} comments={comments} />}
+      {/* Given the link rather than reading it again: deleting it from its editor, over this
+          post in the same dialog, removes it before the dialog has closed. */}
+      {link.data && <Post link={link.data} standalone={standalone} comments={comments} />}
     </QueryState>
   );
 }
 function Post({
-  id,
+  link,
   standalone,
   comments,
 }: {
-  id: string;
+  link: SavedLink;
   standalone: boolean;
   comments: ReturnType<typeof useComments>;
 }) {
-  const link = useLink(id).data!,
-    author = useProfile(link.ownerId),
+  const author = useProfile(link.ownerId),
     viewer = useViewer(),
     group = useQuery(groupOptions(useAPI(), link.groupId)).data;
   const { list, create, remove } = comments,
@@ -215,7 +216,7 @@ function Post({
           onSubmit={(e) => {
             e.preventDefault();
             if (text.trim())
-              create.mutate({ linkId: id, body: text }, { onSuccess: () => setText("") });
+              create.mutate({ linkId: link.id, body: text }, { onSuccess: () => setText("") });
           }}
         >
           <UserAvatar person={viewer} />

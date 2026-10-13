@@ -311,6 +311,8 @@ test("deleting a link from its editor closes it, or leaves the link's own page",
   await remove();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(own.getByRole("button", { name: "Are.na", exact: true })).toHaveCount(0);
+  // The post under the editor outlives its link while the dialog closes, without failing.
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
   await page.goto("/links/" + data.locked.id);
   await page.getByRole("link", { name: "Edit", exact: true }).click();
   await remove();
