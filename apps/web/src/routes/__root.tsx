@@ -84,8 +84,9 @@ function Root() {
       <Toaster
         theme={resolved}
         richColors
-        offset={isMenuBar ? 56 : undefined}
-        mobileOffset={isMenuBar ? { bottom: 56, left: 12, right: 12 } : undefined}
+        // Above the menu panel's footer.
+        offset={isMenuBar ? 80 : undefined}
+        mobileOffset={isMenuBar ? { bottom: 80, left: 12, right: 12 } : undefined}
       />
     </>
   );

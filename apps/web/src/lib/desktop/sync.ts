@@ -7,6 +7,8 @@ import { client } from "@/utils/orpc";
 import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./index";
 
 type RevisionEvent = { revision: number; source: string | null };
+/** The host shows the panel at once when it already holds content for the current account. */
+type MenuOpened = { presented: boolean };
 type PendingNavigation = { id: number; path: string; recipientId: string | null };
 
 let menuPanelHeight: (() => number) | undefined;
@@ -123,8 +125,10 @@ export async function installDesktopSync(
       void presentMenuPanel().catch(() => {});
     });
   }
-  async function focus() {
-    if (isMenuBar) window.dispatchEvent(new Event("index:menu-checking"));
+  /** A shown panel revalidates in place; any other opening of the panel shows after this check. */
+  async function focus(presented = false) {
+    const checking = isMenuBar && !presented;
+    if (checking) window.dispatchEvent(new Event("index:menu-checking"));
     try {
       const next = await desktopInvoke<number>("session_revision");
       if (next > revision) acceptSession({ revision: next, source: null });
@@ -132,10 +136,8 @@ export async function installDesktopSync(
     } catch {
       void clearAccountState(cache);
     } finally {
-      if (isMenuBar) {
-        flushSync(() => window.dispatchEvent(new Event("index:menu-checked")));
-        void presentMenuPanel().catch(() => {});
-      }
+      if (checking) flushSync(() => window.dispatchEvent(new Event("index:menu-checked")));
+      if (isMenuBar) void presentMenuPanel().catch(() => {});
     }
   }
   const local = (event: Event) => {
@@ -154,7 +156,18 @@ export async function installDesktopSync(
         void cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
       }),
     );
-    cleanups.push(await listen("index:desktop-open", () => void focus()));
+    // Each window hears only of its own opening, so opening the panel leaves main alone.
+    cleanups.push(
+      await (isMenuBar
+        ? listen<MenuOpened>("index:menu-open", ({ payload }) => void focus(payload.presented))
+        : listen("index:desktop-open", () => void focus())),
+    );
+    if (isMenuBar)
+      cleanups.push(
+        await listen("index:menu-closed", () =>
+          window.dispatchEvent(new Event("index:menu-closed")),
+        ),
+      );
     const initial = await desktopInvoke<number>("session_revision");
     revision = Math.max(revision, initial);
   } catch (error) {
@@ -168,11 +181,12 @@ export async function installDesktopSync(
   };
   window.addEventListener("index:desktop-stale-window", stale);
   cleanups.push(() => window.removeEventListener("index:desktop-stale-window", stale));
-  // The panel checks on every opening and hides on blur, so its focus always follows a
-  // finished check; checking again would replace its visible content with the status.
+  // The panel revalidates on every opening and hides on blur, so its focus always follows that
+  // opening; checking again would replace its visible content with the status.
   if (!isMenuBar) {
-    window.addEventListener("focus", focus);
-    cleanups.push(() => window.removeEventListener("focus", focus));
+    const focused = () => void focus();
+    window.addEventListener("focus", focused);
+    cleanups.push(() => window.removeEventListener("focus", focused));
   }
   cleanups.push(
     cache.getMutationCache().subscribe((event) => {

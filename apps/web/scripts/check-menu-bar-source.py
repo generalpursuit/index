@@ -18,8 +18,9 @@ class MenuBarPackaging(unittest.TestCase):
         self.assertNotIn('remote', capability)
         self.assertEqual(capability['permissions'], ['core:default'])
         windows = (TAURI / 'src/menu_bar.rs').read_text()
-        self.assertIn('crate::restrict_navigation(WebviewWindowBuilder::from_config', windows)
-        self.assertIn('crate::restrict_navigation(builder, app).build()', windows)
+        self.assertIn('WebviewWindowBuilder::from_config(app, config)', windows)
+        # Both the main window and the panel are built through the navigation guard.
+        self.assertEqual(windows.count('crate::restrict_navigation(builder, app).build()'), 2)
         library = (TAURI / 'src/lib.rs').read_text()
         self.assertIn('NewWindowResponse::Deny', library)
         for command in ['session_snapshot', 'session_compare_write', 'session_touch',
@@ -79,6 +80,26 @@ class MenuBarPackaging(unittest.TestCase):
         self.assertNotIn('shutdown()', lifecycle)
         self.assertIn('notifications::shutdown()', (TAURI / 'src/lib.rs').read_text())
         self.assertIn('!isMenuBar && <NotificationLifecycle', (WEB / 'src/routes/__root.tsx').read_text())
+
+    def test_panel_closes_like_menu_extras_and_watches_only_while_shown(self):
+        native = (TAURI / 'native/menu_bar.m').read_text()
+        watch = native.split('static void index_menu_watch(void)', 1)[1].split('void index_menu_unwatch(void)', 1)[0]
+        for mask in ['NSEventMaskLeftMouseDown', 'NSEventMaskRightMouseDown', 'NSEventMaskOtherMouseDown']:
+            self.assertIn(mask, watch)
+        self.assertIn('addGlobalMonitorForEventsMatchingMask', watch)
+        self.assertIn('com.apple.HIToolbox.beginMenuTrackingNotification', watch)
+        self.assertIn('NSWorkspaceDidActivateApplicationNotification', watch)
+        self.assertIn('processIdentifier != getpid()', watch)
+        present = native.split('void index_menu_present(', 1)[1].split('void index_menu_resize(', 1)[0]
+        self.assertIn('index_menu_watch();', present)
+        unwatch = native.split('void index_menu_unwatch(void)', 1)[1].split('\n}\n', 1)[0]
+        for removal in ['[NSEvent removeMonitor:outsideClicks]', 'removeObserver:otherMenus', 'removeObserver:otherApps']:
+            self.assertIn(removal, unwatch)
+        menu = (TAURI / 'src/menu_bar.rs').read_text()
+        self.assertIn('os::index_menu_unwatch()', menu.split('fn hide_panel(', 1)[1].split('\n}\n', 1)[0])
+        lifecycle = menu.split('pub fn attach_lifecycle', 1)[1].split('fn valid_navigation', 1)[0]
+        self.assertEqual(lifecycle.count('hide_panel(&handle)'), 2)
+        self.assertIn('hide_panel(&panel)', menu.split('pub fn show_main', 1)[1].split('\n}\n', 1)[0])
 
     def test_revision_guards_cover_native_notification_mutations(self):
         notifications = (TAURI / 'src/notifications.rs').read_text()

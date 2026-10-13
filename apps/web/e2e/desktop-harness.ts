@@ -211,7 +211,7 @@ export class DesktopHarness {
     await page.addInitScript((menu) => {
       const listeners = new Map<string, Set<(value: unknown) => void>>();
       Object.assign(window, {
-        __INDEX_MENU_BAR__: menu,
+        __INDEX_MENU_BAR__: menu ? { maxHeight: 560 } : undefined,
         __desktopListeners: listeners,
         __TAURI_INTERNALS__: {},
         __TAURI__: {

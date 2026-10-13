@@ -143,6 +143,9 @@ pub fn run() {
                 )?;
             }
             menu_bar::ensure_main(app.handle())?;
+            // A failure here leaves the first click to build the panel.
+            #[cfg(all(target_os = "macos", not(feature = "native-smoke")))]
+            let _ = menu_bar::ensure_panel(app.handle());
             Ok(())
         })
         .build(tauri::generate_context!())

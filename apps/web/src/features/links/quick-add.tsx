@@ -34,7 +34,7 @@ export function QuickAdd({
   groupId?: string;
   links: SavedLink[];
   label: string;
-  /** A short, tinted field with desktop text for narrow surfaces that are not phones. */
+  /** Shorter rows with desktop text, for narrow surfaces that are not phones. */
   compact?: boolean;
   /** Called as a save starts, before the server has read the page. */
   onSave?: () => void;
@@ -130,7 +130,7 @@ export function QuickAdd({
         className={
           "quick-add grid grid-cols-[32px_minmax(0,_1fr)_auto] items-center gap-x-3 text-subtle-foreground [&_input]:min-w-0 [&_input]:border-0 [&_input]:[outline:none] [&_input]:bg-transparent [&_input]:text-[14px] [&_input]:text-foreground [&:hover_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&:focus-within_.category-mark]:[box-shadow:inset_0_0_0_1px_var(--ring)] [&_input::placeholder]:text-subtle-foreground " +
           (compact
-            ? "min-h-9.5 rounded-[10px] bg-foreground/[0.055] pr-1 [&_input]:h-9.5"
+            ? "min-h-8.5 [&_input]:h-8.5"
             : "min-h-12 [&_input]:h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3 [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_input]:text-[16px]")
         }
       >
