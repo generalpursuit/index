@@ -1,8 +1,10 @@
 import { useLayoutEffect, type RefObject } from "react";
-import { ArrowUp, Link2, X } from "lucide-react";
+import { ArrowUp, Link2, Reply, X } from "lucide-react";
 import { Button } from "@index/ui/components/button";
 import { IconButton } from "@index/ui/components/icon-button";
 import { domain } from "@/features/links/url";
+import type { Conversation } from "@/lib/types";
+import { replyExcerpt, replyLabel } from "./conversation-presentation";
 import type { MessageDraft } from "./draft";
 
 type Snapshot = ReturnType<MessageDraft["getSnapshot"]>;
@@ -10,13 +12,17 @@ type Snapshot = ReturnType<MessageDraft["getSnapshot"]>;
 const chipClassName =
   "flex items-center gap-2.5 min-h-9 p-[2px_2px_2px_10px] rounded-[14px] bg-surface text-[13px] [&>svg]:flex-none [&>svg]:size-4 [&>svg]:text-subtle-foreground [&>span]:flex-1 [&>span]:min-w-0 [&>span]:truncate [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_button]:size-7 [&_button]:text-subtle-foreground";
 
-/** One rounded field: what the message carries, then the text and its send button. */
+/** One rounded field: what the message answers and carries, then its text and send button. */
 export function Composer({
+  chat,
+  viewerId,
   draft,
   owner,
   input,
   onSend,
 }: {
+  chat: Conversation;
+  viewerId: string;
   draft: Snapshot;
   owner: MessageDraft;
   input: RefObject<HTMLTextAreaElement | null>;
@@ -41,6 +47,20 @@ export function Composer({
         onSend();
       }}
     >
+      {draft.replyTo && (
+        <div className={"draft-reply " + chipClassName}>
+          <Reply />
+          <span>
+            <strong className="font-medium">
+              {replyLabel(chat, viewerId, viewerId, draft.replyTo.senderId)}
+            </strong>{" "}
+            <small>{replyExcerpt(draft.replyTo)}</small>
+          </span>
+          <IconButton label="Cancel reply" disabled={locked} onClick={() => owner.removeReply()}>
+            <X />
+          </IconButton>
+        </div>
+      )}
       {draft.attachment && (
         <div className={"draft-attachment " + chipClassName}>
           <Link2 />

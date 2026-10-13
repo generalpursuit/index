@@ -19,7 +19,7 @@ import type { MessageDraft } from "./draft";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
 import { timeAgo } from "@/lib/weeks";
-import type { SavedLink } from "@/lib/types";
+import type { Message, SavedLink } from "@/lib/types";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const personLabelClassName =
@@ -201,6 +201,15 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       .flatMap((p) => p.items)
       .slice()
       .reverse() ?? [];
+  function reply(message: Message) {
+    draftOwner.reply({
+      id: message.id,
+      senderId: message.senderId,
+      excerpt: message.body,
+      hasAttachment: message.hasAttachment,
+    });
+    input.current?.focus();
+  }
   async function send() {
     const attempt = draftOwner.prepare();
     if (!attempt) return;
@@ -287,7 +296,14 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               error={list.error}
               retry={() => void list.refetch()}
             >
-              <MessageThread messages={messages} chat={detail.data} viewerId={viewer.id} />
+              <MessageThread
+                messages={messages}
+                chat={detail.data}
+                viewerId={viewer.id}
+                canReply={draft.status !== "sending" && draft.status !== "uncertain"}
+                onReply={reply}
+                composer={input}
+              />
             </QueryState>
             <div ref={end} />
           </div>
@@ -331,7 +347,14 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                 setRecovery(undefined);
               }}
             />
-            <Composer draft={draft} owner={draftOwner} input={input} onSend={() => void send()} />
+            <Composer
+              chat={detail.data}
+              viewerId={viewer.id}
+              draft={draft}
+              owner={draftOwner}
+              input={input}
+              onSend={() => void send()}
+            />
           </div>
         </div>
       )}

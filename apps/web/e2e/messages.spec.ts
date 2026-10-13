@@ -108,6 +108,47 @@ test("the composer holds its attachment, grows with Shift+Enter and ignores IME 
   await expect(sent.locator(".shared-post")).toContainText(link.title);
 });
 
+test("the message menu replies and copies, and a quote leads back to its original", async ({
+  page,
+  context,
+  browser,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await login(page);
+  await page.goto("/messages/" + data.conversationId);
+  const original = page.locator(".message-bubble").filter({ hasText: "Adding it to my list." });
+  await original.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Copy", exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Adding it to my list.");
+  await original.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Reply", exact: true }).click();
+  const chip = page.locator("form.composer .draft-reply");
+  await expect(chip).toContainText("Replying to Bob");
+  await expect(chip).toContainText("Adding it to my list.");
+  await expect(page.getByLabel("Message", { exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Cancel reply", exact: true }).click();
+  await expect(chip).toHaveCount(0);
+  await original.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Reply", exact: true }).click();
+  await page.getByLabel("Message", { exact: true }).fill("Same, and this one too");
+  await page.keyboard.press("Enter");
+  await expect(chip).toHaveCount(0);
+  const reply = page.locator(".message.outgoing").last();
+  await expect(reply.locator(".message-bubble")).toHaveText("Same, and this one too");
+  const quote = reply.getByRole("button", { name: /^Replying to Bob/ });
+  await expect(quote).toContainText("Adding it to my list.");
+  await quote.click();
+  await expect(page.locator(".message[data-highlighted]")).toContainText("Adding it to my list.");
+  await expect(page.locator(".message[data-highlighted]")).toHaveCount(0);
+
+  const bob = await browser.newContext();
+  const recipient = await bob.newPage();
+  await login(recipient, "bob");
+  await recipient.goto("/messages/" + data.conversationId);
+  await expect(recipient.locator(".message-quote").last()).toContainText("Replying to you");
+  await bob.close();
+});
+
 test("the newest message stays in view while the composer grows", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 520 });
   await login(page);
