@@ -38,7 +38,9 @@ const fixedDialogHeight = "h-[min(640px,_calc(100dvh_-_80px_-_var(--titlebar-ins
 const sheetActionRow =
   "[&_.modal-cancel]:hidden [&_.modal-actions_[data-slot=button]]:flex-1 [&_.modal-actions_[data-slot=button]]:min-h-11.5";
 
-const ModalPresentation = createContext<"dialog" | "sheet">("dialog");
+const ModalPresentation = createContext<"dialog" | "sheet" | undefined>(undefined);
+/** How the modal around this content is shown; undefined outside one. */
+export const useModalPresentation = () => useContext(ModalPresentation);
 
 /**
  * A titled dialog on larger screens and a swipeable bottom sheet on phones. The title row stays
