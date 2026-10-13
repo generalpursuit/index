@@ -28,7 +28,7 @@ test("profile styling stays borderless with shared display typography", async ({
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toBeVisible();
 });
 
-test("the profile lists weeks under sticky headings, with a scrubber and a list menu", async ({
+test("the profile lists weeks under sticky headings, with a scrubber and a list dock", async ({
   page,
   request,
 }) => {
@@ -73,6 +73,13 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
       scroller.evaluate((el) => Math.abs(el.scrollHeight - el.clientHeight - el.scrollTop)),
     )
     .toBeLessThanOrEqual(1);
+  // The dock floats over the foot of the list, which scrolls far enough to clear it.
+  const dock = page.getByRole("navigation", { name: "Lists" });
+  const [lastRow, dockBox] = await Promise.all([
+    older.locator(".link-row").last().boundingBox(),
+    dock.boundingBox(),
+  ]);
+  expect(lastRow!.y + lastRow!.height).toBeLessThanOrEqual(dockBox!.y);
   await ticks.first().click();
   await expect.poll(headingOffset(weeks.first())).toBe(0);
   await expect(ticks.first()).toHaveAttribute("data-active", "true");
@@ -83,11 +90,28 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await older.getByRole("button", { name: /Jump to a week/ }).click();
   await page.getByRole("dialog", { name: "Weeks" }).getByRole("button").first().click();
   await expect(page.getByRole("dialog", { name: "Weeks" })).toHaveCount(0);
-  // The list menu rides on the sticky row; Starred (others' links) is only on your own profile.
-  await page.getByRole("button", { name: "Showing All", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Starred" }).click();
-  await expect(page.getByRole("button", { name: "Showing Starred", exact: true })).toBeVisible();
+  // Chips link to each list. The one on screen sets where the add row starts saving.
+  const chip = (name: string) => dock.getByRole("link", { name, exact: true });
+  const destination = page.getByRole("button", { name: /^Save destination:/ });
+  await expect(chip("All")).toHaveAttribute("aria-current", "page");
+  await expect(destination).toHaveAccessibleName("Save destination: Your links");
+  await chip("Reading").click();
+  await expect(page).toHaveURL(/\/u\/alice\/reading$/);
+  await expect(chip("Reading")).toHaveAttribute("aria-current", "page");
+  await expect(chip("All")).not.toHaveAttribute("aria-current");
+  await expect(destination).toHaveAccessibleName("Save destination: Reading");
+  await expect(chip("Notes").locator(".lucide-lock-keyhole")).toHaveCount(1);
+  await chip("Notes").click();
+  await expect(destination).toHaveAccessibleName("Save destination: Notes");
+  // Starred (others' links you kept) and Favorites are not destinations, so they have no add row.
+  await chip("Starred").click();
+  await expect(chip("Starred")).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("textbox", { name: /Enter a link/ })).toHaveCount(0);
+  await expect(dock.getByRole("button", { name: "New group", exact: true })).toBeVisible();
+  // Others' profiles get their visible lists, without Starred or a new group.
   await page.goto("/people/" + fixture.people.Lena);
-  await page.getByRole("button", { name: "Showing All", exact: true }).click();
-  await expect(page.getByRole("menuitemradio", { name: "Starred" })).toHaveCount(0);
+  await expect(chip("Reading")).toBeVisible();
+  await expect(chip("All")).toHaveAttribute("aria-current", "page");
+  await expect(chip("Starred")).toHaveCount(0);
+  await expect(dock.getByRole("button", { name: "New group", exact: true })).toHaveCount(0);
 });

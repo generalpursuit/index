@@ -49,11 +49,14 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(editor).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(page.locator(".profile-heading")).toContainText("Alice Example");
-  await page.getByRole("button", { name: "Showing All", exact: true }).click();
-  await page.getByRole("menuitem", { name: "New group" }).click();
+  const lists = page.getByRole("navigation", { name: "Lists" });
+  await lists.getByRole("button", { name: "New group", exact: true }).click();
   await page.getByRole("dialog").getByLabel("Name", { exact: true }).fill("Research");
   await page.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Showing Research", exact: true })).toBeVisible();
+  await expect(lists.getByRole("link", { name: "Research", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   // Groups are managed in Settings; the profile only shows and filters them.
   await page.goto("/settings");
   const lock = page.getByRole("button", { name: "Lock Research", exact: true });
@@ -69,8 +72,9 @@ test("edit profile, create and lock a group, move a link, then remove a follower
   await expect(page.getByText("Only you will see this link.")).toBeVisible();
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.goto("/people/" + data.people.Alice);
-  await page.getByRole("button", { name: "Showing All", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Research" }).click();
+  await lists.getByRole("link", { name: "Research", exact: true }).click();
+  // The chip turns current as navigation starts; the Research list's add row shows it arrived.
+  await expect(page.getByRole("button", { name: "Save destination: Research" })).toBeVisible();
   await expect(page.locator(".profile-links")).toContainText("Are.na");
   await page.getByRole("button", { name: /followers?$/ }).click();
   const lena = page.getByRole("dialog").locator(".person-row").filter({ hasText: "lena" });

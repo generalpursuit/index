@@ -257,10 +257,19 @@ test("a profile group beyond page one remains unknown on failure, then loads on 
     .locator(".profile-links")
     .getByRole("button", { name: "Try again", exact: true })
     .click();
-  await expect(page.getByRole("button", { name: "Showing Reading", exact: true })).toBeVisible();
+  const lists = page.getByRole("navigation", { name: "Lists" });
+  await expect(lists.getByRole("link", { name: "Reading", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
   await expect(page.locator(".profile-links .link-row")).not.toHaveCount(0);
-  await page.getByRole("button", { name: "Showing Reading", exact: true }).click();
-  await expect(page.getByRole("menuitemradio")).toHaveCount(106);
+  // All, Favorites, Reading, Notes, 101 collections across two group pages, and Starred.
+  await expect(lists.getByRole("link")).toHaveCount(106);
+  // The dock scrolls to show the list on screen, however far along it is.
+  await page.goto("/u/alice/collection-100");
+  await expect(lists.getByRole("link", { name: "Collection 100", exact: true })).toBeInViewport({
+    ratio: 1,
+  });
 });
 
 test("week index errors expose retry without hiding the loaded feed", async ({ page }) => {
