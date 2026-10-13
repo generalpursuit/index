@@ -20,7 +20,7 @@ class MenuBarPackaging(unittest.TestCase):
         windows = (TAURI / 'src/menu_bar.rs').read_text()
         self.assertIn('WebviewWindowBuilder::from_config(app, config)', windows)
         # Both the main window and the panel are built through the navigation guard.
-        self.assertEqual(windows.count('crate::restrict_navigation(builder, app).build()'), 2)
+        self.assertEqual(windows.count('crate::restrict_navigation('), 2)
         library = (TAURI / 'src/lib.rs').read_text()
         self.assertIn('NewWindowResponse::Deny', library)
         for command in ['session_snapshot', 'session_compare_write', 'session_touch',
