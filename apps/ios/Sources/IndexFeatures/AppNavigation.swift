@@ -4,7 +4,7 @@ import Observation
 
 public enum Destination: Hashable, Identifiable {
   case profile(String), collection(String, String), link(String), messages, conversation(String)
-  case connections(String), add(String, String?, SavedLink?), recipients(SavedLink?), settings, group(LinkGroup?)
+  case connections(String), edit(SavedLink), recipients(SavedLink?), settings, group(LinkGroup?)
   public var id: Self { self }
 }
 public enum AppTab: String, CaseIterable {

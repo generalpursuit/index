@@ -12,12 +12,13 @@ React, TanStack Router/Query and Tauri share one frontend. Run `bun dev` from th
 
 ## Appearance and mobile focus
 
-[src/lib/appearance](src/lib/appearance) owns device preference, subscription and the pre-paint bootstrap; Settings owns its control. `index.theme` is System/Light/Dark, independent of sign-out. [theme-plugin.ts](theme-plugin.ts) serves the same-origin blocking bootstrap before CSS/app startup. Desktop synchronizes this store with native chrome and mirrors the last preference natively so a new main window is shown in its final titlebar/background colors; shared UI receives theme as presentation input. Use semantic foreground/surface pairs from [UI styles](../../packages/ui/src/styles/globals.css), including `primary-foreground` rather than hardcoded white. Artwork/generation belongs to [assets/brand](../../assets/brand/README.md).
+[src/lib/appearance](src/lib/appearance) owns device preference, subscription and the pre-paint bootstrap; Settings owns its control. `index.theme` is System/Light/Dark, independent of sign-out. [theme-plugin.ts](theme-plugin.ts) serves the same-origin blocking bootstrap before CSS/app startup. Desktop synchronizes this store with native chrome and mirrors the last preference natively so a new main window is shown in its final background color; shared UI receives theme as presentation input. Use semantic foreground/surface pairs from [UI styles](../../packages/ui/src/styles/globals.css), including `primary-foreground` rather than hardcoded white. Artwork/generation belongs to [assets/brand](../../assets/brand/README.md).
 
 Preserve these constraints in shared controls, including portals:
 
 - Editable controls need at least 16px text on narrow/coarse-pointer screens to avoid iOS focus zoom. Keep user pinch zoom available.
 - Phone sheets initially focus the popup, not an input; desktop dialogs focus their first control. Validation may focus a field. Restore the launch control on close, using a stable ref when there is no trigger. Avoid `autoFocus` in shared form contents.
+- On macOS the main window's page extends under its transparent titlebar; `--titlebar-inset` is the band the window controls cover there (0 elsewhere). Backdrops and backgrounds extend under it, while content and controls start below it. [titlebar.rs](src-tauri/src/titlebar.rs) keeps dragging and the System Settings double-click action native in that band.
 - Sheets follow the actual visual viewport, with safe-area padding and a scrollable body. Do not position their frame using the keyboard inset: its blur reset can move an action between pointerdown and click. Keep list/carousel scrolling intact.
 
 [Mobile browser tests](e2e/mobile-layout.spec.ts) exercise layout and simulated keyboard bounds. Physical Safari still needs keyboard dismissal, rotation and pinch-zoom checks; emulation cannot establish those behaviors.
@@ -74,4 +75,4 @@ cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
 
 For macOS native integration, start `bun e2e/server.ts` in `apps/web`, then run `bun run desktop:test` there in another terminal. It uses isolated credentials and rebuilds the normal host-only app afterward. This smoke feature omits the Share extension/menu lifecycle and stubs notifications.
 
-Use a real signed bundle to check Keychain restore/erase and two-window account races, menu-bar placement/focus/VoiceOver, main hide/reopen, Quit, login-item OS approval, sleep/wake and real notifications. Check first-paint/native appearance after relaunch. Windows/Linux installation and updates need their respective systems; compilation or a mocked browser bridge is not native acceptance.
+Use a real signed bundle to check Keychain restore/erase and two-window account races, menu-bar placement/focus/VoiceOver, main hide/reopen, Quit, login-item OS approval, sleep/wake and real notifications. Check first-paint/native appearance after relaunch, and titlebar dragging, each double-click action and full screen. Windows/Linux installation and updates need their respective systems; compilation or a mocked browser bridge is not native acceptance.

@@ -46,7 +46,7 @@ export function WeekScrubber({
     <div
       className={
         // Centered on the screen like the navigation rail, above the bar along a phone's foot.
-        "week-scrubber [--bottom-bar:0px] fixed top-[calc((100dvh_-_var(--bottom-bar))_/_2)] left-[min(calc(50%_+_50px_+_370px_+_16px),_calc(100%_-_36px))] z-5 flex flex-col w-7 h-[min(60dvh,_calc(var(--weeks)_*_12px))] -translate-y-1/2 cursor-pointer touch-none select-none [@media(width<=700px)]:[--bottom-bar:calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:right-1 [@media(width<=700px)]:left-auto"
+        "week-scrubber [--bottom-bar:0px] fixed top-[calc((100dvh_+_var(--titlebar-inset)_-_var(--bottom-bar))_/_2)] left-[min(calc(50%_+_50px_+_370px_+_16px),_calc(100%_-_36px))] z-5 flex flex-col w-7 h-[min(60dvh,_calc(var(--weeks)_*_12px))] -translate-y-1/2 cursor-pointer touch-none select-none [@media(width<=700px)]:[--bottom-bar:calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:right-1 [@media(width<=700px)]:left-auto"
       }
       aria-hidden="true"
       style={{ "--weeks": weeks.length } as CSSProperties}

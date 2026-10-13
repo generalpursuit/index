@@ -41,7 +41,7 @@ function KeyboardViewport({ children }: { children: ReactNode }) {
   return (
     <DrawerPrimitive.Viewport
       ref={element}
-      className="fixed inset-x-0 top-0 z-50 flex h-dvh min-h-0 items-end justify-center pt-[max(16px,_env(safe-area-inset-top,_0px))]"
+      className="fixed inset-x-0 top-0 z-50 flex h-dvh min-h-0 items-end justify-center pt-[max(calc(16px_+_var(--titlebar-inset)),_env(safe-area-inset-top,_0px))]"
       data-slot="drawer-viewport"
     >
       {children}

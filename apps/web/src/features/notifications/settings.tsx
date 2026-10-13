@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { Preferences } from "@index/api/features/notifications/schemas";
 import { Button } from "@index/ui/components/button";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import {
@@ -8,20 +9,41 @@ import {
   accountMutationOptions,
 } from "@/lib/account-boundary";
 import { isDesktop } from "@/lib/desktop";
-import { deviceStatus, enableDevice, disableDevice, type DeviceStatus } from "./device";
-const labels = {
-  message: "Messages",
-  comment: "Comments",
-  mention: "Mentions",
-  request: "Follow requests",
-  follow: "New followers",
-  accepted: "Accepted requests",
-  previews: "Show message and comment previews",
-} as const;
+import {
+  deviceStatus,
+  enableDevice,
+  disableDevice,
+  homeScreenRequired,
+  type DeviceStatus,
+} from "./device";
+// A profile gets a follow request while private and a follow while public, never both for
+// the same follow, so one row controls both keys and shows on only when both are on.
+const rows: { label: string; description: string; keys: (keyof Preferences)[] }[] = [
+  { label: "Messages", description: "New messages in your conversations", keys: ["message"] },
+  { label: "Comments", description: "When someone comments on your links", keys: ["comment"] },
+  { label: "Mentions", description: "When someone mentions you in a comment", keys: ["mention"] },
+  {
+    label: "Followers",
+    description: "New followers, or follow requests while your profile is private",
+    keys: ["follow", "request"],
+  },
+  {
+    label: "Accepted follow requests",
+    description: "When someone approves your request to follow them",
+    keys: ["accepted"],
+  },
+  {
+    label: "Show message and comment previews",
+    description:
+      "Previews are hidden by default. Enabling them may show private text on your lock screen.",
+    keys: ["previews"],
+  },
+];
 export function NotificationSettings() {
   const api = useAPI(),
     viewer = useViewer(),
-    cache = useQueryClient();
+    cache = useQueryClient(),
+    id = useId();
   const prefs = useQuery(api.notifications.preferences.queryOptions({ input: {} }));
   const capabilities = useQuery(api.notifications.capabilities.queryOptions({ input: {} }));
   const [status, setStatus] = useState<DeviceStatus>();
@@ -91,6 +113,11 @@ export function NotificationSettings() {
     }
   }
   const permission = status?.permission;
+  // Capabilities only decide whether a device can be enabled. A registered device keeps its
+  // button while they load, so it can always be turned off.
+  const checking = !status || (status.supported && !status.registered && capabilities.isPending);
+  // Only an explicit answer means push is off; after a failed check, enabling reports the cause.
+  const serverOff = configured === false && !status?.registered;
   return (
     <section
       aria-label="Notifications"
@@ -99,32 +126,34 @@ export function NotificationSettings() {
       <div>
         <h2 className="font-medium">Notifications</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Choose alerts for your account. Your in-app activity is always kept.
+          Choose alerts for your account. Your in-app activity is always kept. No notification
+          emails are sent.
         </p>
       </div>
       <div className="rounded-xl bg-muted p-3 space-y-2">
         <h3 className="text-sm font-medium">This device</h3>
         <p role="status" className="text-sm text-muted-foreground">
-          {!status
+          {checking
             ? "Checking device permission…"
             : !status.supported
-              ? "Push notifications are not supported on this device or browser."
-              : permission === "denied"
-                ? "Blocked in system or browser settings."
-                : status.registered
-                  ? "Enabled on this device."
-                  : permission === "granted"
-                    ? "Permission allowed. Alerts are off on this device."
-                    : "Alerts are off. Permission has not been requested."}
+              ? homeScreenRequired()
+                ? "Add Index to your Home Screen to turn on notifications."
+                : "Push notifications are not supported on this device or browser."
+              : serverOff
+                ? "Notifications aren't available on this server yet."
+                : permission === "denied"
+                  ? "Blocked in system or browser settings."
+                  : status.registered
+                    ? "Enabled on this device."
+                    : permission === "granted"
+                      ? "Permission allowed. Alerts are off on this device."
+                      : "Alerts are off. Permission has not been requested."}
         </p>
-        {status?.supported && !configured && (
-          <p className="text-sm text-muted-foreground">Push delivery is not configured yet.</p>
-        )}
-        {status?.supported && (
+        {!checking && status.supported && !serverOff && (
           <Button
             type="button"
             variant="outline"
-            disabled={busy || (!status.registered && (!configured || permission === "denied"))}
+            disabled={busy || (!status.registered && permission === "denied")}
             onClick={() => void changeDevice()}
           >
             {busy
@@ -138,24 +167,26 @@ export function NotificationSettings() {
       {prefs.data && (
         <fieldset disabled={update.isPending} className="space-y-3">
           <legend className="mb-2 text-sm font-medium">Account preferences</legend>
-          {Object.entries(labels).map(([key, label]) => (
-            <label
-              key={key}
-              className="flex items-center justify-between gap-4 text-sm cursor-pointer"
-            >
-              <span>{label}</span>
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={prefs.data[key as keyof typeof labels]}
-                onChange={(e) => update.mutate({ [key]: e.currentTarget.checked })}
-              />
-            </label>
+          {rows.map(({ label, description, keys }) => (
+            <div key={label}>
+              <label className="flex items-center justify-between gap-4 text-sm cursor-pointer">
+                <span>{label}</span>
+                <input
+                  type="checkbox"
+                  className="size-4 accent-primary"
+                  aria-describedby={`${id}-${keys[0]}`}
+                  checked={keys.every((key) => prefs.data[key])}
+                  onChange={(e) => {
+                    const checked = e.currentTarget.checked;
+                    update.mutate(Object.fromEntries(keys.map((key) => [key, checked])));
+                  }}
+                />
+              </label>
+              <p id={`${id}-${keys[0]}`} className="mt-0.5 text-xs text-muted-foreground">
+                {description}
+              </p>
+            </div>
           ))}
-          <p className="text-xs text-muted-foreground">
-            Previews are hidden by default. Enabling them may show private text on your lock screen.
-            No notification emails are sent.
-          </p>
         </fieldset>
       )}
       {(error || prefs.error || capabilities.error || update.error) && (

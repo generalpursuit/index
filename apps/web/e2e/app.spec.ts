@@ -67,8 +67,10 @@ test("single-week layout, scrolling, adding and Favorites", async ({ page }) => 
     .getByRole("button", { name: "Calm Software", exact: true })
     .click();
   const post = page.getByRole("dialog", { name: "Post", exact: true });
-  await post.getByRole("button", { name: "Actions for Calm Software", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Add to Favorites" }).click();
+  const favorite = post.getByRole("button", { name: "Favorite", exact: true });
+  await expect(favorite).toHaveAttribute("aria-pressed", "false");
+  await favorite.click();
+  await expect(favorite).toHaveAttribute("aria-pressed", "true");
   await page.keyboard.press("Escape");
   await expect(post).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
@@ -155,10 +157,7 @@ test("forward to multiple recipients, restricted card and member reply", async (
 }) => {
   await login(page);
   await page.goto("/links/" + data.privateLink.id);
-  await page
-    .getByRole("button", { name: "Actions for " + data.privateLink.title, exact: true })
-    .click();
-  await page.getByRole("menuitem", { name: "Forward", exact: true }).click();
+  await page.getByRole("button", { name: "Forward", exact: true }).click();
   await page.getByRole("checkbox", { name: "Bob", exact: true }).click();
   await page.getByRole("checkbox", { name: "Lena", exact: true }).click();
   await page.getByRole("button", { name: "Next (2)", exact: true }).click();
@@ -198,10 +197,12 @@ test("comments respond/delete, locked forwarding, and logout clears private data
   await own.getByRole("button", { name: "Actions for comment by Alice" }).click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
   await expect(own).toHaveCount(0);
+  // A link in a locked group stays with its owner: it shows the lock and can't be forwarded.
   await page.goto("/links/" + data.locked.id);
-  await page.getByRole("button", { name: "Actions for Working notes", exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Forward", exact: true })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Working notes", exact: true })).toBeVisible();
+  await expect(page.locator(".post-label")).toContainText("Notes");
+  await expect(page.locator(".post-label").getByLabel("Locked", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Forward", exact: true })).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
@@ -223,8 +224,7 @@ test("editing a saved link changes its details, and a new address its category",
   await expect(row.locator(".category-mark")).toHaveAttribute("data-category", "video");
   await row.getByRole("button", { name: "Calm Software", exact: true }).click();
   const post = page.getByRole("dialog", { name: "Post", exact: true });
-  await post.getByRole("button", { name: "Actions for Calm Software", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
   const editor = page.getByRole("dialog", { name: "Edit link" });
   await expect(editor.getByLabel("Link", { exact: true })).toHaveValue(
     "https://pages.test/calm-software",
@@ -240,6 +240,36 @@ test("editing a saved link changes its details, and a new address its category",
   const edited = own.locator(".link-row").filter({ hasText: "Calm notes" });
   // The new address is read again; this one says nothing, so the link is uncategorized.
   await expect(edited.locator(".category-mark")).toHaveAttribute("data-category", "uncategorized");
+});
+
+test("deleting a link from its editor closes it, or leaves the link's own page", async ({
+  page,
+}) => {
+  await login(page);
+  const own = page.locator('.week-page[data-active="true"] .own-links');
+  const remove = async () => {
+    await page
+      .getByRole("dialog", { name: "Edit link", exact: true })
+      .getByRole("button", { name: "Delete link", exact: true })
+      .click();
+    await page
+      .getByRole("alertdialog", { name: "Delete link?" })
+      .getByRole("button", { name: "Delete", exact: true })
+      .click();
+  };
+  await own.getByRole("button", { name: "Are.na", exact: true }).click();
+  await page
+    .getByRole("dialog", { name: "Post", exact: true })
+    .getByRole("link", { name: "Edit", exact: true })
+    .click();
+  await remove();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(own.getByRole("button", { name: "Are.na", exact: true })).toHaveCount(0);
+  await page.goto("/links/" + data.locked.id);
+  await page.getByRole("link", { name: "Edit", exact: true }).click();
+  await remove();
+  await expect(page).toHaveURL(/\/u\/alice$/);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
 test("pasting into the first row saves the link right away", async ({ page }) => {

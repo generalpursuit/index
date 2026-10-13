@@ -136,7 +136,7 @@ struct RootView: View {
     case .messages: MessagesView()
     case .conversation(let id): ConversationView(conversationID: id)
     case .connections(let initial): ConnectionsView(initial: initial)
-    case .add(let week, let group, let edit): AddLinkView(week: week, groupID: group, editing: edit)
+    case .edit(let link): EditLinkView(link: link)
     case .recipients(let link): RecipientView(attachment: link)
     case .settings: SettingsView()
     case .group(let group): GroupEditorView(group: group)

@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import type { apiFor } from "@/utils/orpc";
 import type { SavedLink } from "@/lib/types";
 import { seedLinkRoute } from "@/lib/routes";
+import { groupOptions } from "@/features/groups/queries";
 type API = ReturnType<typeof apiFor>;
 
 export const linkOptions = (api: API, id: string) => api.links.get.queryOptions({ input: { id } });
@@ -39,6 +40,7 @@ export function preparePost(cache: QueryClient, api: API, link: SavedLink) {
     cache.setQueryData(options.queryKey, link, { updatedAt: 0 });
   preparePostReference(cache, api, link);
   void cache.prefetchQuery(api.profiles.get.queryOptions({ input: { userId: link.ownerId } }));
+  if (link.groupId) void cache.prefetchQuery(groupOptions(api, link.groupId));
 }
 /** What opening a post needs when only its identifiers are known. */
 export function preparePostReference(

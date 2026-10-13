@@ -12,10 +12,13 @@ const modalSizes = {
   md: "w-150 sm:max-w-[calc(100vw_-_32px)]",
   lg: "w-162.5 sm:max-w-[calc(100vw_-_32px)]",
 };
+// Centered in the page below any window controls over its top (see --titlebar-inset).
+export const modalCenter =
+  "top-[calc(50%_+_var(--titlebar-inset)_/_2)] max-h-[calc(100dvh_-_40px_-_var(--titlebar-inset))]";
 // A list that changes length grows downward from a fixed top instead of re-centering.
 const modalPositions = {
-  center: "max-h-[calc(100dvh_-_40px)]",
-  top: "top-[12dvh] translate-y-0 max-h-[calc(88dvh_-_20px)]",
+  center: modalCenter,
+  top: "top-[calc(12dvh_+_var(--titlebar-inset))] translate-y-0 max-h-[calc(88dvh_-_20px_-_var(--titlebar-inset))]",
 };
 
 export function Modal({

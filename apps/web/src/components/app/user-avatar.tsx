@@ -5,7 +5,7 @@ export function UserAvatar({
   person,
   large = false,
 }: {
-  person: Pick<Person, "id" | "name" | "image">;
+  person: Pick<Person, "id" | "name"> & { image?: Person["image"] };
   large?: boolean;
 }) {
   const hue = (Array.from(person.id).reduce((n, c) => n + c.charCodeAt(0), 0) * 37) % 360;

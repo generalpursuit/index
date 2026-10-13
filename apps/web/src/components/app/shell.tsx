@@ -27,6 +27,10 @@ const navItemClassName =
   "nav-item [&.nav-settings]:absolute [&.nav-settings]:bottom-7 relative flex items-center justify-center w-11 h-11 text-subtle-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] [&[data-status='active']]:text-foreground [&:hover]:text-foreground [&[data-status='active']_.nav-brand]:opacity-[1] [&:hover_.nav-brand]:opacity-[1]";
 const unreadDotClassName =
   "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]";
+// The post and its editor show their own heading; the dialog title only names them for
+// assistive technology.
+const hiddenTitleClassName =
+  "[&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)]";
 
 export function AppShell() {
   const viewer = useViewer(),
@@ -76,20 +80,20 @@ export function AppShell() {
       <LinkDraftProvider>
         <div
           className={
-            "index-app select-none bg-background text-foreground text-[14px] leading-[1.5] h-dvh overflow-hidden [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[clamp(34px,_4vw,_56px)] [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_h1]:text-[40px]"
+            "index-app select-none bg-background text-foreground text-[14px] leading-[1.5] h-dvh pt-[var(--titlebar-inset)] overflow-hidden [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[clamp(34px,_4vw,_56px)] [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_h1]:text-[40px]"
           }
         >
           <a
             href="#app-content"
             className={
-              "skip-link fixed top-[-100px] left-5 z-100 bg-foreground text-background p-3 [&:focus]:top-3"
+              "skip-link fixed top-[-100px] left-5 z-100 bg-foreground text-background p-3 [&:focus]:top-[calc(var(--titlebar-inset)_+_12px)]"
             }
           >
             Skip navigation
           </a>
           <nav
             className={
-              "app-nav fixed left-6 top-0 bottom-0 flex flex-col justify-center gap-5.5 z-20 items-center [@media(width<=700px)]:top-auto [@media(width<=700px)]:bottom-0 [@media(width<=700px)]:left-0 [@media(width<=700px)]:right-0 [@media(width<=700px)]:[transform:none] [@media(width<=700px)]:flex-row [@media(width<=700px)]:justify-around [@media(width<=700px)]:gap-0 [@media(width<=700px)]:p-[8px_8px_calc(8px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:h-[calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:bg-background [@media(width<=700px)]:z-30"
+              "app-nav fixed left-6 top-[var(--titlebar-inset)] bottom-0 flex flex-col justify-center gap-5.5 z-20 items-center [@media(width<=700px)]:top-auto [@media(width<=700px)]:bottom-0 [@media(width<=700px)]:left-0 [@media(width<=700px)]:right-0 [@media(width<=700px)]:[transform:none] [@media(width<=700px)]:flex-row [@media(width<=700px)]:justify-around [@media(width<=700px)]:gap-0 [@media(width<=700px)]:p-[8px_8px_calc(8px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:h-[calc(66px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:bg-background [@media(width<=700px)]:z-30"
             }
             aria-label="Main navigation"
           >
@@ -169,8 +173,12 @@ export function AppShell() {
             open={!!search.post}
             title="Post"
             size="lg"
+            // Comments grow the post downward instead of re-centering it; its editor opens in
+            // the same place.
+            position="top"
             className={
-              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] flex flex-col pb-5 overflow-hidden [&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)] [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1"
+              "post-dialog flex flex-col overflow-hidden [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1 " +
+              hiddenTitleClassName
             }
             onOpenChange={(v) => {
               if (!v)
@@ -192,7 +200,8 @@ export function AppShell() {
             open={!!search.edit}
             title="Edit link"
             size="md"
-            className="editor-dialog"
+            position="top"
+            className={"editor-dialog " + hiddenTitleClassName}
             onOpenChange={(v) => {
               if (!v) closeEditor();
             }}
