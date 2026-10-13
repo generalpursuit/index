@@ -162,7 +162,7 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   expect(await panel.evaluate(() => document.scrollingElement!.scrollTop)).toBe(0);
 });
 
-test("an opening for the same account shows cached links at once and refreshes them in place", async ({
+test("an opening for the same account shows cached links at once and refreshes them calmly in place", async ({
   page,
   context,
   request,
@@ -199,6 +199,13 @@ test("an opening for the same account shows cached links at once and refreshes t
   expect(saved.ok()).toBe(true);
   await row.evaluate((el) => ((el as any).kept = true));
   await panel.evaluate(() => {
+    const record = window as any;
+    record.animated = [];
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (keyframes: any, options: any) {
+      record.animated.push({ text: this.textContent, keyframes: JSON.stringify(keyframes) });
+      return animate.call(this, keyframes, options);
+    };
     (window as any).checked = false;
     new MutationObserver(() => {
       if (document.body.textContent?.includes("Checking your session"))
@@ -212,6 +219,37 @@ test("an opening for the same account shows cached links at once and refreshes t
   ).toBeVisible();
   expect(await row.evaluate((el) => (el as any).kept)).toBe(true);
   expect(await panel.evaluate(() => (window as any).checked)).toBe(false);
+  // The new row fades in at the top while the rows it moves down glide there.
+  const animated = async (text: string, keyframe: string) =>
+    (
+      await panel.evaluate(() => (window as any).animated as { text: string; keyframes: string }[])
+    ).some((call) => call.text.includes(text) && call.keyframes.includes(keyframe));
+  expect(await animated("Saved elsewhere", "opacity")).toBe(true);
+  expect(await animated("Are.na", "translateY(-34px)")).toBe(true);
+  // A removed row fades out where it was, as a copy hidden from assistive technology.
+  const removed = await request.delete(apiURL + "/api/v1/links/" + (await saved.json()).id, {
+    headers: { Authorization: `Bearer ${desktop.token}` },
+  });
+  expect(removed.ok()).toBe(true);
+  await desktop.emit("index:desktop-data", { revision: desktop.revision, source: "main" });
+  await expect(
+    panel.getByRole("button", { name: "Open Saved elsewhere in browser", exact: true }),
+  ).toHaveCount(0);
+  await expect.poll(() => animated("Saved elsewhere", '"opacity":0')).toBe(true);
+  await expect(panel.locator("[aria-hidden]", { hasText: "Saved elsewhere" })).toHaveCount(0);
+  expect(await row.evaluate((el) => (el as any).kept)).toBe(true);
+  // With reduced motion, changes apply at once.
+  await panel.emulateMedia({ reducedMotion: "reduce" });
+  await panel.evaluate(() => ((window as any).animated = []));
+  await request.post(apiURL + "/api/v1/links", {
+    headers: { Authorization: `Bearer ${desktop.token}` },
+    data: { url: "https://pages.test/saved-calmly", title: "Saved calmly" },
+  });
+  await desktop.emit("index:desktop-data", { revision: desktop.revision, source: "main" });
+  await expect(
+    panel.getByRole("button", { name: "Open Saved calmly in browser", exact: true }),
+  ).toBeVisible();
+  expect(await panel.evaluate(() => (window as any).animated.length)).toBe(0);
   // An opening the host could not show at once checks the session before presenting.
   const before = desktop.commands.length;
   await desktop.emit("index:menu-open", { presented: false }, "menu-bar");

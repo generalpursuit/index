@@ -19,7 +19,8 @@ export function scrollToTop(scroller: RefObject<HTMLElement | null>) {
 /**
  * Scrolls link rows within the height its parent gives it, without a scrollbar: it snaps to rows,
  * fades the edges it hides, brings new links at the top into view and loads the next page as its
- * end comes near. Rows are its direct children and set `--row`.
+ * end comes near. Rows are its direct children and set `--row`; it positions what is placed over
+ * them.
  */
 export function LinkList({
   list,
@@ -67,7 +68,7 @@ export function LinkList({
     <div
       ref={scroller}
       className={
-        "link-list min-h-0 overflow-y-auto [scroll-snap-type:y_proximity] [&>*]:[scroll-snap-align:start] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(_to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent_)] [&[data-fade-start]]:[--fade-start:var(--row,_48px)] [&[data-fade-end]]:[--fade-end:var(--row,_48px)] [&>.load-more]:my-[calc((var(--row,_48px)_-_32px)_/_2)]"
+        "link-list relative min-h-0 overflow-y-auto [scroll-snap-type:y_proximity] [&>*]:[scroll-snap-align:start] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(_to_bottom,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent_)] [&[data-fade-start]]:[--fade-start:var(--row,_48px)] [&[data-fade-end]]:[--fade-end:var(--row,_48px)] [&>.load-more]:my-[calc((var(--row,_48px)_-_32px)_/_2)]"
       }
       data-scroll-panel
       data-fade-start={edges.before || undefined}

@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <ServiceManagement/ServiceManagement.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
@@ -94,7 +95,9 @@ void index_menu_present(void *pointer, double width, double height) {
   [window orderFrontRegardless];
   [window makeKeyWindow];
 }
-// Content-fit height while open: the top edge stays under the status item.
+// Content-fit height while open: the top edge stays under the status item while the height eases
+// to its new value, at once for someone who reduces motion. A new height retargets from where the
+// frame is.
 void index_menu_resize(void *pointer, double height) {
   NSWindow *window = (__bridge NSWindow *)pointer;
   NSRect usable = (window.screen ?: NSScreen.mainScreen).visibleFrame;
@@ -103,8 +106,20 @@ void index_menu_resize(void *pointer, double height) {
   frame.size.height = MIN(height, NSHeight(usable) - 12);
   frame.origin.y = MAX(NSMinY(usable) + 6, top - frame.size.height);
   if (NSEqualRects(frame, window.frame)) return;
-  [window setFrame:frame display:YES];
-  [window invalidateShadow];
+  if (NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion) {
+    [window setFrame:frame display:YES];
+    [window invalidateShadow];
+    return;
+  }
+  [NSAnimationContext runAnimationGroup:^(NSAnimationContext *context) {
+    // Matches the page's row motion.
+    context.duration = 0.2;
+    context.timingFunction = [CAMediaTimingFunction functionWithControlPoints:0.2 :0 :0 :1];
+    [window.animator setFrame:frame display:YES];
+  } completionHandler:^{
+    // A transparent window's shadow follows its drawn shape, which changes with its size.
+    [window invalidateShadow];
+  }];
 }
 // No preference mirror and no registration during launch/status. The OS is authoritative.
 int index_login_status(void) {

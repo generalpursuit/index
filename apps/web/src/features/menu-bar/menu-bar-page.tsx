@@ -1,6 +1,7 @@
 import {
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
@@ -23,6 +24,7 @@ import { sessionOptions } from "@/lib/session";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { client } from "@/utils/orpc";
 import type { SavedLink } from "@/lib/types";
+import { CalmRows } from "./calm-rows";
 
 const report = (action: Promise<unknown>) =>
   void action.catch(() => toast.error("Could not complete that. Try again."));
@@ -192,16 +194,14 @@ function useFittedPanel(
       return Math.ceil(around + Math.floor((max - around) / row) * row);
     };
     const stop = measureMenuPanel(measure);
-    let frame = 0,
-      reported = 0;
+    let reported = 0;
+    // Measured at once rather than on the next frame: a hidden panel may draw no frames, and
+    // the next opening should already have the height of what changed meanwhile.
     const update = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const height = measure();
-        if (height === reported) return;
-        reported = height;
-        void desktopInvoke("desktop_panel_resize", { height }).catch(() => {});
-      });
+      const height = measure();
+      if (height === reported) return;
+      reported = height;
+      void desktopInvoke("desktop_panel_resize", { height }).catch(() => {});
     };
     const sizes = new ResizeObserver(update);
     for (const element of [panel.current!, content.current!]) sizes.observe(element);
@@ -210,7 +210,6 @@ function useFittedPanel(
     changes.observe(document.body, { childList: true, subtree: true });
     return () => {
       stop();
-      cancelAnimationFrame(frame);
       sizes.disconnect();
       changes.disconnect();
     };
@@ -230,7 +229,7 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
     };
   }, []);
   const query = useInfiniteQuery(weekLinksOptions(api, userId, week));
-  const links = query.data?.pages.flatMap((page) => page.items) ?? [];
+  const links = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data]);
   const scroller = useRef<HTMLDivElement>(null);
   return (
     // Kept while hidden, so a draft survives the session check of the next opening.
@@ -278,9 +277,10 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
             Save your first link for this week.
           </p>
         )}
-        {links.map((link) => (
-          <MenuLink key={link.id} link={link} />
-        ))}
+        {/* A refresh after opening changes rows in place, without flicker. */}
+        <CalmRows items={links} rowKey={(link) => link.id}>
+          {(link) => <MenuLink link={link} />}
+        </CalmRows>
       </LinkList>
     </section>
   );

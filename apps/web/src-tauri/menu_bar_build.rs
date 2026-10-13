@@ -9,7 +9,7 @@ pub fn build() {
         native.define("INDEX_NATIVE_SMOKE", None);
     }
     native.compile("index_menu_bar");
-    for framework in ["AppKit", "Foundation", "ServiceManagement"] {
+    for framework in ["AppKit", "Foundation", "QuartzCore", "ServiceManagement"] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
 }
