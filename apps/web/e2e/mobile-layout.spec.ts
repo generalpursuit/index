@@ -43,12 +43,21 @@ async function layout(page: Page, label: string, scope: Locator = page.locator("
 async function dialogLayout(page: Page, name: string) {
   const dialog = page.getByRole("dialog", { name, exact: true });
   await expect(dialog).toBeVisible();
-  // Let the sheet's entrance finish before inspecting geometry.
+  // Inspect geometry once it has settled. A sheet mounts in its starting style, off screen,
+  // and its slide only starts a frame later; views switching inside animate on their own.
   await expect
     .poll(() =>
-      dialog.evaluate((el) => el.getAnimations().filter((a) => a.playState === "running").length),
+      dialog.evaluate(
+        (el) =>
+          el.hasAttribute("data-starting-style") ||
+          el
+            .getAnimations({ subtree: true })
+            .some(
+              (a) => a.playState === "running" && a.effect?.getTiming().iterations !== Infinity,
+            ),
+      ),
     )
-    .toBe(0);
+    .toBe(false);
   await layout(page, name, dialog);
   const box = await dialog.boundingBox();
   // Mobile Chromium can expose a fractional visual viewport at scale 1; clientWidth
