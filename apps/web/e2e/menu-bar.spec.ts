@@ -68,7 +68,7 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await expect(panel.getByRole("dialog")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "Save destination: Menu reading" })).toBeFocused();
   await add(panel, "https://pages.test/calm-software");
-  await expect(panel.getByText("Link added", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Link added to Menu reading", { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toBeVisible();
   await panel.getByRole("button", { name: "Open Index", exact: true }).click({ trial: true });
   await panel.getByRole("button", { name: "Quit", exact: true }).click({ trial: true });

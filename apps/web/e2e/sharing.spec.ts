@@ -59,6 +59,8 @@ for (const width of [1440, 390]) {
       current(page).getByRole("button", { name: "Calm Software", exact: true }),
     ).toHaveCount(1);
     await expect(input(page)).toHaveValue("");
+    // Home lists every destination, so the toast says where the link went.
+    await expect(page.getByText("Link added to Shared reading", { exact: true })).toBeVisible();
     await input(page).fill("https://pages.test/calm-software");
     await input(page).press("Enter");
     const duplicate = page.getByRole("dialog", { name: "Already saved", exact: true });

@@ -84,7 +84,8 @@ export function QuickAdd({
       const link = result.link;
       setDuplicate(null);
       setAnnouncement("Added " + link.title);
-      successToast.current = toast.success("Link added", {
+      // Named, because the link may land outside the list being viewed.
+      successToast.current = toast.success("Link added to " + (target?.name ?? "Your links"), {
         action: {
           label: "Undo",
           onClick: () => {
