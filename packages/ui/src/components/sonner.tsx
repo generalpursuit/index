@@ -33,7 +33,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast:
             "flex w-(--width) items-center gap-2.5 rounded-[14px] bg-popover py-2.5 pr-2.5 pl-4 font-sans text-[14px] leading-5 text-popover-foreground shadow-(--menu-shadow) ring-1 ring-foreground/10 data-[expanded=false]:data-[front=false]:*:opacity-0",
-          icon: "flex size-4 flex-none items-center",
+          // Sonner centres its loading spinner absolutely inside the icon slot.
+          icon: "relative flex size-4 flex-none items-center",
           content: "flex min-w-0 flex-1 flex-col gap-0.5 py-1",
           description: "text-[13px] text-muted-foreground",
           actionButton: toastButton,
