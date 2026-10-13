@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { apiURL } from "./urls";
-let fixture: { links: { id: string; title: string }[]; older: string };
+let fixture: { links: { id: string; shortId: string; title: string }[]; older: string };
 async function login(page: Page) {
   await page.goto("/login");
   await page.getByLabel("Email or username", { exact: true }).fill("alice@test.example");
@@ -141,7 +141,9 @@ test("editing a post keeps its dialog in place", async ({ page }) => {
   const after = (await editor.boundingBox())!;
   expect([after.x, after.y, after.width]).toEqual([before.x, before.y, before.width]);
 });
-test("a post keeps its size while its comments load", async ({ page }) => {
+test("a post opened before its comments have loaded waits for them, then opens complete", async ({
+  page,
+}) => {
   await login(page);
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
@@ -152,20 +154,47 @@ test("a post keeps its size while its comments load", async ({ page }) => {
     await route.continue();
   });
   const post = page.getByRole("dialog", { name: "Post", exact: true });
-  const height = () => post.evaluate((element) => (element as HTMLElement).offsetHeight);
-  let loading: number;
   try {
     await page
       .locator('.week-page[data-active="true"] .own-links')
       .getByRole("button", { name: "In Rainbows", exact: true })
       .click();
-    await expect(post.getByRole("heading", { name: "In Rainbows", exact: true })).toBeVisible();
-    loading = await height();
+    // The page stays, under the progress bar, rather than showing the post without them.
+    await expect(page.locator(".navigation-progress")).toBeAttached();
+    await expect(post).toHaveCount(0);
   } finally {
     release();
   }
   await expect(post.locator(".comments")).toContainText("No comments yet.");
-  expect(await height()).toBe(loading);
+});
+test("a post opened from its address shows complete from its first frame", async ({ page }) => {
+  await login(page);
+  type Frame = { post: boolean; loading: boolean; label: string };
+  // Every frame the dialog is on screen.
+  await page.addInitScript(() => {
+    const frames: Frame[] = [];
+    (window as unknown as { postFrames: Frame[] }).postFrames = frames;
+    const sample = () => {
+      const dialog = document.querySelector('[role="dialog"]');
+      if (dialog)
+        frames.push({
+          post: !!dialog.querySelector(".post-detail"),
+          loading: !!dialog.querySelector('[role="status"]'),
+          label: dialog.querySelector(".post-label")?.textContent ?? "",
+        });
+      requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  });
+  await page.goto("/?post=" + fixture.links[0]!.shortId);
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.locator(".comments")).toContainText("Do you have a favorite channel?");
+  const frames = await page.evaluate(
+    () => (window as unknown as { postFrames: Frame[] }).postFrames,
+  );
+  expect(frames.length).toBeGreaterThan(0);
+  // No empty or loading frame, and the group in its label from the start.
+  expect(frames.filter((f) => !f.post || f.loading || !f.label.includes("Reading"))).toEqual([]);
 });
 test("Discover follow buttons do not fetch every person's full profile", async ({ page }) => {
   await login(page);
