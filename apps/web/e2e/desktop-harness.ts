@@ -1,5 +1,8 @@
 import type { Page } from "@playwright/test";
 
+// The host's bounds for the panel's height (menu_bar.rs).
+const panelHeight = (height: number) => Math.min(560, Math.max(160, height));
+
 /** In-memory model of the IPC contract, shared by two real browser pages.
  * This does not exercise AppKit, Tauri, Keychain, ServiceManagement or notifications. */
 export class DesktopHarness {
@@ -32,6 +35,13 @@ export class DesktopHarness {
   restartError = false;
   quits = 0;
   hidden: string[] = [];
+  /** The native panel: its stored height, whether it is shown, and the revision it committed. */
+  panel = {
+    height: 560,
+    shown: false,
+    requested: false,
+    committed: undefined as number | undefined,
+  };
   pending: { id: number; path: string; recipientId: string | null } | null = null;
   private nextNavigation = 1;
   private queue: Promise<unknown> = Promise.resolve();
@@ -54,6 +64,26 @@ export class DesktopHarness {
           );
         }),
     );
+  }
+  /** Like a click on the status item: shows committed content at once, or waits for the check. */
+  async togglePanel() {
+    if (this.panel.shown || this.panel.requested) return this.hidePanel();
+    this.panel.requested = true;
+    const presented = this.panel.committed === this.revision;
+    if (presented) await this.presentPanel();
+    await this.emit("index:menu-open", { presented }, "menu-bar");
+  }
+  async hidePanel() {
+    this.panel.shown = this.panel.requested = false;
+    await this.emit("index:menu-closed", null, "menu-bar");
+  }
+  private async presentPanel() {
+    this.panel.shown = true;
+    await this.sizePanel();
+  }
+  // The window keeps its last frame while hidden; only a shown panel takes a new height.
+  private sizePanel() {
+    return this.pages.get("menu-bar")!.setViewportSize({ width: 390, height: this.panel.height });
   }
   async attach(page: Page, label: string) {
     this.pages.set(label, page);
@@ -149,14 +179,20 @@ export class DesktopHarness {
         }
         if (command === "desktop_panel_ready") {
           check();
+          this.panel.committed = args.expectedRevision;
+          if (args.height !== undefined) this.panel.height = panelHeight(args.height);
+          if (this.panel.requested && !this.panel.shown) await this.presentPanel();
           return;
         }
         if (command === "desktop_panel_resize") {
           if (label !== "menu-bar") throw new Error("Only the menu panel can be resized");
+          this.panel.height = panelHeight(args.height);
+          if (this.panel.shown) await this.sizePanel();
           return;
         }
         if (command === "desktop_hide") {
           this.hidden.push(label);
+          if (label === "menu-bar") await this.hidePanel();
           return;
         }
         if (command === "desktop_quit") {
