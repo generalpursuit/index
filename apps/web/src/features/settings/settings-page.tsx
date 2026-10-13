@@ -341,42 +341,7 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
       }
       aria-labelledby="settings-visibility"
     >
-      <div>
-        <h2 id="settings-visibility">Profile visibility</h2>
-        <p className={"muted text-subtle-foreground"}>
-          {current === "private"
-            ? "Only approved followers see your links."
-            : "Anyone can see your links."}{" "}
-          Locked groups are always only yours.
-        </p>
-      </div>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              className={
-                "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
-              }
-              aria-label={"Profile visibility: " + current}
-            />
-          }
-        >
-          {current === "private" ? "Private" : "Public"}
-          <ChevronDown aria-hidden="true" />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuRadioGroup
-            value={current}
-            onValueChange={(value) => {
-              if (value !== current) setNext(value as "public" | "private");
-            }}
-          >
-            <DropdownMenuRadioItem value="public">Public</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="private">Private</DropdownMenuRadioItem>
-          </DropdownMenuRadioGroup>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {/* In the Settings sheet the box turns into the question. */}
       <Confirmation
         open={next !== null}
         onOpenChange={(open) => {
@@ -388,11 +353,49 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
             ? "Only approved followers will see your links. Existing followers keep access. Locked groups remain only yours."
             : "Anyone can see your links. Pending follow requests will be accepted. Locked groups remain only yours."
         }
+        label={next === "private" ? "Make private" : "Make public"}
         pending={update.isPending}
         onConfirm={() =>
           next && update.mutate({ profileVisibility: next }, { onSuccess: () => setNext(null) })
         }
-      />
+      >
+        <div>
+          <h2 id="settings-visibility">Profile visibility</h2>
+          <p className={"muted text-subtle-foreground"}>
+            {current === "private"
+              ? "Only approved followers see your links."
+              : "Anyone can see your links."}{" "}
+            Locked groups are always only yours.
+          </p>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                className={
+                  "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
+                }
+                aria-label={"Profile visibility: " + current}
+              />
+            }
+          >
+            {current === "private" ? "Private" : "Public"}
+            <ChevronDown aria-hidden="true" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuRadioGroup
+              value={current}
+              onValueChange={(value) => {
+                if (value !== current) setNext(value as "public" | "private");
+              }}
+            >
+              <DropdownMenuRadioItem value="public">Public</DropdownMenuRadioItem>
+              <DropdownMenuRadioItem value="private">Private</DropdownMenuRadioItem>
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </Confirmation>
     </section>
   );
 }

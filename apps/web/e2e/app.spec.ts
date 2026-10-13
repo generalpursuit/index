@@ -139,8 +139,12 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await page.getByRole("link", { name: "Settings", exact: true }).click();
   await page.getByRole("button", { name: /^Profile visibility/ }).click();
   await page.getByRole("menuitemradio", { name: "Public", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Make profile public?" })).toBeVisible();
+  // The Settings sheet asks in place, instead of opening a dialog over itself.
+  await expect(page.getByRole("dialog", { name: "Settings" }).getByRole("alert")).toContainText(
+    "Make profile public?",
+  );
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Profile visibility/ })).toBeFocused();
   await expect(page.getByRole("button", { name: /^Profile visibility/ })).toContainText("Private");
   // On phones Settings is a sheet over the profile; ✕ closes it.
   await page
@@ -320,21 +324,30 @@ test("deleting a link from its editor closes it, or leaves the link's own page",
 }) => {
   await login(page);
   const own = page.locator('.week-page[data-active="true"] .own-links');
+  const editor = page.getByRole("dialog", { name: "Edit link", exact: true }),
+    deleteLink = editor.getByRole("button", { name: "Delete link", exact: true });
   const remove = async () => {
-    await page
-      .getByRole("dialog", { name: "Edit link", exact: true })
-      .getByRole("button", { name: "Delete link", exact: true })
-      .click();
-    await page
-      .getByRole("alertdialog", { name: "Delete link?" })
-      .getByRole("button", { name: "Delete", exact: true })
-      .click();
+    await deleteLink.click();
+    await editor.getByRole("button", { name: "Delete", exact: true }).click();
   };
   await own.getByRole("button", { name: "Are.na", exact: true }).click();
   await page
     .getByRole("dialog", { name: "Post", exact: true })
     .getByRole("link", { name: "Edit", exact: true })
     .click();
+  // The footer turns into the question, rather than a dialog opening on top.
+  await deleteLink.click();
+  await expect(editor.getByRole("alert")).toHaveText(
+    "Delete the link, its comments and saved references?",
+  );
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(editor.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(deleteLink).toBeFocused();
+  await deleteLink.click();
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(deleteLink).toBeFocused();
+  await expect(editor.getByRole("button", { name: "Save changes", exact: true })).toBeVisible();
   await remove();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(own.getByRole("button", { name: "Are.na", exact: true })).toHaveCount(0);

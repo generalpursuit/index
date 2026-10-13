@@ -12,6 +12,15 @@ async function login(page: Page) {
 test.beforeEach(async ({ request }) => {
   await request.post(apiURL + "/_test/reset");
 });
+// A page asks in a dialog; inside a modal, such as the phone Settings sheet, it asks in place.
+const question = (page: Page, title: string) =>
+  page
+    .getByRole("alertdialog", { name: title, exact: true })
+    .or(
+      page
+        .locator(".confirmation-in-place")
+        .filter({ has: page.getByText(title, { exact: true }) }),
+    );
 
 for (const scheme of ["light", "dark"] as const) {
   for (const width of [1440, 390]) {
@@ -75,7 +84,7 @@ for (const scheme of ["light", "dark"] as const) {
       const rowLock = row.getByRole("button", { name: "Lock Weekend reads", exact: true });
       await expect(rowLock).toHaveAttribute("aria-pressed", "true");
       await rowLock.click();
-      const confirm = page.getByRole("alertdialog", { name: "Unlock group?" });
+      const confirm = question(page, "Unlock group?");
       await expect(confirm).toContainText("Visible to anyone who can see your profile.");
       await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
       await expect(rowLock).toHaveAttribute("aria-pressed", "true");
@@ -102,16 +111,12 @@ for (const scheme of ["light", "dark"] as const) {
       await edit.getByLabel("Name", { exact: true }).fill("Weekend reading");
       await edit.getByRole("button", { name: "Lock group", exact: true }).click();
       await edit.getByRole("button", { name: "Save", exact: true }).click();
-      await page
-        .getByRole("alertdialog", { name: "Lock group?" })
-        .getByRole("button", { name: "Cancel" })
-        .click();
+      // Inside the Edit group modal the question takes the place of its actions.
+      await expect(page.getByRole("alertdialog")).toHaveCount(0);
+      await question(page, "Lock group?").getByRole("button", { name: "Cancel" }).click();
       await expect(edit.getByLabel("Name", { exact: true })).toHaveValue("Weekend reading");
       await edit.getByRole("button", { name: "Save", exact: true }).click();
-      await page
-        .getByRole("alertdialog", { name: "Lock group?" })
-        .getByRole("button", { name: "Lock and save" })
-        .click();
+      await question(page, "Lock group?").getByRole("button", { name: "Lock and save" }).click();
       await expect(edit).toHaveCount(0);
       await expect(
         page.getByRole("button", { name: "Lock Weekend reading", exact: true }),
@@ -124,8 +129,7 @@ for (const scheme of ["light", "dark"] as const) {
       ).toHaveAttribute("aria-pressed", "true");
       // Favorites uses the same lock, with the same confirmation, without rename/delete actions.
       await page.getByRole("button", { name: "Lock Favorites", exact: true }).click();
-      await page
-        .getByRole("alertdialog", { name: "Lock group?" })
+      await question(page, "Lock group?")
         .getByRole("button", { name: "Lock group", exact: true })
         .click();
       await expect(
@@ -252,8 +256,7 @@ test("management errors preserve privacy and edits without overflowing phone set
   const lock = row.getByRole("button", { name: `Lock ${name}`, exact: true });
   await page.route("**/rpc/v1/groups/update", (route) => route.abort("failed"));
   await lock.click();
-  await page
-    .getByRole("alertdialog", { name: "Lock group?" })
+  await question(page, "Lock group?")
     .getByRole("button", { name: "Lock group", exact: true })
     .click();
   await expect(row.getByRole("alert")).toBeVisible();
@@ -269,8 +272,7 @@ test("management errors preserve privacy and edits without overflowing phone set
   );
   await page.unroute("**/rpc/v1/groups/update");
   await lock.click();
-  await page
-    .getByRole("alertdialog", { name: "Lock group?" })
+  await question(page, "Lock group?")
     .getByRole("button", { name: "Lock group", exact: true })
     .click();
   await expect(lock).toHaveAttribute("aria-pressed", "true");
@@ -286,7 +288,7 @@ test("management errors preserve privacy and edits without overflowing phone set
   await expect(editTrigger).toBeFocused();
   await editTrigger.click();
   await page.getByRole("menuitem", { name: "Delete", exact: true }).click();
-  const confirm = page.getByRole("alertdialog", { name: "Delete group?" });
+  const confirm = question(page, "Delete group?");
   await expect(confirm).toContainText("They will no longer be locked");
   await confirm.getByRole("button", { name: "Cancel", exact: true }).click();
   await expect(row).toBeVisible();
