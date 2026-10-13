@@ -301,6 +301,34 @@ test("Send link takes the post's place in its dialog and goes back to it", async
   await row.click();
   await expect(forward).toBeVisible();
 });
+test("going back focuses what opened a view, though clicking it didn't focus it", async ({
+  page,
+}) => {
+  await login(page);
+  // As in WebKit, and so the desktop app: clicking a link or button leaves focus where it was.
+  await page.evaluate(() =>
+    addEventListener("mousedown", (event) => event.preventDefault(), { capture: true }),
+  );
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    edit = post.getByRole("link", { name: "Edit", exact: true }),
+    forward = post.getByRole("button", { name: "Forward", exact: true });
+  await edit.click();
+  await page
+    .getByRole("dialog", { name: "Edit link", exact: true })
+    .getByRole("button", { name: "Cancel", exact: true })
+    .click();
+  await expect(edit).toBeFocused();
+  await forward.click();
+  await page
+    .getByRole("dialog", { name: "Send link", exact: true })
+    .getByRole("button", { name: "Back", exact: true })
+    .click();
+  await expect(forward).toBeFocused();
+});
 test("the editor's title field shows whole letters, however many lines it takes", async ({
   page,
 }) => {
