@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { releaseBranches } from "./deployment";
+import { releaseBranch, releaseStages } from "./deployment";
 
 const repository = "repos/generalpursuit/index";
 function github(method: string, path: string, body?: unknown) {
@@ -13,7 +13,7 @@ function github(method: string, path: string, body?: unknown) {
 
 // Alchemy beta.80 sends reviewer settings even when omitted. GitHub rejects
 // those on this account's plan, so bootstrap only the supported branch policy.
-for (const [stage, branch] of Object.entries(releaseBranches)) {
+for (const stage of releaseStages) {
   const path = `${repository}/environments/${stage}`;
   github("PUT", path, {
     deployment_branch_policy: { protected_branches: false, custom_branch_policies: true },
@@ -24,12 +24,12 @@ for (const [stage, branch] of Object.entries(releaseBranches)) {
   ) as {
     branch_policies: { id: number; name: string; type: string }[];
   };
-  if (!policies.some((policy) => policy.name === branch && policy.type === "branch"))
-    github("POST", `${path}/deployment-branch-policies`, { name: branch, type: "branch" });
+  if (!policies.some((policy) => policy.name === releaseBranch && policy.type === "branch"))
+    github("POST", `${path}/deployment-branch-policies`, { name: releaseBranch, type: "branch" });
   for (const policy of policies)
-    if (policy.name !== branch || policy.type !== "branch")
+    if (policy.name !== releaseBranch || policy.type !== "branch")
       github("DELETE", `${path}/deployment-branch-policies/${policy.id}`);
-  console.log(`${stage}: deployments allowed from ${branch}`);
+  console.log(`${stage}: deployments allowed from ${releaseBranch}`);
 }
 
 execFileSync(

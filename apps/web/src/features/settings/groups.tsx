@@ -1,6 +1,6 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Button } from "@index/ui/components/button";
-import { Pencil, Plus, Star, EllipsisVertical, Trash } from "lucide-react";
+import { Heart, Pencil, Plus, Star, EllipsisVertical, Trash } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -19,16 +19,17 @@ import { GroupLockControl, groupPrivacyDescription } from "@/features/groups/gro
 import type { Group } from "@/lib/types";
 
 /**
- * Your lists in one place: create groups, lock custom groups and Favorites (Starred is always private), and
- * rename or delete your own groups. The profile only shows and filters them.
+ * Your lists in one place. Favorites and Starred come first and are never locked here: Favorites
+ * follows each link's own group, Starred is always private. Below them you create, lock, rename
+ * and delete your own groups. The profile only shows and filters them.
  */
 export function GroupSettings({ userId }: { userId: string }) {
-  // In the profile's order: Favorites, your groups, then Starred (other people's links).
-  const order = { favorites: 0, custom: 1, starred: 2 } as const;
   const groups = useGroups(userId),
-    all = (groups.data?.pages.flatMap((p) => p.items) ?? []).sort(
-      (a, b) => order[a.kind] - order[b.kind],
-    );
+    all = groups.data?.pages.flatMap((p) => p.items) ?? [],
+    pinned = (["favorites", "starred"] as const).flatMap((kind) =>
+      all.filter((g) => g.kind === kind),
+    ),
+    own = all.filter((g) => g.kind === "custom");
   const [creating, setCreating] = useState(false);
   const createTrigger = useRef<HTMLButtonElement>(null);
   return (
@@ -46,7 +47,7 @@ export function GroupSettings({ userId }: { userId: string }) {
         <div>
           <h2 id="settings-groups">Groups</h2>
           <p className={"muted text-subtle-foreground"}>
-            Locked lists are only yours, whoever can see your profile.
+            Lock a group to keep its links to yourself.
           </p>
         </div>
         <IconButton ref={createTrigger} label="New group" onClick={() => setCreating(true)}>
@@ -60,32 +61,32 @@ export function GroupSettings({ userId }: { userId: string }) {
         retry={() => void groups.refetch()}
       >
         <ul className="settings-group-list">
-          {all.map((g) => (
-            <li
-              key={g.id}
-              className={
-                "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
-              }
-            >
-              <span
-                className={
-                  "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
-                }
-              >
-                {g.kind === "starred" && <Star size={14} aria-hidden="true" />}
-                {g.name}
-              </span>
-              <span
-                className={
-                  "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
-                }
-              >
-                {g.linkCount === 1 ? "1 link" : g.linkCount + " links"}
-              </span>
-              <GroupActions group={g} />
-            </li>
+          {pinned.map((g) => (
+            <GroupRow key={g.id} group={g}>
+              {/* Keeps counts aligned with the lock and actions of your groups. */}
+              <span className="settings-group-slot w-[78px] -mr-2" aria-hidden="true" />
+            </GroupRow>
           ))}
         </ul>
+        {own.length > 0 && (
+          <>
+            <h3
+              id="settings-own-groups"
+              className={
+                "settings-group-divider flex items-center gap-2.5 mt-2 mb-1 font-mono text-[11px] font-normal uppercase tracking-[0.06em] text-subtle-foreground after:flex-1 after:h-px after:bg-border after:content-['']"
+              }
+            >
+              Your groups
+            </h3>
+            <ul className="settings-group-list" aria-labelledby="settings-own-groups">
+              {own.map((g) => (
+                <GroupRow key={g.id} group={g}>
+                  <GroupActions group={g} />
+                </GroupRow>
+              ))}
+            </ul>
+          </>
+        )}
         <More
           hasNext={groups.hasNextPage}
           isFetching={groups.isFetchingNextPage}
@@ -102,19 +103,52 @@ export function GroupSettings({ userId }: { userId: string }) {
     </section>
   );
 }
-// Only custom groups can be renamed/deleted. Starred never offers an unlock action.
+function GroupRow({
+  group,
+  children,
+}: {
+  group: Group & { linkCount: number };
+  children: ReactNode;
+}) {
+  return (
+    <li
+      className={
+        "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
+      }
+    >
+      <span
+        className={
+          "settings-group-name inline-flex items-center gap-2 min-w-0 text-[14px] wrap-anywhere"
+        }
+      >
+        {group.kind === "favorites" && <Heart size={14} aria-hidden="true" />}
+        {group.kind === "starred" && <Star size={14} aria-hidden="true" />}
+        {group.name}
+      </span>
+      <span
+        className={
+          "settings-group-count text-[13px] text-subtle-foreground [font-variant-numeric:tabular-nums]"
+        }
+      >
+        {group.linkCount === 1 ? "1 link" : group.linkCount + " links"}
+      </span>
+      {children}
+    </li>
+  );
+}
+// Your own groups can be locked, renamed and deleted.
 function GroupActions({ group }: { group: Group }) {
   const actions = useGroupActions(),
     [edit, setEdit] = useState(false),
     [remove, setRemove] = useState(false),
     [privacy, setPrivacy] = useState<boolean>(),
     [error, setError] = useState<string>(),
-    locked = group.kind === "starred" || group.visibility === "private";
+    locked = group.visibility === "private";
   const submitting = useRef(false);
   const editTrigger = useRef<HTMLButtonElement>(null);
   const busy = actions.updateGroup.isPending || actions.deleteGroup.isPending;
   const changePrivacy = async () => {
-    if (submitting.current || privacy === undefined || group.kind === "starred") return;
+    if (submitting.current || privacy === undefined) return;
     submitting.current = true;
     setError(undefined);
     try {
@@ -135,7 +169,6 @@ function GroupActions({ group }: { group: Group }) {
         <GroupLockControl
           name={group.name}
           locked={locked}
-          alwaysPrivate={group.kind === "starred"}
           disabled={busy}
           onChange={(next) => {
             setError(undefined);
@@ -153,43 +186,40 @@ function GroupActions({ group }: { group: Group }) {
           pending={busy}
           onConfirm={() => void changePrivacy()}
         />
-        {group.kind !== "custom" && <span className="settings-group-slot w-8" aria-hidden="true" />}
-        {group.kind === "custom" && (
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  ref={editTrigger}
-                  variant="ghost"
-                  size="icon"
-                  aria-label={"Actions for " + group.name}
-                />
-              }
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                ref={editTrigger}
+                variant="ghost"
+                size="icon"
+                aria-label={"Actions for " + group.name}
+              />
+            }
+          >
+            <EllipsisVertical />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              onClick={() => {
+                setEdit(true);
+              }}
             >
-              <EllipsisVertical />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem
-                onClick={() => {
-                  setEdit(true);
-                }}
-              >
-                <Pencil />
-                Edit group
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onClick={() => {
-                  setError(undefined);
-                  setRemove(true);
-                }}
-              >
-                <Trash />
-                Delete
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        )}
+              <Pencil />
+              Edit group
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              variant="destructive"
+              onClick={() => {
+                setError(undefined);
+                setRemove(true);
+              }}
+            >
+              <Trash />
+              Delete
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
         {edit && (
           <Modal
             open

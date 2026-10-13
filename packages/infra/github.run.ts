@@ -4,7 +4,7 @@ import * as GitHub from "alchemy/GitHub";
 import * as Config from "effect/Config";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import { releaseBranches } from "./deployment";
+import { releaseStages } from "./deployment";
 
 /** Run locally with the admin profile; CI never receives token-management credentials. */
 export default Alchemy.Stack(
@@ -18,7 +18,7 @@ export default Alchemy.Stack(
     const neonKey = yield* Config.Redacted("NEON_API_KEY");
     const subdomain = yield* Config.String("WORKERS_SUBDOMAIN");
     const repo = { owner: "generalpursuit", repository: "index" };
-    for (const stage of Object.keys(releaseBranches)) {
+    for (const stage of releaseStages) {
       const environment = stage;
       const token = yield* Cloudflare.ApiToken.AccountApiToken(`${stage}-deploy-token`, {
         name: `index-${stage}-github-actions`,

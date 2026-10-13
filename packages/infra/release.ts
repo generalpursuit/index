@@ -1,7 +1,7 @@
 import { appendFileSync, readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
-import { releaseBranches, type ReleaseStage } from "./deployment";
+import { isReleaseStage, releaseBranch, type ReleaseStage } from "./deployment";
 
 const releaseVersion = /^\d+\.\d+\.\d+$/;
 
@@ -12,19 +12,20 @@ function newer(version: string, than: string) {
 }
 
 /**
- * The root package.json version names every release. Staging ships it without a bump,
- * ordered by workflow run; production must exceed the latest `vX.Y.Z` tag.
+ * The root package.json version names every release, which runs from main. Staging ships it
+ * without a bump, ordered by workflow run; production must exceed the latest `vX.Y.Z` tag.
  */
 export function releaseIdentity(input: {
   branch: string | undefined;
+  stage: string | undefined;
   packageVersion: unknown;
   run: string | undefined;
   tags: string[];
 }): { stage: ReleaseStage; version: string } {
-  const stage = (Object.keys(releaseBranches) as ReleaseStage[]).find(
-    (key) => releaseBranches[key] === input.branch,
-  );
-  if (!stage) throw new Error("Releases run only from main or staging.");
+  if (input.branch !== releaseBranch) throw new Error("Releases run only from main.");
+  const stage = input.stage;
+  if (!stage || !isReleaseStage(stage))
+    throw new Error("Choose the staging or production release stage.");
   const version = input.packageVersion;
   if (typeof version !== "string" || !releaseVersion.test(version))
     throw new Error("Set the root package.json version to major.minor.patch.");
@@ -51,6 +52,7 @@ if (import.meta.main) {
   if (remote.status !== 0) throw new Error(remote.stderr || "Could not list release tags.");
   const { stage, version } = releaseIdentity({
     branch: process.env.GITHUB_REF_NAME,
+    stage: process.env.RELEASE_STAGE,
     packageVersion: JSON.parse(
       readFileSync(join(import.meta.dirname, "../../package.json"), "utf8"),
     ).version,
