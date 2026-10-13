@@ -133,6 +133,23 @@ public struct ActivityPage: Codable, Sendable {
   public let nextCursor: String?
   public let unreadCount: Int
 }
+/// The start of a replied message. Its attachment stays behind its own visibility rules,
+/// so a reply only learns that there was one.
+public struct MessageReply: Codable, Hashable, Sendable {
+  public let id: String
+  public let senderId: String
+  public let excerpt: String
+  public let hasAttachment: Bool
+  /// How a draft quotes `message` until the server returns the sent reply's own excerpt.
+  public init(quoting message: Message) {
+    id = message.id
+    senderId = message.senderId
+    excerpt = message.body
+    hasAttachment = message.hasAttachment
+  }
+  /// The quoted text. A replied message without text was a shared post.
+  public var preview: String { excerpt.isEmpty && hasAttachment ? "Shared post" : excerpt }
+}
 public struct Message: Codable, Identifiable, Sendable {
   public let id: String
   public let conversationId: String
@@ -143,6 +160,8 @@ public struct Message: Codable, Identifiable, Sendable {
   public let attachment: SavedLink?
   public let hasAttachment: Bool
   public let restrictedAuthor: Person?
+  /// Null once the replied message is deleted.
+  public let replyTo: MessageReply?
 }
 public struct Conversation: Codable, Identifiable, Sendable {
   public let id: String
@@ -150,6 +169,8 @@ public struct Conversation: Codable, Identifiable, Sendable {
   public let participants: [Person]
   public let canSend: Bool
   public let unreadCount: Int
+  /// The viewer's newest message that every other member has read.
+  public let readReceiptMessageId: String?
   public let lastMessage: Message?
   public let updatedAt: String
   public func title(viewerId: String) -> String {
@@ -157,6 +178,20 @@ public struct Conversation: Codable, Identifiable, Sendable {
     return others.map {
       others.count > 1 ? String($0.name.split(separator: " ").first ?? Substring($0.name)) : $0.name
     }.joined(separator: ", ")
+  }
+  /// Who a reply answers, from the point of view of the person reading it.
+  public func replyLabel(viewerId: String, from sender: String, to original: String) -> String {
+    if original != viewerId {
+      return "Replying to " + (participants.first { $0.id == original }?.name ?? "a former participant")
+    }
+    return sender == viewerId ? "Replying to yourself" : "Replying to you"
+  }
+}
+/// API timestamps are ISO 8601, with or without fractional seconds.
+public enum APITimestamp {
+  public static func date(_ value: String) -> Date? {
+    (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value))
+      ?? (try? Date.ISO8601FormatStyle().parse(value))
   }
 }
 public struct Success: Codable, Sendable { public let success: Bool }

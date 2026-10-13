@@ -26,7 +26,10 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   static let shared = NotificationController()
   var permission = NotificationPermission.notDetermined
   var registered = false
-  var configured = false
+  /// Whether the server delivers through APNs; nil until it answers.
+  var configured: Bool?
+  /// The account whose registration has been checked, whether or not the check succeeded.
+  var checkedAccount: String?
   var error: String?
   private weak var app: AppModel?
   private var generation = 0
@@ -63,8 +66,8 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
       let config: NotificationCapabilities = try await api.request("/me/notifications/capabilities")
       guard version == generation, app.userID == account, app.verificationUser == nil else { return }
       configured = config.apns
-      if !permission.allowsAlerts { await disable(); return }
-      if UserDefaults.standard.string(forKey: defaultsKey) == account && configured {
+      if !permission.allowsAlerts { await disable(); checkedAccount = account; return }
+      if UserDefaults.standard.string(forKey: defaultsKey) == account && config.apns {
         let installation = try NotificationInstallation(server: api.baseURL).readOrCreate()
         binding = (installation, config.sessionId, account)
         let status: NotificationDeviceStatus = try await api.request("/me/notifications/devices/status", method: "POST", body: deviceBody())
@@ -74,8 +77,13 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
         UIApplication.shared.registerForRemoteNotifications()
         #endif
       }
+      checkedAccount = account
       resumeClick()
-    } catch { if version == generation { self.error = "Could not check notification registration." } }
+    } catch {
+      guard version == generation else { return }
+      self.error = "Could not check notification registration."
+      checkedAccount = account
+    }
   }
   func enable(_ app: AppModel) async {
     self.app = app
@@ -91,7 +99,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
       let config: NotificationCapabilities = try await api.request("/me/notifications/capabilities")
       guard version == generation, app.userID == account else { return }
       configured = config.apns
-      guard config.apns else { error = "Push delivery is not configured yet."; return }
+      guard config.apns else { error = "Notifications aren't available on this server yet."; return }
       binding = (try NotificationInstallation(server: api.baseURL).readOrCreate(), config.sessionId, account)
       UserDefaults.standard.set(account, forKey: defaultsKey)
       #if os(iOS)
@@ -201,17 +209,27 @@ struct NotificationSettings: View {
     VStack(alignment: .leading, spacing: 12) {
       Text("Notifications").font(.headline)
       Text("Your in-app activity is always kept. No notification emails are sent.").font(.footnote).foregroundStyle(IndexPalette.mutedForeground)
-      Text(notifications.permission == .denied ? "Blocked in system settings." : notifications.registered ? "Enabled on this device." : "Alerts are off on this device.").font(.subheadline)
-      if !notifications.configured { Text("Push delivery is not configured yet.").font(.footnote).foregroundStyle(IndexPalette.mutedForeground) }
-      AsyncButton {
-        if notifications.registered { await notifications.disable() } else { await notifications.enable(app) }
-      } label: { Text(notifications.registered ? "Turn off on this device" : "Enable on this device") }
-      .buttonStyle(PillStyle()).disabled(!notifications.registered && (!notifications.configured || notifications.permission == .denied))
-      #if os(iOS)
-      if notifications.permission == .denied {
-        Button("Open system settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.buttonStyle(PillStyle())
+      // Capabilities only decide whether a device can be enabled; a registered device can always
+      // turn off. Only an explicit answer means push is off; after a failed check, enabling reports why.
+      let checking = !notifications.registered && notifications.checkedAccount != app.userID
+      let serverOff = notifications.configured == false && !notifications.registered
+      Text(
+        checking ? "Checking…"
+          : serverOff ? "Notifications aren't available on this server yet."
+          : notifications.permission == .denied ? "Blocked in system settings."
+          : notifications.registered ? "Enabled on this device." : "Alerts are off on this device."
+      ).font(.subheadline)
+      if !checking && !serverOff {
+        AsyncButton {
+          if notifications.registered { await notifications.disable() } else { await notifications.enable(app) }
+        } label: { Text(notifications.registered ? "Turn off on this device" : "Enable on this device") }
+        .buttonStyle(PillStyle()).disabled(!notifications.registered && notifications.permission == .denied)
+        #if os(iOS)
+        if notifications.permission == .denied {
+          Button("Open system settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.buttonStyle(PillStyle())
+        }
+        #endif
       }
-      #endif
       if let preferences {
         ForEach(rows, id: \.label) { row in
           Toggle(isOn: Binding(get: { row.keys.allSatisfy { value(preferences, $0) } }, set: { newValue in

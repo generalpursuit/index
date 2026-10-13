@@ -89,11 +89,18 @@ struct LiveAPITests {
     #expect(restricted.restrictedAuthor?.id == iris.id)
     let reply: Message = try await bob.request(
       "/conversations/\(conversation.id)/messages", method: "POST",
-      body: ["clientId": .string(UUID().uuidString), "body": .string("I’ll request to follow.")])
+      body: [
+        "clientId": .string(UUID().uuidString), "body": .string("I’ll request to follow."),
+        "replyToMessageId": .string(sent.id),
+      ])
     #expect(reply.senderId == bobProfile.id)
+    // The quote tells that the original had a post without forwarding it.
+    #expect(reply.replyTo?.id == sent.id && reply.replyTo?.hasAttachment == true)
     let _: Success = try await alice.request(
       "/conversations/\(conversation.id)/read", method: "POST",
       body: ["messageId": .string(reply.id)])
+    let read: Conversation = try await bob.request("/conversations/\(conversation.id)")
+    #expect(read.readReceiptMessageId == reply.id)
     let activity: ActivityPage = try await alice.request("/me/activity", query: ["type": "request"])
     let pending = try #require(activity.items.first(where: { $0.requestStatus == "pending" }))
     let _: FollowState = try await alice.request(

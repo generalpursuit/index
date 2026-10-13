@@ -363,11 +363,7 @@ struct LinkDetailView: View {
   }
 }
 func relativeTime(_ value: String) -> String {
-  let formatter = ISO8601DateFormatter()
-  formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-  var date = formatter.date(from: value)
-  if date == nil { formatter.formatOptions = [.withInternetDateTime]; date = formatter.date(from: value) }
-  guard let date else { return "" }
+  guard let date = APITimestamp.date(value) else { return "" }
   let minutes = max(0, Int(Date().timeIntervalSince(date) / 60))
   return minutes < 1 ? "Now" : minutes < 60 ? "\(minutes)m" : minutes < 1440 ? "\(minutes / 60)h" : "\(minutes / 1440)d"
 }

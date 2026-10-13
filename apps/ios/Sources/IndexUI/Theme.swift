@@ -27,6 +27,7 @@ public enum IndexPalette {
   public static let subtleForeground = adaptive(light: 0x6b6b6b, dark: 0x929292)
   public static let input = adaptive(light: 0xb8b8b8, dark: 0x454545)
   public static let border = adaptive(light: 0xd4d4d4, dark: 0x303030)
+  public static let ring = adaptive(light: 0x626262, dark: 0xbdbdbd)
   public static let primary = foreground
   public static let primaryForeground = background
   public static let destructive = adaptive(light: 0xb42332, dark: 0xff8a8a)
