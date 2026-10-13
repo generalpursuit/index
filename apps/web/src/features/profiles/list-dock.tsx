@@ -30,7 +30,7 @@ export function ListDock({
 }) {
   const groups = useAllGroups(userId),
     all = groups.data?.pages.flatMap((page) => page.items) ?? [];
-  // Favorites first, then the person's groups, like Settings.
+  // Favorites first, then the person's groups.
   const lists = all
       .filter((group) => group.kind !== "starred")
       .sort((a, b) => Number(b.kind === "favorites") - Number(a.kind === "favorites")),

@@ -2,7 +2,6 @@ import { readFileSync } from "node:fs";
 
 export const channels = {
   production: {
-    branch: "main",
     name: "Index",
     identifier: "com.generalpursuit.index",
     binary: "index",
@@ -11,7 +10,6 @@ export const channels = {
     keychainSuffix: "com.generalpursuit.index.shared",
   },
   staging: {
-    branch: "staging",
     name: "Index Staging",
     identifier: "com.generalpursuit.index.staging",
     binary: "index-staging",
@@ -70,12 +68,6 @@ function parseBaseConfig(value: unknown): BaseConfig {
     throw new Error("Invalid desktop bundle version in tauri.conf.json.");
   // The guards above cover the fields in this deliberately narrow consumer type.
   return value as BaseConfig;
-}
-
-export function channelForBranch(branch: string | undefined): Channel {
-  const name = (Object.keys(channels) as Channel[]).find((key) => channels[key].branch === branch);
-  if (!name) throw new Error("Desktop releases must come from main or staging.");
-  return name;
 }
 
 /** Release versions are numeric; only staging builds carry a pre-release suffix. */

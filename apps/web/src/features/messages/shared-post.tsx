@@ -13,6 +13,7 @@ const cardClassName =
 const actionClassName =
   "text-foreground cursor-pointer [transition:background_150ms_ease] hover:bg-muted outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
+/** A message's post. Its message is the tab stop and opens it with Enter. */
 export function SharedPost({ message }: { message: Message }) {
   const navigate = useNavigate(),
     cache = useQueryClient(),
@@ -22,6 +23,7 @@ export function SharedPost({ message }: { message: Message }) {
     return (
       <button
         type="button"
+        tabIndex={-1}
         className={cardClassName + " " + actionClassName}
         onPointerEnter={prepare}
         onFocus={prepare}
@@ -51,6 +53,7 @@ export function SharedPost({ message }: { message: Message }) {
           " restricted [&>span>span]:text-[12px] [&>span>span]:underline [&>span>span]:underline-offset-[3px] [&>span>span]:mt-1"
         }
         person={message.restrictedAuthor}
+        tabIndex={-1}
       >
         <LockKeyhole />
         <span>

@@ -2,7 +2,7 @@ name: Desktop native checks
 
 on:
   push:
-    branches: [dev]
+    branches: [main]
     paths:
       - "apps/web/src-tauri/**"
       - "apps/web/scripts/**"
@@ -22,8 +22,9 @@ permissions:
   contents: read
 
 jobs:
+  # Pushes and pull requests already run CI on their own.
   checks:
-    if: github.event_name != 'pull_request'
+    if: github.event_name == 'workflow_dispatch'
     uses: ./.github/workflows/ci.yml
 
   native:
@@ -39,15 +40,15 @@ jobs:
     env:
       VITE_SERVER_URL: http://localhost:3002
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Select Xcode with Swift 6
         if: runner.os == 'macOS'
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/web/src-tauri -> target
       - name: Install Linux build dependencies

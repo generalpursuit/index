@@ -1,6 +1,6 @@
 # Deployment
 
-[Alchemy](../packages/infra/alchemy.run.ts) owns the API Worker, Vite web Worker, Neon database and private R2 photo bucket. `staging` and `production` have independent resources and state. Their branch mapping lives in [deployment.ts](../packages/infra/deployment.ts): `staging` deploys staging; `main` deploys production. Worker names are `index-<stage>-web` and `index-<stage>-api` under the configured `WORKERS_SUBDOMAIN`.
+[Alchemy](../packages/infra/alchemy.run.ts) owns the API Worker, Vite web Worker, Neon database and private R2 photo bucket. `staging` and `production` have independent resources and state. Both release from `main`; [deployment.ts](../packages/infra/deployment.ts) names the stages, and the release workflow's input picks one. Worker names are `index-<stage>-web` and `index-<stage>-api` under the configured `WORKERS_SUBDOMAIN`.
 
 ## Local development
 
@@ -30,9 +30,9 @@ From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, sup
 
 ## Release deployment
 
-[release.yml](../.github/workflows/release.yml) runs only on manual dispatch: merging does not release. Run it from the Actions tab and select `staging` or `main`; other branches are skipped. One run releases the API, web and [desktop apps](desktop-releases.md) under one version after reusable [CI](../.github/workflows/ci.yml). It serializes each release branch without cancelling an active run, and each job uses the matching GitHub environment. The checked-in workflow is the input inventory; environment configuration does not affect an already deployed Worker until redeployment.
+[release.yml](../.github/workflows/release.yml) runs only on manual dispatch: merging does not release. Run it from the Actions tab on `main` and choose the `staging` or `production` stage; runs from other branches fail before anything deploys. One run releases the API, web and [desktop apps](desktop-releases.md) under one version after reusable [CI](../.github/workflows/ci.yml). It serializes each stage without cancelling an active run, and each job uses the matching GitHub environment. The checked-in workflow is the input inventory; environment configuration does not affect an already deployed Worker until redeployment.
 
-The root [package.json](../package.json) `version` is the product version. Staging releases it as `X.Y.Z-staging.<run>` without a bump. Production releases exactly `X.Y.Z`: [release.ts](../packages/infra/release.ts) refuses to start unless it is higher than the latest `vX.Y.Z` tag, which the workflow creates only after every part is published. Bump the version on the way to `main`, and regenerate the iOS project with `python3 apps/ios/Scripts/generate-project.py`.
+The root [package.json](../package.json) `version` is the product version. Staging releases it as `X.Y.Z-staging.<run>` without a bump. Production releases exactly `X.Y.Z`: [release.ts](../packages/infra/release.ts) refuses to start unless it is higher than the latest `vX.Y.Z` tag, which the workflow creates only after every part is published. Bump the version before a production release, and regenerate the iOS project with `python3 apps/ios/Scripts/generate-project.py`.
 
 The API and web deploy together once checks pass; desktop builds run alongside, and their update feed advances only after the deployment. Keep the API compatible with the previous release's clients: desktop apps update silently, but iOS updates and open browser tabs lag. To drop older clients, follow [client versions](api.md#client-versions).
 

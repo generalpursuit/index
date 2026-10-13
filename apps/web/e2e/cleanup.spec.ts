@@ -144,6 +144,34 @@ test("a deleted forwarded link permits confirmed recovery without guessing wheth
   ).toHaveCount(1);
 });
 
+test("retrying a lost forward after its link was deleted confirms the delivered message", async ({
+  page,
+}) => {
+  await login(page);
+  await attachFromHome(page);
+  let accepted = false;
+  await page.route(
+    "**/rpc/v1/messages/send",
+    async (route) => {
+      expect((await route.fetch()).ok()).toBe(true);
+      accepted = true;
+      await route.abort("failed");
+    },
+    { times: 1 },
+  );
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect.poll(() => accepted).toBe(true);
+  await expect(
+    page.getByRole("alert").filter({ hasText: "Delivery is unconfirmed" }),
+  ).toBeVisible();
+  const removed = await page.request.delete(apiURL + "/api/v1/links/" + fixture.links[0]!.id);
+  expect(removed.ok()).toBe(true);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".draft-attachment")).toHaveCount(0);
+  await expect(page.locator(".shared-post.unavailable")).toHaveCount(1);
+});
+
 test("saved link edits reopen with the saved values; failed edits keep unsaved input", async ({
   page,
 }) => {

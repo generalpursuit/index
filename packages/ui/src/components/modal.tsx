@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
   type RefObject,
+  type SyntheticEvent,
 } from "react";
 import { Button } from "./button";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./dialog";
@@ -173,20 +174,25 @@ export function ModalFooter({
 export type ModalView = { id: string; content: ReactNode };
 // The curve sheets move with.
 const switchTiming = { duration: 220, easing: "cubic-bezier(0.32, 0.72, 0, 1)" };
+// The views fade through rather than across: one fades steadily out before the next settles in,
+// so their headings, at different heights, never show together.
+const fadeOut = { duration: 80, fill: "forwards" } as const,
+  fadeIn = { ...switchTiming, delay: 80, duration: 140, fill: "backwards" } as const;
 const control =
   "a[href], button:not(:disabled), input:not(:disabled):not([type='hidden']), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex='-1'])";
 
 /**
  * Views stacked in one modal, the last one shown. The ones under it stay mounted but hidden, so
- * they come back as they were. Switching crossfades while the frame takes the new view's height.
- * Focus moves into the shown view (its first control in a dialog, the sheet itself on phones),
- * or back to where it was in a view shown again.
+ * they come back as they were. Switching fades one view out and the next in while the frame
+ * takes the new view's height. Focus moves into the shown view (its first control in a dialog,
+ * the sheet itself on phones); a view shown again gives it back to the control that opened the
+ * view over it.
  */
 export function ModalViews({ views }: { views: ModalView[] }) {
   const sheet = useContext(ModalPresentation) === "sheet",
     shown = views.at(-1)?.id;
-  // The view shown before a switch fades out over the next; one that left the stack keeps its
-  // last content until then.
+  // The view shown before a switch fades out as the next comes in; one that left the stack keeps
+  // its last content until it has gone.
   const [previous, setPrevious] = useState(views);
   const [leaving, setLeaving] = useState<ModalView & { stays: boolean }>();
   if (previous !== views) {
@@ -197,7 +203,15 @@ export function ModalViews({ views }: { views: ModalView[] }) {
   }
   const frame = useRef<HTMLDivElement>(null),
     height = useRef(0),
-    focused = useRef(new Map<string, HTMLElement>());
+    // The control last used in each view, clicked or focused: WebKit doesn't focus a link or
+    // button it clicks, so what has focus as a view opens needn't be what opened it.
+    used = useRef(new WeakMap<Element, HTMLElement>());
+  const remember = (event: SyntheticEvent<HTMLElement>) => {
+    const target = (event.target as Element).closest<HTMLElement>(control);
+    // Content portaled out of the view, such as a menu, is not part of it.
+    if (target && event.currentTarget.contains(target))
+      used.current.set(event.currentTarget, target);
+  };
   // The height a switch starts from.
   useLayoutEffect(() => {
     const element = frame.current!;
@@ -212,14 +226,9 @@ export function ModalViews({ views }: { views: ModalView[] }) {
     const next = element.querySelector<HTMLElement>(":scope > [data-view='shown']"),
       fading = element.querySelector<HTMLElement>(":scope > [data-view='leaving']");
     if (!leaving || !shown || !next || !fading) return;
-    // A covered view keeps what had focus in it, to get it back when it is shown again.
-    const active = document.activeElement;
-    if (leaving.stays && active instanceof HTMLElement && fading.contains(active))
-      focused.current.set(leaving.id, active);
-    const back = focused.current.get(shown);
-    focused.current.delete(shown);
+    const back = used.current.get(next);
     const target =
-      back?.isConnected && next.contains(back)
+      back && next.contains(back)
         ? back
         : sheet
           ? element.closest<HTMLElement>("[role='dialog']")
@@ -236,8 +245,8 @@ export function ModalViews({ views }: { views: ModalView[] }) {
     Object.assign(next.style, { flex: "none", height: `${to}px` });
     const animations = [
       element.animate({ height: [`${height.current}px`, `${to}px`] }, switchTiming),
-      next.animate({ opacity: [0, 1] }, switchTiming),
-      fading.animate({ opacity: [1, 0] }, { ...switchTiming, fill: "forwards" }),
+      fading.animate({ opacity: [1, 0] }, fadeOut),
+      next.animate({ opacity: [0, 1] }, fadeIn),
     ];
     Promise.all(animations.map((animation) => animation.finished)).then(
       () => setLeaving(undefined),
@@ -259,6 +268,8 @@ export function ModalViews({ views }: { views: ModalView[] }) {
             key={view.id}
             data-view={state}
             inert={state !== "shown"}
+            onClickCapture={remember}
+            onFocusCapture={remember}
             className={
               state === "shown"
                 ? "flex min-h-0 flex-1 flex-col"

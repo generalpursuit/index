@@ -1,30 +1,37 @@
 name: Release
 
-# Release only on manual dispatch; the selected branch picks the stage.
+# Release only on manual dispatch from main; the input picks the stage.
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: Release stage
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.stage }}
   cancel-in-progress: false
 
 jobs:
   version:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     outputs:
       stage: ${{ steps.release.outputs.stage }}
       version: ${{ steps.release.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
       - id: release
-        name: Select the release version; production must exceed the latest tag
+        name: Require main and select the release version; production must exceed the latest tag
+        env:
+          RELEASE_STAGE: ${{ inputs.stage }}
         run: bun packages/infra/release.ts
 
   checks:
@@ -40,8 +47,8 @@ jobs:
     env:
       DEPLOY_STAGE: ${{ needs.version.outputs.stage }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile
@@ -107,17 +114,17 @@ jobs:
       APPLE_API_KEY: ${{ vars.APPLE_API_KEY }}
       APPLE_API_ISSUER: ${{ vars.APPLE_API_ISSUER }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Select Xcode with Swift 6
         if: runner.os == 'macOS'
         run: sudo xcode-select --switch /Applications/Xcode_16.4.app/Contents/Developer
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           targets: ${{ matrix.target }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: apps/web/src-tauri -> target
           key: release-${{ needs.version.outputs.stage }}-${{ matrix.target }}
@@ -168,7 +175,7 @@ jobs:
           spctl --assess --type execute --verbose "$app"
       - name: Collect release files and checksums
         run: bun apps/web/scripts/desktop/artifacts.ts "apps/web/src-tauri/target/${{ matrix.target }}/release/bundle" desktop-artifacts
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: desktop-${{ needs.version.outputs.stage }}-${{ matrix.platform }}
           path: desktop-artifacts/
@@ -189,12 +196,12 @@ jobs:
       group: desktop-publish
       cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.2
       - run: bun install --frozen-lockfile --ignore-scripts
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: desktop-${{ needs.version.outputs.stage }}-*
           path: desktop-artifacts
@@ -202,6 +209,7 @@ jobs:
       - name: Publish the complete release and advance its update feed
         env:
           GH_TOKEN: ${{ github.token }}
+          INDEX_DESKTOP_CHANNEL: ${{ needs.version.outputs.stage }}
           INDEX_DESKTOP_VERSION: ${{ needs.version.outputs.version }}
         run: bun apps/web/scripts/desktop/publish.ts desktop-artifacts
 

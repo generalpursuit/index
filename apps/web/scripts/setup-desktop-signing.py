@@ -14,7 +14,8 @@ import shutil
 import subprocess
 import sys
 
-CHANNELS = {'production': ('main', 'com.generalpursuit.index'), 'staging': ('staging', 'com.generalpursuit.index.staging')}
+# Both channels release from main; the release workflow's stage input selects one.
+CHANNELS = {'production': ('main', 'com.generalpursuit.index'), 'staging': ('main', 'com.generalpursuit.index.staging')}
 
 def progress(message):
     print(message, flush=True)
@@ -68,6 +69,9 @@ def ensure_environment(repo, channel, branch):
     policies = json.loads(gh(['api', path + '/deployment-branch-policies']))['branch_policies']
     if not any(policy['name'] == branch and policy['type'] == 'branch' for policy in policies):
         gh(['api', path + '/deployment-branch-policies', '--method', 'POST', '--input', '-'], json.dumps({'name': branch, 'type': 'branch'}).encode())
+    for policy in policies:
+        if policy['name'] != branch or policy['type'] != 'branch':
+            gh(['api', f"{path}/deployment-branch-policies/{policy['id']}", '--method', 'DELETE'])
     return environment
 
 def certificate_identity(path, password):

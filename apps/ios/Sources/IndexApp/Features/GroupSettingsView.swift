@@ -18,25 +18,30 @@ struct GroupSettingsView: View {
           Image(systemName: "plus").frame(width: 44, height: 44)
         }.accessibilityLabel("New group")
       }
-      Text("Locked lists are only yours, whoever can see your profile.")
+      Text("Lock a group to keep its links to yourself.")
         .font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
       LoadingError(error: error, loading: loading, retry: { await load() })
-      ForEach(groups) { group in
-        HStack {
-          VStack(alignment: .leading, spacing: 3) {
-            Text(group.name)
-            if let count = group.linkCount {
-              Text(count == 1 ? "1 link" : "\(count) links").font(IndexFont.sans(12))
-                .foregroundStyle(IndexPalette.mutedForeground)
-            }
-          }
-          Spacer()
-          ManagedGroupLock(group: group)
-          if group.kind == "custom" {
+      // Favorites and Starred are never locked here: Favorites follows each link's own group,
+      // Starred is always private.
+      ForEach(groups.filter { $0.kind != "custom" }) { group in
+        HStack { name(group); Spacer() }.frame(minHeight: 44)
+      }
+      if groups.contains(where: { $0.kind == "custom" }) {
+        HStack(spacing: 10) {
+          Text("YOUR GROUPS").font(IndexFont.mono(11)).tracking(0.66)
+            .foregroundStyle(IndexPalette.subtleForeground)
+          Rectangle().fill(IndexPalette.border).frame(height: 1)
+        }.padding(.top, 4).accessibilityElement(children: .ignore)
+          .accessibilityLabel("Your groups").accessibilityAddTraits(.isHeader)
+        ForEach(groups.filter { $0.kind == "custom" }) { group in
+          HStack {
+            name(group)
+            Spacer()
+            ManagedGroupLock(group: group)
             Button { editing = group } label: {
               Image(systemName: "pencil").frame(width: 44, height: 44)
             }.accessibilityLabel("Edit \(group.name)")
-          } else { Color.clear.frame(width: 44, height: 44).accessibilityHidden(true) }
+          }
         }
       }
     }
@@ -49,14 +54,29 @@ struct GroupSettingsView: View {
       GroupEditorView(group: group).indexSheetStyle().presentationDetents([.height(360), .large])
     }
   }
+  private func name(_ group: LinkGroup) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
+      HStack(spacing: 8) {
+        if group.kind != "custom" {
+          Image(systemName: group.kind == "favorites" ? "heart" : "star").font(.system(size: 13))
+            .accessibilityHidden(true)
+        }
+        Text(group.name)
+      }
+      if let count = group.linkCount {
+        Text(count == 1 ? "1 link" : "\(count) links").font(IndexFont.sans(12))
+          .foregroundStyle(IndexPalette.mutedForeground)
+      }
+    }
+  }
   private func load() async {
     loading = groups.isEmpty
     do {
       let available = try await allGroups(api: app.api, ownerID: app.userID)
       try Task.checkCancellation()
-      let order = ["favorites": 0, "custom": 1, "starred": 2]
+      let order = ["favorites": 0, "starred": 1, "custom": 2]
       groups = available.sorted {
-        let lhs = order[$0.kind] ?? 1, rhs = order[$1.kind] ?? 1
+        let lhs = order[$0.kind] ?? 2, rhs = order[$1.kind] ?? 2
         return lhs == rhs ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : lhs < rhs
       }
       error = nil
@@ -76,10 +96,10 @@ private struct ManagedGroupLock: View {
   @State private var pending = false
   @State private var error: String?
   @AccessibilityFocusState private var errorFocused: Bool
-  private var locked: Bool { group.kind == "starred" || group.visibility == .private }
+  private var locked: Bool { group.visibility == .private }
   var body: some View {
     VStack(alignment: .trailing, spacing: 4) {
-      GroupLockControl(locked: locked, name: group.name, alwaysPrivate: group.kind == "starred", disabled: pending) { _ in
+      GroupLockControl(locked: locked, name: group.name, disabled: pending) { _ in
         error = nil
         confirming = true
       }
@@ -92,7 +112,7 @@ private struct ManagedGroupLock: View {
     } message: { Text(GroupDraft.privacyDescription(locked: !locked)) }
   }
   private func save() {
-    guard !pending, group.kind != "starred", let api = app.api else { return }
+    guard !pending, group.kind == "custom", let api = app.api else { return }
     pending = true
     let account = app.userID
     Task { @MainActor in

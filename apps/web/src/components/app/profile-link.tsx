@@ -8,6 +8,7 @@ export function ProfileLink({
 }: {
   person: { id: string; username?: string | null };
   className?: string;
+  tabIndex?: number;
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLAnchorElement>;
   "aria-label"?: string;

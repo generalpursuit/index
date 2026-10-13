@@ -259,6 +259,38 @@ describe("messaging", () => {
       "Open",
     );
   });
+  it("answers a retried forward after its link is deleted and rejects another link or none", async () => {
+    const alice = api.client("alice"),
+      bob = api.client("bob");
+    await alice.follows.follow({ userId: "bob" });
+    const c = await alice.messages.createConversation({ recipientIds: ["bob"] });
+    const link = await alice.links.create({ url: "https://example.com", title: "Shared" });
+    const other = await alice.links.create({ url: "https://example.org", title: "Other" });
+    const forward = {
+      conversationId: c.id,
+      clientId: crypto.randomUUID(),
+      body: "Look",
+      linkId: link.id,
+    };
+    const sent = await alice.messages.send(forward);
+    await alice.links.delete({ id: link.id });
+    // The deleted link still identifies the send: retrying it returns the delivered message,
+    // now marked unavailable, and reusing its client ID for another link or none is rejected.
+    const retried = await alice.messages.send(forward);
+    assert.equal(retried.id, sent.id);
+    assert.equal(retried.attachment, null);
+    assert.equal(retried.hasAttachment, true);
+    for (const linkId of [other.id, undefined])
+      await assert.rejects(alice.messages.send({ ...forward, linkId }), { code: "NOT_FOUND" });
+    // A new send cannot forward the deleted link.
+    await assert.rejects(alice.messages.send({ ...forward, clientId: crypto.randomUUID() }), {
+      code: "NOT_FOUND",
+    });
+    const [received] = (await bob.messages.list({ conversationId: c.id })).items;
+    assert.equal(received!.id, sent.id);
+    assert.equal(received!.hasAttachment, true);
+    assert.equal((await api.db.select().from(messages)).length, 1);
+  });
   it("does not partially create a conversation if any recipient is ineligible", async () => {
     const alice = api.client("alice");
     await alice.follows.follow({ userId: "bob" });

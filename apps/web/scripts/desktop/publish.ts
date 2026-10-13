@@ -3,10 +3,11 @@ import { createHash } from "node:crypto";
 import { readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
-import { channelForBranch } from "./channels.ts";
+import { isChannel } from "./channels.ts";
 import { artifactMetadata, manifest, updateFeed } from "./artifacts.ts";
 
-const channel = channelForBranch(process.env.GITHUB_REF_NAME);
+const channel = process.env.INDEX_DESKTOP_CHANNEL;
+if (!isChannel(channel)) throw new Error("Set INDEX_DESKTOP_CHANNEL to staging or production.");
 const repository = process.env.GITHUB_REPOSITORY;
 const version = process.env.INDEX_DESKTOP_VERSION;
 const commit = process.env.GITHUB_SHA;
