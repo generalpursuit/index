@@ -1,5 +1,10 @@
 import { Button } from "@index/ui/components/button";
 import { LockKeyhole, LockKeyholeOpen } from "lucide-react";
+import type { Group } from "@/lib/types";
+
+/** A group's name as spoken where a drawn lock marks it private. */
+export const groupLabel = (group: Pick<Group, "name" | "visibility">) =>
+  group.visibility === "private" ? group.name + ", only you" : group.name;
 
 export const groupPrivacyDescription = (locked: boolean) =>
   locked

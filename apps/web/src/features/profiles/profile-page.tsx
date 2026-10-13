@@ -1,18 +1,9 @@
-import { groupPath, profilePath } from "@index/api/routes";
+import { groupPath } from "@index/api/routes";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
-import { Link, useNavigate, useRouter } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
 import { Button } from "@index/ui/components/button";
-import { LockKeyhole, Earth, Plus, Star, Settings, ChevronDown } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-} from "@index/ui/components/dropdown-menu";
+import { LockKeyhole, Earth, Settings } from "lucide-react";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
 import { Modal } from "@index/ui/components/modal";
@@ -28,7 +19,8 @@ import { CreateGroup } from "@/features/groups/create-group";
 import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrubber";
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
-import type { Profile, Person, Group } from "@/lib/types";
+import { ListDock } from "./list-dock";
+import type { Profile, Person } from "@/lib/types";
 const count = (n: number, noun: string) => n + " " + noun + (n === 1 ? "" : "s");
 export function FollowButton({
   person,
@@ -239,17 +231,18 @@ function ProfileContent({
           <FollowButton person={profile} />
         </div>
       ) : (
-        <ProfileLinks
-          key={filter}
-          userId={profile.id}
-          username={profile.username!}
-          own={own}
-          filter={filter}
-          onNewGroup={(trigger) => {
-            groupReturnFocus.current = trigger ?? null;
-            setNewGroup(true);
-          }}
-        />
+        <>
+          <ProfileLinks key={filter} userId={profile.id} own={own} filter={filter} />
+          <ListDock
+            userId={profile.id}
+            username={profile.username!}
+            own={own}
+            onNewGroup={(trigger) => {
+              groupReturnFocus.current = trigger;
+              setNewGroup(true);
+            }}
+          />
+        </>
       )}
       {connections && <Connections initial={connections} onClose={() => setConnections(null)} />}
       {own && (
@@ -289,26 +282,13 @@ function ProfileContent({
 }
 /**
  * One person's links as one continuous list of weeks. Each week's heading sticks while you
- * read it, the list filter rides at the end of that sticky row, and the scrubber (or the week
- * title) jumps to any week. Weeks with nothing in the chosen list are skipped.
+ * read it, and the scrubber (or the week title) jumps to any week. Weeks with nothing in the
+ * chosen list are skipped.
  */
-function ProfileLinks({
-  userId,
-  username,
-  own,
-  filter,
-  onNewGroup,
-}: {
-  userId: string;
-  own: boolean;
-  filter: string;
-  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
-  username: string;
-}) {
+function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; filter: string }) {
   const groups = useAllGroups(userId),
     allGroups = groups.data?.pages.flatMap((p) => p.items) ?? [],
-    selected = allGroups.find((g) => g.id === filter),
-    starredGroup = allGroups.find((g) => g.kind === "starred");
+    selected = allGroups.find((g) => g.id === filter);
   // A chosen list is known once groups load. Starred has no group until something is starred,
   // and a deleted group has none either; both simply show as empty.
   const ready =
@@ -335,35 +315,11 @@ function ProfileLinks({
   const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const onScreen = useVisibleWeeks(listRef, weeks);
-  const navigate = useNavigate(),
-    router = useRouter();
-  const destination = (value: string) => {
-    const group = value === "starred" ? (starredGroup?.id ?? value) : value;
-    return {
-      to:
-        group === "all"
-          ? profilePath(username)
-          : groupPath(username, allGroups.find((g) => g.id === group)?.slug ?? group),
-      search: (old: Record<string, unknown>) => ({ ...old, group: undefined }),
-      state: { userId, groupId: group === "all" ? undefined : group },
-    };
-  };
   const jump = (week: string) =>
     document.querySelector(`.profile-week[data-week="${week}"]`)?.scrollIntoView({
       block: "start",
       behavior: "instant",
     });
-  const filterMenu = (
-    <ListFilter
-      groups={allGroups}
-      filter={selected?.kind === "starred" ? "starred" : filter}
-      own={own}
-      onSelect={(value) => void navigate(destination(value))}
-      // Menu items aren't links, so they preload like one on hover/focus.
-      onPreview={(value) => void router.preloadRoute(destination(value)).catch(() => {})}
-      onNewGroup={onNewGroup}
-    />
-  );
   return (
     <div
       ref={listRef}
@@ -383,10 +339,6 @@ function ProfileLinks({
       >
         {weeks.length ? (
           <>
-            {/* No height of its own: the menu sits over the end of whichever heading sticks. */}
-            <div className={"profile-list-bar sticky top-0 z-3 h-0 flex justify-end [&>*]:mt-2.5"}>
-              {filterMenu}
-            </div>
             {weeks.map((w) => (
               <ProfileWeek
                 key={w.weekStart}
@@ -402,31 +354,21 @@ function ProfileLinks({
             <WeekScrubber weeks={weeks} active={onScreen} onJump={jump} />
           </>
         ) : (
-          <>
-            {/* Without weeks the menu keeps its place at the end of the row. */}
-            <div
-              className={
-                "profile-week-heading sticky top-0 z-2 flex items-center justify-between h-13 bg-background profile-menu-only justify-end"
-              }
-            >
-              {filterMenu}
-            </div>
-            <div
-              className={
-                "empty-box flex flex-col justify-center items-center gap-3 min-h-40 p-6 text-subtle-foreground text-center [&_a]:text-foreground [&_a:hover]:underline [&_a:hover]:underline-offset-[4px]"
-              }
-            >
-              <p>
-                {filter === "all"
-                  ? "No links yet"
-                  : selected?.kind === "favorites"
-                    ? "No favorites yet"
-                    : selected?.kind === "starred" || filter === "starred"
-                      ? "No starred links yet"
-                      : "Nothing in this group yet"}
-              </p>
-            </div>
-          </>
+          <div
+            className={
+              "empty-box flex flex-col justify-center items-center gap-3 min-h-40 p-6 text-subtle-foreground text-center [&_a]:text-foreground [&_a:hover]:underline [&_a:hover]:underline-offset-[4px]"
+            }
+          >
+            <p>
+              {filter === "all"
+                ? "No links yet"
+                : selected?.kind === "favorites"
+                  ? "No favorites yet"
+                  : selected?.kind === "starred" || filter === "starred"
+                    ? "No starred links yet"
+                    : "Nothing in this group yet"}
+            </p>
+          </div>
         )}
       </QueryState>
       {list.isFetchNextPageError && (
@@ -546,87 +488,4 @@ function useVisibleWeeks(list: RefObject<HTMLElement | null>, weeks: Week[]) {
     return () => observer.disconnect();
   }, [list, key]);
   return visible;
-}
-/**
- * Picks which of the person's lists to show. Starred (other people's links you kept) sits
- * apart and only on your own profile, which can also start a new group here.
- */
-function ListFilter({
-  groups,
-  filter,
-  own,
-  onSelect,
-  onPreview,
-  onNewGroup,
-}: {
-  groups: Group[];
-  filter: string;
-  own: boolean;
-  onSelect: (value: string) => void;
-  onPreview: (value: string) => void;
-  onNewGroup: (trigger?: HTMLButtonElement | null) => void;
-}) {
-  const trigger = useRef<HTMLButtonElement>(null);
-  // Favorites first, then the person's groups, like Settings.
-  const lists = groups
-      .filter((g) => g.kind !== "starred")
-      .sort((a, b) => Number(b.kind === "favorites") - Number(a.kind === "favorites")),
-    chosen = lists.find((g) => g.id === filter);
-  const name =
-    filter === "all" ? "All" : filter === "starred" ? "Starred" : (chosen?.name ?? "All");
-  const preview = (value: string) => ({
-    onPointerEnter: () => onPreview(value),
-    onFocus: () => onPreview(value),
-  });
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            className={
-              "list-filter gap-1.5 mr-[-8px] p-[0_8px] text-[14px] font-medium text-foreground [&_svg]:text-subtle-foreground [&_svg:last-child]:w-4 [&_svg:last-child]:h-4 [&_svg:last-child]:[transition:transform_150ms_ease] [&[aria-expanded='true']_svg:last-child]:[transform:rotate(180deg)]"
-            }
-            ref={trigger}
-            aria-label={"Showing " + name}
-          />
-        }
-      >
-        {chosen?.visibility === "private" && <LockKeyhole size={13} aria-hidden="true" />}
-        {name}
-        <ChevronDown aria-hidden="true" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="list-filter-menu">
-        <DropdownMenuRadioGroup value={filter} onValueChange={(value) => onSelect(String(value))}>
-          <DropdownMenuRadioItem value="all" {...preview("all")}>
-            All
-          </DropdownMenuRadioItem>
-          {lists.map((g) => (
-            <DropdownMenuRadioItem key={g.id} value={g.id} {...preview(g.id)}>
-              {g.visibility === "private" && <LockKeyhole aria-hidden="true" />}
-              {g.name}
-            </DropdownMenuRadioItem>
-          ))}
-          {own && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuRadioItem value="starred" {...preview("starred")}>
-                <Star aria-hidden="true" />
-                Starred
-              </DropdownMenuRadioItem>
-            </>
-          )}
-        </DropdownMenuRadioGroup>
-        {own && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => onNewGroup(trigger.current)}>
-              <Plus />
-              New group
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
 }

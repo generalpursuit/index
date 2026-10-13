@@ -30,9 +30,12 @@ test("legacy profile/group/post URLs redirect while retaining settings and post 
     fixture.links[0]!.title,
   );
   await page.keyboard.press("Escape");
-  await expect(page.getByRole("button", { name: "Showing Reading", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Showing Reading", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Favorites", exact: true }).click();
+  const lists = page.getByRole("navigation", { name: "Lists" });
+  await expect(lists.getByRole("link", { name: "Reading", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  await lists.getByRole("link", { name: "Favorites", exact: true }).click();
   await expect(page).toHaveURL(/\/u\/alice\/favorites$/);
   await page.goto(`/people/${fixture.people.Alice}?settings=true`);
   await expect(page).toHaveURL(/\/u\/alice\?settings=true$/);

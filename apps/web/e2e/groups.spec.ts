@@ -195,20 +195,18 @@ for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 960 });
     await login(page);
     await page.goto("/u/alice");
-    await page.getByRole("button", { name: "Showing All", exact: true }).click();
-    await page.getByRole("menuitem", { name: "New group", exact: true }).click();
+    const lists = page.getByRole("navigation", { name: "Lists" });
+    const add = lists.getByRole("button", { name: "New group", exact: true });
+    await add.click();
     const form = page.getByRole("dialog", { name: "New group", exact: true });
-    const showing = page.getByRole("button", { name: "Showing All", exact: true });
     await form.getByRole("button", { name: "Cancel", exact: true }).click();
     await expect(form).toHaveCount(0);
-    await expect(showing).toBeFocused();
-    await showing.click();
-    await page.getByRole("menuitem", { name: "New group", exact: true }).click();
+    await expect(add).toBeFocused();
+    await add.click();
     await page.keyboard.press("Escape");
     await expect(form).toHaveCount(0);
-    await expect(showing).toBeFocused();
-    await showing.click();
-    await page.getByRole("menuitem", { name: "New group", exact: true }).click();
+    await expect(add).toBeFocused();
+    await add.click();
     await form.getByLabel("Name", { exact: true }).fill("Chosen automatically");
     let attempts = 0;
     let release!: () => void;
@@ -231,8 +229,11 @@ for (const width of [1440, 390]) {
     await expect(form).toHaveCount(0);
     await expect(page).toHaveURL(/\/u\/alice\/chosen-automatically$/);
     await expect(
-      page.getByRole("button", { name: "Showing Chosen automatically", exact: true }),
-    ).toBeVisible();
+      lists.getByRole("link", { name: "Chosen automatically", exact: true }),
+    ).toHaveAttribute("aria-current", "page");
+    await expect(page.getByRole("button", { name: /^Save destination:/ })).toHaveAccessibleName(
+      "Save destination: Chosen automatically",
+    );
   });
 }
 

@@ -1,13 +1,10 @@
 import { useId, useState, useRef, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { DestinationPicker, useDestinationStatus } from "@/features/sharing/destination-picker";
+import { DestinationMenu, useDestination } from "@/features/sharing/destination-menu";
 import { useShareSave } from "@/features/sharing/use-share-save";
-import { useViewer } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { Modal } from "@index/ui/components/modal";
 import { Button } from "@index/ui/components/button";
-import { useGroups } from "@/features/groups/use-groups";
-import type { Group } from "@/lib/types";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { useLibraryActions } from "./hooks/use-links";
@@ -16,6 +13,7 @@ import { domain, webURL } from "./url";
 import type { SavedLink } from "@/lib/types";
 
 type Pending = { url: string; existing: Set<string> };
+const unavailableMessage = "This group is unavailable. Choose a destination before saving.";
 
 /**
  * A list row that is also a field: pasting a link (or typing one and pressing Enter) saves it
@@ -31,6 +29,7 @@ export function QuickAdd({
   onSave,
   onViewExisting,
 }: {
+  /** Where saving starts: the group being viewed, otherwise Your links. */
   groupId?: string;
   links: SavedLink[];
   label: string;
@@ -43,12 +42,8 @@ export function QuickAdd({
   const { remove } = useLibraryActions();
   const share = useShareSave(),
     navigate = useNavigate(),
-    viewer = useViewer()!;
-  const groups = useGroups(viewer.id),
-    inputRef = useRef<HTMLInputElement>(null);
-  const [destination, setDestination] = useState<Group | null>(null);
-  const [initialized, setInitialized] = useState(!groupId);
-  const chosen = useDestinationStatus(destination);
+    destination = useDestination(groupId);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [duplicate, setDuplicate] = useState<SavedLink | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const busy = useRef(false),
@@ -60,27 +55,13 @@ export function QuickAdd({
       active.current = false;
     };
   }, []);
-  useEffect(() => {
-    setInitialized(!groupId);
-    setDestination(null);
-  }, [groupId]);
-  useEffect(() => {
-    if (groupId && !initialized) {
-      const group = groups.data?.pages.flatMap((p) => p.items).find((g) => g.id === groupId);
-      if (group) {
-        setInitialized(true);
-        setDestination(group);
-      } else if (groups.hasNextPage && !groups.isFetching && !groups.isError)
-        void groups.fetchNextPage();
-    }
-  }, [groupId, initialized, groups.data, groups.hasNextPage, groups.isFetching, groups.isError]);
   const hintId = useId();
   const [text, setText] = useState("");
   const [hint, setHint] = useState(false);
   const [pending, setPending] = useState<Pending[]>([]);
   const [announcement, setAnnouncement] = useState("");
   const save = async (url: string, saveAgain = false) => {
-    if (busy.current || chosen.unavailable) return;
+    if (busy.current || destination.blocked) return;
     busy.current = true;
     if (successToast.current !== undefined) toast.dismiss(successToast.current);
     const generation = accountGeneration();
@@ -90,8 +71,9 @@ export function QuickAdd({
     setHint(false);
     setPending((old) => [entry, ...old]);
     onSave?.();
+    const target = destination.current;
     try {
-      const result = await share.save(url, chosen.current?.id ?? null, saveAgain);
+      const result = await share.save(url, target?.id ?? null, saveAgain);
       assertCurrentAccount(generation);
       if (!active.current) return;
       if (result.status === "existing") {
@@ -102,7 +84,8 @@ export function QuickAdd({
       const link = result.link;
       setDuplicate(null);
       setAnnouncement("Added " + link.title);
-      successToast.current = toast.success("Link added", {
+      // Named, because the link may land outside the list being viewed.
+      successToast.current = toast.success("Link added to " + (target?.name ?? "Your links"), {
         action: {
           label: "Undo",
           onClick: () => {
@@ -138,7 +121,7 @@ export function QuickAdd({
         <i className={categoryMarkClassName} data-empty aria-hidden="true" />
         <input
           ref={inputRef}
-          disabled={share.pending || chosen.unavailable || (!!groupId && !initialized)}
+          disabled={share.pending || destination.blocked}
           type="url"
           inputMode="url"
           autoComplete="off"
@@ -170,19 +153,11 @@ export function QuickAdd({
             }
           }}
         />
-        <DestinationPicker
-          value={destination}
-          onChange={(group) => {
-            setInitialized(true);
-            setDestination(group);
-          }}
-          disabled={share.pending}
-        />
+        <DestinationMenu destination={destination} disabled={share.pending} />
       </div>
-      {(chosen.unavailable ||
-        (!!groupId && !initialized && !!groups.data && !groups.hasNextPage)) && (
+      {destination.unavailable && (
         <p role="alert" className="ml-11 text-sm text-destructive">
-          This group is unavailable. Choose a destination before saving.
+          {unavailableMessage}
         </p>
       )}
       {failure && (
@@ -200,14 +175,15 @@ export function QuickAdd({
       >
         <div className="flex flex-col gap-4">
           <p>You already saved {duplicate?.title}. Save again to add it to this week.</p>
-          <DestinationPicker
-            value={destination}
-            onChange={(group) => {
-              setInitialized(true);
-              setDestination(group);
-            }}
-            disabled={share.pending}
-          />
+          <div className="-my-1 flex items-center gap-1 text-[12px] text-subtle-foreground">
+            Save to
+            <DestinationMenu destination={destination} disabled={share.pending} />
+          </div>
+          {destination.unavailable && (
+            <p role="alert" className="text-sm text-destructive">
+              {unavailableMessage}
+            </p>
+          )}
           <div className="flex flex-wrap justify-end gap-2">
             <Button variant="ghost" disabled={share.pending} onClick={() => setDuplicate(null)}>
               Cancel
@@ -232,7 +208,7 @@ export function QuickAdd({
               View existing
             </Button>
             <Button
-              disabled={share.pending || chosen.unavailable}
+              disabled={share.pending || destination.blocked}
               onClick={() => void save(text, true)}
             >
               Save again

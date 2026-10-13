@@ -12,12 +12,16 @@ export function useGroups(ownerId: string) {
     complete: !!groups.data && !groups.hasNextPage && !groups.isError && !groups.isFetching,
   };
 }
-/** Profile filters and lock markers need the whole group index, including later pages. */
+/**
+ * Profile lists, lock markers and save destinations need the whole group index, including later
+ * pages.
+ */
 export function useAllGroups(ownerId: string) {
   const groups = useGroups(ownerId);
   const { hasNextPage, isFetching, isError, fetchNextPage } = groups;
   useEffect(() => {
-    if (hasNextPage && !isFetching && !isError) void fetchNextPage();
+    // Several parts of a page may load the same index; they share one request for each page.
+    if (hasNextPage && !isFetching && !isError) void fetchNextPage({ cancelRefetch: false });
   }, [hasNextPage, isFetching, isError, fetchNextPage]);
   return groups;
 }

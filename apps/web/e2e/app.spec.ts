@@ -74,9 +74,13 @@ test("single-week layout, scrolling, adding and Favorites", async ({ page }) => 
   await page.keyboard.press("Escape");
   await expect(post).toHaveCount(0);
   await page.getByRole("link", { name: "Your profile", exact: true }).click();
-  await page.getByRole("button", { name: "Showing All", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Favorites" }).click();
-  await expect(page.getByRole("button", { name: "Showing Favorites", exact: true })).toBeVisible();
+  const favorites = page
+    .getByRole("navigation", { name: "Lists" })
+    .getByRole("link", { name: "Favorites", exact: true });
+  await favorites.click();
+  await expect(favorites).toHaveAttribute("aria-current", "page");
+  // Favorites is not a destination, so its arrival removes the add row.
+  await expect(page.getByRole("textbox", { name: /Enter a link/ })).toHaveCount(0);
   await expect(page.locator(".profile-links")).toContainText("Calm Software");
   await page.screenshot({
     path: "test-results/profile-desktop.png",

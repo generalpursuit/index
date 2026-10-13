@@ -4,61 +4,17 @@ import { useGroupActions } from "@/features/groups/use-groups";
 import type { Group } from "@/lib/types";
 import { GroupForm } from "./group-form";
 
-export type CreateGroupProps = {
-  onClose: () => void;
-  /** Full created group, including its canonical slug. Called once after a successful write. */
-  onCreated: (group: Group) => void;
-};
-
-/** Use inside a caller-owned save/share surface. The caller closes it after onCreated. */
-export function CreateGroupForm({
-  onClose,
-  onCreated,
-  onPendingChange,
-}: CreateGroupProps & {
-  /** Lets the host block dismissal while the write is pending. */
-  onPendingChange?: (pending: boolean) => void;
-}) {
-  const { pending, create } = useGroupCreation(onCreated);
-
-  return (
-    <GroupForm
-      pending={pending}
-      onClose={onClose}
-      onSave={async (value) => {
-        onPendingChange?.(true);
-        try {
-          await create(value);
-        } finally {
-          onPendingChange?.(false);
-        }
-      }}
-    />
-  );
-}
-
 /** Shared desktop dialog / mobile sheet. Mount to open; unmount onClose or onCreated. */
 export function CreateGroup({
   onClose,
   onCreated,
   returnFocus,
-}: CreateGroupProps & { returnFocus?: RefObject<HTMLElement | null> }) {
-  const { pending, create } = useGroupCreation(onCreated);
-  return (
-    <Modal
-      open
-      onOpenChange={(open) => {
-        if (!open && !pending) onClose();
-      }}
-      title="New group"
-      returnFocus={returnFocus}
-    >
-      <GroupForm pending={pending} onClose={onClose} onSave={create} />
-    </Modal>
-  );
-}
-
-function useGroupCreation(onCreated: CreateGroupProps["onCreated"]) {
+}: {
+  onClose: () => void;
+  /** Full created group, including its canonical slug. Called once after a successful write. */
+  onCreated: (group: Group) => void;
+  returnFocus?: RefObject<HTMLElement | null>;
+}) {
   const { createGroup } = useGroupActions();
   const [created, setCreated] = useState(false);
   const active = useRef(false);
@@ -68,14 +24,27 @@ function useGroupCreation(onCreated: CreateGroupProps["onCreated"]) {
       active.current = false;
     };
   }, []);
-  return {
-    pending: created || createGroup.isPending,
-    create: async (value: Parameters<typeof createGroup.mutateAsync>[0]) => {
-      const group = await createGroup.mutateAsync(value);
-      // Account changes/navigation can unmount the caller while a request completes.
-      if (!active.current) return;
-      setCreated(true);
-      onCreated(group);
-    },
-  };
+  const pending = created || createGroup.isPending;
+  return (
+    <Modal
+      open
+      onOpenChange={(open) => {
+        if (!open && !pending) onClose();
+      }}
+      title="New group"
+      returnFocus={returnFocus}
+    >
+      <GroupForm
+        pending={pending}
+        onClose={onClose}
+        onSave={async (value) => {
+          const group = await createGroup.mutateAsync(value);
+          // Account changes/navigation can unmount the caller while a request completes.
+          if (!active.current) return;
+          setCreated(true);
+          onCreated(group);
+        }}
+      />
+    </Modal>
+  );
 }

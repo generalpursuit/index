@@ -28,7 +28,9 @@ export function LinkReference({
         to: ".",
         replace: true,
         resetScroll: false,
-        search: (old) => ({ ...old, [mode]: target.canonicalPath.split("/").pop() }),
+        // Only while the URL still asks for this reference; a closing dialog keeps showing it.
+        search: (old) =>
+          old[mode] === value ? { ...old, [mode]: target.canonicalPath.split("/").pop() } : old,
       });
   }, [target, value, mode, navigate]);
   return (

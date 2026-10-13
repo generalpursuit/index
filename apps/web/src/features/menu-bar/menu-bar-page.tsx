@@ -68,11 +68,13 @@ function MenuPanel() {
         event.preventDefault();
         quit();
       }
-      // A dialog that is animating closed has already handled its own Escape.
+      // A dialog or menu that is animating closed has already handled its own Escape.
       else if (
         event.key === "Escape" &&
         !event.defaultPrevented &&
-        !document.querySelector('[role="dialog"]:not([data-closed])')
+        !document.querySelector(
+          '[role="dialog"]:not([data-closed]), [role="menu"]:not([data-closed])',
+        )
       )
         report(desktopInvoke("desktop_hide"));
     };
@@ -164,9 +166,12 @@ function MenuItem({
     </button>
   );
 }
+// An open menu's offset from its trigger, its border and room from the panel's edge.
+const menuMargin = 16;
 /**
  * The native panel follows the content's natural height, showing whole rows of the list when it
- * reaches its maximum, and opens fully while a dialog sheet is shown.
+ * reaches its maximum, grows to show an open menu whole, and opens fully while a dialog sheet is
+ * shown.
  */
 function useFittedPanel(
   panel: RefObject<HTMLElement | null>,
@@ -174,8 +179,7 @@ function useFittedPanel(
   footer: RefObject<HTMLElement | null>,
 ) {
   useLayoutEffect(() => {
-    const measure = () => {
-      if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
+    const fitted = () => {
       const page = panel.current!.getBoundingClientRect();
       // A hidden list (while the session is checked) has no offset parent.
       const list = content.current!.querySelector<HTMLElement>(".link-list");
@@ -188,10 +192,19 @@ function useFittedPanel(
         page.bottom -
         footer.current!.getBoundingClientRect().top;
       const max = window.__INDEX_MENU_BAR__!.maxHeight;
-      if (!shown || natural <= max) return Math.ceil(natural);
+      if (!shown || natural <= max) return natural;
       const row = parseFloat(getComputedStyle(shown).getPropertyValue("--row"));
       const around = natural - shown.scrollHeight;
-      return Math.ceil(around + Math.floor((max - around) / row) * row);
+      return around + Math.floor((max - around) / row) * row;
+    };
+    const measure = () => {
+      if (document.querySelector('[role="dialog"]')) return window.screen.availHeight;
+      // Measured from its trigger: until the panel is tall enough, the menu may sit elsewhere.
+      const trigger = document.querySelector('[aria-haspopup="menu"][aria-expanded="true"]'),
+        menu = document.querySelector('[role="menu"]:not([data-closed])');
+      const below =
+        trigger && menu ? trigger.getBoundingClientRect().bottom + menu.scrollHeight : 0;
+      return Math.ceil(Math.max(fitted(), below + menuMargin));
     };
     const stop = measureMenuPanel(measure);
     let reported = 0;

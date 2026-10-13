@@ -131,17 +131,23 @@ for (const viewport of [
       await layout(page, "Email correction");
     });
 
-    test("destination, group, week, post and recipient sheets fit", async ({ page }) => {
+    test("destination menu, group, week, post and recipient sheets fit", async ({ page }) => {
       await login(page);
       await page
         .locator('.week-page[data-active="true"]')
         .getByRole("button", { name: "Save destination: Your links" })
         .click();
-      let dialog = await dialogLayout(page, "Save to");
-      if (viewport.width <= 700) await expect(dialog).toBeFocused();
+      const menu = page.getByRole("menu");
+      await expect
+        .poll(async () => {
+          const box = (await menu.boundingBox())!;
+          return box.x >= 0 && box.x + box.width <= viewport.width;
+        })
+        .toBe(true);
       await page.screenshot({ path: `test-results/mobile-${viewport.width}-destination.png` });
-      await dialog.getByRole("button", { name: "Create group", exact: true }).click();
-      dialog = await dialogLayout(page, "Create group");
+      await menu.getByRole("menuitem", { name: "New group…", exact: true }).click();
+      let dialog = await dialogLayout(page, "New group");
+      if (viewport.width <= 700) await expect(dialog).toBeFocused();
       await page.keyboard.press("Escape");
       await page.getByRole("button", { name: /jump to a week/ }).click();
       await dialogLayout(page, "Weeks");
@@ -240,8 +246,9 @@ test.describe("software keyboard layout", () => {
       .locator('.week-page[data-active="true"]')
       .getByRole("button", { name: "Save destination: Your links" })
       .click();
-    const picker = await dialogLayout(page, "Save to");
-    await expect(picker).toBeFocused();
+    await page.getByRole("menuitem", { name: "New group…", exact: true }).click();
+    const form = await dialogLayout(page, "New group");
+    await expect(form).toBeFocused();
     // Desktop automation cannot open an iOS keyboard. Simulate its VisualViewport
     // geometry, exercising the real Base UI provider and our production sheet CSS.
     await page.evaluate(() => {
@@ -251,17 +258,20 @@ test.describe("software keyboard layout", () => {
         scale: { configurable: true, get: () => 1 },
       });
     });
-    await picker.getByRole("textbox", { name: "Search destinations" }).focus();
+    const name = form.getByRole("textbox", { name: "Name", exact: true });
+    await name.focus();
     await page.evaluate(() => visualViewport!.dispatchEvent(new Event("resize")));
     await expect
-      .poll(() => picker.evaluate((el) => el.getBoundingClientRect().bottom))
+      .poll(() => form.evaluate((el) => el.getBoundingClientRect().bottom))
       .toBeLessThanOrEqual(524);
-    await picker.getByRole("textbox", { name: "Search destinations" }).fill("Reading");
-    await picker.getByRole("button", { name: "Done", exact: true }).scrollIntoViewIfNeeded();
-    const done = await picker.getByRole("button", { name: "Done", exact: true }).boundingBox();
-    expect(done!.y + done!.height).toBeLessThanOrEqual(524);
-    await page.screenshot({ path: "test-results/mobile-keyboard-destination.png" });
-    await picker.getByRole("button", { name: "Done", exact: true }).click();
+    await name.fill("Reading list");
+    const create = form.getByRole("button", { name: "Create", exact: true });
+    await create.scrollIntoViewIfNeeded();
+    const action = await create.boundingBox();
+    expect(action!.y + action!.height).toBeLessThanOrEqual(524);
+    await page.screenshot({ path: "test-results/mobile-keyboard-new-group.png" });
+    await page.keyboard.press("Escape");
+    await expect(form).toHaveCount(0);
     await page.evaluate(() => {
       for (const key of ["height", "offsetTop", "scale"])
         Reflect.deleteProperty(visualViewport!, key);
