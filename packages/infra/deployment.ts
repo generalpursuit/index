@@ -1,5 +1,7 @@
-export const releaseBranches = { staging: "staging", production: "main" } as const;
-export type ReleaseStage = keyof typeof releaseBranches;
+/** Both stages release from main; the release dispatch input chooses the stage. */
+export const releaseBranch = "main";
+export const releaseStages = ["staging", "production"] as const;
+export type ReleaseStage = (typeof releaseStages)[number];
 
 export function isReleaseStage(stage: string): stage is ReleaseStage {
   return stage === "staging" || stage === "production";

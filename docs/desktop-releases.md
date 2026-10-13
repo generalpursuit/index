@@ -1,11 +1,11 @@
 # Desktop releases
 
-Promote tested work from `dev` through `staging` to `main`. The manually dispatched [release workflow](deployment.md#release-deployment) publishes desktop apps only from `staging` or `main`, after CI and all native targets pass and the API is deployed.
+Release tested work on `main` to staging first, then to production. The manually dispatched [release workflow](deployment.md#release-deployment) publishes desktop apps only from `main`, to the channel of the chosen stage, after CI and all native targets pass and the API is deployed.
 
-| Branch    | Installed app | GitHub environment   | Channel      |
-| --------- | ------------- | -------------------- | ------------ |
-| `staging` | Index Staging | `desktop-staging`    | `staging`    |
-| `main`    | Index         | `desktop-production` | `production` |
+| Stage and channel | Installed app | GitHub environment   |
+| ----------------- | ------------- | -------------------- |
+| `staging`         | Index Staging | `desktop-staging`    |
+| `production`      | Index         | `desktop-production` |
 
 [Channel configuration](../apps/web/scripts/desktop/channels.ts) binds each app to its service, identity and feed. The channels have separate credentials, app data, Share extensions and updater keys; they can be installed together. A staging update cannot convert the production app. Release builds select `--channel staging` or `--channel production` and reject development overrides.
 
@@ -40,4 +40,4 @@ python3 apps/web/scripts/test-desktop-signing.py
 
 [Desktop native CI](../.github/workflows/desktop-checks.yml) compiles the supported platforms without release credentials. [Local desktop checks](../apps/web/README.md#desktop-checks) cover development; native compilation alone does not verify installation, Gatekeeper, extension discovery or actual updates.
 
-Before promotion, install staging on the target operating systems, exercise login/external links/macOS Share, and update it to a second staging version. Keep production installed alongside it to verify independent sessions and update channels.
+Before a production release, install staging on the target operating systems, exercise login/external links/macOS Share, and update it to a second staging version. Keep production installed alongside it to verify independent sessions and update channels.

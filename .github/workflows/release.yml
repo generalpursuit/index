@@ -1,19 +1,24 @@
 name: Release
 
-# Release only on manual dispatch; the selected branch picks the stage.
+# Release only on manual dispatch from main; the input picks the stage.
 on:
   workflow_dispatch:
+    inputs:
+      stage:
+        description: Release stage
+        type: choice
+        options: [staging, production]
+        default: staging
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name }}
+  group: release-${{ inputs.stage }}
   cancel-in-progress: false
 
 jobs:
   version:
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
     runs-on: ubuntu-latest
     outputs:
       stage: ${{ steps.release.outputs.stage }}
@@ -24,7 +29,9 @@ jobs:
         with:
           bun-version: 1.4.2
       - id: release
-        name: Select the release version; production must exceed the latest tag
+        name: Require main and select the release version; production must exceed the latest tag
+        env:
+          RELEASE_STAGE: ${{ inputs.stage }}
         run: bun packages/infra/release.ts
 
   checks:
@@ -202,6 +209,7 @@ jobs:
       - name: Publish the complete release and advance its update feed
         env:
           GH_TOKEN: ${{ github.token }}
+          INDEX_DESKTOP_CHANNEL: ${{ needs.version.outputs.stage }}
           INDEX_DESKTOP_VERSION: ${{ needs.version.outputs.version }}
         run: bun apps/web/scripts/desktop/publish.ts desktop-artifacts
 

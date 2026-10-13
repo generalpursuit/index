@@ -64,7 +64,7 @@ const githubState = z.object({
 });
 type GithubState = z.infer<typeof githubState>;
 type Fixture = {
-  publish(): SpawnSyncReturns<string>;
+  publish(env?: Record<string, string | undefined>): SpawnSyncReturns<string>;
   read(): GithubState;
   save(state: GithubState): void;
   artifacts: string;
@@ -101,16 +101,17 @@ function fixture(run: (fixture: Fixture) => void) {
         }),
       );
     }
-    const publish = () =>
+    const publish = (env: Record<string, string | undefined> = {}) =>
       spawnSync(process.execPath, [resolve(import.meta.dir, "./publish.ts"), artifacts], {
         encoding: "utf8",
         env: {
           PATH: bin + delimiter + process.env.PATH,
           INDEX_TEST_GITHUB_STATE: statePath,
-          GITHUB_REF_NAME: "staging",
+          INDEX_DESKTOP_CHANNEL: "staging",
           GITHUB_REPOSITORY: "generalpursuit/index",
           INDEX_DESKTOP_VERSION: "0.2.0-staging.42",
           GITHUB_SHA: "release-commit",
+          ...env,
         },
       });
     run({ publish, read, save, artifacts });
@@ -120,6 +121,13 @@ function fixture(run: (fixture: Fixture) => void) {
 }
 
 describe("desktop publication transaction", () => {
+  test("only the staging or production channel can publish", () =>
+    fixture(({ publish, read }) => {
+      for (const channel of [undefined, "", "main", "dev", "Production"]) {
+        expect(publish({ INDEX_DESKTOP_CHANNEL: channel }).status).not.toBe(0);
+        expect(read().calls).toEqual([]);
+      }
+    }));
   test("malformed artifact metadata is rejected before any GitHub operation", () =>
     fixture(({ publish, read, artifacts }) => {
       const path = join(artifacts, "metadata-linux-x86_64.json");

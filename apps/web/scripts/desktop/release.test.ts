@@ -5,7 +5,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { channels, channelForBranch, readBaseConfig, releaseConfig } from "./channels.ts";
+import { channels, readBaseConfig, releaseConfig } from "./channels.ts";
 import { collect, manifest, updaterFiles } from "./artifacts.ts";
 
 describe("macOS Share extension build", () => {
@@ -104,7 +104,7 @@ describe("desktop release isolation", () => {
           process.execPath,
           [
             "--eval",
-            'import { readBaseConfig, channelForBranch } from "./scripts/desktop/channels.ts"; console.log(channelForBranch("staging"), readBaseConfig().version);',
+            'import { readBaseConfig, isChannel } from "./scripts/desktop/channels.ts"; console.log(isChannel("staging"), readBaseConfig().version);',
           ],
           { cwd: root, encoding: "utf8" },
         );
@@ -116,12 +116,6 @@ describe("desktop release isolation", () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
-  });
-  test("branches cannot select the other release channel", () => {
-    expect(channelForBranch("main")).toBe("production");
-    expect(channelForBranch("staging")).toBe("staging");
-    for (const branch of ["dev", "feature/staging", "main;echo bad", ""])
-      expect(() => channelForBranch(branch)).toThrow();
   });
   test("installed apps, credentials, server scopes and signed feeds are separate", () => {
     const base = readBaseConfig();
