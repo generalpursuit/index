@@ -104,16 +104,20 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await expect(panel.getByRole("dialog", { name: "Already saved" })).not.toBeVisible();
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toHaveCount(2);
   await panel.screenshot({ path: "test-results/menu-bar-compact.png" });
-  // Subtle text is darker over the panel's glass than on a page, and lighter in dark mode.
-  const subtle = panel.getByText(/· Your links$/);
-  await expect(subtle).toHaveCSS("color", "rgb(89, 89, 89)");
+  // Over the panel's glass, text is translucent so it takes on the tone behind the panel.
+  const heading = panel.getByRole("heading", { level: 1 }),
+    subtle = panel.getByText(/· Your links$/);
+  await expect(heading).toHaveCSS("color", "rgba(0, 0, 0, 0.88)");
+  await expect(subtle).toHaveCSS("color", "rgba(0, 0, 0, 0.55)");
+  await expect(panel.locator("footer hr")).toHaveCSS("border-top-color", "rgba(0, 0, 0, 0.1)");
   await page.goto("/settings");
   await page.getByRole("radio", { name: "Dark", exact: true }).check();
   await expect(panel.locator("html")).toHaveAttribute("data-theme-preference", "dark");
   await expect
     .poll(() => desktop.appearances.filter((value) => value.label === "menu-bar").at(-1)?.resolved)
     .toBe("dark");
-  await expect(subtle).toHaveCSS("color", "rgb(163, 163, 163)");
+  await expect(heading).toHaveCSS("color", "rgba(255, 255, 255, 0.88)");
+  await expect(subtle).toHaveCSS("color", "rgba(255, 255, 255, 0.55)");
   await panel.screenshot({ path: "test-results/menu-bar-dark.png" });
   expect(
     desktop.commands.filter((c) => c.label === "menu-bar" && c.command.startsWith("notification_")),

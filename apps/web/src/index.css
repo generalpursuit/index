@@ -9,13 +9,34 @@ html.menu-bar-surface body {
   background: transparent;
   overflow: hidden;
 }
-/* Glass is lighter or darker than a page depending on what is behind it, so the panel's subtle
-   text keeps 4.5:1 down to a mid-grey glass in light mode, and on a light grey one in dark mode. */
+/* Over the panel's glass, text and lines are translucent like macOS's vibrant labels, so they take
+   on the tone of what is behind the panel instead of sitting on it in flat grey. Tune the alphas
+   here. Popups and dialogs are portaled outside main onto opaque surfaces and keep the app's
+   colors. */
 html.menu-bar-surface {
-  --subtle-foreground: #595959;
+  --panel-label: rgb(0 0 0 / 0.88);
+  --panel-secondary-label: rgb(0 0 0 / 0.55);
+  --panel-separator: rgb(0 0 0 / 0.1);
+  --panel-fill: rgb(0 0 0 / 0.06);
 }
 html.menu-bar-surface.dark {
-  --subtle-foreground: #a3a3a3;
+  --panel-label: rgb(255 255 255 / 0.88);
+  --panel-secondary-label: rgb(255 255 255 / 0.55);
+  --panel-separator: rgb(255 255 255 / 0.1);
+  --panel-fill: rgb(255 255 255 / 0.06);
+}
+html.menu-bar-surface main {
+  --foreground: var(--panel-label);
+  --subtle-foreground: var(--panel-secondary-label);
+  --muted: var(--panel-fill);
+}
+/* With Reduce transparency the native surface is opaque, and the text can be too. */
+@media (prefers-reduced-transparency: reduce) {
+  html.menu-bar-surface main {
+    --foreground: inherit;
+    --subtle-foreground: inherit;
+    --muted: inherit;
+  }
 }
 html.menu-bar-surface
   input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]) {
