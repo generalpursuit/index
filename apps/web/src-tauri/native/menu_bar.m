@@ -10,6 +10,7 @@
 
 // Main-thread AppKit bridge. No credentials, account data or notification runtime here.
 extern void index_menu_toggle(void);
+extern void index_menu_dismiss(void);
 extern void index_show_main(void);
 static NSStatusItem *statusItem;
 static int instanceLock = -1;
@@ -41,6 +42,38 @@ static BOOL index_menu_nonactivating(NSWindow *window) {
   // Replacing the class skips NSPanel initialization, which tags the window for the WindowServer.
   ((void (*)(id, SEL, BOOL))objc_msgSend)(window, preventsActivation, YES);
   return YES;
+}
+
+// While shown, the panel closes like other menu bar extras: on a click anywhere else, when another
+// menu opens or when another app becomes active. Index's own status item toggles it, and Index's
+// own windows take key status from it. Watching clicks needs no Accessibility permission.
+static id outsideClicks, otherMenus, otherApps, ownMenuBegan, ownMenuEnded;
+static NSInteger ownMenus;
+static void index_menu_watch(void) {
+  if (outsideClicks) return;
+  outsideClicks = [NSEvent addGlobalMonitorForEventsMatchingMask:NSEventMaskLeftMouseDown | NSEventMaskRightMouseDown | NSEventMaskOtherMouseDown handler:^(__unused NSEvent *event) { index_menu_dismiss(); }];
+  // HIToolbox announces every menu, including a context menu inside the panel; only others close it.
+  NSNotificationCenter *local = NSNotificationCenter.defaultCenter;
+  ownMenuBegan = [local addObserverForName:NSMenuDidBeginTrackingNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note) { ownMenus++; }];
+  ownMenuEnded = [local addObserverForName:NSMenuDidEndTrackingNotification object:nil queue:nil usingBlock:^(__unused NSNotification *note) { if (ownMenus > 0) ownMenus--; }];
+  otherMenus = [NSDistributedNotificationCenter.defaultCenter addObserverForName:@"com.apple.HIToolbox.beginMenuTrackingNotification" object:nil queue:NSOperationQueue.mainQueue usingBlock:^(__unused NSNotification *note) {
+    if (!ownMenus) index_menu_dismiss();
+  }];
+  otherApps = [NSWorkspace.sharedWorkspace.notificationCenter addObserverForName:NSWorkspaceDidActivateApplicationNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) {
+    NSRunningApplication *app = note.userInfo[NSWorkspaceApplicationKey];
+    if (app.processIdentifier != getpid()) index_menu_dismiss();
+  }];
+}
+// Called whenever the panel hides; nothing watches while it is hidden.
+void index_menu_unwatch(void) {
+  if (!outsideClicks) return;
+  [NSEvent removeMonitor:outsideClicks];
+  [NSNotificationCenter.defaultCenter removeObserver:ownMenuBegan];
+  [NSNotificationCenter.defaultCenter removeObserver:ownMenuEnded];
+  [NSDistributedNotificationCenter.defaultCenter removeObserver:otherMenus];
+  [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:otherApps];
+  outsideClicks = otherMenus = otherApps = ownMenuBegan = ownMenuEnded = nil;
+  ownMenus = 0;
 }
 
 // A per-user lock prevents duplicate UI/pollers, including simultaneous launches.
@@ -94,6 +127,7 @@ void index_menu_present(void *pointer, double width, double height) {
   if (!index_menu_nonactivating(window)) [NSApp activateIgnoringOtherApps:YES];
   [window orderFrontRegardless];
   [window makeKeyWindow];
+  index_menu_watch();
 }
 // Content-fit height while open: the top edge stays under the status item while the height eases
 // to its new value, at once for someone who reduces motion. A new height retargets from where the

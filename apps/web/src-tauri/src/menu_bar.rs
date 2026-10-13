@@ -44,6 +44,7 @@ mod os {
         pub fn index_menu_init(image: *const u8, length: usize) -> i32;
         pub fn index_menu_present(window: *mut c_void, width: f64, height: f64);
         pub fn index_menu_resize(window: *mut c_void, height: f64);
+        pub fn index_menu_unwatch();
         pub fn index_login_status() -> i32;
         pub fn index_login_set(enabled: bool) -> i32;
         pub fn index_login_settings();
@@ -74,6 +75,21 @@ pub extern "C" fn index_menu_toggle() {
         if let Err(_) = toggle(app) { let _ = show_main(app); }
     }
 }
+/// Called by the native monitors of a shown panel: the user clicked elsewhere, opened another
+/// menu or switched apps.
+#[cfg(target_os = "macos")]
+#[unsafe(no_mangle)]
+pub extern "C" fn index_menu_dismiss() {
+    if let Some(window) = APP.get().and_then(|app| app.get_webview_window("menu-bar")) { let _ = hide_panel(&window); }
+}
+/// Hides the panel, ending any opening, and stops watching for what closes it. Runs on the main
+/// thread, like window events, the status item and synchronous commands.
+fn hide_panel(window: &WebviewWindow) -> tauri::Result<()> {
+    MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+    #[cfg(target_os = "macos")]
+    unsafe { os::index_menu_unwatch(); }
+    window.hide()
+}
 pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     if let Some(window) = app.get_webview_window("main") { return Ok(window); }
     let config = app.config().app.windows.first().expect("main window configuration");
@@ -90,7 +106,7 @@ pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 pub fn show_main(app: &AppHandle) -> tauri::Result<()> {
     let window = ensure_main(app)?;
     MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
-    if let Some(panel) = app.get_webview_window("menu-bar") { let _ = panel.hide(); }
+    if let Some(panel) = app.get_webview_window("menu-bar") { let _ = hide_panel(&panel); }
     window.unminimize()?;
     window.show()?;
     window.set_focus()?;
@@ -119,10 +135,7 @@ pub fn ensure_panel(app: &AppHandle) -> tauri::Result<WebviewWindow> {
 #[cfg(target_os = "macos")]
 fn toggle(app: &AppHandle) -> tauri::Result<()> {
     let window = ensure_panel(app)?;
-    if window.is_visible()? || MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) {
-        MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
-        return window.hide();
-    }
+    if window.is_visible()? || MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) { return hide_panel(&window); }
     MENU_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
     // Content committed for this account shows at once and refreshes in place. After an account
     // change, which the hidden webview may have slept through, or before its first commit, the
@@ -144,15 +157,14 @@ pub fn attach_lifecycle(window: &WebviewWindow) {
         window.on_window_event(move |event| match event {
             WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                if handle.label() == "menu-bar" { MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst); }
-                if handle.label() == "main" { crate::notifications::clear_active(); }
-                let _ = handle.hide();
-            }
-            WindowEvent::Focused(false) => {
-                if handle.label() == "menu-bar" {
-                    MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
+                if handle.label() == "menu-bar" { let _ = hide_panel(&handle); }
+                else {
+                    crate::notifications::clear_active();
                     let _ = handle.hide();
                 }
+            }
+            WindowEvent::Focused(false) => {
+                if handle.label() == "menu-bar" { let _ = hide_panel(&handle); }
                 else { crate::notifications::clear_active(); }
             }
             WindowEvent::Destroyed if handle.label() == "main" => crate::notifications::clear_active(),
@@ -197,7 +209,7 @@ pub fn hide_on_session_change(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("menu-bar") {
         MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst);
         let handle = window.clone();
-        let _ = window.run_on_main_thread(move || { let _ = handle.hide(); });
+        let _ = window.run_on_main_thread(move || { let _ = hide_panel(&handle); });
     }
 }
 /// Called after the UI has checked its session and committed safe content, with that content's height.
@@ -237,7 +249,7 @@ pub fn desktop_panel_resize(window: WebviewWindow, height: f64) -> Result<(), St
 }
 #[tauri::command]
 pub fn desktop_hide(window: WebviewWindow) -> Result<(), String> {
-    if window.label() == "menu-bar" { MENU_REQUESTED.store(false, std::sync::atomic::Ordering::SeqCst); }
+    if window.label() == "menu-bar" { return hide_panel(&window).map_err(|_| "Could not hide this window.".into()); }
     if window.label() == "main" { crate::notifications::clear_active(); }
     window.hide().map_err(|_| "Could not hide this window.".into())
 }
