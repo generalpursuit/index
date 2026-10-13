@@ -171,7 +171,7 @@ export function AppShell() {
             hideTitle
             size="lg"
             className={
-              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"
+              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] max-h-[min(820px,_calc(100dvh_-_40px))] [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"
             }
             onOpenChange={(v) => {
               if (!v)

@@ -14,11 +14,9 @@ const modalSizes = {
   md: "w-150 sm:max-w-[calc(100vw_-_32px)]",
   lg: "w-162.5 sm:max-w-[calc(100vw_-_32px)]",
 };
-// A list that changes length grows downward from a fixed top instead of re-centering.
-const modalPositions = {
-  center: "max-h-[calc(100dvh_-_40px)]",
-  top: "top-[12dvh] translate-y-0 max-h-[calc(88dvh_-_20px)]",
-};
+// Dialogs stay vertically centered; a bounded height keeps the header and actions on screen.
+const dialogHeight = "max-h-[min(640px,_calc(100dvh_-_80px))]";
+const fixedDialogHeight = "h-[min(640px,_calc(100dvh_-_80px))]";
 
 const ModalPresentation = createContext<"dialog" | "sheet">("dialog");
 
@@ -35,7 +33,7 @@ export function Modal({
   children,
   className = "",
   size = "sm",
-  position = "center",
+  fixedHeight = false,
   returnFocus,
 }: {
   open: boolean;
@@ -47,7 +45,8 @@ export function Modal({
   children: ReactNode;
   className?: string;
   size?: keyof typeof modalSizes;
-  position?: keyof typeof modalPositions;
+  /** For a list that loads or filters in place: the frame keeps its size while it changes. */
+  fixedHeight?: boolean;
   returnFocus?: RefObject<HTMLElement | null>;
 }) {
   const phone = useMediaQuery("(max-width: 700px)");
@@ -81,6 +80,7 @@ export function Modal({
           className={
             modalClassName +
             " app-sheet relative flex min-h-0 w-full! max-w-full! flex-col gap-5 overflow-hidden rounded-t-[22px] border-t border-border [outline:0] pt-2.5 [--modal-inset:20px] [--modal-bottom:calc(20px_+_env(safe-area-inset-bottom,_0px))] max-h-full! [transform:translateY(var(--drawer-swipe-movement-y,_0px))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] [&[data-starting-style]]:[transform:translateY(100%)] [&[data-ending-style]]:[transform:translateY(100%)] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot=drawer-close]]:absolute [&_[data-slot=drawer-close]]:top-7.5 [&_[data-slot=drawer-close]]:right-3.5 " +
+            (fixedHeight ? "h-full " : "") +
             className
           }
         >
@@ -94,7 +94,7 @@ export function Modal({
         finalFocus={returnFocus}
         className={
           modalClassName +
-          ` ${modalSizes[size]} ${modalPositions[position]} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-7 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
+          ` ${modalSizes[size]} ${dialogHeight} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-7 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
           className
         }
       >
