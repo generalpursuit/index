@@ -505,3 +505,52 @@ final class ConcurrentFeedbackTests: XCTestCase {
     XCTAssertEqual(model.error, "Profile failed")
   }
 }
+
+final class MessageTimelineTests: XCTestCase {
+  // A fixed zone and locale, so the expectations hold on any machine.
+  private let calendar: Calendar = {
+    var calendar = Calendar(identifier: .gregorian)
+    calendar.timeZone = TimeZone(identifier: "Europe/Berlin")!
+    return calendar
+  }()
+  private let locale = Locale(identifier: "en_GB")
+  private func at(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int) -> Date {
+    calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+  }
+  private func sent(_ id: String, by sender: String, at date: Date) throws -> Message {
+    let createdAt = date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
+    return try decode(
+      #"{"id":"\#(id)","conversationId":"chat","senderId":"\#(sender)","clientId":"\#(id)","body":"hello","createdAt":"\#(createdAt)","hasAttachment":false}"#)
+  }
+
+  func testGroupsSendersIntoRunsAndStampsAfterAnHourPause() throws {
+    let rows = MessageTimeline.rows([
+      try sent("1", by: "bob", at: at(2026, 10, 13, 9, 0)),
+      try sent("2", by: "bob", at: at(2026, 10, 13, 9, 5)),
+      try sent("3", by: "alice", at: at(2026, 10, 13, 9, 6)),
+      try sent("4", by: "bob", at: at(2026, 10, 13, 10, 6)),
+      try sent("5", by: "bob", at: at(2026, 10, 13, 11, 5)),
+    ])
+    XCTAssertEqual(rows.map(\.stamp), [at(2026, 10, 13, 9, 0), nil, nil, at(2026, 10, 13, 10, 6), nil])
+    XCTAssertEqual(rows.map(\.startsRun), [true, false, true, true, false])
+    // A run also ends where a new section starts, so its last bubble keeps the tail.
+    XCTAssertEqual(rows.map(\.endsRun), [false, true, true, false, true])
+    XCTAssertTrue(MessageTimeline.rows([]).isEmpty)
+  }
+
+  func testStampsReadLikeMessagesInTheViewersCalendar() {
+    let now = at(2026, 10, 13, 18, 0)
+    func label(_ date: Date, now: Date = now) -> String {
+      MessageTimeline.stamp(date, now: now, calendar: calendar, locale: locale).text
+    }
+    XCTAssertEqual(label(at(2026, 10, 13, 11, 15)), "Today 11:15")
+    XCTAssertEqual(label(at(2026, 10, 12, 9, 2)), "Yesterday 09:02")
+    XCTAssertEqual(label(at(2026, 10, 8, 23, 40)), "Thursday 23:40")
+    XCTAssertEqual(label(at(2026, 10, 4, 14, 19)), "Sun 4 Oct at 14:19")
+    XCTAssertEqual(label(at(2025, 12, 30, 8, 0)), "30 Dec 2025 at 08:00")
+    // A clock slightly ahead of this device still reads as today.
+    XCTAssertEqual(label(at(2026, 10, 13, 18, 1)), "Today 18:01")
+    // The day daylight saving starts lasts 23 hours but is still a whole day.
+    XCTAssertEqual(label(at(2026, 3, 29, 12, 0), now: at(2026, 3, 30, 9, 0)), "Yesterday 12:00")
+  }
+}

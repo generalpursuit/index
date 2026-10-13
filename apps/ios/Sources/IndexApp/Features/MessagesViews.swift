@@ -194,6 +194,13 @@ struct ConversationView: View {
   private var text: Binding<String> {
     Binding(get: { draft.body }, set: { app.drafts.edit($0, in: conversationID) })
   }
+  /// As in iMessage, a 1:1 receipt shows only while the viewer's message is the newest.
+  private var readMessageID: String? {
+    guard let conversation, conversation.participants.count <= 2, let newest = messages.first,
+      newest.senderId == app.userID, newest.id == conversation.readReceiptMessageId
+    else { return nil }
+    return newest.id
+  }
   var body: some View {
     VStack(spacing: 0) {
       if let conversation {
@@ -215,17 +222,17 @@ struct ConversationView: View {
       }
       ScrollViewReader { proxy in
         ScrollView {
-          LazyVStack(spacing: 18) {
+          LazyVStack(spacing: 0) {
             LoadingError(error: error, loading: loading, retry: { await refresh() })
             LoadMore(hasMore: cursor != nil) { try await more() }
-            ForEach(messages.reversed()) { message in
-              MessageBubble(message: message, participants: conversation?.participants ?? [])
-                .id(message.id)
+            ForEach(MessageTimeline.rows(messages.reversed())) { row in
+              MessageRow(row: row, participants: conversation?.participants ?? [], read: row.id == readMessageID)
+                .id(row.id)
             }
             Color.clear.frame(height: 1).id("bottom").onAppear { nearBottom = true }.onDisappear {
               nearBottom = false
             }
-          }.padding(.vertical, 20)
+          }.padding(.bottom, 20)
         }.defaultScrollAnchor(.bottom)
           .onChange(of: messages.first?.id) { _, _ in
             if nearBottom || scrollAfterSend {
@@ -308,58 +315,141 @@ struct ConversationView: View {
     try await model.load(api: api, id: conversationID, more: true)
   }
 }
-struct MessageBubble: View {
-  let message: Message
+/// A message in its sender's run, as iMessage shows it: a stamp when it opens a section, and in
+/// group chats the sender's name above an incoming run and their avatar beside its last bubble.
+struct MessageRow: View {
+  let row: MessageTimelineRow
   let participants: [Person]
+  /// Whether "Read" shows under this message.
+  let read: Bool
   @Environment(AppModel.self) private var app
-  var own: Bool { message.senderId == app.userID }
+  private var message: Message { row.message }
+  private var own: Bool { message.senderId == app.userID }
+  // In 1:1 chats the header already names and pictures the other person.
+  private var named: Bool { participants.count > 2 && !own }
+  private var sender: Person? { participants.first { $0.id == message.senderId } }
   var body: some View {
-    HStack {
-      if own { Spacer(minLength: 42) }
-      VStack(alignment: own ? .trailing : .leading, spacing: 6) {
-        if !own && participants.count > 2 {
-          Text(participants.first(where: { $0.id == message.senderId })?.name ?? "Former participant")
-            .font(IndexFont.sans(10)).foregroundStyle(IndexPalette.subtleForeground)
-        }
-        VStack(alignment: .leading, spacing: 0) {
-          attachment
-          if !message.body.isEmpty {
-            Text(message.body).font(IndexFont.sans(13)).textSelection(.enabled)
-              .padding(.horizontal, 14).padding(.vertical, 11)
+    VStack(alignment: own ? .trailing : .leading, spacing: 2) {
+      if let stamp = row.stamp { MessageStampLabel(date: stamp) }
+      if named && row.startsRun {
+        Text(sender?.name ?? "Former participant").font(IndexFont.sans(11.5, relativeTo: .caption))
+          .foregroundStyle(IndexPalette.subtleForeground).padding(.leading, 40).accessibilityHidden(true)
+      }
+      HStack(alignment: .bottom, spacing: 8) {
+        if named {
+          if row.endsRun, let sender {
+            PersonAvatar(person: sender, size: 28)
+          } else {
+            Color.clear.frame(width: 28, height: 0)
           }
-        }.background(own ? IndexPalette.primary : IndexPalette.muted)
+        }
+        MessageContent(message: message, own: own, tail: row.endsRun)
+      }
+      .padding(own ? .leading : .trailing, 42)
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(spokenSummary)
+      .accessibilityActions {
+        if let attachment = message.attachment {
+          Button("Open post") { app.openLink(attachment) }
+        } else if let author = message.restrictedAuthor {
+          Button("View profile") { app.navigate(.profile(author.id)) }
+        }
+      }
+      if read {
+        Text("Read").font(IndexFont.sans(11, relativeTo: .caption)).foregroundStyle(IndexPalette.subtleForeground)
+          .padding(.trailing, 4).accessibilityHidden(true)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: own ? .trailing : .leading)
+    .padding(.top, row.stamp != nil ? 0 : row.startsRun ? 12 : 2)
+  }
+  /// Sender, text, post and time, read as one message.
+  private var spokenSummary: String {
+    var parts = [own ? "You" : sender?.name ?? "Former participant"]
+    if !message.body.isEmpty { parts.append(message.body) }
+    if let attachment = message.attachment {
+      parts.append("Shared post, \(attachment.title), \(attachment.domain)")
+    } else if let author = message.restrictedAuthor {
+      parts.append("Private post from @\(author.label)")
+    } else if message.hasAttachment {
+      parts.append("Post unavailable")
+    }
+    if let date = APITimestamp.date(message.createdAt) { parts.append(MessageTimeline.stamp(date).text) }
+    if read { parts.append("Read") }
+    return parts.joined(separator: ", ")
+  }
+}
+/// A centred section stamp with its day emphasised, such as "**Today** 11:15".
+struct MessageStampLabel: View {
+  let date: Date
+  var body: some View {
+    let stamp = MessageTimeline.stamp(date)
+    Text("\(Text(stamp.day).font(IndexFont.sans(11.5, weight: .semibold, relativeTo: .caption))) \(stamp.time)")
+      .font(IndexFont.sans(11.5, relativeTo: .caption)).foregroundStyle(IndexPalette.subtleForeground)
+      .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 18).padding(.bottom, 10)
+  }
+}
+/// A message's text bubble and shared post. Only the last bubble of a run has a tail, and only
+/// when no card follows it: a card is its own surface.
+struct MessageContent: View {
+  let message: Message
+  let own: Bool
+  let tail: Bool
+  private var card: Bool { message.attachment != nil || message.restrictedAuthor != nil || message.hasAttachment }
+  var body: some View {
+    VStack(alignment: own ? .trailing : .leading, spacing: 2) {
+      if !message.body.isEmpty {
+        Text(message.body).font(IndexFont.sans(15)).padding(.horizontal, 13).padding(.vertical, 8)
           .foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
-          .clipShape(UnevenRoundedRectangle(topLeadingRadius: 19, bottomLeadingRadius: own ? 19 : 5,
-            bottomTrailingRadius: own ? 5 : 19, topTrailingRadius: 19))
-        Text(relativeTime(message.createdAt)).font(IndexFont.sans(10))
-          .foregroundStyle(IndexPalette.subtleForeground).padding(.horizontal, 4)
-      }.frame(maxWidth: 420, alignment: own ? .trailing : .leading)
-      if !own { Spacer(minLength: 42) }
+          .background(own ? IndexPalette.primary : IndexPalette.muted, in: bubble)
+      }
+      SharedPostCard(message: message)
     }
   }
-  @ViewBuilder private var attachment: some View {
+  private var bubble: UnevenRoundedRectangle {
+    let tailed = tail && !card
+    return UnevenRoundedRectangle(
+      topLeadingRadius: 18, bottomLeadingRadius: tailed && !own ? 5 : 18,
+      bottomTrailingRadius: tailed && own ? 5 : 18, topTrailingRadius: 18)
+  }
+}
+/// A post shared in a message. It never takes a bubble's colours, so it reads in either
+/// appearance and beside either sender's bubbles.
+struct SharedPostCard: View {
+  let message: Message
+  @Environment(AppModel.self) private var app
+  var body: some View {
     if let attachment = message.attachment {
       Button { app.openLink(attachment) } label: {
-        HStack(spacing: 12) {
-          Image(systemName: "link").font(.system(size: 20))
-          VStack(alignment: .leading, spacing: 4) {
-            Text(attachment.title).font(IndexFont.sans(13, weight: .medium))
-            Text(attachment.domain).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
-          }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(.horizontal, 16).padding(.vertical, 18)
-          .background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
+        card(symbol: "link") {
+          Text(attachment.title).font(IndexFont.sans(14, weight: .medium))
+          Text(attachment.domain).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
+        }
       }.buttonStyle(.plain)
     } else if let author = message.restrictedAuthor {
       Button { app.navigate(.profile(author.id)) } label: {
-        VStack(alignment: .leading, spacing: 6) {
-          Label("Private post from @\(author.label)", systemImage: "lock").font(IndexFont.sans(13, weight: .medium))
-          Text("Only approved followers can view this post.").font(IndexFont.sans(11))
-          Text("View profile").font(IndexFont.sans(12)).underline()
-        }.padding(16).background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
+        card(symbol: "lock") {
+          Text("Private post from @\(author.label)").font(IndexFont.sans(14, weight: .medium))
+          Text("Only approved followers can view this post.").font(IndexFont.sans(12))
+            .foregroundStyle(IndexPalette.subtleForeground)
+          Text("View profile").font(IndexFont.sans(12)).underline().padding(.top, 4)
+        }
       }.buttonStyle(.plain)
     } else if message.hasAttachment {
-      Label("Post unavailable", systemImage: "lock").font(IndexFont.sans(13))
-        .padding(16).background(IndexPalette.surface).foregroundStyle(IndexPalette.foreground)
+      card(symbol: "lock") {
+        Text("Post unavailable").font(IndexFont.sans(14)).foregroundStyle(IndexPalette.subtleForeground)
+      }
     }
+  }
+  private func card(symbol: String, @ViewBuilder content: () -> some View) -> some View {
+    HStack(spacing: 12) {
+      Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(IndexPalette.subtleForeground)
+      VStack(alignment: .leading, spacing: 2) { content() }.frame(maxWidth: .infinity, alignment: .leading)
+    }
+    .padding(.horizontal, 14).padding(.vertical, 10).frame(maxWidth: 280)
+    .foregroundStyle(IndexPalette.foreground)
+    .background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 16))
+    .overlay(RoundedRectangle(cornerRadius: 16).stroke(IndexPalette.border))
+    .contentShape(RoundedRectangle(cornerRadius: 16))
   }
 }

@@ -178,6 +178,13 @@ public struct Conversation: Codable, Identifiable, Sendable {
     }.joined(separator: ", ")
   }
 }
+/// API timestamps are ISO 8601, with or without fractional seconds.
+public enum APITimestamp {
+  public static func date(_ value: String) -> Date? {
+    (try? Date.ISO8601FormatStyle(includingFractionalSeconds: true).parse(value))
+      ?? (try? Date.ISO8601FormatStyle().parse(value))
+  }
+}
 public struct Success: Codable, Sendable { public let success: Bool }
 public struct UnreadCount: Codable, Sendable { public let unreadCount: Int }
 public struct FollowState: Codable, Sendable { public let status: String }
