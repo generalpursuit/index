@@ -1,9 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Power, RefreshCw } from "lucide-react";
+import { ArrowUpRight, Power } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
-import { IconButton } from "@index/ui/components/icon-button";
 import { categoryMarkClassName } from "@/features/links/category-mark";
 import { QuickAdd } from "@/features/links/quick-add";
 import { weekLinksOptions } from "@/features/links/queries";
@@ -188,25 +187,14 @@ function OwnWeek({ userId }: { userId: string }) {
   }
   return (
     <section aria-label="This week's links" className="flex flex-col gap-2">
-      <div className="flex items-start justify-between pt-1.5 pr-0.5 pb-1 pl-2">
-        <div>
-          <h1 className="font-serif text-[23px] leading-[1.05] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
-            {weekLabel(week)}
-          </h1>
-          <p className="mt-1.5 font-mono text-[10.5px] leading-none tracking-[0.06em] text-subtle-foreground uppercase">
-            {weekRange(week)} · Your links
-          </p>
-        </div>
-        <IconButton
-          label="Refresh links"
-          className="text-subtle-foreground hover:bg-foreground/[0.06] dark:hover:bg-foreground/[0.06]"
-          disabled={query.isFetching}
-          onClick={() => void query.refetch()}
-        >
-          <RefreshCw
-            className={query.isFetching ? "size-3.5 motion-safe:animate-spin" : "size-3.5"}
-          />
-        </IconButton>
+      {/* Every opening already refreshes it, and changes elsewhere arrive as they happen. */}
+      <div className="pt-1.5 pb-1 pl-2">
+        <h1 className="font-serif text-[23px] leading-[1.05] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
+          {weekLabel(week)}
+        </h1>
+        <p className="mt-1.5 font-mono text-[10.5px] leading-none tracking-[0.06em] text-subtle-foreground uppercase">
+          {weekRange(week)} · Your links
+        </p>
       </div>
       <QuickAdd
         compact

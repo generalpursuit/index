@@ -30,6 +30,8 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await panel.goto("/menu-bar");
   await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
   await expect(panel.getByLabel("Index Staging", { exact: true })).toHaveCount(0);
+  // Opening refreshes the panel, so it offers no refresh of its own.
+  await expect(panel.getByRole("button", { name: "Refresh links" })).toHaveCount(0);
   await expect(
     panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
   ).toBeVisible();
