@@ -84,7 +84,9 @@ export function listMessages(
 export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessageInput) {
   return repository
     .sendMessage(db, actorId, input)
-    .andThen((row) => (row ? ok(row.id) : err(notFound("Conversation, recipients or link"))))
+    .andThen((row) =>
+      row ? ok(row.id) : err(notFound("Conversation, recipients, link or replied message")),
+    )
     .andThen((id) => repository.listMessages(db, actorId, input.conversationId, 1, undefined, id))
     .andThen((rows) => (rows[0] ? ok(rows[0]) : err(notFound("Message"))));
 }
