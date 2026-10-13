@@ -75,7 +75,7 @@ function DrawerContent({ className, children, ...props }: DrawerPrimitive.Popup.
               aria-hidden="true"
             />
             <DrawerPrimitive.Content
-              className={"flex flex-col gap-5 min-h-0 min-w-0"}
+              className={"flex flex-1 flex-col min-h-0 min-w-0"}
               data-slot="drawer-body"
             >
               {children}

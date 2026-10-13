@@ -168,9 +168,10 @@ export function AppShell() {
           <Modal
             open={!!search.post}
             title="Post"
+            hideTitle
             size="lg"
             className={
-              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] flex flex-col pb-5 overflow-hidden [&_.dialog-title]:absolute [&_.dialog-title]:w-px [&_.dialog-title]:h-px [&_.dialog-title]:overflow-hidden [&_.dialog-title]:[clip-path:inset(50%)] [&_[data-slot='dialog-description']]:absolute [&_[data-slot='dialog-description']]:w-px [&_[data-slot='dialog-description']]:h-px [&_[data-slot='dialog-description']]:overflow-hidden [&_[data-slot='dialog-description']]:[clip-path:inset(50%)] [&_[data-slot='drawer-description']]:absolute [&_[data-slot='drawer-description']]:w-px [&_[data-slot='drawer-description']]:h-px [&_[data-slot='drawer-description']]:overflow-hidden [&_[data-slot='drawer-description']]:[clip-path:inset(50%)] [&>.post-detail]:min-h-0 [&>.post-detail]:flex-1 [&_[data-slot='drawer-body']]:min-h-0 [&_[data-slot='drawer-body']]:flex-1"
+              "post-dialog h-[min(820px,_calc(100dvh_-_40px))] [&_.post-detail]:min-h-0 [&_.post-detail]:flex-1"
             }
             onOpenChange={(v) => {
               if (!v)

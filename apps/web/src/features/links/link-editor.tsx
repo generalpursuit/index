@@ -5,6 +5,7 @@ import { Input } from "@index/ui/components/input";
 import { Textarea } from "@index/ui/components/textarea";
 import { Button } from "@index/ui/components/button";
 import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
+import { ModalFooter } from "@index/ui/components/modal";
 import { createLinkInputSchema } from "@index/api/features/links/schemas";
 import { LockKeyhole } from "lucide-react";
 import { toast } from "sonner";
@@ -226,18 +227,11 @@ function LinkForm({ existing, onDone }: { existing: SavedLink; onDone: () => voi
           );
         }}
       </form.Field>
-      <div
-        className={
-          "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
-        }
-      >
-        <Button type="button" variant="ghost" className="modal-cancel" onClick={onDone}>
-          Cancel
-        </Button>
+      <ModalFooter onCancel={onDone}>
         <Button type="submit" disabled={saving}>
           Save changes
         </Button>
-      </div>
+      </ModalFooter>
     </form>
   );
 }

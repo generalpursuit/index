@@ -4,6 +4,7 @@ import { createGroupSchema, type CreateGroupInput } from "@index/api/features/gr
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Confirmation } from "@index/ui/components/confirmation";
+import { ModalFooter } from "@index/ui/components/modal";
 import type { Group } from "@/lib/types";
 import { GroupLockControl, groupPrivacyDescription } from "./group-lock-control";
 
@@ -132,14 +133,15 @@ export function GroupForm({
             {group ? "Saving group…" : "Creating group…"}
           </p>
         )}
-        <div className="mt-2 flex items-center justify-end gap-2 [&_button]:min-h-11 [&_button]:px-5">
+        <ModalFooter>
+          {/* Unlike the footer's own Cancel, this one stays on sheets and waits for a pending write. */}
           <Button type="button" variant="ghost" disabled={pending} onClick={onClose}>
             Cancel
           </Button>
           <Button type="submit" disabled={pending}>
             {pending ? (group ? "Saving…" : "Creating…") : group ? "Save" : "Create"}
           </Button>
-        </div>
+        </ModalFooter>
       </form>
       <Confirmation
         open={!!confirmation}

@@ -20,7 +20,7 @@ import { updateProfileSchema } from "@index/api/features/profiles/schemas";
 import { useEffect, useRef, useState, type RefObject } from "react";
 import { Confirmation } from "@index/ui/components/confirmation";
 import { IconButton } from "@index/ui/components/icon-button";
-import { Modal } from "@index/ui/components/modal";
+import { Modal, ModalFooter } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
@@ -304,18 +304,11 @@ function EditProfile({
             {error.message}
           </p>
         )}
-        <div
-          className={
-            "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
-          }
-        >
-          <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
-            Cancel
-          </Button>
+        <ModalFooter onCancel={onClose}>
           <Button type="submit" disabled={saving}>
             {saving ? "Saving…" : "Save"}
           </Button>
-        </div>
+        </ModalFooter>
       </form>
     </Modal>
   );

@@ -5,7 +5,7 @@ import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Checkbox } from "@index/ui/components/checkbox";
 import { ChevronRight } from "lucide-react";
-import { Modal } from "@index/ui/components/modal";
+import { Modal, ModalFooter } from "@index/ui/components/modal";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
@@ -171,14 +171,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
           fetch={conversations.fetchNextPage}
         />
       </div>
-      <div
-        className={
-          "modal-actions flex items-center justify-end gap-2 mt-1 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
-        }
-      >
-        <Button type="button" variant="ghost" className="modal-cancel" onClick={onClose}>
-          Cancel
-        </Button>
+      <ModalFooter onCancel={onClose}>
         {!singleRecipient && (
           <Button
             disabled={!selected.length || start.isPending || selected.length > 19}
@@ -189,7 +182,7 @@ export function RecipientPicker({ link, onClose }: { link?: SavedLink; onClose: 
               : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
           </Button>
         )}
-      </div>
+      </ModalFooter>
     </Modal>
   );
 }

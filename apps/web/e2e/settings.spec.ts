@@ -114,6 +114,43 @@ for (const viewport of [
   });
 }
 
+for (const viewport of [
+  { width: 1440, height: 420 },
+  { width: 390, height: 420 },
+]) {
+  test(`a short window scrolls the editor between its fixed title and actions at ${viewport.width}px`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+    await login(page);
+    await page.goto(viewport.width <= 700 ? "/u/alice?settings=true" : "/settings");
+    await page.getByRole("button", { name: "Edit profile", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "Edit profile" });
+    await expect(editor.getByLabel("Name", { exact: true })).toBeVisible();
+    await expect
+      .poll(() =>
+        editor.evaluate((el) => el.getAnimations().filter((a) => a.playState === "running").length),
+      )
+      .toBe(0);
+    const title = editor.getByRole("heading", { name: "Edit profile", exact: true });
+    const save = editor.getByRole("button", { name: "Save", exact: true });
+    // Sticky placement can land on a fractional pixel once the body scrolls.
+    const place = async () => {
+      const [heading, action] = [(await title.boundingBox())!, (await save.boundingBox())!];
+      return [Math.round(heading.y), Math.round(action.y + action.height)];
+    };
+    const before = await place();
+    const scrolled = await editor.locator('[data-slot="modal-body"]').evaluate((body) => {
+      body.scrollTop = body.scrollHeight;
+      return body.scrollTop;
+    });
+    expect(scrolled).toBeGreaterThan(0);
+    expect(await place()).toEqual(before);
+    const frame = (await editor.boundingBox())!;
+    expect(before[1]).toBeLessThanOrEqual(Math.round(frame.y + frame.height));
+  });
+}
+
 test("settings retains edits across validation, save and sign-out failures", async ({ page }) => {
   await login(page);
   await page.goto("/settings");
