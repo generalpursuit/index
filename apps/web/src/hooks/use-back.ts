@@ -7,14 +7,17 @@ export function useBack(fallback = "/") {
     else router.history.replace(fallback);
   };
 }
+/** Touches starting this close to the left edge belong to the back swipe. */
+export const backSwipeEdge = 28;
 export function useEdgeBack(back: () => void) {
   const origin = useRef<{ x: number; y: number } | null>(null);
+  // Capturing sees touches that controls inside the page stop, such as long-press menus.
   return {
-    onTouchStart: (e: React.TouchEvent) => {
+    onTouchStartCapture: (e: React.TouchEvent) => {
       const t = e.touches[0];
-      origin.current = t && t.clientX < 28 ? { x: t.clientX, y: t.clientY } : null;
+      origin.current = t && t.clientX < backSwipeEdge ? { x: t.clientX, y: t.clientY } : null;
     },
-    onTouchEnd: (e: React.TouchEvent) => {
+    onTouchEndCapture: (e: React.TouchEvent) => {
       const t = e.changedTouches[0],
         start = origin.current;
       origin.current = null;

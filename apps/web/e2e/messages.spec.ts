@@ -1,5 +1,5 @@
 import { apiURL } from "./urls";
-import { test, expect, type Locator, type Page } from "@playwright/test";
+import { test, expect, type Browser, type Locator, type Page } from "@playwright/test";
 let data: {
   conversationId: string;
   directConversationId: string;
@@ -31,6 +31,34 @@ function contrast(surface: Locator, text: string) {
     ].sort((x, y) => y - x);
     return (light! + 0.05) / (dark! + 0.05);
   }, text);
+}
+/** Real touch input, so the browser applies touch-action and derives pointer events. */
+async function swipe(page: Page, target: Locator, from: number, distance: number) {
+  const box = (await target.boundingBox())!,
+    start = { x: box.x + from, y: box.y + box.height / 2 };
+  const touch = await page.context().newCDPSession(page);
+  await touch.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [start] });
+  for (let step = 1; step <= 10; step++)
+    await touch.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [{ x: start.x + (distance * step) / 10, y: start.y }],
+    });
+  const offset = await target.evaluate((element) =>
+    element.closest(".message")!.getAttribute("style"),
+  );
+  await touch.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  return offset ?? "";
+}
+async function phone(browser: Browser, reducedMotion: "reduce" | "no-preference") {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    hasTouch: true,
+    isMobile: true,
+    reducedMotion,
+  });
+  const page = await context.newPage();
+  await login(page);
+  return page;
 }
 test.beforeEach(async ({ request }) => {
   data = await (await request.post(apiURL + "/_test/reset")).json();
@@ -147,6 +175,39 @@ test("the message menu replies and copies, and a quote leads back to its origina
   await recipient.goto("/messages/" + data.conversationId);
   await expect(recipient.locator(".message-quote").last()).toContainText("Replying to you");
   await bob.close();
+});
+
+test("swiping a message right replies on touch screens, leaving the edge to back", async ({
+  browser,
+}) => {
+  const page = await phone(browser, "no-preference");
+  await page.goto("/messages/" + data.conversationId);
+  const chip = page.locator("form.composer .draft-reply");
+  const bob = page.locator(".message-bubble").filter({ hasText: "Adding it to my list." });
+  // A short swipe springs back without replying.
+  expect(await swipe(page, bob, 20, 40)).toContain("translateX");
+  await expect(chip).toHaveCount(0);
+  await swipe(page, bob, 20, 140);
+  await expect(chip).toContainText("Replying to Bob");
+  await page.getByRole("button", { name: "Cancel reply", exact: true }).click();
+
+  // A swipe from the screen edge goes back, even when it starts on a bubble.
+  await page.goto("/messages/" + data.directConversationId);
+  const incoming = page.locator(".message-bubble").filter({ hasText: "Not yet. Send it over?" });
+  const left = (await incoming.boundingBox())!.x;
+  expect(left).toBeLessThan(28);
+  await swipe(page, incoming, 26 - left, 140);
+  await expect(page).not.toHaveURL(/\/messages\//);
+  await expect(chip).toHaveCount(0);
+  await page.context().close();
+
+  // Reduced motion keeps the message still while the reply icon appears.
+  const still = await phone(browser, "reduce");
+  await still.goto("/messages/" + data.conversationId);
+  const message = still.locator(".message-bubble").filter({ hasText: "Same here." });
+  expect(await swipe(still, message, 20, 140)).not.toContain("translateX");
+  await expect(still.locator("form.composer .draft-reply")).toContainText("Replying to Lena");
+  await still.context().close();
 });
 
 test("the newest message stays in view while the composer grows", async ({ page }) => {

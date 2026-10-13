@@ -12,6 +12,7 @@ import type { Conversation, Message } from "@/lib/types";
 import { replyExcerpt, replyLabel } from "./conversation-presentation";
 import { SharedPost } from "./shared-post";
 import { exactTime, messageTimeline, stampLabel, type MessageRun } from "./timeline";
+import { useSwipeReply } from "./use-swipe-reply";
 
 /** Oldest-first messages as iMessage shows them: stamped sections of sender runs. */
 export function MessageThread({
@@ -157,7 +158,7 @@ function Run({
   );
 }
 
-/** A message with its reply menu, opened by right click or long press. */
+/** A message with its reply menu (right click or long press) and swipe to reply. */
 function MessageItem({
   message,
   outgoing,
@@ -177,6 +178,9 @@ function MessageItem({
   onReply: () => void;
   composer: RefObject<HTMLElement | null>;
 }) {
+  const swipe = useSwipeReply(() => {
+    if (canReply) onReply();
+  });
   // The menu keeps focus while open, so replying hands it to the composer as it closes.
   const replying = useRef(false);
   // A run's tail belongs to its final bubble; a card below it is its own surface.
@@ -187,8 +191,18 @@ function MessageItem({
         if (open) replying.current = false;
       }}
     >
-      <ContextMenuTrigger className="relative min-w-0">
+      <ContextMenuTrigger className="relative min-w-0 touch-pan-y" {...swipe.handlers}>
+        <span
+          ref={swipe.icon}
+          aria-hidden="true"
+          className={
+            "absolute left-0 top-1/2 -mt-3.5 grid place-items-center size-7 rounded-full bg-muted text-subtle-foreground opacity-0 [transition:transform_150ms_ease,_color_150ms_ease] data-[armed=true]:scale-110 data-[armed=true]:text-foreground [&>svg]:size-3.5"
+          }
+        >
+          <Reply />
+        </span>
         <div
+          ref={swipe.content}
           id={"message-" + message.id}
           className={
             "message relative flex flex-col gap-0.5 min-w-0 [&[data-highlighted]_.message-bubble]:[box-shadow:0_0_0_2px_var(--ring)] [&[data-highlighted]_.shared-post]:[box-shadow:0_0_0_2px_var(--ring)] " +
