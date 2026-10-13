@@ -52,6 +52,12 @@ const conversationSelection = (actorId: string) => ({
   unreadCount: sql<number>`(select count(*)::int from messages m join conversation_members cm on cm.conversation_id=m.conversation_id and cm.user_id=${actorId}
  where m.conversation_id="conversations"."id" and m.sender_id<>${actorId}
  and (cm.read_at is null or (m.created_at,m.id)>(cm.read_at,cm.read_message_id)))`,
+  // The actor's newest message at or below every other member's read watermark.
+  readReceiptMessageId: sql<string | null>`(select m.id from messages m
+ where m.conversation_id="conversations"."id" and m.sender_id=${actorId}
+ and (m.created_at,m.id) <= all (select o.read_at,o.read_message_id from conversation_members o
+   where o.conversation_id=m.conversation_id and o.user_id<>${actorId})
+ order by m.created_at desc,m.id desc limit 1)`,
 });
 export function findConversation(db: QueryDatabase, actorId: string, id: string) {
   return ResultAsync.fromPromise(

@@ -27,6 +27,8 @@ export const conversationSchema = z.object({
   participants: z.array(publicUserSchema),
   canSend: z.boolean(),
   unreadCount: z.number().int().nonnegative(),
+  /** The viewer's newest message that every other member has read. */
+  readReceiptMessageId: z.uuid().nullable(),
   lastMessage: messageSchema.nullable(),
   updatedAt: z.iso.datetime(),
 });

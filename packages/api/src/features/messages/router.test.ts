@@ -83,6 +83,51 @@ describe("messaging", () => {
       body: "Reply without following",
     });
   });
+  it("reports the sender's newest message that every other member has read", async () => {
+    const alice = api.client("alice"),
+      bob = api.client("bob");
+    await alice.follows.follow({ userId: "bob" });
+    await alice.follows.follow({ userId: "carol" });
+    const direct = await alice.messages.createConversation({ recipientIds: ["bob"] });
+    const send = (body: string) =>
+      alice.messages.send({ conversationId: direct.id, clientId: crypto.randomUUID(), body });
+    const first = await send("First");
+    const second = await send("Second");
+    const receipt = async () =>
+      (await alice.messages.conversation({ conversationId: direct.id })).readReceiptMessageId;
+    assert.equal(await receipt(), null);
+    await bob.messages.markRead({ conversationId: direct.id, messageId: first.id });
+    assert.equal(await receipt(), first.id);
+    const answer = await bob.messages.send({
+      conversationId: direct.id,
+      clientId: crypto.randomUUID(),
+      body: "Answer",
+    });
+    await bob.messages.markRead({ conversationId: direct.id, messageId: answer.id });
+    assert.equal(await receipt(), second.id);
+    assert.equal(
+      (await alice.messages.conversations({})).items[0]!.readReceiptMessageId,
+      second.id,
+    );
+    // Receipts describe the viewer's own messages only.
+    const bobReceipt = async () =>
+      (await bob.messages.conversation({ conversationId: direct.id })).readReceiptMessageId;
+    assert.equal(await bobReceipt(), null);
+    await alice.messages.markRead({ conversationId: direct.id, messageId: answer.id });
+    assert.equal(await bobReceipt(), answer.id);
+    const group = await alice.messages.createConversation({ recipientIds: ["bob", "carol"] });
+    const hello = await alice.messages.send({
+      conversationId: group.id,
+      clientId: crypto.randomUUID(),
+      body: "Hello",
+    });
+    await bob.messages.markRead({ conversationId: group.id, messageId: hello.id });
+    const pending = await alice.messages.conversation({ conversationId: group.id });
+    assert.equal(pending.readReceiptMessageId, null);
+    await api.client("carol").messages.markRead({ conversationId: group.id, messageId: hello.id });
+    const read = await alice.messages.conversation({ conversationId: group.id });
+    assert.equal(read.readReceiptMessageId, hello.id);
+  });
   it("does not grant access through forwarding and redacts originals after revocation or deletion", async () => {
     const alice = api.client("alice"),
       bob = api.client("bob");

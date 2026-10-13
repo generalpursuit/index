@@ -34,7 +34,7 @@ Neon HTTP does not provide interactive transactions. Multi-write invariants use 
 
 ## Messages and retries
 
-An exact participant set identifies a conversation. Its creator must have accepted outgoing follows to the other participants; existing members can keep reading and replying after unfollowing. Nonmembers cannot inspect, send or mark read. Read state is a monotonic message watermark; acknowledging an older message cannot clear newer arrivals.
+An exact participant set identifies a conversation. Its creator must have accepted outgoing follows to the other participants; existing members can keep reading and replying after unfollowing. Nonmembers cannot inspect, send or mark read. Read state is a monotonic message watermark; acknowledging an older message cannot clear newer arrivals. A conversation's read receipt is the viewer's newest message at or below every other member's watermark, so members learn read state only for their own messages.
 
 A send owns an immutable `clientId`, conversation and payload until its outcome is known. Retry an uncertain write with that same identity and payload, including after navigation. Reusing the ID with different contents is rejected. A deliberate abandonment does not retract a possibly committed send. [Link sharing](sharing.md) uses the corresponding `requestId` receipt contract.
 
