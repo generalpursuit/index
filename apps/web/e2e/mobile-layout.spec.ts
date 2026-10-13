@@ -191,8 +191,15 @@ for (const viewport of [
       ).toBeVisible();
       await input.fill("https://pages.test/calm-software");
       await input.press("Enter");
-      await dialogLayout(page, "Already saved");
-      await page.keyboard.press("Escape");
+      // Touch has no Return to point at, so Save again is offered to tap.
+      const saved = current.getByRole("status").filter({ hasText: "Already saved this week" });
+      await expect(saved).toHaveText("Already saved this week · Save again · View");
+      await layout(page, "Already saved");
+      await saved.getByRole("button", { name: "Save again", exact: true }).click();
+      await expect(saved).toHaveCount(0);
+      await expect(current.getByRole("button", { name: "Calm Software", exact: true })).toHaveCount(
+        2,
+      );
       await current.locator(".own-links .link-open").first().click();
       const post = await dialogLayout(page, "Post");
       await post.getByRole("button", { name: "Forward", exact: true }).click();

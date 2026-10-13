@@ -10,6 +10,8 @@ async function login(page: Page) {
 const current = (page: Page) => page.locator('.week-page[data-active="true"]');
 const input = (page: Page) =>
   current(page).getByRole("textbox", { name: /Enter a link to add it/ });
+const alreadySaved = (page: Page) =>
+  current(page).getByRole("status").filter({ hasText: "Already saved this week" });
 test.beforeEach(async ({ request }) => {
   await request.post(apiURL + "/_test/reset");
 });
@@ -65,19 +67,30 @@ for (const width of [1440, 390]) {
     await expect(page.getByText("Link added to Shared reading", { exact: true })).toBeVisible();
     await input(page).fill("https://pages.test/calm-software");
     await input(page).press("Enter");
-    const duplicate = page.getByRole("dialog", { name: "Already saved", exact: true });
-    await expect(duplicate.getByRole("button", { name: "View existing" })).toBeVisible();
-    await expect(
-      duplicate.getByRole("button", { name: "Save destination: Shared reading" }),
-    ).toBeVisible();
-    await duplicate.getByRole("button", { name: "Save again" }).click();
-    await expect(duplicate).toHaveCount(0);
+    // The link stays in the field, described by a quiet line, ready for a second Enter.
+    await expect(input(page)).toHaveValue("https://pages.test/calm-software");
+    await expect(input(page)).toHaveAccessibleDescription(
+      "Already saved this week. Enter to save again · View",
+    );
+    await expect(alreadySaved(page).locator("kbd")).toHaveText("↵");
+    await expect(input(page)).toBeFocused();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    // Another destination may be chosen first; the earlier save stays where it is.
+    await chosen.click();
+    await page.getByRole("menuitemradio", { name: "Your links", exact: true }).click();
+    await expect(alreadySaved(page)).toBeVisible();
+    await input(page).press("Enter");
+    await expect(alreadySaved(page)).toHaveCount(0);
+    await expect(input(page)).toHaveValue("");
+    await expect(page.getByText("Link added to Your links", { exact: true })).toBeVisible();
     await expect(
       current(page).getByRole("button", { name: "Calm Software", exact: true }),
     ).toHaveCount(2);
     expect(requests).toHaveLength(3);
-    expect(requests.every((r) => r.groupId === requests[0]!.groupId && !!r.groupId)).toBe(true);
-    expect(requests[2]!.saveAgain).toBe(true);
+    expect(requests[1]!.groupId).toBe(requests[0]!.groupId);
+    expect(requests[0]!.groupId).toBeTruthy();
+    expect(requests.map((r) => r.saveAgain)).toEqual([false, false, true]);
+    expect(requests[2]!.groupId).toBeNull();
     expect(new Set(requests.map((r) => r.requestId)).size).toBe(3);
     expect(
       await page.evaluate(
@@ -118,21 +131,37 @@ test("lost response retains input and retry ID; cancellation does not save", asy
   expect(ids[0]).toBe(ids[1]);
   await expect(current(page).locator(".own-links .link-row")).toHaveCount(before + 1);
 });
-test("duplicate View existing resolves canonical post without another save", async ({ page }) => {
+test("a duplicate ends with an edit or Escape, and View resolves the canonical post", async ({
+  page,
+}) => {
   await login(page);
-  for (let i = 0; i < 2; i++) {
+  const again: boolean[] = [];
+  page.on("request", (request) => {
+    if (request.url().endsWith("/links/share")) again.push(request.postDataJSON().json.saveAgain);
+  });
+  const duplicate = async () => {
     await input(page).fill("https://pages.test/calm-software");
     await input(page).press("Enter");
-    await expect(
-      current(page).getByRole("button", { name: "Calm Software", exact: true }),
-    ).toHaveCount(1);
-  }
-  await page
-    .getByRole("dialog", { name: "Already saved" })
-    .getByRole("button", { name: "View existing" })
-    .click();
+    await expect(alreadySaved(page)).toBeVisible();
+  };
+  await input(page).fill("https://pages.test/calm-software");
+  await input(page).press("Enter");
+  await expect(
+    current(page).getByRole("button", { name: "Calm Software", exact: true }),
+  ).toHaveCount(1);
+  await duplicate();
+  await input(page).press("Backspace");
+  await expect(alreadySaved(page)).toHaveCount(0);
+  await expect(input(page)).not.toHaveAttribute("aria-describedby");
+  await duplicate();
+  await input(page).press("Escape");
+  await expect(alreadySaved(page)).toHaveCount(0);
+  await expect(input(page)).toHaveValue("");
+  await duplicate();
+  await alreadySaved(page).getByRole("button", { name: "View", exact: true }).click();
   await expect(page).toHaveURL(/\/l\/[A-Za-z0-9_-]{16}$/);
   await expect(page.getByRole("heading", { name: "Calm Software" })).toBeVisible();
+  expect(again).toEqual([false, false, false, false]);
 });
 
 test("selected group refreshes rename/privacy and deletion requires a fresh choice", async ({

@@ -13,7 +13,7 @@ async function add(page: Page, url: string) {
   await page.getByRole("textbox", { name: "Add a link to this week" }).press("Enter");
 }
 
-test("menu bar shares current-week data, group creation, duplicate flow and canonical main navigation", async ({
+test("menu bar shares current-week data, destination choice, duplicate flow and canonical main navigation", async ({
   page,
   context,
   request,
@@ -36,7 +36,7 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
     panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
   ).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open .*in browser/ })).toHaveCount(5);
-  // The native panel hugs this week's content, and grows to its maximum for dialog sheets.
+  // The native panel hugs this week's content.
   const panelHeight = (command: string) =>
     desktop.commands.findLast((c) => c.label === "menu-bar" && c.command === command)?.args
       ?.height as number | undefined;
@@ -62,15 +62,16 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await panel.keyboard.press("Escape");
   await expect(menu).toHaveCount(0);
   expect(desktop.hidden).not.toContain("menu-bar");
+  // Groups are created in the main app; the panel's menu only chooses among them.
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
-  await menu.getByRole("menuitem", { name: "New group…", exact: true }).click();
-  await expect.poll(() => panelHeight("desktop_panel_resize")).toBeGreaterThan(fitted);
-  await panel.getByRole("textbox", { name: "Name", exact: true }).fill("Menu reading");
-  await panel.getByRole("button", { name: "Create", exact: true }).click();
-  await expect(panel.getByRole("dialog")).toHaveCount(0);
-  await expect(panel.getByRole("button", { name: "Save destination: Menu reading" })).toBeFocused();
+  const reading = menu.getByRole("menuitemradio", { name: "Reading", exact: true });
+  await expect(reading).toBeVisible();
+  await expect(menu.getByRole("menuitem")).toHaveCount(0);
+  await expect(menu.getByRole("separator")).toHaveCount(0);
+  await reading.click();
+  await expect(panel.getByRole("button", { name: "Save destination: Reading" })).toBeFocused();
   await add(panel, "https://pages.test/calm-software");
-  await expect(panel.getByText("Link added to Menu reading", { exact: true })).toBeVisible();
+  await expect(panel.getByText("Link added to Reading", { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toBeVisible();
   // The footer ends the panel with two full-width rows, like the end of a native menu.
   for (const name of ["Open Index", "Quit Index"]) {
@@ -94,14 +95,17 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
       .first(),
   ).toBeVisible();
   await add(panel, "https://pages.test/calm-software");
-  await expect(panel.getByRole("dialog", { name: "Already saved" })).toBeVisible();
-  await panel.getByRole("button", { name: "View existing", exact: true }).click();
+  // A line under the field rather than a sheet over the panel.
+  const saved = panel.getByRole("status").filter({ hasText: "Already saved this week" });
+  await expect(saved).toBeVisible();
+  await expect(panel.getByRole("dialog")).toHaveCount(0);
+  await panel.screenshot({ path: "test-results/menu-bar-already-saved.png" });
+  await saved.getByRole("button", { name: "View", exact: true }).click();
   await expect(page).toHaveURL(/\/l\/[A-Za-z0-9_-]+$/);
   await expect(panel).toHaveURL(/\/menu-bar$/);
   await expect.poll(() => desktop.pending).toBeNull();
-  await add(panel, "https://pages.test/calm-software");
-  await panel.getByRole("button", { name: "Save again", exact: true }).click();
-  await expect(panel.getByRole("dialog", { name: "Already saved" })).not.toBeVisible();
+  await panel.getByRole("textbox", { name: "Add a link to this week" }).press("Enter");
+  await expect(saved).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toHaveCount(2);
   await panel.screenshot({ path: "test-results/menu-bar-compact.png" });
   // Over the panel's glass, text is translucent so it takes on the tone behind the panel.
@@ -320,6 +324,15 @@ test("the panel window always fits its content and its page never scrolls", asyn
   await field.fill("https://pages.test/calm-software");
   await field.press("Enter");
   await expect(rows).toHaveCount(1);
+  await fits();
+  // So does the line under the field for a link saved before.
+  await field.fill("https://pages.test/calm-software");
+  await field.press("Enter");
+  const saved = panel.getByRole("status").filter({ hasText: "Already saved this week" });
+  await expect(saved).toBeVisible();
+  await fits();
+  await field.fill("");
+  await expect(saved).toHaveCount(0);
   await fits();
   // An opening the host cannot show at once goes through the session check while hidden.
   await desktop.togglePanel();
