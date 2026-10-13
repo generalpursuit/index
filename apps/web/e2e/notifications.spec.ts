@@ -37,6 +37,32 @@ test("account preferences persist, preserve activity and stay isolated after log
   await expect(settings.getByLabel("Messages", { exact: true })).toBeChecked();
   await expect(settings.getByLabel("Show message and comment previews")).not.toBeChecked();
 });
+test("followers controls both follow events and is on only when both are", async ({ page }) => {
+  await login(page);
+  const settings = page.getByRole("region", { name: "Notifications", exact: true });
+  const followers = settings.getByLabel("Followers", { exact: true });
+  const preferences = async () =>
+    (await page.request.get(apiURL + "/api/v1/me/notifications/preferences")).json();
+  await expect(followers).toBeChecked();
+  await expect(followers).toHaveAccessibleDescription(
+    "New followers, or follow requests while your profile is private",
+  );
+  await expect(settings.getByLabel("Accepted follow requests")).toHaveAccessibleDescription(
+    "When someone approves your request to follow them",
+  );
+  await followers.click();
+  await expect(followers).not.toBeChecked();
+  await expect.poll(preferences).toMatchObject({ follow: false, request: false });
+  const partial = await page.request.patch(apiURL + "/api/v1/me/notifications/preferences", {
+    data: { request: true },
+  });
+  expect(partial.ok()).toBe(true);
+  await page.reload();
+  await expect(followers).not.toBeChecked();
+  await followers.click();
+  await expect(followers).toBeChecked();
+  await expect.poll(preferences).toMatchObject({ follow: true, request: true });
+});
 test("permission is never requested on load and denial never appears enabled", async ({ page }) => {
   await page.addInitScript(() => {
     (window as any).permissionRequests = 0;
