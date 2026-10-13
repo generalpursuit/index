@@ -99,6 +99,11 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await expect(page).toHaveURL(/\/u\/alice\/reading$/);
   await expect(chip("Reading")).toHaveAttribute("aria-current", "page");
   await expect(chip("All")).not.toHaveAttribute("aria-current");
+  // Only the list on screen sits on a quiet pill; the others are plain text.
+  await expect(chip("Reading")).toHaveCSS("background-color", "rgb(235, 235, 235)");
+  await expect(chip("Reading")).toHaveCSS("color", "rgb(23, 23, 23)");
+  await expect(chip("All")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(chip("All")).toHaveCSS("border-top-width", "0px");
   await expect(destination).toHaveAccessibleName("Save destination: Reading");
   // A private list's lock is also spoken.
   const notes = chip("Notes, only you");

@@ -6,8 +6,9 @@ import { groupLabel } from "@/features/groups/group-lock-control";
 import { useAllGroups } from "@/features/groups/use-groups";
 import { useScrollEdges } from "@/features/links/hooks/use-scroll-edges";
 
+// Plain text; only the list on screen sits on a quiet pill.
 const chipClassName =
-  "inline-flex h-7 shrink-0 items-center rounded-full border border-border text-[12.5px] whitespace-nowrap text-foreground hover:bg-muted [&_svg]:shrink-0 [&_svg]:text-subtle-foreground aria-[current=page]:border-primary aria-[current=page]:bg-primary aria-[current=page]:text-primary-foreground aria-[current=page]:[&_svg]:text-primary-foreground";
+  "inline-flex h-8 shrink-0 items-center rounded-full text-[14px] whitespace-nowrap text-foreground hover:bg-muted/50 aria-[current=page]:bg-muted aria-[current=page]:hover:bg-muted [&_svg]:shrink-0 [&_svg]:text-subtle-foreground [@media(width<=700px)]:text-[13px]";
 // The strip's edge fades, as in its class names.
 const fade = 28;
 
@@ -59,7 +60,7 @@ export function ListDock({
       >
         <div
           ref={strip}
-          className="relative flex min-w-0 gap-1.5 overflow-x-auto rounded-full p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(to_right,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [&[data-fade-start]]:[--fade-start:28px] [&[data-fade-end]]:[--fade-end:28px]"
+          className="relative flex min-w-0 gap-0.5 overflow-x-auto rounded-full p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(to_right,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [&[data-fade-start]]:[--fade-start:28px] [&[data-fade-end]]:[--fade-end:28px]"
           data-fade-start={edges.before || undefined}
           data-fade-end={edges.after || undefined}
         >
@@ -91,7 +92,7 @@ export function ListDock({
                 type="button"
                 aria-label="New group"
                 title="New group"
-                className={chipClassName + " w-7 justify-center [&_svg]:size-3.5"}
+                className={chipClassName + " w-8 justify-center [&_svg]:size-4"}
                 onClick={(event) => onNewGroup(event.currentTarget)}
               >
                 <Plus aria-hidden="true" />
@@ -124,7 +125,7 @@ function ListChip({
       state={{ userId, groupId }}
       activeOptions={{ exact: true, includeSearch: false }}
       aria-label={label}
-      className={chipClassName + " gap-1 px-3 [&_svg]:size-3"}
+      className={chipClassName + " gap-1 px-3.5 [&_svg]:size-3"}
     >
       {children}
     </Link>
