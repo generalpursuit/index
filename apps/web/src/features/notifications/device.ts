@@ -30,6 +30,10 @@ export function supportedBrowser() {
     "PushManager" in window
   );
 }
+/** iPhone and iPad Safari offer Web Push only to Home Screen apps, not to browser tabs. */
+export function homeScreenRequired() {
+  return !isDesktop && "standalone" in navigator && !navigator.standalone;
+}
 function registration() {
   return (worker ??= navigator.serviceWorker.register("/notifications-sw.js").catch((error) => {
     worker = undefined;

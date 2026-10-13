@@ -9,7 +9,13 @@ import {
   accountMutationOptions,
 } from "@/lib/account-boundary";
 import { isDesktop } from "@/lib/desktop";
-import { deviceStatus, enableDevice, disableDevice, type DeviceStatus } from "./device";
+import {
+  deviceStatus,
+  enableDevice,
+  disableDevice,
+  homeScreenRequired,
+  type DeviceStatus,
+} from "./device";
 // A profile gets a follow request while private and a follow while public, never both for
 // the same follow, so one row controls both keys and shows on only when both are on.
 const rows: { label: string; description: string; keys: (keyof Preferences)[] }[] = [
@@ -107,6 +113,10 @@ export function NotificationSettings() {
     }
   }
   const permission = status?.permission;
+  const checking = !status || (status.supported && capabilities.isPending);
+  // Only an explicit answer means push is off; after a failed check, enabling reports the cause.
+  // A registered device keeps its button so it can still be turned off.
+  const serverOff = configured === false && !status?.registered;
   return (
     <section
       aria-label="Notifications"
@@ -122,26 +132,27 @@ export function NotificationSettings() {
       <div className="rounded-xl bg-muted p-3 space-y-2">
         <h3 className="text-sm font-medium">This device</h3>
         <p role="status" className="text-sm text-muted-foreground">
-          {!status
+          {checking
             ? "Checking device permission…"
             : !status.supported
-              ? "Push notifications are not supported on this device or browser."
-              : permission === "denied"
-                ? "Blocked in system or browser settings."
-                : status.registered
-                  ? "Enabled on this device."
-                  : permission === "granted"
-                    ? "Permission allowed. Alerts are off on this device."
-                    : "Alerts are off. Permission has not been requested."}
+              ? homeScreenRequired()
+                ? "Add Index to your Home Screen to turn on notifications."
+                : "Push notifications are not supported on this device or browser."
+              : serverOff
+                ? "Notifications aren't available on this server yet."
+                : permission === "denied"
+                  ? "Blocked in system or browser settings."
+                  : status.registered
+                    ? "Enabled on this device."
+                    : permission === "granted"
+                      ? "Permission allowed. Alerts are off on this device."
+                      : "Alerts are off. Permission has not been requested."}
         </p>
-        {status?.supported && !configured && (
-          <p className="text-sm text-muted-foreground">Push delivery is not configured yet.</p>
-        )}
-        {status?.supported && (
+        {!checking && status.supported && !serverOff && (
           <Button
             type="button"
             variant="outline"
-            disabled={busy || (!status.registered && (!configured || permission === "denied"))}
+            disabled={busy || (!status.registered && permission === "denied")}
             onClick={() => void changeDevice()}
           >
             {busy

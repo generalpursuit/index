@@ -99,6 +99,47 @@ test("unsupported browsers show preferences without pretending delivery is avail
   await expect(settings.getByRole("button", { name: "Enable on this device" })).toHaveCount(0);
   await expect(settings.getByLabel("Comments", { exact: true })).toBeChecked();
 });
+test("iPhone and iPad Safari tabs point to the Home Screen app", async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (window as any).PushManager;
+    Object.defineProperty(Navigator.prototype, "standalone", { get: () => false });
+  });
+  await login(page);
+  const settings = page.getByRole("region", { name: "Notifications", exact: true });
+  await expect(settings.getByRole("status")).toHaveText(
+    "Add Index to your Home Screen to turn on notifications.",
+  );
+  await expect(settings.getByRole("button", { name: "Enable on this device" })).toHaveCount(0);
+});
+test("device status waits for server capabilities and hides enabling when push is off", async ({
+  page,
+}) => {
+  let answer!: () => void;
+  const answered = new Promise<void>((resolve) => (answer = resolve));
+  let hold = false;
+  await page.route("**/rpc/v1/notifications/capabilities", async (route) => {
+    // The page loader waits for this check. Failing it until the page is up leaves the
+    // section checking again, as after a slow or flaky server.
+    if (!hold) return route.abort();
+    const response = await route.fetch();
+    const body = await response.json();
+    await answered;
+    await route.fulfill({ response, json: { ...body, json: { ...body.json, web: false } } });
+  });
+  await login(page);
+  hold = true;
+  const settings = page.getByRole("region", { name: "Notifications", exact: true });
+  const enable = settings.getByRole("button", { name: "Enable on this device" });
+  // Let the device check finish while the server has not answered yet.
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect(settings.getByRole("status")).toHaveText("Checking device permission…");
+  await expect(enable).toHaveCount(0);
+  answer();
+  await expect(settings.getByRole("status")).toHaveText(
+    "Notifications aren't available on this server yet.",
+  );
+  await expect(enable).toHaveCount(0);
+});
 test("opt-in registers the real worker, binds the current account, and unregisters on signout", async ({
   page,
   context,
