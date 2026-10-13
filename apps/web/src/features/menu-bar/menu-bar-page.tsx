@@ -1,6 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
-import { ArrowUpRight, Power } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
 import { categoryMarkClassName } from "@/features/links/category-mark";
@@ -19,6 +26,7 @@ import type { SavedLink } from "@/lib/types";
 
 const report = (action: Promise<unknown>) =>
   void action.catch(() => toast.error("Could not complete that. Try again."));
+const quit = () => report(desktopInvoke("desktop_quit"));
 
 export function MenuBarPage() {
   if (!isMenuBar)
@@ -52,18 +60,22 @@ function MenuPanel() {
     if (!session.isPending && !checking) void presentMenuPanel(session.isError).catch(() => {});
   }, [session.isPending, session.isError, session.dataUpdatedAt, checking]);
   useEffect(() => {
-    const escape = (event: KeyboardEvent) => {
+    const keys = (event: KeyboardEvent) => {
+      // The footer promises Command-Q; Index is not the active app, so its menu may never see it.
+      if (event.metaKey && event.key.toLowerCase() === "q") {
+        event.preventDefault();
+        quit();
+      }
       // A dialog that is animating closed has already handled its own Escape.
-      if (
-        event.key !== "Escape" ||
-        event.defaultPrevented ||
-        document.querySelector('[role="dialog"]:not([data-closed])')
+      else if (
+        event.key === "Escape" &&
+        !event.defaultPrevented &&
+        !document.querySelector('[role="dialog"]:not([data-closed])')
       )
-        return;
-      report(desktopInvoke("desktop_hide"));
+        report(desktopInvoke("desktop_hide"));
     };
-    document.addEventListener("keydown", escape);
-    return () => document.removeEventListener("keydown", escape);
+    document.addEventListener("keydown", keys);
+    return () => document.removeEventListener("keydown", keys);
   }, []);
   return (
     <main
@@ -72,7 +84,7 @@ function MenuPanel() {
       aria-label="Index menu bar"
     >
       {/* Takes its natural height; when the panel is shorter, only the link list gives way. */}
-      <div ref={content} className="flex min-h-0 flex-col pb-2">
+      <div ref={content} className="flex min-h-0 flex-col pb-1.5">
         {checking || session.isPending ? (
           <p role="status" className="py-8 text-center text-subtle-foreground">
             Checking your session…
@@ -107,23 +119,47 @@ function MenuPanel() {
           />
         )}
       </div>
-      <footer
-        ref={footer}
-        className="mt-auto flex shrink-0 items-center gap-2 border-t border-foreground/10 pt-2"
-      >
-        <Button className="h-8 flex-1 text-[13px]" onClick={() => report(openIndex())}>
-          Open Index <ArrowUpRight data-icon="inline-end" className="size-3.5" />
-        </Button>
-        <Button
-          variant="ghost"
-          className="h-8 bg-foreground/[0.06] px-3 text-[13px] hover:bg-foreground/10 dark:hover:bg-foreground/10"
-          onClick={() => report(desktopInvoke("desktop_quit"))}
-        >
-          <Power data-icon="inline-start" className="size-3.5 text-subtle-foreground" />
-          Quit
-        </Button>
+      {/* Ends the panel like the items at the end of a native menu. */}
+      <footer ref={footer} className="mt-auto shrink-0">
+        <hr className="mx-2 border-foreground/10" />
+        <div className="pt-1.5">
+          <MenuItem
+            hint={<ArrowUpRight className="size-3.5" />}
+            onClick={() => report(openIndex())}
+          >
+            Open Index
+          </MenuItem>
+          <MenuItem hint="⌘Q" shortcut="Meta+Q" onClick={quit}>
+            Quit Index
+          </MenuItem>
+        </div>
       </footer>
     </main>
+  );
+}
+/** A full-width row like a native menu item, with its hint (a shortcut or symbol) at the end. */
+function MenuItem({
+  hint,
+  shortcut,
+  onClick,
+  children,
+}: {
+  hint: ReactNode;
+  shortcut?: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      className="flex h-7 w-full items-center justify-between gap-3 rounded-[6px] px-2 text-left hover:bg-foreground/[0.06] focus-visible:outline-offset-[-2px]"
+      aria-keyshortcuts={shortcut}
+      onClick={onClick}
+    >
+      {children}
+      <span className="text-subtle-foreground" aria-hidden="true">
+        {hint}
+      </span>
+    </button>
   );
 }
 /**

@@ -58,8 +58,14 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   await add(panel, "https://pages.test/calm-software");
   await expect(panel.getByText("Link added", { exact: true })).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toBeVisible();
-  await panel.getByRole("button", { name: "Open Index", exact: true }).click({ trial: true });
-  await panel.getByRole("button", { name: "Quit", exact: true }).click({ trial: true });
+  // The footer ends the panel with two full-width rows, like the end of a native menu.
+  for (const name of ["Open Index", "Quit Index"]) {
+    const item = panel.getByRole("button", { name, exact: true });
+    await item.click({ trial: true });
+    expect(await item.evaluate((el: HTMLElement) => [el.offsetHeight, el.offsetWidth])).toEqual([
+      28, 370,
+    ]);
+  }
   await expect
     .poll(async () => {
       const toastBox = await panel.locator("[data-sonner-toast]").last().boundingBox();
@@ -220,8 +226,12 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   await expect.poll(() => desktop.commands.some((c) => c.command === "desktop_open")).toBe(true);
   await panel.keyboard.press("Escape");
   await expect.poll(() => desktop.hidden).toContain("menu-bar");
-  await panel.getByRole("button", { name: "Quit", exact: true }).click();
+  const quit = panel.getByRole("button", { name: "Quit Index", exact: true });
+  await expect(quit).toHaveAttribute("aria-keyshortcuts", "Meta+Q");
+  await quit.click();
   await expect.poll(() => desktop.quits).toBe(1);
+  await panel.getByRole("textbox", { name: "Add a link to this week" }).press("Meta+q");
+  await expect.poll(() => desktop.quits).toBe(2);
   expect(
     desktop.commands.filter((c) => c.label === "menu-bar" && c.command.startsWith("notification_")),
   ).toHaveLength(0);
