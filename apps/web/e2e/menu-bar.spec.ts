@@ -119,6 +119,33 @@ test("menu bar shares current-week data, group creation, duplicate flow and cano
   ).toBe(true);
 });
 
+test("menu rows show a favorite's heart but keep their one action, opening the link", async ({
+  page,
+  context,
+  request,
+}) => {
+  await request.post(apiURL + "/_test/reset");
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
+  const favorite = page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Favorite Are.na", exact: true });
+  await Promise.all([page.waitForResponse("**/rpc/v1/favorites/add**"), favorite.click()]);
+  const panel = await context.newPage();
+  await desktop.attach(panel, "menu-bar");
+  await panel.goto("/menu-bar");
+  const kept = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
+  await expect(kept.locator(".link-mark[data-kept] svg")).toHaveCSS("opacity", "1");
+  await expect(
+    panel
+      .getByRole("button", { name: "Open In Rainbows in browser", exact: true })
+      .locator(".link-mark[data-kept]"),
+  ).toHaveCount(0);
+  await expect(panel.getByRole("button", { name: /^(Favorite|Star) / })).toHaveCount(0);
+  await kept.locator(".link-mark").click();
+  await expect.poll(() => desktop.opened).toContain("https://are.na/");
+});
 test("only the menu panel's links scroll, by whole rows, loading more near their end", async ({
   page,
   context,
