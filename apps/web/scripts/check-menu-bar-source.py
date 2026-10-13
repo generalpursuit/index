@@ -18,8 +18,9 @@ class MenuBarPackaging(unittest.TestCase):
         self.assertNotIn('remote', capability)
         self.assertEqual(capability['permissions'], ['core:default'])
         windows = (TAURI / 'src/menu_bar.rs').read_text()
-        self.assertIn('crate::restrict_navigation(WebviewWindowBuilder::from_config', windows)
-        self.assertIn('crate::restrict_navigation(builder, app).build()', windows)
+        self.assertIn('WebviewWindowBuilder::from_config(app, config)', windows)
+        # Both the main window and the panel are built through the navigation guard.
+        self.assertEqual(windows.count('crate::restrict_navigation(builder, app).build()'), 2)
         library = (TAURI / 'src/lib.rs').read_text()
         self.assertIn('NewWindowResponse::Deny', library)
         for command in ['session_snapshot', 'session_compare_write', 'session_touch',
