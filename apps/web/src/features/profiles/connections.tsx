@@ -25,7 +25,7 @@ export function Connections({
         if (!v) onClose();
       }}
       title="Connections"
-      position="top"
+      fixedHeight
     >
       <Tabs value={tab} onValueChange={(v) => setTab(v as typeof tab)}>
         <TabsList variant="line">
@@ -35,7 +35,7 @@ export function Connections({
       </Tabs>
       <div
         className={
-          "recipient-list max-h-[35dvh] overflow-auto [&_.recipient-row]:flex [&_.recipient-row]:h-auto [&_.recipient-row]:justify-start [&_.recipient-row]:cursor-pointer [&_.recipient-row]:w-full [&_.recipient-row]:items-center [&_.recipient-row]:gap-3 [&_.recipient-row]:p-3 [&_.recipient-row]:rounded-[12px] [&_.recipient-row]:text-left"
+          "recipient-list min-h-0 flex-1 overflow-y-auto overscroll-contain [&_.recipient-row]:flex [&_.recipient-row]:h-auto [&_.recipient-row]:justify-start [&_.recipient-row]:cursor-pointer [&_.recipient-row]:w-full [&_.recipient-row]:items-center [&_.recipient-row]:gap-3 [&_.recipient-row]:p-3 [&_.recipient-row]:rounded-[12px] [&_.recipient-row]:text-left"
         }
       >
         <QueryState

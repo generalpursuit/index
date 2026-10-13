@@ -334,8 +334,12 @@ for (const width of [1440, 390]) {
     const avatar = (await bob.locator(".user-avatar").boundingBox())!;
     const name = (await bob.locator(".person-label").boundingBox())!;
     expect(name.x - (avatar.x + avatar.width)).toBeLessThanOrEqual(16);
+    const frame = (await picker.boundingBox())!;
+    if (width > 700) expect(Math.abs(frame.y + frame.height / 2 - 450)).toBeLessThanOrEqual(1);
     await picker.getByRole("textbox", { name: "Search recipients" }).fill("Bob");
     await expect(picker.getByRole("checkbox")).toHaveCount(0);
+    // The list filters inside a frame that neither moves nor resizes.
+    expect(await picker.boundingBox()).toEqual(frame);
     await expect(picker.getByRole("button", { name: "Next", exact: true })).toHaveCount(0);
     await bob.click();
     await expect(page).toHaveURL(/\/messages\/[^/?]+/);
