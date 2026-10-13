@@ -82,6 +82,15 @@ pub fn with_revision<T>(expected: u64, operation: impl FnOnce() -> T) -> Result<
     let revision = REVISION.lock().unwrap();
     revision.apply(expected, operation)
 }
+/// with_revision for the main thread, which must never wait: credential operations hold the lock
+/// across Keychain I/O, which can be slow or show a prompt. None while the lock is held or once
+/// the revision has moved, without running the operation.
+pub fn try_with_revision<T>(expected: u64, operation: impl FnOnce() -> T) -> Option<T> {
+    try_apply(&REVISION, expected, operation)
+}
+fn try_apply<T>(revision: &Mutex<Revision>, expected: u64, operation: impl FnOnce() -> T) -> Option<T> {
+    revision.try_lock().ok()?.apply(expected, operation).ok()
+}
 async fn update(token: Option<String>, expected: Option<u64>, source: Option<String>) -> Result<u64, String> {
     if token.as_ref().is_some_and(|value| value.is_empty() || value.len() > 8192) {
         return Err("Invalid session credential.".into());
@@ -124,6 +133,20 @@ pub async fn session_touch(window: WebviewWindow, expected_revision: u64, invali
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn main_thread_revision_checks_never_wait_or_run_for_a_moved_revision() {
+        let revision = Mutex::new(Revision::new());
+        let mut ran = false;
+        let busy = revision.lock().unwrap(); // a credential write waiting on Keychain
+        assert_eq!(try_apply(&revision, 0, || ran = true), None);
+        drop(busy);
+        revision.lock().unwrap().advance(); // another account signed in
+        assert_eq!(try_apply(&revision, 0, || ran = true), None);
+        assert!(!ran);
+        assert_eq!(try_apply(&revision, 1, || ran = true), Some(()));
+        assert!(ran);
+    }
 
     #[test]
     #[ignore = "requires an unlocked OS credential store"]

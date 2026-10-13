@@ -12,12 +12,10 @@ const PANEL_WIDTH: f64 = 390.0;
 const PANEL_MIN_HEIGHT: f64 = 160.0;
 const PANEL_MAX_HEIGHT: f64 = 560.0;
 static PANEL_HEIGHT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(PANEL_MAX_HEIGHT.to_bits());
-/// The session revision the panel last committed content for (see desktop_panel_ready).
+/// The session revision the panel last committed content for (see desktop_panel_ready). Any
+/// account change advances the revision, so content for the current one is the current account's.
 static PANEL_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(NEVER_COMMITTED);
 const NEVER_COMMITTED: u64 = u64::MAX;
-/// Content committed for the current revision belongs to the current account, so an opening may
-/// show it before revalidating. Any account change advances the revision first.
-fn shows_committed_content(committed: u64, current: u64) -> bool { committed != NEVER_COMMITTED && committed == current }
 fn panel_height(requested: f64) -> f64 {
     if requested.is_finite() { requested.clamp(PANEL_MIN_HEIGHT, PANEL_MAX_HEIGHT) } else { PANEL_MAX_HEIGHT }
 }
@@ -137,11 +135,15 @@ fn toggle(app: &AppHandle) -> tauri::Result<()> {
     let window = ensure_panel(app)?;
     if window.is_visible()? || MENU_REQUESTED.load(std::sync::atomic::Ordering::SeqCst) { return hide_panel(&window); }
     MENU_REQUESTED.store(true, std::sync::atomic::Ordering::SeqCst);
-    // Content committed for this account shows at once and refreshes in place. After an account
-    // change, which the hidden webview may have slept through, or before its first commit, the
-    // panel stays hidden until its session refresh and React commit acknowledge this opening.
-    let presented = shows_committed_content(PANEL_REVISION.load(std::sync::atomic::Ordering::SeqCst), crate::session::visible_revision());
-    if presented { present(&window); }
+    // Content committed for this account shows at once and refreshes in place. It shows under the
+    // session lock, so no other account can be accepted between the check and the showing; a later
+    // change hides it again (hide_on_session_change). The main thread only tries the lock, which
+    // credential writes hold across Keychain I/O. While it is busy, after an account change (which
+    // the hidden webview may have slept through) or before a first commit, the panel stays hidden
+    // until its session refresh and React commit acknowledge this opening.
+    let committed = PANEL_REVISION.load(std::sync::atomic::Ordering::SeqCst);
+    let presented = committed != NEVER_COMMITTED
+        && crate::session::try_with_revision(committed, || present(&window)).is_some();
     let _ = window.emit_to("menu-bar", "index:menu-open", MenuOpened { presented });
     Ok(())
 }
@@ -296,14 +298,6 @@ mod tests {
         assert_eq!(panel_height(12.0), PANEL_MIN_HEIGHT);
         assert_eq!(panel_height(4000.0), PANEL_MAX_HEIGHT);
         assert_eq!(panel_height(f64::NAN), PANEL_MAX_HEIGHT);
-    }
-    #[test]
-    fn only_content_committed_for_the_current_revision_shows_at_once() {
-        assert!(!shows_committed_content(NEVER_COMMITTED, 0));
-        assert!(shows_committed_content(3, 3));
-        // Another account signed in, or the same one changed access, since the panel committed.
-        assert!(!shows_committed_content(3, 4));
-        assert_eq!(PANEL_REVISION.load(std::sync::atomic::Ordering::SeqCst), NEVER_COMMITTED);
     }
     #[test]
     fn login_items_reflect_approval_and_support_without_assuming_enabled() {
