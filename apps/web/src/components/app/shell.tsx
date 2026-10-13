@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Link,
   Outlet,
@@ -67,6 +67,10 @@ export function AppShell() {
     if (!viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
   }, [viewer, protectedPage, navigate, router]);
+  // A closing dialog keeps showing its link. Removing its focused content mid-close makes it
+  // refocus itself a frame later, taking focus from a dialog opened in its place (Edit, from Post).
+  const post = useRetained(search.post),
+    edit = useRetained(search.edit);
   // Closing returns to exactly where the editor was opened.
   const closeEditor = () =>
     void navigate({
@@ -190,11 +194,7 @@ export function AppShell() {
                 });
             }}
           >
-            {search.post ? (
-              <LinkReference key={search.post} value={search.post} mode="post" onDone={() => {}} />
-            ) : (
-              <QueryState pending />
-            )}
+            {post && <LinkReference key={post} value={post} mode="post" onDone={() => {}} />}
           </Modal>
           <Modal
             open={!!search.edit}
@@ -206,17 +206,16 @@ export function AppShell() {
               if (!v) closeEditor();
             }}
           >
-            {search.edit && (
-              <LinkReference
-                key={search.edit}
-                value={search.edit}
-                mode="edit"
-                onDone={closeEditor}
-              />
-            )}
+            {edit && <LinkReference key={edit} value={edit} mode="edit" onDone={closeEditor} />}
           </Modal>
         </div>
       </LinkDraftProvider>
     </MessageDraftProvider>
   );
+}
+/** The latest value, kept after it is cleared. */
+function useRetained<T>(value: T | undefined) {
+  const [retained, setRetained] = useState(value);
+  if (value !== undefined && value !== retained) setRetained(value);
+  return value ?? retained;
 }
