@@ -5,7 +5,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
-import { ArrowUp, SquarePen, X, Link2, Search } from "lucide-react";
+import { SquarePen, X, Search } from "lucide-react";
 import { Heading, Back } from "@/components/app/navigation";
 import { IconButton } from "@index/ui/components/icon-button";
 import { Confirmation } from "@index/ui/components/confirmation";
@@ -17,7 +17,7 @@ import { useDebounced } from "@/hooks/use-debounced";
 import { useMessageDraft } from "./drafts";
 import type { MessageDraft } from "./draft";
 import { MessageThread } from "./message-thread";
-import { domain } from "@/features/links/url";
+import { Composer } from "./composer";
 import { timeAgo } from "@/lib/weeks";
 import type { SavedLink } from "@/lib/types";
 
@@ -139,15 +139,13 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
     navigate = useNavigate();
   const { draft, owner: draftOwner } = useMessageDraft(id);
   const [recovery, setRecovery] = useState<MessageDraft>();
-  const sending = draft.status === "sending";
-  const locked = sending || draft.status === "uncertain";
   const attached = useQuery(
     api.links.get.queryOptions({
       input: { id: attach ?? "00000000-0000-4000-8000-000000000000" },
       enabled: !!attach,
     }),
   );
-  const input = useRef<HTMLInputElement>(null),
+  const input = useRef<HTMLTextAreaElement>(null),
     end = useRef<HTMLDivElement>(null),
     scroller = useRef<HTMLDivElement>(null),
     nearBottom = useRef(true);
@@ -284,26 +282,6 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
           </div>
           <div className={"chat-composer-area flex-none"}>
             {attached.error && <p role="alert">This attachment is unavailable.</p>}
-            {draft.attachment && (
-              <div
-                className={
-                  "draft-attachment flex items-center gap-3 bg-surface border border-border rounded-[14px] p-[12px_14px] mt-3 [&>.person-label]:flex-1 [&_strong]:whitespace-nowrap [&_strong]:text-ellipsis"
-                }
-              >
-                <Link2 />
-                <div className={personLabelClassName}>
-                  <strong>{draft.attachment.title}</strong>
-                  <small>{domain(draft.attachment.url)}</small>
-                </div>
-                <IconButton
-                  label="Remove attachment"
-                  disabled={locked}
-                  onClick={() => draftOwner.removeAttachment()}
-                >
-                  <X />
-                </IconButton>
-              </div>
-            )}
             {(draft.status === "uncertain" || draft.status === "rejected") && (
               <p className={"field-error select-text text-[12px] text-destructive"} role="alert">
                 {draft.status === "uncertain"
@@ -342,34 +320,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                 setRecovery(undefined);
               }}
             />
-            <form
-              className={"composer flex gap-2.5 items-center pt-4"}
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send();
-              }}
-            >
-              <Input
-                variant="composer"
-                className="h-10"
-                ref={input}
-                disabled={locked}
-                aria-label="Message"
-                placeholder="Message"
-                maxLength={10000}
-                value={draft.body}
-                onChange={(e) => draftOwner.editBody(e.target.value)}
-              />
-              <Button
-                type="submit"
-                size="icon"
-                className="size-10 flex-none"
-                aria-label="Send message"
-                disabled={sending || (!draft.body.trim() && !draft.attachment)}
-              >
-                <ArrowUp />
-              </Button>
-            </form>
+            <Composer draft={draft} owner={draftOwner} input={input} onSend={() => void send()} />
           </div>
         </div>
       )}

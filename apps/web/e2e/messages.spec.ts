@@ -81,3 +81,29 @@ test("sent link cards keep a readable surface in light and dark mode", async ({ 
       await expect.poll(() => contrast(card, text)).toBeGreaterThanOrEqual(4.5);
   }
 });
+
+test("the composer holds its attachment, grows with Shift+Enter and ignores IME Enter", async ({
+  page,
+}) => {
+  await login(page);
+  const link = data.links[2]!;
+  await page.goto(`/messages/${data.conversationId}?attach=${link.id}`);
+  const composer = page.locator("form.composer");
+  await expect(composer.locator(".draft-attachment")).toContainText(link.title);
+  await expect(composer.getByRole("button", { name: "Send message", exact: true })).toBeVisible();
+  const field = composer.getByRole("textbox", { name: "Message", exact: true });
+  const height = (await field.boundingBox())!.height;
+  await field.fill("Same, and this one too");
+  await field.press("Shift+Enter");
+  await field.pressSequentially("Second line");
+  expect((await field.boundingBox())!.height).toBeGreaterThan(height);
+  // Enter that confirms an IME composition must not send.
+  await field.dispatchEvent("keydown", { key: "Enter", isComposing: true });
+  await expect(field).toHaveValue("Same, and this one too\nSecond line");
+  await field.press("Enter");
+  await expect(field).toHaveValue("");
+  await expect(composer.locator(".draft-attachment")).toHaveCount(0);
+  const sent = page.locator(".message.outgoing").last();
+  await expect(sent.locator(".message-bubble")).toHaveText("Same, and this one too\nSecond line");
+  await expect(sent.locator(".shared-post")).toContainText(link.title);
+});
