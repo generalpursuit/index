@@ -42,6 +42,18 @@ export function instantEdit<TData, TVariables>(
       else cache.setQueryData(entry.key, data);
     }
   };
+  const completeDestinations = (layer: Layer) => {
+    if (cache.isMutating({ mutationKey: key }) !== 1) return;
+    // A destination opened during the write may have read the server's previous value.
+    for (const query of cache.getQueryCache().findAll({
+      predicate: (query) => affects(query.queryKey) && !layer.base.has(query.queryHash),
+    })) {
+      let data = query.state.data;
+      for (const edit of layer.edits) data = edit.patch(data, query.queryKey);
+      if (data === undefined) cache.removeQueries({ queryKey: query.queryKey, exact: true });
+      else cache.setQueryData(query.queryKey, data);
+    }
+  };
   return accountMutationOptions<TData, Error, TVariables, { layer: Layer; edit: Edit }>({
     mutationKey: key,
     mutationFn: (input) => mutationFn(input),
@@ -65,14 +77,16 @@ export function instantEdit<TData, TVariables>(
       return { layer, edit };
     },
     onSuccess: (data, input, context) => {
-      if (!context || !response) return;
-      context.edit.patch = response(data, input);
+      if (!context) return;
+      if (response) context.edit.patch = response(data, input);
       replay(context.layer);
+      completeDestinations(context.layer);
     },
     onError: (_error, _input, context) => {
       if (!context) return;
       context.layer.edits = context.layer.edits.filter((edit) => edit !== context.edit);
       replay(context.layer);
+      completeDestinations(context.layer);
     },
     onSettled: () => {
       if (cache.isMutating({ mutationKey: key }) === 1) {

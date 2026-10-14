@@ -192,3 +192,27 @@ test("a confirmed edit survives immediate reload while optimistic drafts stay of
   cache.clear();
   restored.clear();
 });
+
+test("an edit patches a destination that read the previous value while its write was pending", async () => {
+  const cache = new QueryClient();
+  cache.setQueryData(["list"], "previous");
+  const answer = deferred<string>();
+  const mutation = new MutationObserver(
+    cache,
+    instantEdit(cache, {
+      key: ["edit"],
+      affects: () => true,
+      mutationFn: () => answer.promise,
+      optimistic: () => () => "pending",
+      response: (value) => () => value,
+    }),
+  );
+  const pending = mutation.mutate(undefined);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  cache.setQueryData(["destination"], "previous");
+  answer.resolve("confirmed");
+  await pending;
+  assert.equal(cache.getQueryData(["list"]), "confirmed");
+  assert.equal(cache.getQueryData(["destination"]), "confirmed");
+  cache.clear();
+});
