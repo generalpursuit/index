@@ -87,8 +87,15 @@ impl TokenCache {
         if matches!(self, Self::Unread) { *self = Self::Ready(load()?); }
         match self {
             Self::Ready(token) => Ok(token.clone()),
-            _ => Err("Could not update your secure session. Unlock your credential store and try again.".into()),
+            Self::Unavailable => Ok(None),
+            Self::Unread => unreachable!(),
         }
+    }
+    fn contains(&self, token: &Option<String>) -> bool {
+        matches!(self, Self::Ready(current) if current == token)
+    }
+    fn written(&mut self, token: Option<String>, result: &Result<(), String>) {
+        *self = if result.is_ok() { Self::Ready(token) } else { Self::Unavailable };
     }
 }
 fn cached_token() -> Result<Option<String>, String> {
@@ -165,11 +172,11 @@ async fn update(token: Option<String>, expected: Option<u64>, source: Option<Str
         // Keychain operation completes before any newer session can be accepted.
         let mut revision = REVISION.lock().unwrap();
         if let Some(expected) = expected { revision.check(expected)?; }
-        if token.is_some() && cached_token()? == token { return Ok(revision.current()); }
+        if token.is_some() && TOKEN.lock().unwrap().contains(&token) { return Ok(revision.current()); }
         // Persist ordering before credentials: a crash or failed credential write must never
         // let the next process accept an old account's disk cache under a reused revision.
         let result = persist_revision(revision.current() + 1).and_then(|()| write(token.clone()));
-        *TOKEN.lock().unwrap() = if result.is_ok() { TokenCache::Ready(token) } else { TokenCache::Unavailable };
+        TOKEN.lock().unwrap().written(token, &result);
         let next = revision.advance();
         // Also drop displayed content when the Keychain fails; never claim sign-out succeeded.
         changed(next, source);
@@ -228,7 +235,24 @@ mod tests {
         cache = TokenCache::Ready(None);
         assert_eq!(cache.snapshot(|| panic!("erased credentials must not be restored")).unwrap(), None);
         cache = TokenCache::Unavailable;
-        assert!(cache.snapshot(|| panic!("a failed erasure must not resurrect credentials")).is_err());
+        assert_eq!(cache.snapshot(|| panic!("a failed erasure must not resurrect credentials")).unwrap(), None);
+    }
+
+    #[test]
+    fn failed_secure_writes_fail_closed_and_a_later_write_repairs_the_cache() {
+        for token in [None, Some("signed-token".to_string())] {
+            let mut cache = TokenCache::Ready(Some("signed-token".into()));
+            cache.written(token.clone(), &Err("locked".into()));
+            assert!(!cache.contains(&token));
+            assert_eq!(cache.snapshot(|| panic!("never reload a failed erasure")).unwrap(), None);
+            cache.written(Some("signed-token".into()), &Ok(()));
+            assert!(cache.contains(&Some("signed-token".into())));
+            assert_eq!(cache.snapshot(|| panic!("successful retry is cached")).unwrap(), Some("signed-token".into()));
+        }
+        let mut touched = TokenCache::Unavailable;
+        assert_eq!(touched.snapshot(|| panic!("failed touch is signed out")).unwrap(), None);
+        touched.written(None, &Ok(()));
+        assert!(touched.contains(&None));
     }
 
     #[test]
