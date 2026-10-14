@@ -18,6 +18,7 @@ import { WeekPicker, WeekScrubber, type Week } from "@/components/app/week-scrub
 import { monday, weekLabel, weekRange } from "@/lib/weeks";
 import { Connections } from "./connections";
 import { ListDock } from "./list-dock";
+import { ProfileName } from "./profile-name";
 import type { Profile, Person } from "@/lib/types";
 const count = (n: number, noun: string) => n + " " + noun + (n === 1 ? "" : "s");
 export function FollowButton({
@@ -117,10 +118,10 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
         <div className={"profile-identity flex-1 min-w-0 flex flex-col gap-2.5"}>
           <div
             className={
-              "profile-name flex items-center gap-2.5 min-w-0 [&_h1]:min-w-0 [&_h1]:wrap-anywhere [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
+              "profile-name flex items-center gap-2.5 min-w-0 [&_h1]:min-w-0 [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
             }
           >
-            <h1>{profile.name}</h1>
+            <ProfileName name={profile.name} />
             <span
               className={"profile-visibility inline-flex flex-none text-subtle-foreground"}
               role="img"

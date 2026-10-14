@@ -276,7 +276,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
           </header>
           <div
             className={
-              "chat-scroller flex-1 min-h-0 overflow-auto overscroll-contain p-[0_2px_16px] [scrollbar-width:thin] [scrollbar-color:var(--input)_transparent]"
+              "chat-scroller flex-1 min-h-0 overflow-auto overscroll-contain p-[0_2px_16px]"
             }
             ref={scroller}
             onScroll={() => {

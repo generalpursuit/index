@@ -201,6 +201,13 @@
 }
 
 /* Editing, motion preferences and the shared loading animation are document resets. */
+/* Hide indicators across pages, portals and editors without changing how they scroll. */
+* {
+  scrollbar-width: none;
+}
+*::-webkit-scrollbar {
+  display: none;
+}
 input {
   user-select: text;
   -webkit-user-select: text;

@@ -1,6 +1,57 @@
 import { apiURL } from "./urls";
 import { test, expect } from "@playwright/test";
 
+test("profile names fit on one line through phone and desktop resizes", async ({
+  page,
+  request,
+}) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await request.post(apiURL + "/_test/reset");
+  const login = await request.post(apiURL + "/api/auth/sign-in/email", {
+    data: { email: "alice@test.example", password: "test-password-123" },
+  });
+  const token = login.headers()["set-auth-token"]!;
+  await page.goto("/login");
+  await page.getByLabel("Email or username", { exact: true }).fill("alice");
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+  for (const name of ["Jona Schwarz", "Alexandria Éléonore von Schwarzenberg " + "W".repeat(40)]) {
+    await request.patch(apiURL + "/api/v1/me/profile", {
+      headers: { Authorization: `Bearer ${token}` },
+      data: { name },
+    });
+    await page.goto("/u/alice");
+    const heading = page.getByRole("heading", { name, exact: true });
+    await expect(heading).toBeVisible();
+    for (const viewport of [
+      { width: 320, height: 568 },
+      { width: 402, height: 874 },
+      { width: 874, height: 402 },
+      { width: 1440, height: 960 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await expect
+        .poll(() =>
+          heading.evaluate((element) => {
+            const range = document.createRange();
+            range.selectNodeContents(element);
+            return (
+              range.getClientRects().length > 0 &&
+              element.scrollWidth <= element.clientWidth + 1 &&
+              element.getBoundingClientRect().height <=
+                parseFloat(getComputedStyle(element).fontSize) + 1
+            );
+          }),
+        )
+        .toBe(true);
+      await expect(heading).toHaveText(name);
+    }
+  }
+  expect(errors).toEqual([]);
+});
+
 test("profile styling stays borderless with shared display typography", async ({
   page,
   request,

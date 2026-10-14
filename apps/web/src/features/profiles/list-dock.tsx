@@ -56,7 +56,7 @@ export function ListDock({
       <nav
         aria-label="Lists"
         // Centered on the content column, above the navigation bar along a phone's foot.
-        className="list-dock fixed bottom-5 left-[calc(50%_+_50px)] z-10 flex max-w-[min(740px,_calc(100%_-_180px))] -translate-x-1/2 rounded-full bg-card shadow-(--menu-shadow) ring-1 ring-foreground/8 [@media(width<=700px)]:bottom-[calc(78px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:left-1/2 [@media(width<=700px)]:max-w-[calc(100%_-_32px)]"
+        className="list-dock fixed bottom-5 left-[calc(50%_+_50px)] z-10 flex max-w-[min(740px,_calc(100%_-_180px))] -translate-x-1/2 rounded-full bg-card shadow-sm ring-1 ring-foreground/8 [@media(width<=700px)]:bottom-[calc(78px_+_env(safe-area-inset-bottom))] [@media(width<=700px)]:left-1/2 [@media(width<=700px)]:max-w-[calc(100%_-_32px)]"
       >
         <div
           ref={strip}
