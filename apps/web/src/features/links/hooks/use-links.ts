@@ -35,7 +35,7 @@ export function useLibraryWeeks(userId: string, groupId?: string, enabled = true
   return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
 }
 /** Everything that lists links or counts them, after the library changes. */
-function refreshLibrary(cache: QueryClient, api: API) {
+export function refreshLibrary(cache: QueryClient, api: API) {
   return Promise.all(
     [
       api.links.listMine.key(),

@@ -33,6 +33,7 @@ import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
 import { AppIconSettings } from "./app-icon";
 import { LaunchAtLoginSettings } from "./launch-at-login";
+import { CurateeImport } from "./curatee-import";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const settingsPhotoClassName =
@@ -80,7 +81,7 @@ function SettingsContent({ userId }: { userId: string }) {
   );
 }
 
-/** One box per concern: who you are, who sees your links, your lists, and signing out. */
+/** One box per concern: who you are, who sees your links, your lists, imports, and signing out. */
 function SettingsBoxes({ profile }: { profile: Profile }) {
   const signOut = useSignOut();
   // Editing opens with a freshly picked photo when the avatar was tapped.
@@ -132,6 +133,7 @@ function SettingsBoxes({ profile }: { profile: Profile }) {
       <LaunchAtLoginSettings />
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />
+      <CurateeImport />
       <NotificationSettings />
       <AccountSecurity />
       <DesktopUpdates />

@@ -51,7 +51,8 @@ for (const viewport of [
     );
     // Settings shows who you are; name, username and photo are edited in one modal.
     await expect(page.locator(".settings-identity strong")).toHaveText("Alice");
-    await expect(page.getByRole("textbox")).toHaveCount(0);
+    for (const field of ["Name", "Username"])
+      await expect(page.getByRole("textbox", { name: field, exact: true })).toHaveCount(0);
     await expect(page.getByLabel("Bio", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Sign out", exact: true })).toHaveCount(1);
     // Compare rendered CSS geometry: headed emulation can round a requested 390px to 391px.
@@ -213,4 +214,37 @@ test("settings is private and opens on its own in a fresh tab", async ({
   await fresh.getByRole("link", { name: "Your profile", exact: true }).click();
   await expect(fresh).toHaveURL(/\/u\/alice/);
   await fresh.close();
+});
+
+test("settings imports a curatee profile into the weeks its links were saved", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await login(page);
+  await page.goto("/settings");
+  const box = page.getByRole("region", { name: "Import from curatee", exact: true });
+  const field = box.getByRole("textbox", { name: "curatee username", exact: true });
+  const submit = box.getByRole("button", { name: "Import", exact: true });
+  await submit.click();
+  await expect(box.getByRole("alert")).toHaveText("Enter a curatee username.");
+  await field.fill("nobody");
+  await submit.click();
+  await expect(box.getByRole("alert")).toHaveText("No curatee profile has that username.");
+  // The username is kept so it can be corrected.
+  await expect(field).toHaveValue("nobody");
+  await field.fill("mara");
+  await submit.click();
+  await expect(page.getByText("Imported 2 links", { exact: true })).toBeVisible();
+  await expect(field).toHaveValue("");
+  await expect(box.getByRole("alert")).toHaveCount(0);
+  // Importing again finds nothing new.
+  await field.fill("mara");
+  await submit.click();
+  await expect(page.getByText("No new links to import", { exact: true })).toBeVisible();
+
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  await expect(page.locator('.profile-week[data-week="2026-01-05"]')).toContainText(
+    "Slow Productivity",
+  );
+  await expect(page.locator('.profile-week[data-week="2026-01-12"]')).toContainText(
+    "A talk worth watching",
+  );
 });
