@@ -144,11 +144,14 @@ final class ResponseSnapshots: @unchecked Sendable {
       if changed || wasProvisional, let directory {
         let selected = accountDirectory!
         let server = selected.deletingLastPathComponent()
+        // Compare names, not URLs: listings can return a resolved path (/private/var on Apple
+        // platforms), which never equals the /var path built here.
+        let kept = [selected.lastPathComponent, rememberedFile(scope)?.lastPathComponent]
         if let servers = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
-          for other in servers where other != server { try? FileManager.default.removeItem(at: other) }
+          for other in servers where other.lastPathComponent != server.lastPathComponent { try? FileManager.default.removeItem(at: other) }
         }
         if let children = try? FileManager.default.contentsOfDirectory(at: server, includingPropertiesForKeys: nil) {
-          for child in children where child != selected && child != rememberedFile(scope) { try? FileManager.default.removeItem(at: child) }
+          for child in children where !kept.contains(child.lastPathComponent) { try? FileManager.default.removeItem(at: child) }
         }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         pruneDisk(selected)

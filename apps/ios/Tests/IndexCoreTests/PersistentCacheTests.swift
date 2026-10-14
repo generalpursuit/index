@@ -140,4 +140,18 @@ struct PersistentCacheTests {
     #expect(!relaunched.snapshots.store(Data("late alice".utf8), key: "/links/a", version: ticket))
     #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://one.example") == nil)
   }
+  @Test func restoresThroughASymlinkedDirectory() async throws {
+    // Application Support and temporary folders sit under /var, a symlink to /private/var.
+    let real = folder()
+    let link = folder()
+    defer { try? FileManager.default.removeItem(at: real); try? FileManager.default.removeItem(at: link) }
+    try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+    try FileManager.default.createSymbolicLink(at: link, withDestinationURL: real)
+    let first = ResponseCache(directory: link)
+    await first.accept(scope: "https://one.example", account: "alice")
+    _ = try await first.load("/links/a") { Data("kept".utf8) }
+    let relaunched = ResponseCache(directory: link)
+    await relaunched.accept(scope: "https://one.example", account: "alice")
+    #expect(relaunched.snapshot("/links/a") == Data("kept".utf8))
+  }
 }
