@@ -50,6 +50,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
     secret: env.BETTER_AUTH_SECRET,
     baseURL: env.BETTER_AUTH_URL,
     advanced: {
+      database: { joins: true },
       defaultCookieAttributes: {
         sameSite: "none",
         secure: true,

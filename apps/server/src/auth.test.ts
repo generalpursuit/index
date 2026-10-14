@@ -119,6 +119,50 @@ describe("native and browser authentication", () => {
     assert.equal(await authentication.api.getSession({ headers }), null);
   });
 
+  it("reads current session and user state in one query for signed cookies and bearer tokens", async (t) => {
+    const authentication = auth();
+    const registered = await authentication.handler(
+      post("/sign-up/email", {
+        email: "joined@example.com",
+        password: "secure-test-password-123",
+        name: "Joined reader",
+        username: "joined",
+      }),
+    );
+    assert.equal(registered.status, 200);
+    const token = registered.headers.get("set-auth-token");
+    assert.ok(token);
+    const statements = t.mock.method(fixture.client, "query");
+    for (const headers of [
+      new Headers({ Authorization: `Bearer ${token}` }),
+      new Headers({ Cookie: `__Secure-better-auth.session_token=${token}` }),
+    ]) {
+      const before = statements.mock.callCount();
+      const restricted = await authentication.api.getSession({ headers });
+      assert.ok(restricted);
+      assert.equal(restricted.user.emailVerified, false);
+      assert.equal(statements.mock.callCount() - before, 1);
+      assert.match(String(statements.mock.calls.at(-1)!.arguments[0]), /join/i);
+      await fixture.client.query('UPDATE "user" SET email_verified = true WHERE id = $1', [
+        restricted.user.id,
+      ]);
+      const afterVerification = statements.mock.callCount();
+      const verified = await authentication.api.getSession({ headers });
+      assert.equal(verified?.user.emailVerified, true);
+      assert.equal(statements.mock.callCount() - afterVerification, 1);
+      await fixture.client.query('UPDATE "user" SET email_verified = false WHERE id = $1', [
+        restricted.user.id,
+      ]);
+    }
+    const headers = new Headers({ Authorization: `Bearer ${token}` });
+    const restored = await authentication.api.getSession({ headers });
+    assert.ok(restored);
+    await fixture.client.query('DELETE FROM "session" WHERE id = $1', [restored.session.id]);
+    const beforeRevocation = statements.mock.callCount();
+    assert.equal(await authentication.api.getSession({ headers }), null);
+    assert.equal(statements.mock.callCount() - beforeRevocation, 1);
+  });
+
   it("requires a valid, unique username at sign-up and signs in with it", async () => {
     const authentication = auth();
     const signUp = (body: Record<string, string>) =>
