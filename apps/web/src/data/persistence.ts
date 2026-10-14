@@ -7,26 +7,13 @@ import {
 } from "@tanstack/query-persist-client-core";
 import { cacheMaxAge } from "./client";
 import type { ContentStorage } from "./storage";
+import { contentFeatures } from "./content";
 
 type Identity = {
   user: { id: string; emailVerified: boolean };
   expiresAt: number;
   revision?: number;
 };
-const content = new Set([
-  "feed",
-  "profiles",
-  "groups",
-  "links",
-  "comments",
-  "follows",
-  "messages",
-  "activity",
-  "routes",
-  "favorites",
-  "stars",
-  "discovery",
-]);
 function hasDraft(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   const item = value as Record<string, unknown>;
@@ -41,7 +28,7 @@ export function persistContent(query: Query, account: string) {
     Array.isArray(path) &&
     path[0] === "viewer" &&
     path[1] === account &&
-    content.has(path[2]!) &&
+    contentFeatures.has(path[2]!) &&
     !query.queryKey.includes("pulse") &&
     path[3] !== "searchUsers" &&
     !options?.input?.query &&
@@ -60,6 +47,7 @@ export function createContentPersistence<T extends Identity>(
 ) {
   const metadata = storageFor(`index.identity.${origin}`);
   let accepted: T | undefined;
+  let ready = false;
   let unsubscribe: (() => void) | undefined;
   let epoch = 0;
   let flush: (() => Promise<void>) | undefined;
@@ -67,24 +55,33 @@ export function createContentPersistence<T extends Identity>(
   const settled = mutations.config.onSettled;
   mutations.config.onSettled = async (...args) => {
     await settled?.(...args);
-    if (cache.isMutating() === 1) await flush?.();
+    if (cache.isMutating() === 1) await flush?.().catch(() => {});
   };
   let erasing: Promise<unknown> = Promise.resolve();
   const storage = (id: string) => storageFor(`index.content.${origin}.${id}`);
-  async function erase() {
+  async function erase(prior = accepted) {
     ++epoch;
     unsubscribe?.();
     unsubscribe = undefined;
     flush = undefined;
-    const prior = accepted;
     accepted = undefined;
+    ready = false;
+    if (!prior) return erasing;
     // Queue deletion after any already-started transaction, before a new account can bind.
-    erasing = erasing.then(async () => {
-      const marker = await metadata.getItem("account");
-      await metadata.removeItem("account");
-      const id = prior?.user.id ?? (marker ? (JSON.parse(marker) as T).user.id : undefined);
-      if (id) await storage(id).removeItem("cache");
-    });
+    erasing = erasing
+      .catch(() => {})
+      .then(async () => {
+        const marker = await metadata.getItem("account").catch(() => null);
+        const saved = marker ? (JSON.parse(marker) as T) : undefined;
+        // A peer tab may already have accepted another account. Never erase its marker.
+        await Promise.allSettled([
+          saved?.user.id === prior.user.id && saved.revision === prior.revision
+            ? metadata.removeItem("account")
+            : Promise.resolve(),
+          storage(prior.user.id).removeItem("cache"),
+        ]);
+      })
+      .catch(() => {});
     return erasing;
   }
   async function accept(identity: T) {
@@ -93,8 +90,12 @@ export function createContentPersistence<T extends Identity>(
       return;
     }
     if (accepted?.user.id === identity.user.id && accepted.revision === identity.revision) {
-      accepted = identity;
-      await metadata.setItem("account", JSON.stringify({ ...identity, buster }));
+      const marker = await metadata.getItem("account");
+      const saved = marker ? (JSON.parse(marker) as T) : undefined;
+      if (saved?.user.id === identity.user.id && saved.revision === identity.revision) {
+        accepted = identity;
+        await metadata.setItem("account", JSON.stringify({ ...identity, buster }));
+      } else await erase();
       return;
     }
     const before = epoch;
@@ -102,7 +103,8 @@ export function createContentPersistence<T extends Identity>(
     else {
       const marker = await metadata.getItem("account");
       if (epoch !== before) return;
-      if (marker && (JSON.parse(marker) as T).user.id !== identity.user.id) await erase();
+      if (marker && (JSON.parse(marker) as T).user.id !== identity.user.id)
+        await erase(JSON.parse(marker) as T);
     }
     const waiting = epoch;
     await erasing;
@@ -115,7 +117,15 @@ export function createContentPersistence<T extends Identity>(
       getItem: async (key) => (expected === epoch ? underlying.getItem(key) : null),
       setItem: async (key, value) => {
         const timestamp = (JSON.parse(value) as { timestamp: number }).timestamp;
-        if (expected === epoch && timestamp >= latestWrite) {
+        const marker = await metadata.getItem("account");
+        const saved = marker ? (JSON.parse(marker) as T & { buster: string }) : undefined;
+        if (
+          expected === epoch &&
+          timestamp >= latestWrite &&
+          saved?.user.id === identity.user.id &&
+          saved.revision === identity.revision &&
+          saved.buster === buster
+        ) {
           latestWrite = timestamp;
           await underlying.setItem(key, value);
         }
@@ -160,6 +170,7 @@ export function createContentPersistence<T extends Identity>(
       throttleTime: 0,
     });
     flush = () => persistQueryClientSave({ ...options, persister: immediate });
+    ready = true;
   }
   async function restore(revision?: number): Promise<T | undefined> {
     const expected = epoch;
@@ -172,11 +183,32 @@ export function createContentPersistence<T extends Identity>(
       identity.expiresAt <= Date.now() ||
       identity.revision !== revision
     ) {
-      await erase();
+      await erase(identity);
       return;
     }
     await accept(identity);
-    return accepted;
+    return ready ? accepted : undefined;
   }
-  return { accept, erase, restore };
+  return {
+    accept: async (identity: T) => {
+      try {
+        await accept(identity);
+        return (
+          ready && accepted?.user.id === identity.user.id && accepted.revision === identity.revision
+        );
+      } catch {
+        await erase();
+        return false;
+      }
+    },
+    erase: () => erase(),
+    restore: async (revision?: number) => {
+      try {
+        return await restore(revision);
+      } catch {
+        await erase();
+        return undefined;
+      }
+    },
+  };
 }

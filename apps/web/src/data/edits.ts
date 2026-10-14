@@ -1,4 +1,4 @@
-import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import { replaceEqualDeep, type QueryClient, type QueryKey } from "@tanstack/react-query";
 import {
   accountGeneration,
   accountMutationOptions,
@@ -9,12 +9,75 @@ type Patch = (data: unknown, key: QueryKey) => unknown;
 type Edit = { patch: Patch };
 type Layer = {
   generation: number;
-  base: Map<string, { key: QueryKey; data: unknown }>;
+  base: Map<string, { key: QueryKey; data: unknown; applied: unknown }>;
   edits: Edit[];
 };
 const layers = new WeakMap<QueryClient, Map<string, Layer>>();
 
-/** Replay overlapping edits over their shared base, so one rollback cannot erase another edit. */
+const revisions = new WeakMap<QueryClient, Map<string, number>>();
+export const editRevision = (cache: QueryClient, key: QueryKey) =>
+  revisions.get(cache)?.get(JSON.stringify(key)) ?? 0;
+function advanceRevision(cache: QueryClient, group: string) {
+  let values = revisions.get(cache);
+  if (!values) revisions.set(cache, (values = new Map()));
+  values.set(group, (values.get(group) ?? 0) + 1);
+}
+
+const same = (a: unknown, b: unknown) => replaceEqualDeep(a, b) === a;
+const object = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object" && !Array.isArray(value);
+
+/** Undo only our changes that are still present. Reads can add items or change fields meanwhile. */
+function undo(current: unknown, before: unknown, applied: unknown): unknown {
+  if (same(before, applied)) return current;
+  if (same(current, applied)) return before;
+  if (Array.isArray(current) && Array.isArray(before) && Array.isArray(applied)) {
+    if (
+      [...current, ...before, ...applied].every(
+        (item) => object(item) && typeof item.id === "string",
+      )
+    ) {
+      const prior = new Map(before.map((item) => [item.id, item]));
+      const written = new Map(applied.map((item) => [item.id, item]));
+      const result = current.flatMap((item) => {
+        if (!written.has(item.id)) return [item];
+        if (!prior.has(item.id)) return same(item, written.get(item.id)) ? [] : [item];
+        return [undo(item, prior.get(item.id), written.get(item.id))];
+      });
+      for (let index = 0; index < before.length; index++) {
+        const item = before[index];
+        if (written.has(item.id) || result.some((entry) => object(entry) && entry.id === item.id))
+          continue;
+        const next = before
+          .slice(index + 1)
+          .find((entry) => result.some((value) => object(value) && value.id === entry.id));
+        const position = next
+          ? result.findIndex((value) => object(value) && value.id === next.id)
+          : result.length;
+        result.splice(position, 0, item);
+      }
+      return result;
+    }
+    return current.map((item, index) =>
+      index < before.length && index < applied.length
+        ? undo(item, before[index], applied[index])
+        : item,
+    );
+  }
+  if (object(current) && object(before) && object(applied)) {
+    const result = { ...current };
+    for (const key of new Set([...Object.keys(before), ...Object.keys(applied)])) {
+      if (same(before[key], applied[key])) continue;
+      const value = undo(current[key], before[key], applied[key]);
+      if (value === undefined) delete result[key];
+      else result[key] = value;
+    }
+    return result;
+  }
+  return current;
+}
+
+/** Related edits share a layer, but each replay starts with current server data. */
 export function instantEdit<TData, TVariables>(
   cache: QueryClient,
   {
@@ -35,27 +98,34 @@ export function instantEdit<TData, TVariables>(
 ) {
   const group = JSON.stringify(key);
   const write = (queryKey: QueryKey, data: unknown) => {
-    if (data === undefined)
-      cache.getQueryCache().find({ queryKey, exact: true })?.setState({
-        data: undefined,
-        dataUpdatedAt: 0,
-        error: null,
-        status: "pending",
+    const query = cache.getQueryCache().find({ queryKey, exact: true });
+    if (!query || query.state.data === undefined) return;
+    // Null hides an intentionally removed item without resetting its query/error state.
+    const next = replaceEqualDeep(query.state.data, data === undefined ? null : data);
+    if (next !== query.state.data)
+      cache.setQueryData(queryKey, next, {
+        updatedAt: next === null ? 0 : query.state.dataUpdatedAt,
       });
-    else cache.setQueryData(queryKey, data);
   };
   const replay = (layer: Layer) => {
     for (const entry of layer.base.values()) {
+      const current = cache.getQueryData(entry.key);
+      if (current === undefined) continue;
+      entry.data = undo(current, entry.data, entry.applied);
       let data = entry.data;
       for (const edit of layer.edits) data = edit.patch(data, entry.key);
       write(entry.key, data);
+      entry.applied = cache.getQueryData(entry.key);
     }
   };
   const completeDestinations = (layer: Layer) => {
     if (cache.isMutating({ mutationKey: key }) !== 1) return;
     // A destination opened during the write may have read the server's previous value.
     for (const query of cache.getQueryCache().findAll({
-      predicate: (query) => affects(query.queryKey) && !layer.base.has(query.queryHash),
+      predicate: (query) =>
+        affects(query.queryKey) &&
+        !layer.base.has(query.queryHash) &&
+        query.state.data !== undefined,
     })) {
       let data = query.state.data;
       for (const edit of layer.edits) data = edit.patch(data, query.queryKey);
@@ -67,18 +137,25 @@ export function instantEdit<TData, TVariables>(
     mutationFn: (input) => mutationFn(input),
     onMutate: async (input) => {
       const generation = accountGeneration();
-      await cache.cancelQueries({ predicate: (query) => affects(query.queryKey) });
+      await cache.cancelQueries({
+        predicate: (query) => affects(query.queryKey) && query.state.data !== undefined,
+      });
       assertCurrentAccount(generation);
+      advanceRevision(cache, group);
       let groups = layers.get(cache);
       if (!groups) layers.set(cache, (groups = new Map()));
       let layer = groups.get(group);
       if (!layer || layer.generation !== generation)
         groups.set(group, (layer = { generation, base: new Map(), edits: [] }));
-      for (const query of cache
-        .getQueryCache()
-        .findAll({ predicate: (query) => affects(query.queryKey) }))
+      for (const query of cache.getQueryCache().findAll({
+        predicate: (query) => affects(query.queryKey) && query.state.data !== undefined,
+      }))
         if (!layer.base.has(query.queryHash))
-          layer.base.set(query.queryHash, { key: query.queryKey, data: query.state.data });
+          layer.base.set(query.queryHash, {
+            key: query.queryKey,
+            data: query.state.data,
+            applied: query.state.data,
+          });
       const edit = { patch: optimistic(input) };
       layer.edits.push(edit);
       replay(layer);
@@ -97,6 +174,7 @@ export function instantEdit<TData, TVariables>(
       completeDestinations(context.layer);
     },
     onSettled: () => {
+      advanceRevision(cache, group);
       if (cache.isMutating({ mutationKey: key }) === 1) {
         layers.get(cache)?.delete(group);
         invalidate?.();

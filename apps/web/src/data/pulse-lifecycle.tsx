@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { isMenuBar } from "@/lib/desktop";
-import { viewerPath } from "./edits";
+import { editRevision, viewerPath } from "./edits";
 import { createPulseDriver, mergeNewestPage, type Pulse } from "./pulse";
 import {
   conversationsOptions,
@@ -18,14 +18,18 @@ export function PulseLifecycle() {
   const viewer = useViewer(),
     api = useAPI(),
     cache = useQueryClient();
-  const applied = useRef({ account: viewer?.id, versions: new Map<string, string>() });
-  if (applied.current.account !== viewer?.id)
-    applied.current = { account: viewer?.id, versions: new Map() };
+  const generation = accountGeneration();
+  const applied = useRef({ account: viewer?.id, generation, versions: new Map<string, string>() });
+  if (applied.current.account !== viewer?.id || applied.current.generation !== generation)
+    applied.current = { account: viewer?.id, generation, versions: new Map() };
   const path = useRouterState({ select: (state) => state.location.pathname });
   const conversationId = useRouterState({
     select: (state) =>
       (state.matches.at(-1)?.loaderData as { conversationId?: string } | undefined)?.conversationId,
   });
+  const openConversation = useRef(conversationId);
+  openConversation.current = conversationId;
+  const clock = useRef<ReturnType<typeof createPulseDriver> | undefined>(undefined);
   useEffect(() => {
     if (!viewer || isMenuBar) return;
     const generation = accountGeneration();
@@ -43,7 +47,7 @@ export function PulseLifecycle() {
       legacyVersion = 0;
     const driver = createPulseDriver({
       visible: () => !document.hidden,
-      focusedConversation: () => !!conversationId && document.hasFocus(),
+      focusedConversation: () => !!openConversation.current && document.hasFocus(),
       request: async () => {
         try {
           if (!legacy) {
@@ -68,6 +72,12 @@ export function PulseLifecycle() {
         };
       },
       changed: async (pulse: Pulse) => {
+        const conversationId = openConversation.current;
+        const messageKey = ["message-edits", viewer.id];
+        const messageRevision = editRevision(cache, messageKey);
+        const messagesIdle = () =>
+          !cache.isMutating({ mutationKey: messageKey }) &&
+          editRevision(cache, messageKey) === messageRevision;
         const needs = (key: import("@tanstack/react-query").QueryKey, version: string) =>
           applied.current.versions.get(JSON.stringify(key)) !== version;
         const remember = (key: import("@tanstack/react-query").QueryKey, version: string) =>
@@ -75,7 +85,7 @@ export function PulseLifecycle() {
         assertCurrentAccount(generation);
         cache.setQueryData(pulseKey(viewer.id), pulse);
         const jobs: Promise<unknown>[] = [];
-        {
+        if (messagesIdle()) {
           for (const query of cache.getQueryCache().findAll({
             predicate: (query) =>
               viewerPath(query.queryKey, viewer.id, "messages") &&
@@ -90,6 +100,7 @@ export function PulseLifecycle() {
                 api.messages.conversations.call({ limit: 30, query: input?.query }, { signal }),
               ).then((page) => {
                 assertCurrentAccount(generation);
+                if (!messagesIdle()) return;
                 cache.setQueryData(options.queryKey, (current) => mergeNewestPage(current, page));
                 remember(options.queryKey, pulse.messages.version);
               }),
@@ -103,6 +114,7 @@ export function PulseLifecycle() {
                   api.messages.list.call({ conversationId, limit: 30 }, { signal }),
                 ).then((page) => {
                   assertCurrentAccount(generation);
+                  if (!messagesIdle()) return;
                   cache.setQueryData(options.queryKey, (current) => mergeNewestPage(current, page));
                   remember(options.queryKey, pulse.messages.version);
                 }),
@@ -112,6 +124,7 @@ export function PulseLifecycle() {
               jobs.push(
                 cache.fetchQuery({ ...detail, staleTime: 0 }).then(() => {
                   assertCurrentAccount(generation);
+                  if (!messagesIdle()) return;
                   remember(detail.queryKey, pulse.messages.version);
                 }),
               );
@@ -145,6 +158,7 @@ export function PulseLifecycle() {
         await Promise.all(jobs);
       },
     });
+    clock.current = driver;
     void driver.tick();
     const refresh = () => void driver.tick();
     window.addEventListener("focus", refresh);
@@ -152,10 +166,14 @@ export function PulseLifecycle() {
     document.addEventListener("visibilitychange", refresh);
     return () => {
       driver.stop();
+      clock.current = undefined;
       window.removeEventListener("focus", refresh);
       window.removeEventListener("index:pulse", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [viewer?.id, conversationId, path, cache, api]);
+  }, [viewer?.id, cache, api]);
+  useEffect(() => {
+    void clock.current?.tick();
+  }, [path, conversationId]);
   return null;
 }

@@ -5,6 +5,7 @@ import { accountGeneration, assertCurrentAccount, clearAccountState } from "../a
 import { sessionOptions } from "../session";
 import { client } from "@/utils/orpc";
 import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./index";
+import { contentFeatures } from "@/data/content";
 
 type RevisionEvent = { revision: number; source: string | null };
 /** The host shows the panel at once when it already holds content for the current account. */
@@ -164,7 +165,8 @@ export async function installDesktopSync(
         void cache.invalidateQueries({
           predicate: (query) =>
             Array.isArray(query.queryKey[0]) &&
-            ["feed", "links", "profiles", "groups", "discovery"].includes(query.queryKey[0][2]),
+            contentFeatures.has(query.queryKey[0][2]) &&
+            !["messages", "activity", "routes"].includes(query.queryKey[0][2]),
         });
       }),
     );
@@ -181,7 +183,9 @@ export async function installDesktopSync(
         ),
       );
     const initial = await desktopInvoke<number>("session_revision");
-    revision = Math.max(revision, initial);
+    if (acceptedDesktopRevision() !== undefined && acceptedDesktopRevision() !== initial)
+      acceptSession({ revision: initial, source: null });
+    else revision = Math.max(revision, initial);
   } catch (error) {
     cleanups.forEach((cleanup) => cleanup());
     throw error;

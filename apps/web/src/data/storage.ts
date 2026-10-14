@@ -1,24 +1,35 @@
 /** Each API/account has its own database. Opening one never reads another account's values. */
 export function diskStorage(name: string) {
-  let opened: Promise<IDBDatabase> | undefined;
   const database = () =>
-    (opened ??= new Promise((resolve, reject) => {
+    new Promise<IDBDatabase>((resolve, reject) => {
       const request = indexedDB.open(name, 1);
+      let blocked = false;
       request.onupgradeneeded = () => request.result.createObjectStore("content");
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        if (blocked) request.result.close();
+        else resolve(request.result);
+      };
       request.onerror = () => reject(request.error);
-    }));
+      request.onblocked = () => {
+        blocked = true;
+        reject(new Error("Content storage is blocked"));
+      };
+    });
   async function operation<T>(
     mode: IDBTransactionMode,
     run: (store: IDBObjectStore) => IDBRequest<T>,
   ) {
     const db = await database();
-    return new Promise<T>((resolve, reject) => {
-      const transaction = db.transaction("content", mode);
-      const request = run(transaction.objectStore("content"));
-      transaction.oncomplete = () => resolve(request.result);
-      transaction.onerror = transaction.onabort = () => reject(transaction.error);
-    });
+    try {
+      return await new Promise<T>((resolve, reject) => {
+        const transaction = db.transaction("content", mode);
+        const request = run(transaction.objectStore("content"));
+        transaction.oncomplete = () => resolve(request.result);
+        transaction.onerror = transaction.onabort = () => reject(transaction.error);
+      });
+    } finally {
+      db.close();
+    }
   }
   return {
     getItem: (key: string) =>

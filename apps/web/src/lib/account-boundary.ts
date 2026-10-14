@@ -16,7 +16,13 @@ export function assertCurrentAccount(expected: number) {
 /** Keep active session observers attached, but synchronously discard the previous identity. */
 export function clearAccountState(client: QueryClient, keepSessionRequest = false) {
   generation++;
-  const clearing = [...clearListeners].map((listener) => listener());
+  const clearing = [...clearListeners].map((listener) => {
+    try {
+      return Promise.resolve(listener()).catch(() => {});
+    } catch {
+      return Promise.resolve();
+    }
+  });
   const cancelled = client.cancelQueries({
     predicate: (query) => !keepSessionRequest || query.queryKey[0] !== "session",
   });

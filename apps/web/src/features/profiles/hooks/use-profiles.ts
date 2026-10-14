@@ -14,6 +14,7 @@ import {
 } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { sessionOptions } from "@/lib/session";
+import { contentFeatures } from "@/data/content";
 import { connectionsOptions, profileOptions } from "../queries";
 let accessChanged = new WeakMap<QueryClient, boolean>();
 onAccountClear(() => {
@@ -34,21 +35,7 @@ export function useProfileActions() {
     cache = useQueryClient(),
     viewer = useViewer();
   const affected = (key: import("@tanstack/react-query").QueryKey) =>
-    viewerPath(
-      key,
-      viewer?.id ?? null,
-      "profiles",
-      "follows",
-      "discovery",
-      "feed",
-      "activity",
-      "messages",
-      "links",
-      "groups",
-      "favorites",
-      "stars",
-      "comments",
-    );
+    viewerPath(key, viewer?.id ?? null, ...contentFeatures);
   const refreshPrivateAccess = () => {
     if (!accessChanged.get(cache)) return;
     accessChanged.delete(cache);

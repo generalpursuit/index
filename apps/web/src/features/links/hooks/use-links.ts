@@ -1,5 +1,6 @@
 import { instantEdit, mapItems, viewerPath } from "@/data/edits";
 import { onAccountClear } from "@/lib/account-boundary";
+import { useRef } from "react";
 import { useViewer } from "@/hooks/use-api";
 import {
   useInfiniteQuery,
@@ -184,7 +185,7 @@ export function useComments(linkId: string) {
     viewer = useViewer();
   const options = commentsOptions(api, linkId);
   const list = useInfiniteQuery({ ...options, enabled: !!linkId });
-  const ids = new WeakMap<object, string>();
+  const ids = useRef(new WeakMap<object, string>()).current;
   type Create = Parameters<typeof api.comments.create.call>[0];
   const create = useMutation(
     instantEdit(cache, {
