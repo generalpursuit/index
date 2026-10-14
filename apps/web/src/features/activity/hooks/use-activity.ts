@@ -1,3 +1,5 @@
+import { pulseKey } from "@/data/pulse-lifecycle";
+import type { Pulse } from "@/data/pulse";
 import { accountMutationOptions } from "@/lib/account-boundary";
 import { activityOptions } from "../queries";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,24 +11,34 @@ export function useActivity(type?: "comment" | "request" | "mention" | "follow")
   const read = useMutation(
     accountMutationOptions(
       api.activity.markRead.mutationOptions({
-        onSuccess: () => cache.invalidateQueries({ queryKey: api.activity.key() }),
+        onSuccess: (_, input) => {
+          cache.setQueriesData(
+            { queryKey: api.activity.list.key() },
+            (current: typeof list.data) =>
+              current && {
+                ...current,
+                pages: current.pages.map((page) => ({
+                  ...page,
+                  items: page.items.map((item) =>
+                    input.ids.includes(item.id)
+                      ? { ...item, readAt: new Date().toISOString() }
+                      : item,
+                  ),
+                })),
+              },
+          );
+          window.dispatchEvent(new Event("index:pulse"));
+        },
       }),
     ),
   );
   return { list, read };
 }
 export function useUnread() {
-  const api = useAPI(),
-    viewer = useViewer();
-  const activity = useQuery(
-    api.activity.list.queryOptions({
-      input: { limit: 1 },
-      enabled: !!viewer,
-      refetchInterval: 30_000,
-    }),
-  );
-  const messages = useQuery(
-    api.messages.unread.queryOptions({ enabled: !!viewer, refetchInterval: 15_000 }),
-  );
-  return { activity: activity.data?.unreadCount ?? 0, messages: messages.data?.unreadCount ?? 0 };
+  const viewer = useViewer();
+  const pulse = useQuery<Pulse>({ queryKey: pulseKey(viewer?.id ?? "anonymous"), enabled: false });
+  return {
+    activity: pulse.data?.activity.unreadCount ?? 0,
+    messages: pulse.data?.messages.unreadCount ?? 0,
+  };
 }

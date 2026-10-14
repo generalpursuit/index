@@ -102,8 +102,10 @@ export async function installDesktopSync(
         refreshAgain = false;
         try {
           await cache.fetchQuery({ ...sessionOptions, staleTime: 0 });
-          await invalidateRouter();
-          await cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+          if (isMenuBar) {
+            await invalidateRouter();
+            await cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+          }
           await pendingNavigation();
         } catch {
           /* No fallback identity when offline; panel offers Retry. */
@@ -132,7 +134,12 @@ export async function installDesktopSync(
     try {
       const next = await desktopInvoke<number>("session_revision");
       if (next > revision) acceptSession({ revision: next, source: null });
-      await refresh();
+      if (isMenuBar || acceptedDesktopRevision() !== next) await refresh();
+      else {
+        void cache.prefetchQuery(sessionOptions);
+        window.dispatchEvent(new Event("index:pulse"));
+        await pendingNavigation();
+      }
     } catch {
       void clearAccountState(cache);
     } finally {
@@ -153,7 +160,11 @@ export async function installDesktopSync(
     cleanups.push(
       await listen<RevisionEvent>("index:desktop-data", ({ payload }) => {
         if (disposed || payload.source === label || payload.revision !== revision) return;
-        void cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+        window.dispatchEvent(new Event("index:pulse"));
+        void cache.invalidateQueries({
+          predicate: (q) => q.queryKey[0] !== "session",
+          refetchType: "none",
+        });
       }),
     );
     // Each window hears only of its own opening, so opening the panel leaves main alone.

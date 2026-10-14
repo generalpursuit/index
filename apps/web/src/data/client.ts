@@ -33,3 +33,7 @@ export function createQueryClient() {
   });
 }
 export const queryClient = createQueryClient();
+
+export const canPrefetch = () =>
+  typeof navigator === "undefined" ||
+  !(navigator as Navigator & { connection?: { saveData?: boolean } }).connection?.saveData;

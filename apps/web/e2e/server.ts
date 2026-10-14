@@ -150,7 +150,10 @@ Bun.serve({
       headers.set("Access-Control-Allow-Origin", origin);
     headers.set("Access-Control-Expose-Headers", "set-auth-token");
     headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set("Access-Control-Allow-Headers", `Content-Type,Authorization,${clientHeader}`);
+    headers.set(
+      "Access-Control-Allow-Headers",
+      `Content-Type,Authorization,${clientHeader},X-ORPC-Batch`,
+    );
     headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     return new Response(response.body, { status: response.status, headers });
   },

@@ -1,3 +1,4 @@
+import { freshness } from "@/data/client";
 import { useEffect, useId, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Preferences } from "@index/api/features/notifications/schemas";
@@ -44,8 +45,14 @@ export function NotificationSettings() {
     viewer = useViewer(),
     cache = useQueryClient(),
     id = useId();
-  const prefs = useQuery(api.notifications.preferences.queryOptions({ input: {} }));
-  const capabilities = useQuery(api.notifications.capabilities.queryOptions({ input: {} }));
+  const prefs = useQuery({
+    ...api.notifications.preferences.queryOptions({ input: {} }),
+    staleTime: freshness.stable,
+  });
+  const capabilities = useQuery({
+    ...api.notifications.capabilities.queryOptions({ input: {} }),
+    staleTime: freshness.stable,
+  });
   const [status, setStatus] = useState<DeviceStatus>();
   const [error, setError] = useState<string>();
   const [busy, setBusy] = useState(false);

@@ -1,3 +1,4 @@
+import { apiFor, queryClient } from "@/utils/orpc";
 import { useEffect } from "react";
 import { useRouter, useRouterState } from "@tanstack/react-router";
 import { useViewer } from "@/hooks/use-api";
@@ -34,7 +35,9 @@ export function NotificationLifecycle() {
           document.hasFocus() &&
           path.startsWith("/messages/")
         ) {
-          const route = await client.routes.resolve({ path });
+          const route = await queryClient.ensureQueryData(
+            apiFor(viewer!.id).routes.resolve.queryOptions({ input: { path } }),
+          );
           if (route.kind === "conversation") id = route.conversationId;
         }
         assertCurrentAccount(generation);
@@ -49,6 +52,7 @@ export function NotificationLifecycle() {
           assertCurrentAccount(generation);
           const destination = notificationPath(click, viewer!.id);
           if (destination && !disposed) {
+            window.dispatchEvent(new Event("index:pulse"));
             const route = await client.routes.resolve({ path: destination });
             assertCurrentAccount(generation);
             if (!disposed) {
