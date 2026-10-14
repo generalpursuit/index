@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { fetchPage, seedFixture, type Registration } from "./fixtures.ts";
+import { fetchImport, fetchPage, seedFixture, type Registration } from "./fixtures.ts";
 import type { SecurityEmail } from "../../../packages/auth/src/delivery.ts";
 import { deliverBatch } from "../../../packages/api/src/features/notifications/delivery.ts";
 import { apiURL, webURL } from "./urls.ts";
@@ -134,13 +134,13 @@ Bun.serve({
       const session = await auth.api.getSession({ headers: request.headers });
       const result = await rpcHandler.handle(request, {
         prefix: "/rpc/v1",
-        context: { db: database.db, session, fetchPage, media, notifications },
+        context: { db: database.db, session, fetchPage, fetchImport, media, notifications },
       });
       const rest = result.matched
         ? result
         : await apiHandler.handle(request, {
             prefix: "/api/v1",
-            context: { db: database.db, session, fetchPage, media, notifications },
+            context: { db: database.db, session, fetchPage, fetchImport, media, notifications },
           });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }

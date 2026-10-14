@@ -213,7 +213,7 @@ const siteLabel = (url: string) => new URL(url).hostname.split(".").at(-2) ?? nu
  * "…/the-long-read.html" becomes "The long read". Anything that is not a multi-word slug
  * (an ID, a single word like "watch") says little, so the domain stands in.
  */
-function titleFromUrl(value: string) {
+export function titleFromUrl(value: string) {
   const url = new URL(value);
   const segment = url.pathname.split("/").filter(Boolean).at(-1) ?? "";
   let words = segment;

@@ -46,6 +46,8 @@ Forwarding an original grants no access to it. Locked originals cannot be forwar
 
 [Metadata reads](../packages/api/src/features/links/metadata.ts) accept only public HTTP(S) destinations, check redirects, and bound time and bytes. Metadata failure must not fail a save.
 
+[curatee imports](../packages/api/src/features/imports/curatee.ts) read a public curatee.co profile through the site's own public Supabase API, uncached and bounded in time. Links keep their title, note and category and are saved into Your links on their original UTC day. One statement claims and saves them, so an import commits or fails as a whole. Its receipts survive link deletion: importing again adds only new links and never restores a deleted one.
+
 [Photo uploads](../packages/api/src/features/profiles/service.ts) validate bytes and use fresh immutable storage keys. The database swaps the address and returns the actual old photo for cleanup. Cleanup failure cannot undo a committed update. An unknown database outcome must retain the new object: a later read cannot rule out a delayed commit. This can leave an orphan, but avoids deleting a live photo.
 
 ## Checks

@@ -10,6 +10,8 @@ export type Context = {
   db: QueryDatabase;
   /** Fetches public pages to read link titles and categories. */
   fetchPage: FetchPage;
+  /** Reads the services links are imported from, uncached so each import sees new links. */
+  fetchImport: FetchPage;
   /** Stores profile photos. */
   media: MediaStore;
 };

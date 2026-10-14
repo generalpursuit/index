@@ -21,6 +21,7 @@ export async function createContext(
     session,
     notifications: await notificationCapabilities(ENV),
     fetchPage,
+    fetchImport: (url, init) => fetch(url, init),
     media: r2MediaStore(ENV.MEDIA, ENV.BETTER_AUTH_URL),
   };
 }

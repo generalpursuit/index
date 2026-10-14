@@ -29,6 +29,36 @@ export async function fetchPage(url: string, init?: RequestInit) {
   if (process.env.E2E_LIVE_PAGES === "1") return fetch(url, init);
   throw new TypeError("Offline: only fixture pages are available.");
 }
+// curatee answers from fixtures too: only the profile "mara" exists, with two links saved in
+// January. E2E_LIVE_PAGES=1 imports real profiles instead.
+const curateeProfile = "6d7f1f0e-3a52-4c1e-9b8a-2f4e5d6c7b80";
+const curateeLinks = [
+  {
+    id: "6d7f1f0e-3a52-4c1e-9b8a-000000000001",
+    url: "https://pages.test/slow-productivity",
+    title: "Slow Productivity",
+    category: "book",
+    body: "Lent to Mia",
+    created_at: "2026-01-07T21:30:00+00:00",
+  },
+  {
+    id: "6d7f1f0e-3a52-4c1e-9b8a-000000000002",
+    url: "https://pages.test/a-talk",
+    title: "A talk worth watching",
+    category: "video",
+    body: null,
+    created_at: "2026-01-14T09:00:00+00:00",
+  },
+];
+export async function fetchImport(url: string, init?: RequestInit) {
+  if (process.env.E2E_LIVE_PAGES === "1") return fetch(url, init);
+  const { pathname, searchParams } = new URL(url);
+  if (pathname.endsWith("/profiles"))
+    return Response.json(
+      searchParams.get("username") === "eq.mara" ? [{ id: curateeProfile }] : [],
+    );
+  return Response.json(searchParams.get("offset") === "0" ? curateeLinks : []);
+}
 export async function seedFixture(database: Database, registerFixture: RegisterFixture) {
   await database.client.exec(
     'TRUNCATE TABLE "user", auth_challenge, auth_throttle, conversations, short_routes CASCADE',

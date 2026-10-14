@@ -38,9 +38,15 @@ export async function createTestDatabase() {
     ]);
   }
 
-  // Tests never reach the network; links fall back to what their URL says.
+  // Tests never reach the network; links fall back to what their URL says and imports fail.
   function context(actorId: string | null): Context {
-    return { db, session: actorId ? sessionFor(actorId) : null, fetchPage: offline, media };
+    return {
+      db,
+      session: actorId ? sessionFor(actorId) : null,
+      fetchPage: offline,
+      fetchImport: offline,
+      media,
+    };
   }
 
   return { db, client, reset, context, close: () => client.close() };

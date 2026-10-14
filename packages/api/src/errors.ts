@@ -9,7 +9,9 @@ export type ApplicationError =
   | {
       code: "NOT_FOUND" | "BAD_REQUEST" | "CONFLICT";
       message: string;
-    };
+    }
+  // A service the request depends on failed or answered unexpectedly.
+  | { code: "BAD_GATEWAY"; message: string; cause: unknown };
 
 export function databaseError(cause: unknown): DatabaseError {
   return { code: "INTERNAL_SERVER_ERROR", message: "Something went wrong.", cause };
