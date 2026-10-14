@@ -695,6 +695,14 @@ final class AccountStoreTests: XCTestCase {
     let legacyCalls = await api.recorded()
     XCTAssertEqual(legacyCalls.filter { $0.path == "/me/pulse" }.count, 1)
   }
+  func testConversationCadenceSlowsWhenAnotherSheetHasFocus() async throws {
+    let store = AccountStore(api: FeatureStub(), profile: try owner())
+    XCTAssertEqual(store.pulseInterval, .seconds(15))
+    store.openConversationID = "chat"
+    XCTAssertEqual(store.pulseInterval, .seconds(4))
+    store.conversationFocused = false
+    XCTAssertEqual(store.pulseInterval, .seconds(15))
+  }
   func testOnShowRefreshUsesAgeAndExplicitRefreshBypassesIt() async throws {
     let api = FeatureStub()
     let store = AccountStore(api: api, profile: try owner())

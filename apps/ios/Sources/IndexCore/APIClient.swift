@@ -332,7 +332,7 @@ public actor APIClient {
         onUpdateRequired?()
         throw APIError.updateRequired
       }
-      if response.statusCode == 401, token != nil {
+      if response.statusCode == 401, token != nil || !path.hasPrefix("/api/auth/sign-in/") {
         try await clearSession()
         throw APIError.unauthenticated
       }

@@ -182,6 +182,16 @@ struct APIClientTests {
     }
     try await client.signOut()
   }
+  @Test func repeatedExpiredReadsStillReportSessionExpiryAfterCredentialErasure() async throws {
+    let client = try make(MemoryCredentials("expired.signature"))
+    HTTPStub.handler = { _ in (401, [:], Data(#"{"message":"Expired"}"#.utf8)) }
+    for _ in 0..<2 {
+      do {
+        let _: Success = try await client.request("/me/pulse")
+        Issue.record("Expired session unexpectedly succeeded")
+      } catch APIError.unauthenticated {}
+    }
+  }
   @Test func offlineLogoutErasesCredentials() async throws {
     let credentials = MemoryCredentials("signed.signature")
     let client = try make(credentials)

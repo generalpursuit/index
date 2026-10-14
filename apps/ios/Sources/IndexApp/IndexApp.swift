@@ -93,9 +93,13 @@ struct RootView: View {
           do { try await Task.sleep(for: .seconds(1)) } catch { return }
           await store.warm()
         }
-        .task(id: "\(scenePhase)-\(store.openConversationID ?? "")") {
+        .task(id: "\(scenePhase)-\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)") {
           store.active = scenePhase == .active
           guard store.active else { return }
+          store.conversationFocused = app.navigation.sheet == nil
+          if store.conversationFocused, let id = store.openConversationID {
+            do { try await store.refreshConversation(id) } catch { app.handleSessionError(error) }
+          }
           while !Task.isCancelled {
             await app.refreshPulse()
             await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)

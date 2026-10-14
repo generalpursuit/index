@@ -17,9 +17,10 @@ public final class AccountStore {
   public private(set) var notificationPreferences: NotificationPreferences?
   public var inboxQuery: String?
   public var activityFilter: String?
+  public var conversationFocused = true
   public var openConversationID: String?
   public var active = false
-  public var pulseInterval: Duration { openConversationID == nil ? .seconds(15) : .seconds(4) }
+  public var pulseInterval: Duration { openConversationID == nil || !conversationFocused ? .seconds(15) : .seconds(4) }
   @ObservationIgnored private let api: any FeatureAPI
   @ObservationIgnored private var feeds: [String: FeedWeekModel] = [:]
   @ObservationIgnored private var profiles: [String: ProfileModel] = [:]
@@ -319,11 +320,11 @@ public final class AccountStore {
       try Task.checkCancellation()
       if let version { inboxVersions[query] = version }
     }
-    if let id = openConversationID { try await conversation(id).load(api: api, id: id) }
+    if conversationFocused, let id = openConversationID { try await conversation(id).load(api: api, id: id) }
     try check(accountVersion)
     try Task.checkCancellation()
     guard active else { throw CancellationError() }
-    if let version { messageVersion = version; if let id = openConversationID { conversationVersions[id] = version } }
+    if let version { messageVersion = version; if conversationFocused, let id = openConversationID { conversationVersions[id] = version } }
   }
   private func refreshActivity(changed: Bool, version: String? = nil) async throws {
     let accountVersion = generation

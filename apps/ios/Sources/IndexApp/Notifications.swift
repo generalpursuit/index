@@ -152,7 +152,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   func setActive(app: AppModel, foreground: Bool) async {
     self.foreground = foreground
     var conversation: String?
-    if foreground, let last = app.navigation.path.last, case .conversation(let id) = last { conversation = id }
+    if foreground, app.navigation.sheet == nil, let last = app.navigation.path.last, case .conversation(let id) = last { conversation = id }
     activeConversationID = conversation
     guard binding?.accountID == app.userID, let api = app.api, registered else { return }
     var body = deviceBody(); body["conversationId"] = conversation.map(JSONValue.string) ?? .null
