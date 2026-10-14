@@ -87,11 +87,10 @@ export function listInGroup(
 ) {
   const cursor = input.cursor ? decodeCursor(input.cursor) : ok(undefined);
   return cursor.asyncAndThen((decoded) =>
-    getGroup(db, viewerId, input.groupId)
-      .andThen(() =>
-        listGroupLinks(db, viewerId, input.groupId, input.limit + 1, decoded, input.weekStart),
-      )
-      .map((rows) => toPage(rows, input.limit)),
+    ResultAsync.combine([
+      getGroup(db, viewerId, input.groupId),
+      listGroupLinks(db, viewerId, input.groupId, input.limit + 1, decoded, input.weekStart),
+    ]).map(([, rows]) => toPage(rows, input.limit)),
   );
 }
 

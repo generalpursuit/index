@@ -1,4 +1,4 @@
-import { ok } from "neverthrow";
+import { ok, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
 import { decodeCursor, toPage } from "../../pagination";
 import * as repository from "./repository";
@@ -12,13 +12,10 @@ export function listActivity(
   },
 ) {
   return (input.cursor ? decodeCursor(input.cursor) : ok(undefined)).asyncAndThen((cursor) =>
-    repository
-      .listActivity(db, actorId, input.limit + 1, cursor, input.type)
-      .andThen((rows) =>
-        repository
-          .unreadCount(db, actorId)
-          .map((unreadCount) => ({ ...toPage(rows, input.limit), unreadCount })),
-      ),
+    ResultAsync.combine([
+      repository.listActivity(db, actorId, input.limit + 1, cursor, input.type),
+      repository.unreadCount(db, actorId),
+    ]).map(([rows, unreadCount]) => ({ ...toPage(rows, input.limit), unreadCount })),
   );
 }
 export { markRead } from "./repository";
