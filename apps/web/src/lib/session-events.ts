@@ -1,6 +1,6 @@
 import { accountGeneration, assertCurrentAccount } from "./account-boundary";
 
-type SessionEvent =
+export type SessionEvent =
   | "index:session-expired"
   | "index:verification-required"
   | "index:update-required";

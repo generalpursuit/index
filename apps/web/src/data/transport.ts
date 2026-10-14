@@ -1,5 +1,5 @@
 import { ENV } from "@/env.public";
-import { apiFetch } from "@/lib/desktop";
+import { apiFetch, notifySessionEvent } from "@/lib/desktop";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import type { AppRouterClient } from "@index/api/contracts";
 import { createORPCClient } from "@orpc/client";
@@ -35,6 +35,29 @@ function acceptedClient() {
   const client: AppRouterClient = createORPCClient(
     new RPCLink({
       url: ENV.VITE_SERVER_URL.replace(/\/$/, "") + "/rpc/v1",
+      interceptors: [
+        async ({ next }) => {
+          assertCurrentAccount(generation);
+          try {
+            const result = await next();
+            assertCurrentAccount(generation);
+            return result;
+          } catch (error) {
+            assertCurrentAccount(generation);
+            if (error && typeof error === "object" && "status" in error) {
+              if (error.status === 401) notifySessionEvent("index:session-expired");
+              else if (
+                error.status === 403 &&
+                "data" in error &&
+                (error.data as { code?: string } | undefined)?.code === "EMAIL_NOT_VERIFIED"
+              )
+                notifySessionEvent("index:verification-required");
+            }
+            assertCurrentAccount(generation);
+            throw error;
+          }
+        },
+      ],
       fetch: async (input, init) => {
         assertCurrentAccount(generation);
         const response = await apiFetch(input, init);
