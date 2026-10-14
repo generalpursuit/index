@@ -122,3 +122,54 @@ for (const ordering of ["createdAt", "updatedAt"] as const) {
     assert.deepEqual(mergeNewestPage(current, full), { pages: [full], pageParams: [undefined] });
   });
 }
+
+for (const cachedAt of ["2", "5"]) {
+  test(`a moved conversation at ${cachedAt} cannot bridge a missing range below the newest page`, () => {
+    const current = {
+      pages: [
+        {
+          items: [
+            { id: "moved", updatedAt: cachedAt },
+            { id: "older", updatedAt: "1" },
+          ],
+          nextCursor: "older",
+        },
+      ],
+      pageParams: [undefined],
+    };
+    const newest = {
+      items: [
+        { id: "moved", updatedAt: "5" },
+        { id: "new", updatedAt: "4" },
+      ],
+      nextCursor: "new",
+    };
+    assert.deepEqual(mergeNewestPage(current, newest), {
+      pages: [newest],
+      pageParams: [undefined],
+    });
+  });
+}
+
+test("an updated conversation at the boundary does not reuse its previous cursor", () => {
+  const current = {
+    pages: [
+      {
+        items: [
+          { id: "moved", updatedAt: "2" },
+          { id: "older", updatedAt: "1" },
+        ],
+        nextCursor: "older",
+      },
+    ],
+    pageParams: [undefined],
+  };
+  const newest = {
+    items: [
+      { id: "new", updatedAt: "6" },
+      { id: "moved", updatedAt: "5" },
+    ],
+    nextCursor: "moved",
+  };
+  assert.deepEqual(mergeNewestPage(current, newest), { pages: [newest], pageParams: [undefined] });
+});
