@@ -5,6 +5,7 @@ These guides cover contracts shared by clients and repeatable operations. Endpoi
 - [API](api.md): transports, visibility, pagination and messaging.
 - [Authentication](authentication.md): signed sessions, verification and account isolation.
 - [Readable routes](readable-routes.md): canonical URLs, aliases and access checks.
+- [Data loading](data-loading.md): caching, placeholders, instant edits and freshness on every client.
 - [Sharing](sharing.md): duplicate saves, retry receipts and native credential boundaries.
 - [Notifications](notifications.md): delivery privacy, providers and operations.
 - [Deployment](deployment.md): environments, migrations and recovery.
