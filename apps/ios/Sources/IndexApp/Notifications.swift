@@ -38,6 +38,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   private var pendingClick: NotificationDestination?
   private var activeConversationID: String?
   private var foreground = false
+  private var reportedActive: (conversation: String?, foreground: Bool)?
   private var defaultsKey: String { "index.notifications.optin.\(app?.api?.baseURL.absoluteString ?? "")" }
   override init() {
     super.init()
@@ -122,6 +123,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
       let _: NotificationRegistration = try await api.request("/me/notifications/devices", method: "POST", body: body)
       guard version == generation, app.userID == binding.accountID else { return }
       registered = true
+      await setActive(app: app, foreground: foreground)
     } catch { if version == generation { self.error = "Could not register this device. Try again." } }
   }
   func registrationFailed() { registered = false; error = "Apple could not register this device for push. Try again." }
@@ -142,6 +144,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     generation += 1
     UserDefaults.standard.removeObject(forKey: defaultsKey)
     binding = nil; token = nil; registered = false; activeConversationID = nil
+    reportedActive = nil
     if !preservePendingClick { pendingClick = nil }
     UNUserNotificationCenter.current().removeAllDeliveredNotifications()
     UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
@@ -155,6 +158,8 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     if foreground, app.navigation.sheet == nil, let last = app.navigation.path.last, case .conversation(let id) = last { conversation = id }
     activeConversationID = conversation
     guard binding?.accountID == app.userID, let api = app.api, registered else { return }
+    if let reportedActive, reportedActive.conversation == conversation, reportedActive.foreground == foreground { return }
+    reportedActive = (conversation, foreground)
     var body = deviceBody(); body["conversationId"] = conversation.map(JSONValue.string) ?? .null
     let _: Success? = try? await api.request("/me/notifications/active", method: "POST", body: body)
   }

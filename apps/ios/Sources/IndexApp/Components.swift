@@ -77,8 +77,8 @@ struct AsyncButton<Label: View>: View {
     Button {
       busy = true
       Task {
-        guard generation == app.session.generation else { return }
         defer { busy = false }
+        guard generation == app.session.generation else { return }
         do { try await action() } catch { if generation == app.session.generation { app.handle(error) } }
       }
     } label: {

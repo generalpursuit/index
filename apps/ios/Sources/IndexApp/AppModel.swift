@@ -86,15 +86,26 @@ final class AppModel {
   func signIn(identifier: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
     await NotificationController.shared.disable()
-    beginAuthentication()
-    let session = try await api.signIn(identifier: identifier, password: password)
-    try await acceptSession(session)
+    try await authenticate { try await api.signIn(identifier: identifier, password: password) }
   }
   func signUp(name: String, username: String, email: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
+    try await authenticate { try await api.signUp(name: name, username: username, email: email, password: password) }
+  }
+  private func authenticate(_ request: () async throws -> AuthSession) async throws {
     beginAuthentication()
-    let session = try await api.signUp(name: name, username: username, email: email, password: password)
-    try await acceptSession(session)
+    var generation = session.generation
+    do {
+      let restored = try await request()
+      guard generation == session.generation else { throw CancellationError() }
+      // Accepting a session begins a new generation. The button belongs to the login
+      // generation, so authentication owns error delivery across this transition.
+      generation += 1
+      try await acceptSession(restored)
+    } catch {
+      if generation == session.generation { handle(error) }
+      throw error
+    }
   }
   private func beginAuthentication() {
     session.clear()
@@ -102,7 +113,6 @@ final class AppModel {
     clearPrivateFeatures()
   }
   func securityChanged() async {
-    restoring = true
     beginAuthentication()
     await restore()
   }
@@ -192,7 +202,7 @@ final class DataBudget {
   private(set) var constrained = true
   private let monitor = NWPathMonitor()
   init() {
-    monitor.pathUpdateHandler = { [weak self] path in
+    monitor.pathUpdateHandler = { @Sendable [weak self] path in
       let constrained = path.isConstrained || path.status != .satisfied
       Task { @MainActor [weak self] in self?.constrained = constrained }
     }

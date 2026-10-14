@@ -93,16 +93,17 @@ struct RootView: View {
           do { try await Task.sleep(for: .seconds(1)) } catch { return }
           await store.warm()
         }
-        .task(id: "\(scenePhase)-\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)") {
+        .task(id: "\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)") {
+          store.conversationFocused = app.navigation.sheet == nil
+          await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
+          guard scenePhase == .active, store.conversationFocused, let id = store.openConversationID else { return }
+          do { try await store.refreshConversation(id) } catch { app.handleSessionError(error) }
+        }
+        .task(id: scenePhase) {
           store.active = scenePhase == .active
           guard store.active else { return }
-          store.conversationFocused = app.navigation.sheet == nil
-          if store.conversationFocused, let id = store.openConversationID {
-            do { try await store.refreshConversation(id) } catch { app.handleSessionError(error) }
-          }
           while !Task.isCancelled {
             await app.refreshPulse()
-            await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
             do { try await Task.sleep(for: store.pulseInterval) } catch { return }
           }
         }
@@ -119,9 +120,6 @@ struct RootView: View {
         app.resumeReadableURL()
         Task { await NotificationController.shared.synchronize(app) }
       }
-    }
-    .onChange(of: app.navigation.path) { _, _ in
-      Task { await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active) }
     }
     .onChange(of: scenePhase) { _, phase in
       app.store?.active = phase == .active
@@ -169,7 +167,7 @@ private struct AccountTabs: View {
   var body: some View {
     ZStack {
       ForEach(AppTab.allCases, id: \.self) { tab in
-        MountedTabRoot(tab: tab, selected: app.navigation.tab == tab && app.navigation.path.isEmpty)
+        MountedTabRoot(tab: tab, selected: app.navigation.tab == tab)
       }
     }
   }
@@ -198,7 +196,7 @@ private struct MountedTabRoot: View {
         }
       } else { Color.clear }
     }
-    .environment(\.screenVisible, selected)
+    .environment(\.screenVisible, selected && app.navigation.path.isEmpty)
     .opacity(selected ? 1 : 0)
     .allowsHitTesting(selected)
     .accessibilityHidden(!selected)
