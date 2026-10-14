@@ -744,6 +744,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await expect.poll(() => desktop.hidden).toContain("menu-bar");
   await desktop.emit("index:menu-open", { presented: false }, "menu-bar");
   await expect(input).toHaveValue("https://pages.test/calm-software");
+  await expect(input).toBeEnabled();
   await input.press("Enter");
   await expect(
     panel.getByRole("button", { name: "Open Calm Software in browser", exact: true }),

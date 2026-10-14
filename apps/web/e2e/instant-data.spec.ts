@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { apiURL } from "./urls";
+import { routeRPC, rpcPaths } from "./rpc";
+import { DesktopHarness } from "./desktop-harness";
 let fixture: {
   week: string;
   conversationId: string;
@@ -284,7 +286,310 @@ test("unfollowing a private person hides a previously cached post on return", as
   await page.goBack();
   await expect(page).toHaveURL(/\/l\//);
   await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText(/not.?found|forbidden|unavailable/i);
   await expect(
     page.getByRole("heading", { name: fixture.privateLink.title, exact: true }),
   ).toHaveCount(0);
+});
+
+test("disabled IndexedDB still permits sign-in, sign-out and a second account", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "indexedDB", {
+      value: {
+        open: () => {
+          throw new DOMException("Storage disabled", "SecurityError");
+        },
+      },
+    });
+  });
+  await login(page);
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page).toHaveURL(/login/);
+  await page.getByLabel("Email or username", { exact: true }).fill("bob@test.example");
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.locator('.week-page[data-active="true"] .own-links')).not.toContainText(
+    "Are.na",
+  );
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+});
+
+test("a seeded post checks access and hides a forbidden server response", async ({ page }) => {
+  await routeRPC(page, "**/rpc/v1/links/get**", (route) =>
+    route.fulfill({
+      status: 404,
+      json: {
+        json: {
+          defined: false,
+          status: 404,
+          code: "NOT_FOUND",
+          message: "This post is no longer available",
+        },
+      },
+    }),
+  );
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await expect(post.getByRole("alert")).toContainText("This post is no longer available");
+  await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toHaveCount(0);
+});
+
+test("a failing profile week keeps the page and offers a local retry", async ({ page }) => {
+  await routeRPC(page, "**/rpc/v1/links/listByOwner**", (route) =>
+    route.fulfill({
+      status: 404,
+      json: {
+        json: {
+          defined: false,
+          status: 404,
+          code: "NOT_FOUND",
+          message: "Could not load this week",
+        },
+      },
+    }),
+  );
+  await login(page);
+  await page.goto("/u/alice");
+  await expect(page.locator(".profile-heading")).toContainText("Alice");
+  await expect(page.locator(".profile-week").getByRole("alert").first()).toContainText(
+    "Could not load this week",
+  );
+  await expect(
+    page.locator(".profile-week").getByRole("button", { name: "Try again" }).first(),
+  ).toBeVisible();
+});
+
+test("a link draft completes after the editor has unmounted", async ({ page }) => {
+  await login(page);
+  await page
+    .locator('.week-page[data-active="true"] .own-links')
+    .getByRole("button", { name: "Are.na", exact: true })
+    .click();
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  const editor = page.getByRole("dialog", { name: "Edit link", exact: true });
+  await editor.getByLabel("Title", { exact: true }).fill("A saved title   ");
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/rpc/v1/links/update**", async (route) => {
+    await held;
+    await route.continue();
+  });
+  try {
+    await editor.getByRole("button", { name: "Save changes", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    await page.waitForTimeout(600);
+  } finally {
+    release();
+  }
+  await expect(page.getByText("Link saved", { exact: true })).toBeVisible();
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("A saved title");
+});
+
+test("navigation preserves the legacy pulse driver after one unsupported endpoint probe", async ({
+  page,
+}) => {
+  let probes = 0;
+  await routeRPC(page, "**/rpc/v1/pulse/get**", async (route) => {
+    probes++;
+    await route.fulfill({
+      status: 404,
+      json: { json: { defined: false, status: 404, code: "NOT_FOUND", message: "Unsupported" } },
+    });
+  });
+  await login(page);
+  await expect.poll(() => probes).toBe(1);
+  for (const name of ["Messages", "Discover", "Activity", "Home"]) {
+    await page.getByRole("link", { name, exact: true }).click();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(1);
+  }
+  expect(probes).toBe(1);
+});
+
+test("a pending conversation uses its row's identity inside one app shell", async ({ page }) => {
+  await login(page);
+  await page.getByRole("link", { name: "Messages", exact: true }).click();
+  const row = page.locator(".conversation-row").first();
+  const name = await row.locator("strong").innerText();
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await routeRPC(page, "**/rpc/v1/messages/list**", async (route) => {
+    await held;
+    await route.continue();
+  });
+  try {
+    await row.click();
+    await expect(page.locator(".chat-heading strong")).toHaveText(name);
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toHaveCount(1);
+  } finally {
+    release();
+  }
+  await expect(page.locator('.chat-page [aria-label="Loading"]')).toHaveCount(0);
+});
+
+test("a confirmed message keeps its height through the next pulse", async ({ page }) => {
+  await login(page);
+  await page.goto("/messages/" + fixture.conversationId);
+  await page.getByLabel("Message", { exact: true }).fill("A stable confirmed bubble");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const message = page.locator(".message").filter({ hasText: "A stable confirmed bubble" });
+  await expect(message).not.toHaveAttribute("data-delivery", "pending");
+  const height = await message.evaluate((element) => element.getBoundingClientRect().height);
+  let reads = 0;
+  page.on("request", (request) => {
+    if (rpcPaths(request).includes("/rpc/v1/messages/list")) reads++;
+  });
+  await page.request.post(apiURL + "/rpc/v1/messages/send", {
+    data: {
+      json: {
+        conversationId: fixture.conversationId,
+        clientId: crypto.randomUUID(),
+        body: "A newer server message",
+      },
+    },
+  });
+  const refreshed = page.waitForResponse((response) =>
+    rpcPaths(response.request()).includes("/rpc/v1/messages/list"),
+  );
+  await page.evaluate(() => window.dispatchEvent(new Event("index:pulse")));
+  await refreshed;
+  await expect.poll(() => reads).toBeGreaterThan(0);
+  await expect(message).not.toContainText("Sent");
+  expect(await message.evaluate((element) => element.getBoundingClientRect().height)).toBe(height);
+});
+
+test("a peer account transition clears this tab before accepting the replacement cookie", async ({
+  page,
+  context,
+}) => {
+  await login(page);
+  const peer = await context.newPage();
+  await peer.goto("/settings");
+  await expect(peer.getByRole("button", { name: "Sign out", exact: true })).toBeVisible();
+  await peer.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page.locator('.week-page[data-active="true"] .own-links')).toHaveCount(0);
+  await peer.getByLabel("Email or username", { exact: true }).fill("bob@test.example");
+  await peer.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await peer.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(peer.getByRole("heading", { level: 1 })).toContainText("Week");
+  await page.goto("/");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+  await expect(page.locator('.week-page[data-active="true"] .own-links')).not.toContainText(
+    "Are.na",
+  );
+});
+
+test("load more recovers every message when more than a page arrived while hidden", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/messages/" + fixture.conversationId);
+  await expect(page.locator(".message-bubble")).not.toHaveCount(0);
+  await page.evaluate(() =>
+    Object.defineProperty(document, "hidden", { configurable: true, value: true }),
+  );
+  for (let index = 0; index < 35; index++) {
+    const response = await page.request.post(apiURL + "/rpc/v1/messages/send", {
+      data: {
+        json: {
+          conversationId: fixture.conversationId,
+          clientId: crypto.randomUUID(),
+          body: `Hidden arrival ${index}`,
+        },
+      },
+    });
+    expect(response.ok()).toBe(true);
+  }
+  await page.evaluate(() => {
+    Object.defineProperty(document, "hidden", { configurable: true, value: false });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await expect(
+    page.locator(".message-bubble").filter({ hasText: "Hidden arrival 34" }),
+  ).toHaveCount(1);
+  await page.getByRole("button", { name: "Load more", exact: true }).click();
+  for (let index = 0; index < 35; index++)
+    await expect(
+      page.locator(".message-bubble").filter({ hasText: new RegExp(`^Hidden arrival ${index}$`) }),
+    ).toHaveCount(1);
+});
+
+test("a desktop revision change between disk restore and subscription clears the restored page", async ({
+  page,
+}) => {
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
+  await page.waitForTimeout(1300);
+  desktop.beforeWindow = () => {
+    desktop.token = null;
+    desktop.revision++;
+  };
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/auth/get-session**", async (route) => {
+    await held;
+    await route.continue();
+  });
+  try {
+    await page.reload();
+    await expect(page.locator('.week-page[data-active="true"] .own-links')).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("Are.na");
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+});
+
+test("a failed disk erasure cannot restore signed-out content when storage recovers", async ({
+  page,
+}) => {
+  await login(page);
+  await page.waitForTimeout(1300);
+  await page.evaluate(() => {
+    Object.defineProperty(window, "indexedDB", {
+      configurable: true,
+      value: {
+        open: () => {
+          throw new DOMException("Connection lost", "InvalidStateError");
+        },
+      },
+    });
+  });
+  await page.getByRole("link", { name: "Settings", exact: true }).click();
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await expect(page).toHaveURL(/login/);
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/auth/get-session**", async (route) => {
+    await held;
+    await route.continue();
+  });
+  const checking = page.waitForRequest("**/api/auth/get-session**");
+  try {
+    await page.reload();
+    await checking;
+    await page.waitForTimeout(500);
+    await expect(page.locator('.week-page[data-active="true"] .own-links')).toHaveCount(0);
+    await expect(page.locator("body")).not.toContainText("Are.na");
+  } finally {
+    release();
+  }
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });

@@ -42,7 +42,7 @@ export const commentsOptions = (api: API, linkId: string) =>
 export function preparePost(cache: QueryClient, api: API, link: SavedLink) {
   const options = linkOptions(api, link.id);
   if (!cache.isMutating() && !cache.getQueryData(options.queryKey))
-    cache.setQueryData(options.queryKey, link);
+    cache.setQueryData(options.queryKey, link, { updatedAt: 0 });
   for (const query of cache.getQueryCache().getAll()) {
     mapItems(
       query.state.data,
@@ -85,6 +85,9 @@ export function preparePostReference(
  */
 export async function loadPost(cache: QueryClient, api: API, linkId: string) {
   const link = await cache.ensureQueryData(linkOptions(api, linkId));
+  // An instant removal hides the detail with a stale null value. Its mounted
+  // query rechecks access; secondary reads must not turn that into a route error.
+  if (!link) return;
   if (link.groupId) void cache.prefetchQuery(groupOptions(api, link.groupId));
   void cache.prefetchQuery(profileOptions(api, link.ownerId));
   void cache.prefetchInfiniteQuery(commentsOptions(api, linkId));

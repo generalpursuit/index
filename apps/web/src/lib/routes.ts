@@ -90,7 +90,7 @@ export function seedLinkRoute(
     linkId: link.id,
     canonicalPath: linkPath(link.shortId),
   };
-  if (!cache.getQueryData(queryKey)) cache.setQueryData(queryKey, route);
+  if (!cache.getQueryData(queryKey)) cache.setQueryData(queryKey, route, { updatedAt: 0 });
 }
 export async function preloadProfile(context: RouteContext, userId: string, groupId?: string) {
   const cache = context.queryClient,
@@ -111,17 +111,20 @@ export async function preloadProfile(context: RouteContext, userId: string, grou
   groups.catch(() => {});
   weeks.catch(() => {});
   if (!(await profile).canViewContent) return;
-  const [, loaded] = await Promise.all([groups, weeks]);
+  const [, loaded] = await Promise.all([
+    groups.catch(() => undefined),
+    weeks.catch(() => undefined),
+  ]);
   // The weeks that fill the first screen open with their links, including your empty current week.
   const shown = context.session?.user.id === userId ? [monday()] : [];
   let rows = 0;
-  for (const week of loaded.pages[0]?.items ?? []) {
+  for (const week of loaded?.pages[0]?.items ?? []) {
     if (rows >= 24 || shown.length >= 4) break;
     if (!shown.includes(week.weekStart)) shown.push(week.weekStart);
     rows += week.count;
   }
   // A failed week shows its own retry; it doesn't hold the page.
-  await Promise.all(
+  await Promise.allSettled(
     shown.map((week) =>
       cache.ensureInfiniteQueryData({
         ...weekLinksOptions(profileApi, userId, week, groupId),

@@ -10,7 +10,7 @@ import { installDesktopSync } from "./lib/desktop/sync";
 import { installDesktopLinks } from "./lib/desktop";
 import { toast } from "sonner";
 
-import { AppShell } from "./components/app/shell";
+import { QueryState } from "./components/app/query-state";
 import { UpdateRequired } from "./components/app/update-required";
 import { routeTree } from "./routeTree.gen";
 import { orpc, queryClient } from "./utils/orpc";
@@ -23,7 +23,7 @@ const router = createRouter({
   defaultPendingMinMs: 400,
   scrollToTopSelectors: ["#app-scroll"],
   scrollRestoration: true,
-  defaultPendingComponent: () => <AppShell pending />,
+  defaultPendingComponent: () => <QueryState pending />,
   context: { orpc, queryClient },
   Wrap: function WrapComponent({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;

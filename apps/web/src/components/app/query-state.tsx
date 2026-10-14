@@ -27,7 +27,7 @@ export function QueryState({
   const alreadyWaited = usePendingPage();
   const [held, setHeld] = useState(false);
   const revealed = useRef(0);
-  const missing = alreadyWaited || (!!pending && !hasData);
+  const missing = !!pending && !hasData;
   useEffect(() => {
     if (missing) {
       const timer = setTimeout(
@@ -50,8 +50,8 @@ export function QueryState({
     return (
       <div
         className="content-placeholder"
-        data-ready={alreadyWaited || undefined}
-        data-placeholder={alreadyWaited || undefined}
+        data-ready={alreadyWaited || held || undefined}
+        data-placeholder
         role="status"
         aria-label="Loading"
       >

@@ -122,7 +122,7 @@ export function useMessageActions() {
           };
           return patchMessage(message);
         },
-        response: (message) => patchMessage({ ...message, delivery: "sent" }),
+        response: (message) => patchMessage(message),
         invalidate: () => window.dispatchEvent(new Event("index:pulse")),
       }),
       meta: { inlineError: true },

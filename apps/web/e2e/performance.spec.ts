@@ -28,20 +28,22 @@ test("a visible post opens with content while its detail refresh is still pendin
   page.on("request", (request) => {
     if (rpcPaths(request).includes("/rpc/v1/comments/list")) commentsStarted = true;
   });
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
   try {
     await page
       .locator('.week-page[data-active="true"] .own-links')
       .getByRole("button", { name: "Are.na", exact: true })
       .click();
-    const post = page.getByRole("dialog", { name: "Post", exact: true });
     await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible({
       timeout: 1500,
     });
     await expect.poll(() => commentsStarted, { timeout: 1500 }).toBe(true);
-    await expect(post.locator(".comments")).toContainText("Do you have a favorite channel?");
+    // This route fixture buffers an intercepted batch. Comments start alongside
+    // the access check, but their packet arrives once the fixture releases it.
   } finally {
     release();
   }
+  await expect(post.locator(".comments")).toContainText("Do you have a favorite channel?");
 });
 test("Discover's data loads once, before it opens", async ({ page }) => {
   // Counted from the start: an idle warm-up after login may load it before the hover does.

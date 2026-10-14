@@ -63,7 +63,9 @@ html.menu-bar-surface
 /* Placeholder components keep their real geometry; only their ink is provisional. */
 .content-placeholder {
   display: contents;
-  animation: loading-reveal 1ms 300ms backwards;
+}
+.content-placeholder:not([data-ready]) > * {
+  visibility: hidden;
 }
 [data-placeholder] {
   animation: loading-reveal 1ms 300ms backwards;

@@ -307,9 +307,9 @@ function MessageItem({
             </p>
           )}
           <SharedPost message={message} />
-          {"delivery" in message && (
+          {"delivery" in message && message.delivery === "pending" && (
             <span className="text-[11px] text-subtle-foreground" role="status">
-              {message.delivery === "pending" ? "Sending…" : "Sent"}
+              Sending…
             </span>
           )}
         </div>

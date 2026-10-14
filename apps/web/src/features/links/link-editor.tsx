@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
 import { useQuery } from "@tanstack/react-query";
+import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { Input } from "@index/ui/components/input";
 import { Textarea } from "@index/ui/components/textarea";
@@ -95,15 +96,15 @@ function LinkForm({
     onSubmit: ({ value }) => {
       const { url, title, description, groupId } = value;
       const submitted = drafts.read(existing.id, saved);
-      actions.update.mutate(
-        { id: existing.id, url, title: title.trim(), description, groupId },
-        {
-          onSuccess: () => {
-            drafts.complete(existing.id, submitted);
-            toast.success("Link saved");
-          },
-        },
-      );
+      const generation = accountGeneration();
+      void actions.update
+        .mutateAsync({ id: existing.id, url, title: title.trim(), description, groupId })
+        .then(() => {
+          assertCurrentAccount(generation);
+          drafts.complete(existing.id, submitted);
+          toast.success("Link saved");
+        })
+        .catch(() => {});
       onDone();
     },
   });
