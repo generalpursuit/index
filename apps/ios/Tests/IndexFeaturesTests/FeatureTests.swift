@@ -1010,6 +1010,68 @@ final class ResourceRegressionTests: XCTestCase {
 }
 
 @MainActor
+final class ProvisionalSessionTests: XCTestCase {
+  func testCachedAccountRendersWithoutVerificationOrAnyContentRequests() async throws {
+    let api = FeatureStub()
+    let identity: Profile = try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)
+    await api.snapshot("/feed/week", feed(["known"]))
+    await api.snapshot("/conversations", page([conversation("chat")]))
+    let session = AccountSession()
+    session.provision(identity)
+    let store = AccountStore(api: api, profile: identity, sessionVerified: false)
+    store.active = true
+    XCTAssertEqual(session.profile?.name, "Me")
+    XCTAssertTrue(session.provisional)
+    XCTAssertEqual(session.verifiedRevision, 0)
+    XCTAssertEqual(store.feed(Week.monday()).feed?.own.items.first?.id, "known")
+    XCTAssertEqual(store.inbox().conversations.first?.id, "chat")
+    var loads = 0
+    try await store.show("test", path: "/test", force: true) { loads += 1 }
+    try await store.refreshInbox("")
+    try await store.refreshActivity("all")
+    try await store.refreshConversation("chat")
+    try await store.refreshPreferences()
+    try await store.pulse()
+    await store.warm()
+    XCTAssertEqual(loads, 0)
+    let calls = await api.recorded()
+    XCTAssertTrue(calls.isEmpty)
+    let original: SavedLink = try decode(link("known"))
+    do { try await store.keep(original); XCTFail("Provisional edit must wait for verification") } catch APIError.sessionNotVerified {}
+    XCTAssertFalse(store.feed(Week.monday()).feed?.own.items.first?.isFavorite == true)
+    store.drafts.edit("a draft", in: "chat")
+    do { try await store.send(in: "chat"); XCTFail("Provisional send must wait for verification") } catch APIError.sessionNotVerified {}
+    XCTAssertNil(store.drafts.draft(for: "chat").pending)
+    let oldGeneration = session.generation
+    try session.verified(identity, generation: oldGeneration)
+    store.verifySession()
+    XCTAssertEqual(session.generation, oldGeneration)
+    XCTAssertFalse(session.provisional)
+    XCTAssertEqual(session.verifiedRevision, 1)
+    XCTAssertEqual(store.drafts.draft(for: "chat").body, "a draft")
+    try await store.show("test", path: "/test", force: true) { loads += 1 }
+    XCTAssertEqual(loads, 1)
+    store.clear()
+    session.clear()
+    XCTAssertNil(session.profile)
+    XCTAssertTrue(store.drafts.draft(for: "chat").isEmpty)
+    XCTAssertFalse(store.sessionVerified)
+  }
+  func testProvisionalIdentityCannotConfirmAnotherAccountOrALateGeneration() throws {
+    let identity = Profile.summary(.clearedAccount("alice"))
+    let session = AccountSession()
+    session.provision(identity)
+    let generation = session.generation
+    XCTAssertThrowsError(try session.verified(.summary(.clearedAccount("bob")), generation: generation))
+    XCTAssertTrue(session.provisional)
+    session.clear()
+    XCTAssertThrowsError(try session.verified(identity, generation: generation))
+    XCTAssertNil(session.profile)
+    XCTAssertFalse(session.provisional)
+  }
+}
+
+@MainActor
 final class PulseFreshnessTests: XCTestCase {
   private func owner() throws -> Profile {
     try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)

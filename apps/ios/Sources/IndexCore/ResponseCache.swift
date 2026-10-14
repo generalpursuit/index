@@ -16,6 +16,7 @@ actor ResponseCache {
   }
   nonisolated func snapshot(_ key: String) -> Data? { snapshots.snapshot(key)?.data }
   func load(_ key: String, operation: @escaping @Sendable () async throws -> Data) async throws -> Data {
+    guard !snapshots.isProvisional else { throw APIError.sessionNotVerified }
     let version = snapshots.ticket(key)
     let existing = flights[key]
     let flight = existing ?? Flight(task: Task { try await operation() })
@@ -48,9 +49,10 @@ actor ResponseCache {
   func accept(scope: String, account: String) {
     if snapshots.accept(scope: scope, account: account) { cancelFlights() }
   }
-  func clear() {
-    snapshots.clear()
+  @discardableResult func clear() -> Bool {
+    let erased = snapshots.clear()
     cancelFlights()
+    return erased
   }
   private func cancelFlights() {
     for flight in flights.values { flight.task.cancel() }
@@ -80,6 +82,7 @@ final class ResponseSnapshots: @unchecked Sendable {
   private var entries: [String: Entry] = [:]
   private var scope: String?
   private var account: String?
+  private var provisional = false
   private var generation = 0
   private var revisions: [String: Int] = [:]
   // Files on disk for the accepted account, so a write only prunes once the folder is full.
@@ -97,6 +100,28 @@ final class ResponseSnapshots: @unchecked Sendable {
     self.directory = directory
   }
   var version: Int { lock.withLock { generation } }
+  var isProvisional: Bool { lock.withLock { provisional } }
+  var provisionalAccount: String? { lock.withLock { provisional ? account : nil } }
+  private struct RememberedAccount: Codable {
+    let format: Int
+    let scope: String
+    let account: String
+  }
+  /// Launch may read the last verified account's files, but cannot refresh or write
+  /// them until get-session confirms that identity. Extensions never call this.
+  func provision(scope: String) -> String? {
+    lock.withLock {
+      guard account == nil, let file = rememberedFile(scope),
+        let data = try? Data(contentsOf: file),
+        let remembered = try? PropertyListDecoder().decode(RememberedAccount.self, from: data),
+        remembered.format == Self.format, remembered.scope == scope, !remembered.account.isEmpty else { return nil }
+      generation += 1
+      self.scope = scope
+      account = remembered.account
+      provisional = true
+      return account
+    }
+  }
   func ticket(_ key: String) -> Ticket {
     lock.withLock {
       if revisions[key] == nil { revisions[key] = 0 }
@@ -105,26 +130,37 @@ final class ResponseSnapshots: @unchecked Sendable {
   }
   @discardableResult func accept(scope: String, account: String) -> Bool {
     lock.withLock {
-      guard self.scope != scope || self.account != account else { return false }
-      eraseAcceptedAccount()
-      generation += 1
-      self.scope = scope
-      self.account = account
+      let changed = self.scope != scope || self.account != account
+      let wasProvisional = provisional
+      if changed {
+        eraseAcceptedAccount()
+        generation += 1
+        self.scope = scope
+        self.account = account
+      }
+      provisional = false
       // Only the verified identity selected by the transport may hydrate its files.
       // Remove sibling accounts left by an interrupted transition before reading.
-      if let directory {
+      if changed || wasProvisional, let directory {
         let selected = accountDirectory!
         let server = selected.deletingLastPathComponent()
         if let servers = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
           for other in servers where other != server { try? FileManager.default.removeItem(at: other) }
         }
         if let children = try? FileManager.default.contentsOfDirectory(at: server, includingPropertiesForKeys: nil) {
-          for child in children where child != selected { try? FileManager.default.removeItem(at: child) }
+          for child in children where child != selected && child != rememberedFile(scope) { try? FileManager.default.removeItem(at: child) }
         }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         pruneDisk(selected)
       }
-      return true
+      if let file = rememberedFile(scope) {
+        let encoder = PropertyListEncoder()
+        encoder.outputFormat = .binary
+        if let bytes = try? encoder.encode(RememberedAccount(format: Self.format, scope: scope, account: account)) {
+          try? write(bytes, to: file)
+        }
+      }
+      return changed || wasProvisional
     }
   }
   func snapshot(_ key: String) -> Entry? {
@@ -146,7 +182,7 @@ final class ResponseSnapshots: @unchecked Sendable {
   }
   @discardableResult func store(_ data: Data, key: String, version: Ticket) -> Bool {
     lock.withLock {
-      guard version == Ticket(account: generation, resource: revisions[key] ?? 0) else { return false }
+      guard !provisional, version == Ticket(account: generation, resource: revisions[key] ?? 0) else { return false }
       let entry = Entry(format: Self.format, scope: scope ?? "", account: account ?? "", key: key, stored: .now, data: data)
       remember(entry)
       // Written under the lock so an account transition can never be followed by a late
@@ -154,21 +190,11 @@ final class ResponseSnapshots: @unchecked Sendable {
       if let file = fileURL(key) {
         let folder = file.deletingLastPathComponent()
         do {
-          try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-          var protectedFolder = folder
-          var values = URLResourceValues()
-          values.isExcludedFromBackup = true
-          try protectedFolder.setResourceValues(values)
           let encoder = PropertyListEncoder()
           encoder.outputFormat = .binary
           let bytes = try encoder.encode(entry)
           let added = !FileManager.default.fileExists(atPath: file.path)
-          #if os(iOS)
-          try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: folder.path)
-          try bytes.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
-          #else
-          try bytes.write(to: file, options: .atomic)
-          #endif
+          try write(bytes, to: file)
           if added { diskCount += 1 }
           if diskCount > capacity { pruneDisk(folder) }
         } catch {
@@ -197,14 +223,19 @@ final class ResponseSnapshots: @unchecked Sendable {
       }
     }
   }
-  func clear() {
+  @discardableResult func clear() -> Bool {
     lock.withLock {
       generation += 1
       eraseAcceptedAccount()
       // Also erase files when no session has been accepted yet (e.g. expired restore).
-      if let directory { try? FileManager.default.removeItem(at: directory) }
+      var erased = true
+      if let directory, FileManager.default.fileExists(atPath: directory.path) {
+        do { try FileManager.default.removeItem(at: directory) } catch { erased = false }
+      }
       scope = nil
       account = nil
+      provisional = false
+      return erased
     }
   }
   private func eraseAcceptedAccount() {
@@ -212,9 +243,27 @@ final class ResponseSnapshots: @unchecked Sendable {
     revisions.removeAll()
     diskCount = 0
     if let folder = accountDirectory { try? FileManager.default.removeItem(at: folder) }
+    if let scope, let file = rememberedFile(scope) { try? FileManager.default.removeItem(at: file) }
+  }
+  private func rememberedFile(_ scope: String) -> URL? {
+    directory?.appendingPathComponent(Self.hashed(scope)).appendingPathComponent("verified-account")
+  }
+  private func write(_ bytes: Data, to file: URL) throws {
+    var folder = file.deletingLastPathComponent()
+    try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+    var values = URLResourceValues()
+    values.isExcludedFromBackup = true
+    try folder.setResourceValues(values)
+    #if os(iOS)
+    try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: folder.path)
+    try bytes.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    #else
+    try bytes.write(to: file, options: .atomic)
+    #endif
   }
   private func removeLocked(_ key: String) {
     entries[key] = nil
+    guard !provisional else { return }
     if let file = fileURL(key), (try? FileManager.default.removeItem(at: file)) != nil { diskCount -= 1 }
   }
   private func remember(_ entry: Entry) {

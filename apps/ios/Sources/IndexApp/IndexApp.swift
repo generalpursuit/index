@@ -42,7 +42,7 @@ struct RootView: View {
         ContentUnavailableView(
           "Configuration needed", systemImage: "gear", description: Text(message))
       } else if app.restoring {
-        SessionPlaceholder().task { await app.restore() }
+        SessionPlaceholder()
       } else if let pending = app.verificationUser {
         VerificationView(email: pending.email)
       } else if app.profile == nil {
@@ -57,6 +57,7 @@ struct RootView: View {
           .background(IndexPalette.background)
         }
         .environment(store)
+        .environment(\.screenVisible, app.sessionReady)
         .id(app.session.generation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
           if app.showsTabs {
@@ -88,35 +89,50 @@ struct RootView: View {
           destinationView(destination).environment(store).id(destination).indexSheetStyle()
             .presentationDetents(sheetDetents(destination))
         }
-        .task(id: "\(scenePhase)-\(app.dataBudget.constrained)") {
-          guard scenePhase == .active, !app.dataBudget.constrained, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+        .task(id: "\(scenePhase)-\(app.dataBudget.constrained)-\(app.sessionReady)") {
+          guard app.sessionReady, scenePhase == .active, !app.dataBudget.constrained, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
           do { try await Task.sleep(for: .seconds(1)) } catch { return }
           await store.warm()
         }
-        .task(id: "\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)") {
+        .task(id: "\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)-\(app.sessionReady)") {
           store.conversationFocused = app.navigation.sheet == nil
           await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
-          guard scenePhase == .active, store.conversationFocused, let id = store.openConversationID else { return }
+          guard app.sessionReady, scenePhase == .active, store.conversationFocused, let id = store.openConversationID else { return }
           do { try await store.refreshConversation(id) } catch { app.handleSessionError(error) }
         }
-        .task(id: scenePhase) {
+        .task(id: "\(scenePhase)-\(app.sessionReady)") {
           store.active = scenePhase == .active
-          guard store.active else { return }
+          guard store.active, app.sessionReady else { return }
+          await app.refreshPulse()
+          var lastPulse = ContinuousClock.now
           while !Task.isCancelled {
-            await app.refreshPulse()
-            do { try await Task.sleep(for: store.pulseInterval) } catch { return }
+            do { try await Task.sleep(for: .seconds(1)) } catch { return }
+            if ContinuousClock.now - lastPulse >= store.pulseInterval {
+              await app.refreshPulse()
+              lastPulse = .now
+            }
           }
         }
       }
     }
+    .task { await app.restore() }
     .frame(maxWidth: .infinity, maxHeight: .infinity).background(IndexPalette.background)
     .overlay(alignment: .bottom) { SavedLinkToast().padding(.bottom, 80) }
+    .overlay(alignment: .bottom) {
+      if let error = app.sessionError {
+        HStack(spacing: 12) {
+          Text(error).font(IndexFont.sans(12))
+          Button("Try again") { Task { await app.restore() } }.buttonStyle(PillStyle(compact: true))
+        }.padding(12).background(IndexPalette.surface, in: RoundedRectangle(cornerRadius: 12))
+          .padding(.horizontal, 20).padding(.bottom, 80)
+      }
+    }
     .onAppear { NotificationController.shared.attach(app) }
     .onChange(of: app.restoring) { _, restoring in
       if !restoring { NotificationController.shared.attach(app) }
     }
     .onChange(of: app.verifiedSessionRevision, initial: true) { _, _ in
-      if app.verificationUser == nil && app.profile != nil {
+      if app.sessionReady {
         app.resumeReadableURL()
         Task { await NotificationController.shared.synchronize(app) }
       }
@@ -124,7 +140,10 @@ struct RootView: View {
     .onChange(of: scenePhase) { _, phase in
       app.store?.active = phase == .active
       Task {
-        if phase == .active { await NotificationController.shared.synchronize(app) }
+        if phase == .active {
+          if app.session.provisional { await app.restore() }
+          await NotificationController.shared.synchronize(app)
+        }
         await NotificationController.shared.setActive(app: app, foreground: phase == .active)
       }
     }
@@ -196,7 +215,7 @@ private struct MountedTabRoot: View {
         }
       } else { Color.clear }
     }
-    .environment(\.screenVisible, selected && app.navigation.path.isEmpty)
+    .environment(\.screenVisible, selected && app.navigation.path.isEmpty && app.sessionReady)
     .opacity(selected ? 1 : 0)
     .allowsHitTesting(selected)
     .accessibilityHidden(!selected)

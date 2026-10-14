@@ -8,6 +8,7 @@ import Observation
 public final class AccountStore {
   public let accountID: String
   public private(set) var profile: Profile
+  public private(set) var sessionVerified: Bool
   public let drafts = MessageDrafts()
   public let feedWeeks: FeedWeeksModel
   public let discovery: DiscoveryModel
@@ -47,10 +48,11 @@ public final class AccountStore {
   @ObservationIgnored private var accepted = true
   @ObservationIgnored private var summaryOnly: Bool
 
-  public init(api: any FeatureAPI, profile: Profile, summaryOnly: Bool = false) {
+  public init(api: any FeatureAPI, profile: Profile, summaryOnly: Bool = false, sessionVerified: Bool = true) {
     self.api = api
     self.profile = profile
     self.summaryOnly = summaryOnly
+    self.sessionVerified = sessionVerified
     accountID = profile.id
     notificationPreferences = api.snapshot("/me/notifications/preferences", query: [:])
     feedWeeks = FeedWeeksModel(api: api)
@@ -60,6 +62,7 @@ public final class AccountStore {
     _ = inbox()
     _ = activity()
   }
+  public func verifySession() { guard accepted else { return }; sessionVerified = true }
   public func updateProfile(_ value: Profile) {
     guard accepted, value.id == accountID else { return }
     profile = value
@@ -70,6 +73,7 @@ public final class AccountStore {
   public func clear() {
     generation += 1
     accepted = false
+    sessionVerified = false
     active = false
     drafts.clear()
     openConversationID = nil
@@ -268,7 +272,7 @@ public final class AccountStore {
     return model
   }
   public func prefetch(_ link: SavedLink) async {
-    guard active, accepted else { return }
+    guard active, accepted, sessionVerified else { return }
     let model = self.link(link.id, opening: link)
     try? await show("link:" + link.id, path: "/links/\(link.id)") { try await model.load(id: link.id, api: self.api) }
   }
@@ -283,7 +287,7 @@ public final class AccountStore {
   /// versions bypass age; ordinary appearances use accepted response timestamps.
   public func show(_ key: String, path: String, query: [String: String] = [:], stable: Bool = false,
                    force: Bool = false, load: @MainActor () async throws -> Void) async throws {
-    guard accepted, !refreshing.contains(key) else { return }
+    guard accepted, sessionVerified, !refreshing.contains(key) else { return }
     let last = shownAt[key] ?? api.snapshotDate(path, query: query)
     if !force, let last, Date().timeIntervalSince(last) < (stable ? 300 : 30) { return }
     refreshing.insert(key)
@@ -296,6 +300,7 @@ public final class AccountStore {
     if shownAt.count > 256, let oldest = shownAt.min(by: { $0.value < $1.value })?.key { shownAt[oldest] = nil }
   }
   public func readActivity(filter: String) async throws {
+    guard accepted, sessionVerified else { return }
     let model = activity(filter)
     let count = model.items.filter { $0.readAt == nil }.count
     let version = generation
@@ -304,7 +309,7 @@ public final class AccountStore {
     unreadActivity = max(0, unreadActivity - count)
   }
   public func warm() async {
-    guard active, accepted else { return }
+    guard active, accepted, sessionVerified else { return }
     // Main screens only; callers suppress this on constrained networks.
     async let weeks: Void? = try? show("feed-weeks", path: "/feed/weeks", query: ["limit": "100"]) {
       try await self.feedWeeks.load(api: self.api, selectedWeek: Week.monday())
@@ -318,7 +323,7 @@ public final class AccountStore {
     try? await refreshDiscovery("")
   }
   public func pulse() async throws {
-    guard active, accepted, !pulsing else { return }
+    guard active, accepted, sessionVerified, !pulsing else { return }
     pulsing = true
     let version = generation
     defer { if version == generation { pulsing = false } }
@@ -399,6 +404,7 @@ public final class AccountStore {
   }
   private func beginEdit(_ key: String) throws -> Int {
     guard accepted else { throw CancellationError() }
+    guard sessionVerified else { throw APIError.sessionNotVerified }
     guard pendingEdits.insert(key).inserted else { throw APIError.server(409, "Wait for this edit to finish before changing it again.") }
     return generation
   }
@@ -422,8 +428,7 @@ public final class AccountStore {
   }
   public func keep(_ link: SavedLink) async throws {
     let key = "link:" + link.id
-    guard accepted, pendingEdits.insert(key).inserted else { return }
-    let version = generation
+    let version = try beginEdit(key)
     defer { if version == generation { pendingEdits.remove(key) } }
     let own = link.ownerId == accountID
     var next = link
@@ -480,8 +485,7 @@ public final class AccountStore {
   }
   public func follow(_ person: Person) async throws {
     let key = "follow:" + person.id
-    guard accepted, pendingEdits.insert(key).inserted else { return }
-    let version = generation
+    let version = try beginEdit(key)
     defer { if version == generation { pendingEdits.remove(key) } }
     let old = profiles[person.id + ":all"]?.profile?.followingStatus ?? person.followingStatus
     let next = old == nil ? (person.profileVisibility == .private ? "pending" : "accepted") : nil
@@ -675,6 +679,7 @@ public final class AccountStore {
   }
   public func send(in id: String) async throws {
     guard accepted else { throw CancellationError() }
+    guard sessionVerified else { throw APIError.sessionNotVerified }
     let version = generation
     let model = conversation(id)
     try await drafts.send(in: id, api: api, started: { pending, draft in

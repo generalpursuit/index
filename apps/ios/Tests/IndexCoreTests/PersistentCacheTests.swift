@@ -106,4 +106,38 @@ struct PersistentCacheTests {
     #expect(relaunched.snapshot("/links/a") == nil)
     #expect(relaunched.snapshot("/links/c") == Data("c".utf8))
   }
+  @Test func rememberedIdentityRequiresMatchingScopeAndFormat() async throws {
+    for changed in ["format", "scope", "account"] {
+      let directory = folder()
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let cache = ResponseCache(directory: directory)
+      await cache.accept(scope: "https://one.example", account: "alice")
+      let file = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil)!
+        .compactMap { $0 as? URL }.first { $0.lastPathComponent == "verified-account" }!
+      var envelope = try PropertyListSerialization.propertyList(from: Data(contentsOf: file), format: nil) as! [String: Any]
+      switch changed {
+      case "format": envelope[changed] = 99
+      case "scope": envelope[changed] = "https://other.example"
+      default: envelope[changed] = ""
+      }
+      try PropertyListSerialization.data(fromPropertyList: envelope, format: .binary, options: 0).write(to: file)
+      let relaunched = ResponseCache(directory: directory)
+      #expect(relaunched.snapshots.provision(scope: "https://one.example") == nil)
+      #expect(relaunched.snapshots.provision(scope: "https://other.example") == nil)
+    }
+  }
+  @Test func provisionalTicketsCannotWriteAfterAccountSwitchOrSignOut() async throws {
+    let directory = folder()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = ResponseCache(directory: directory)
+    await cache.accept(scope: "https://one.example", account: "alice")
+    let relaunched = ResponseCache(directory: directory)
+    #expect(relaunched.snapshots.provision(scope: "https://one.example") == "alice")
+    let ticket = relaunched.snapshots.ticket("/links/a")
+    await relaunched.accept(scope: "https://one.example", account: "bob")
+    #expect(!relaunched.snapshots.store(Data("late alice".utf8), key: "/links/a", version: ticket))
+    await relaunched.clear()
+    #expect(!relaunched.snapshots.store(Data("late alice".utf8), key: "/links/a", version: ticket))
+    #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://one.example") == nil)
+  }
 }

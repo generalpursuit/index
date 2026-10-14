@@ -61,7 +61,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     self.app = app
     let version = generation
     let account = app.userID
-    guard !account.isEmpty, app.verificationUser == nil, let api = app.api else { return }
+    guard !account.isEmpty, app.sessionReady, let api = app.api else { return }
     await refreshPermission()
     do {
       let config: NotificationCapabilities = try await api.request("/me/notifications/capabilities")
@@ -89,7 +89,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   func enable(_ app: AppModel) async {
     self.app = app
     let version = generation, account = app.userID
-    guard let api = app.api, !account.isEmpty, app.verificationUser == nil else { return }
+    guard let api = app.api, !account.isEmpty, app.sessionReady else { return }
     error = nil
     do {
       // Only the Settings button calls enable; restore never requests permission.
@@ -112,7 +112,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   }
   func receivedToken(_ value: String) async {
     token = value
-    guard let binding, let app, let api = app.api, app.userID == binding.accountID, app.verificationUser == nil,
+    guard let binding, let app, let api = app.api, app.userID == binding.accountID, app.sessionReady,
       UserDefaults.standard.string(forKey: defaultsKey) == binding.accountID else { return }
     let version = generation
     let environment = Bundle.main.object(forInfoDictionaryKey: "IndexAPNSEnvironment") as? String ?? ""
@@ -157,7 +157,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     var conversation: String?
     if foreground, app.navigation.sheet == nil, let last = app.navigation.path.last, case .conversation(let id) = last { conversation = id }
     activeConversationID = conversation
-    guard binding?.accountID == app.userID, let api = app.api, registered else { return }
+    guard app.sessionReady, binding?.accountID == app.userID, let api = app.api, registered else { return }
     if let reportedActive, reportedActive.conversation == conversation, reportedActive.foreground == foreground { return }
     reportedActive = (conversation, foreground)
     var body = deviceBody(); body["conversationId"] = conversation.map(JSONValue.string) ?? .null
@@ -184,7 +184,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
   }
   func attach(_ app: AppModel) { self.app = app; resumeClick() }
   private func resumeClick() {
-    guard let click = pendingClick, let app, !app.restoring, let web = app.webURL else { return }
+    guard let click = pendingClick, let app, !app.restoring, !app.session.provisional, let web = app.webURL else { return }
     let account = app.profile?.id ?? app.verificationUser?.id
     guard let url = click.url(webURL: web, accountID: account) else { pendingClick = nil; return }
     // Transfer to the existing pending URL gate. Restricted same-ID sessions retain this

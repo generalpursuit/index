@@ -4,6 +4,7 @@ public enum APIError: LocalizedError, Sendable {
   case invalidServer, invalidResponse, unauthenticated, emailNotVerified, updateRequired
   case server(Int, String)
   case missingToken
+  case sessionNotVerified
   public var errorDescription: String? {
     switch self {
     case .invalidServer:
@@ -14,6 +15,7 @@ public enum APIError: LocalizedError, Sendable {
     case .unauthenticated: "Your session expired. Please sign in again."
     case .server(_, let message): message
     case .missingToken: "The server did not return a signed session token."
+    case .sessionNotVerified: "Reconnect to verify your session before making changes."
     }
   }
 }
@@ -42,9 +44,11 @@ public actor APIClient {
   private nonisolated let externallyManagedSession: Bool
   private var generation = 0
   private var accountID: String?
+  private var provisional = false
   private nonisolated let responses: ResponseCache
   private nonisolated let initialToken: String?
   private let onUpdateRequired: (@Sendable () -> Void)?
+  public nonisolated var provisionalAccountID: String? { responses.snapshots.provisionalAccount }
   /// Identifies this release so the API can ask unsupported clients to update. The macOS
   /// Share extension ships inside the desktop app and shares its version.
   private static let clientIdentity: String = {
@@ -60,14 +64,25 @@ public actor APIClient {
     baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil,
     externallyManagedSession: Bool = false, onUpdateRequired: (@Sendable () -> Void)? = nil
   ) throws {
+    let directory = externallyManagedSession ? nil : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("Index/Responses", isDirectory: true)
+    try self.init(baseURL: baseURL, credentials: credentials, session: session,
+      externallyManagedSession: externallyManagedSession, onUpdateRequired: onUpdateRequired,
+      responses: ResponseCache(directory: directory))
+  }
+  init(baseURL: URL, credentials: any CredentialStore, session: URLSession? = nil,
+       externallyManagedSession: Bool = false, onUpdateRequired: (@Sendable () -> Void)? = nil,
+       responses: ResponseCache) throws {
     self.baseURL = URL(string: try APIScope.normalize(baseURL.absoluteString))!
     self.externallyManagedSession = externallyManagedSession
     self.onUpdateRequired = onUpdateRequired
     self.credentials = credentials
     self.token = try credentials.read()
     self.initialToken = self.token
-    let directory = externallyManagedSession ? nil : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("Index/Responses", isDirectory: true)
-    self.responses = ResponseCache(directory: directory)
+    self.responses = responses
+    if token != nil, !externallyManagedSession {
+      accountID = responses.snapshots.provision(scope: self.baseURL.absoluteString)
+      provisional = accountID != nil
+    }
     let config = URLSessionConfiguration.ephemeral
     config.httpCookieStorage = nil
     config.httpShouldSetCookies = false
@@ -79,6 +94,7 @@ public actor APIClient {
     _ path: String, method: String = "GET", query: [String: String] = [:],
     body: [String: JSONValue]? = nil
   ) async throws -> T {
+    guard !provisional else { throw APIError.sessionNotVerified }
     if method == "GET" {
       let key = Self.responseKey(path, query: query)
       let version = generation
@@ -169,27 +185,40 @@ public actor APIClient {
     return result
   }
   public func restore() async throws -> AuthSession? {
-    guard token != nil else { await responses.clear(); return nil }
     let version = generation
+    guard token != nil else {
+      await responses.clear()
+      guard version == generation else { throw CancellationError() }
+      return nil
+    }
     let result: AuthSession? = try await perform("/api/auth/get-session")
     guard generation == version else { throw CancellationError() }
     if result == nil { try await clearSession() }
     else if result?.user.emailVerified == false {
       generation += 1
       let restrictedVersion = generation
-      await responses.clear()
+      accountID = nil
+      let erased = await responses.clear()
       guard generation == restrictedVersion else { throw CancellationError() }
+      provisional = false
+      if !erased { try await clearSession(); throw APIError.unauthenticated }
     }
     if let result, result.user.emailVerified {
+      if let accountID, accountID != result.user.id {
+        try await clearSession()
+        throw APIError.unauthenticated
+      }
       try await acceptAccount(result.user.id)
     }
     return result
   }
   private func acceptAccount(_ id: String) async throws {
+    provisional = true
     if accountID != id { generation += 1; accountID = id }
     let version = generation
     await responses.accept(scope: baseURL.absoluteString, account: id)
     guard version == generation else { throw CancellationError() }
+    provisional = false
   }
   public func securityStatus() async throws -> AccountSecurityStatus {
     try await perform("/api/auth/security/status")
@@ -244,9 +273,13 @@ public actor APIClient {
     let version = generation
     token = nil
     accountID = nil
-    await responses.clear()
+    provisional = false
+    let erased = await responses.clear()
     guard generation == version else { throw CancellationError() }
     if !externallyManagedSession { try credentials.write(nil) }
+    // Authentication must stop before writing another account's token if disk erasure
+    // failed. A launch with no credential can never provision the leftover files.
+    guard erased else { throw CocoaError(.fileWriteNoPermission) }
   }
   /// A synchronous snapshot for first render; the network always rechecks permissions.
   public nonisolated func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) -> T? {
@@ -312,6 +345,7 @@ public actor APIClient {
     _ path: String, method: String = "GET", query: [String: String] = [:],
     body: [String: JSONValue]? = nil, accepting: Int? = nil
   ) async throws -> Data {
+    if provisional, path != "/api/auth/get-session" { throw APIError.sessionNotVerified }
     if let accepting, accepting != generation { throw CancellationError() }
     let startGeneration = generation
     // An extension instance is pinned to the credential it started with. Signing in to a
@@ -340,9 +374,18 @@ public actor APIClient {
       if response.statusCode == 403,
         errorBody?.code == "EMAIL_NOT_VERIFIED" || errorBody?.data?.code == "EMAIL_NOT_VERIFIED" {
         generation += 1
-        await responses.clear()
+        let version = generation
+        accountID = nil
+        let erased = await responses.clear()
+        guard version == generation else { throw CancellationError() }
+        provisional = false
+        if !erased { try await clearSession(); throw APIError.unauthenticated }
         // Retain the signed credential only for verification/resume/sign-out.
         throw APIError.emailNotVerified
+      }
+      if response.statusCode == 403, path == "/api/auth/get-session" {
+        try await clearSession()
+        throw APIError.unauthenticated
       }
       let message =
         errorBody?.message
