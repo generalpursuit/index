@@ -82,12 +82,14 @@ final class ResponseSnapshots: @unchecked Sendable {
   private var account: String?
   private var generation = 0
   private var revisions: [String: Int] = [:]
+  // Files on disk for the accepted account, so a write only prunes once the folder is full.
+  private var diskCount = 0
   private let capacity: Int
   private let maxAge: TimeInterval
   private let directory: URL?
   private var accountDirectory: URL? {
     guard let directory, let scope, let account else { return nil }
-    return directory.appendingPathComponent(Self.filename(scope)).appendingPathComponent(Self.filename(account))
+    return directory.appendingPathComponent(Self.hashed(scope)).appendingPathComponent(Self.hashed(account))
   }
   init(capacity: Int, maxAge: TimeInterval, directory: URL?) {
     self.capacity = capacity
@@ -128,12 +130,12 @@ final class ResponseSnapshots: @unchecked Sendable {
   func snapshot(_ key: String) -> Entry? {
     lock.withLock {
       var entry = entries[key]
-      if entry == nil, Self.persists(key), let url = accountDirectory?.appendingPathComponent(Self.filename(key)),
-        let data = try? Data(contentsOf: url) {
-        entry = try? JSONDecoder().decode(Entry.self, from: data)
+      if entry == nil, let url = fileURL(key), let data = try? Data(contentsOf: url) {
+        entry = try? PropertyListDecoder().decode(Entry.self, from: data)
+        if entry == nil { removeLocked(key) }
       }
       guard let entry else { return nil }
-      guard maxAge > 0, entry.format == 1, entry.scope == (scope ?? ""), entry.account == (account ?? ""), entry.key == key,
+      guard maxAge > 0, entry.format == Self.format, entry.scope == (scope ?? ""), entry.account == (account ?? ""), entry.key == key,
         Date().timeIntervalSince(entry.stored) >= -60, Date().timeIntervalSince(entry.stored) < maxAge else {
         removeLocked(key)
         return nil
@@ -145,24 +147,30 @@ final class ResponseSnapshots: @unchecked Sendable {
   @discardableResult func store(_ data: Data, key: String, version: Ticket) -> Bool {
     lock.withLock {
       guard version == Ticket(account: generation, resource: revisions[key] ?? 0) else { return false }
-      let entry = Entry(format: 1, scope: scope ?? "", account: account ?? "", key: key, stored: .now, data: data)
+      let entry = Entry(format: Self.format, scope: scope ?? "", account: account ?? "", key: key, stored: .now, data: data)
       remember(entry)
-      if Self.persists(key), let folder = accountDirectory {
+      // Written under the lock so an account transition can never be followed by a late
+      // write of the previous account's file.
+      if let file = fileURL(key) {
+        let folder = file.deletingLastPathComponent()
         do {
           try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
           var protectedFolder = folder
           var values = URLResourceValues()
           values.isExcludedFromBackup = true
           try protectedFolder.setResourceValues(values)
-          let file = folder.appendingPathComponent(Self.filename(key))
-          let bytes = try JSONEncoder().encode(entry)
+          let encoder = PropertyListEncoder()
+          encoder.outputFormat = .binary
+          let bytes = try encoder.encode(entry)
+          let added = !FileManager.default.fileExists(atPath: file.path)
           #if os(iOS)
           try FileManager.default.setAttributes([.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication], ofItemAtPath: folder.path)
           try bytes.write(to: file, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
           #else
           try bytes.write(to: file, options: .atomic)
           #endif
-          pruneDisk(folder)
+          if added { diskCount += 1 }
+          if diskCount > capacity { pruneDisk(folder) }
         } catch {
           // Persistence is best effort; memory remains usable when the device is locked
           // or storage is full. A partial write is never a usable envelope.
@@ -176,13 +184,15 @@ final class ResponseSnapshots: @unchecked Sendable {
     lock.withLock {
       for key in Array(revisions.keys) where prefixes.contains(where: { ResponseCache.matches(key, $0) }) { revisions[key, default: 0] += 1 }
       for key in Array(entries.keys) where prefixes.contains(where: { ResponseCache.matches(key, $0) }) { removeLocked(key) }
+      // Filenames encode their keys, so finding affected files reads no file contents.
       if let folder = accountDirectory,
         let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) {
         for file in files {
-          guard let bytes = try? Data(contentsOf: file), let entry = try? JSONDecoder().decode(Entry.self, from: bytes) else {
-            try? FileManager.default.removeItem(at: file); continue
+          guard let key = Self.key(of: file) else { try? FileManager.default.removeItem(at: file); continue }
+          if prefixes.contains(where: { ResponseCache.matches(key, $0) }) {
+            try? FileManager.default.removeItem(at: file)
+            diskCount -= 1
           }
-          if prefixes.contains(where: { ResponseCache.matches(entry.key, $0) }) { try? FileManager.default.removeItem(at: file) }
         }
       }
     }
@@ -200,37 +210,62 @@ final class ResponseSnapshots: @unchecked Sendable {
   private func eraseAcceptedAccount() {
     entries.removeAll()
     revisions.removeAll()
+    diskCount = 0
     if let folder = accountDirectory { try? FileManager.default.removeItem(at: folder) }
   }
   private func removeLocked(_ key: String) {
     entries[key] = nil
-    if let file = accountDirectory?.appendingPathComponent(Self.filename(key)) { try? FileManager.default.removeItem(at: file) }
+    if let file = fileURL(key), (try? FileManager.default.removeItem(at: file)) != nil { diskCount -= 1 }
   }
   private func remember(_ entry: Entry) {
     if entries[entry.key] == nil, entries.count >= capacity,
       let oldest = entries.min(by: { $0.value.stored < $1.value.stored })?.key { entries[oldest] = nil }
     entries[entry.key] = entry
   }
+  /// Uses only directory metadata: expired and surplus files go, oldest first. Envelopes are
+  /// checked when read, so pruning never decodes payloads.
   private func pruneDisk(_ folder: URL) {
-    guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey]) else { return }
+    let dates: Set<URLResourceKey> = [.contentModificationDateKey]
+    guard let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: Array(dates)) else {
+      diskCount = 0
+      return
+    }
+    var kept: [(file: URL, modified: Date)] = []
     for file in files {
-      guard let bytes = try? Data(contentsOf: file), let entry = try? JSONDecoder().decode(Entry.self, from: bytes),
-        entry.format == 1, entry.scope == scope, entry.account == account,
-        Date().timeIntervalSince(entry.stored) < maxAge else {
+      let modified = (try? file.resourceValues(forKeys: dates).contentModificationDate) ?? .distantPast
+      if Self.key(of: file) == nil || Date().timeIntervalSince(modified) >= maxAge {
         try? FileManager.default.removeItem(at: file)
-        continue
+      } else {
+        kept.append((file, modified))
       }
     }
-    let ordered = files.filter { FileManager.default.fileExists(atPath: $0.path) }.sorted {
-      ((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
-        < ((try? $1.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast)
-    }
-    for file in ordered.prefix(max(0, ordered.count - capacity)) { try? FileManager.default.removeItem(at: file) }
+    kept.sort { $0.modified > $1.modified }
+    for surplus in kept.dropFirst(capacity) { try? FileManager.default.removeItem(at: surplus.file) }
+    diskCount = min(kept.count, capacity)
   }
-  private static func filename(_ value: String) -> String {
-    // A stable filename, with envelope identity checks protecting against collisions.
+  private static let format = 2
+  private static let fileExtension = "plist"
+  /// The key itself, base64url-encoded, so invalidation can match files without opening them.
+  private func fileURL(_ key: String) -> URL? {
+    guard Self.persists(key), let folder = accountDirectory else { return nil }
+    let name = Data(key.utf8).base64EncodedString()
+      .replacingOccurrences(of: "+", with: "-").replacingOccurrences(of: "/", with: "_")
+      .replacingOccurrences(of: "=", with: "")
+    // Long keys would exceed filename limits; they stay in memory only.
+    guard name.utf8.count <= 240 else { return nil }
+    return folder.appendingPathComponent(name).appendingPathExtension(Self.fileExtension)
+  }
+  private static func key(of file: URL) -> String? {
+    guard file.pathExtension == fileExtension else { return nil }
+    var name = file.deletingPathExtension().lastPathComponent
+      .replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    name += String(repeating: "=", count: (4 - name.count % 4) % 4)
+    return Data(base64Encoded: name).flatMap { String(data: $0, encoding: .utf8) }
+  }
+  private static func hashed(_ value: String) -> String {
+    // A stable folder name; the envelope's identity check protects against collisions.
     let hash = value.utf8.reduce(UInt64(14695981039346656037)) { ($0 ^ UInt64($1)) &* 1099511628211 }
-    return String(hash, radix: 16) + ".json"
+    return String(hash, radix: 16)
   }
   private static func persists(_ key: String) -> Bool {
     !key.contains("query=") && !key.hasPrefix("/discovery/users") && !key.hasPrefix("/me/notifications")

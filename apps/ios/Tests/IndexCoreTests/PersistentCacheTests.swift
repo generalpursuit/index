@@ -47,14 +47,14 @@ struct PersistentCacheTests {
       await cache.accept(scope: "https://one.example", account: "alice")
       _ = try await cache.load("/links/a") { Data("private".utf8) }
       let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil)!
-      let file = files.compactMap { $0 as? URL }.first { $0.pathExtension == "json" && (try? Data(contentsOf: $0)) != nil }!
-      var envelope = try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as! [String: Any]
+      let file = files.compactMap { $0 as? URL }.first { $0.pathExtension == "plist" }!
+      var envelope = try PropertyListSerialization.propertyList(from: Data(contentsOf: file), format: nil) as! [String: Any]
       switch changed {
       case "format": envelope[changed] = 99
-      case "stored": envelope[changed] = Date().addingTimeInterval(-8 * 24 * 60 * 60).timeIntervalSinceReferenceDate
+      case "stored": envelope[changed] = Date().addingTimeInterval(-8 * 24 * 60 * 60)
       default: envelope[changed] = "wrong"
       }
-      try JSONSerialization.data(withJSONObject: envelope).write(to: file)
+      try PropertyListSerialization.data(fromPropertyList: envelope, format: .binary, options: 0).write(to: file)
       let relaunched = ResponseCache(directory: directory)
       await relaunched.accept(scope: "https://one.example", account: "alice")
       #expect(relaunched.snapshot("/links/a") == nil)
@@ -88,5 +88,22 @@ struct PersistentCacheTests {
       await relaunched.accept(scope: "https://one.example", account: "alice")
       #expect(relaunched.snapshot(key) == nil)
     }
+  }
+  @Test func diskKeepsOnlyTheNewestEntriesWithinCapacity() async throws {
+    let directory = folder()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = ResponseCache(capacity: 2, directory: directory)
+    await cache.accept(scope: "https://one.example", account: "alice")
+    for name in ["a", "b", "c"] {
+      _ = try await cache.load("/links/\(name)") { Data(name.utf8) }
+      try await Task.sleep(for: .milliseconds(20))
+    }
+    let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil)!
+      .compactMap { $0 as? URL }.filter { $0.pathExtension == "plist" }
+    #expect(files.count == 2)
+    let relaunched = ResponseCache(capacity: 2, directory: directory)
+    await relaunched.accept(scope: "https://one.example", account: "alice")
+    #expect(relaunched.snapshot("/links/a") == nil)
+    #expect(relaunched.snapshot("/links/c") == Data("c".utf8))
   }
 }
