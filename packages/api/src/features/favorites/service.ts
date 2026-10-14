@@ -6,8 +6,15 @@ import { listInGroup } from "../links/service";
 import * as repository from "./repository";
 
 export const getFavoritesGroup = (db: QueryDatabase, actorId: string) =>
-  ensureSystemGroup(db, actorId, "favorites")
-    .andThen(() => repository.findFavoritesGroup(db, actorId))
+  repository
+    .findFavoritesGroup(db, actorId)
+    .andThen((group) =>
+      group
+        ? ok(group)
+        : ensureSystemGroup(db, actorId, "favorites").andThen(() =>
+            repository.findFavoritesGroup(db, actorId),
+          ),
+    )
     .andThen((group) => (group ? ok(group) : err(notFound("Favorites group"))));
 
 export const favoriteLink = (db: QueryDatabase, actorId: string, linkId: string) =>

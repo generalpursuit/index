@@ -84,12 +84,18 @@ export function listGroups(
   limit: number,
   cursor?: Cursor,
 ) {
-  return ResultAsync.fromPromise(
+  const page = db.$with("listed_groups").as(
     db
       .select({
         ...groupSelection,
+        visibility: groupSelection.visibility.as("visibility"),
+        createdAt: groupSelection.createdAt.as("created_at"),
+        updatedAt: groupSelection.updatedAt.as("updated_at"),
         // How many of its links the viewer may see.
-        linkCount: sql<number>`(select count(*)::int from ${links} where ${collectionContainsLink()} and ${linkVisible(viewerId)})`,
+        linkCount:
+          sql<number>`(select count(*)::int from ${links} where ${collectionContainsLink()} and ${linkVisible(viewerId)})`.as(
+            "link_count",
+          ),
       })
       .from(groups)
       .where(
@@ -103,6 +109,40 @@ export function listGroups(
       )
       .orderBy(desc(groups.createdAt), desc(groups.id))
       .limit(limit),
+  );
+  const missingSystemGroups =
+    viewerId === ownerId
+      ? sql<("starred" | "favorites")[]>`array(
+        select kind from (values ('starred'),('favorites')) system(kind)
+        where not exists(select 1 from groups g where g.owner_id=${ownerId} and g.kind=system.kind)
+        order by kind desc
+      )`
+      : sql<("starred" | "favorites")[]>`array[]::text[]`;
+  return ResultAsync.fromPromise(
+    db
+      .with(page)
+      .select({
+        group: {
+          id: page.id,
+          ownerId: page.ownerId,
+          name: page.name,
+          slug: page.slug,
+          kind: page.kind,
+          visibility: page.visibility,
+          createdAt: page.createdAt,
+          updatedAt: page.updatedAt,
+          linkCount: page.linkCount,
+        },
+        missingSystemGroups,
+      })
+      // Keep presence information even for an empty or exhausted page.
+      .from(sql`(select 1) seed`)
+      .leftJoin(page, sql`true`)
+      .orderBy(desc(page.createdAt), desc(page.id))
+      .then((rows) => ({
+        items: rows.flatMap((row) => (row.group?.id ? [row.group] : [])),
+        missingSystemGroups: rows[0]!.missingSystemGroups,
+      })),
     databaseError,
   );
 }

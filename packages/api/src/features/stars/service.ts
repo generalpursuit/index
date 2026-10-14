@@ -6,8 +6,15 @@ import { listInGroup } from "../links/service";
 import * as repository from "./repository";
 
 export const getStarredGroup = (db: QueryDatabase, actorId: string) =>
-  ensureSystemGroup(db, actorId, "starred")
-    .andThen(() => repository.findStarredGroup(db, actorId))
+  repository
+    .findStarredGroup(db, actorId)
+    .andThen((group) =>
+      group
+        ? ok(group)
+        : ensureSystemGroup(db, actorId, "starred").andThen(() =>
+            repository.findStarredGroup(db, actorId),
+          ),
+    )
     .andThen((group) => (group ? ok(group) : err(notFound("Starred group"))));
 
 export const starLink = (db: QueryDatabase, actorId: string, linkId: string) =>
