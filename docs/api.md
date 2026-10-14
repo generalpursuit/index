@@ -6,6 +6,8 @@ The application exposes REST at `/api/v1` and typed oRPC at `/rpc/v1`, with `/rp
 
 Browser calls include the secure HttpOnly session cookie. Native clients retain the signed `set-auth-token` response header and send it as `Authorization: Bearer <token>`; the JSON token is unsigned and unsuitable. See [authentication](authentication.md) for verification and credential lifetime.
 
+RPC clients can add `BatchLinkPlugin` from `@orpc/client/plugins` to their `RPCLink`, with `groups: [{ condition: () => true, context: {} }]`. Its default `streaming` mode returns each result as it finishes; `buffered` is also supported. The plugin sends `X-ORPC-Batch: streaming` (or `buffered`), allowed by CORS. A batch of up to ten calls shares one API context and session lookup; each call retains its own result or error. Group only calls for the same server and account, and keep authorization and `X-Index-Client` on the outer request. The client-version gate applies before context creation. REST calls remain individual requests.
+
 ## Client versions
 
 Clients send `X-Index-Client: <platform>/<version>` (`web`, `desktop` or `ios`) with the product version they were built from. [client-version.ts](../apps/server/src/client-version.ts) answers releases below their platform's minimum with `426` and `CLIENT_UPDATE_REQUIRED` before auth or API context runs; a staging build counts as its release, and unidentified clients are not gated. Clients then block until updated: web reloads, desktop restarts into its newest release and iOS asks for an App Store update.
