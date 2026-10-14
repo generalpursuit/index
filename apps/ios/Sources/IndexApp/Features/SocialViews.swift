@@ -54,6 +54,8 @@ struct DiscoverView: View {
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
     }.indexPage().scrollDismissesKeyboard(.interactively)
+      .onChange(of: query, initial: true) { _, query in store.discoveryQuery = query }
+      .onDisappear { store.discoveryQuery = nil }
       .task(id: "\(query)-\(visible)") {
         guard visible else { return }
         do {
@@ -63,11 +65,8 @@ struct DiscoverView: View {
       }
   }
   private func load(more: Bool = false) async {
-    guard let api = app.api else { return }
     do {
-      try await store.show("discovery:" + query, path: "/discovery/recommendations", force: more || !query.isEmpty || error != nil) {
-        try await model.load(api: api, query: query.trimmingCharacters(in: .whitespacesAndNewlines), more: more)
-      }
+      try await store.refreshDiscovery(query, more: more)
     } catch { app.handleSessionError(error) }
   }
 }
@@ -153,10 +152,7 @@ struct ActivityView: View {
       }
   }
   private func resolve(_ activity: Activity, accept: Bool) async throws {
-    guard let api = app.api else { return }
-    let generation = app.session.generation
     try await store.resolve(activity, accept: accept)
-    guard !Task.isCancelled, generation == app.session.generation else { return }
   }
   private func load(more: Bool = false, force: Bool = false) async {
     do {

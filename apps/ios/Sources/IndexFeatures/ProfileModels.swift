@@ -70,11 +70,13 @@ public final class ProfileModel {
   private let pages = CursorCollection<LibraryWeek>()
   public var weeks: [LibraryWeek] { pages.items }
   public var nextBefore: String? { pages.cursor }
+  public var needsLoad: Bool { profile == nil || summaryOnly || error != nil || (profile?.canViewContent == true && (!groupsLoaded || !pages.hasLoaded)) }
   private var generation = 0
   private var selectedFilter = "all"
   public init(api: (any FeatureAPI)? = nil, userID: String = "", opening: Profile? = nil, summaryOnly: Bool = false, filter: String = "all") {
-    self.summaryOnly = summaryOnly
-    profile = opening ?? api?.snapshot("/profiles/\(userID)", query: [:])
+    let cached: Profile? = api?.snapshot("/profiles/\(userID)", query: [:])
+    self.summaryOnly = summaryOnly && cached == nil
+    profile = summaryOnly ? (cached ?? opening) : (opening ?? cached)
     let cachedGroups: Page<LinkGroup>? = api?.snapshot("/groups", query: ["ownerId": userID, "limit": "100"])
     groups = cachedGroups?.items ?? []
     groupsLoaded = cachedGroups != nil
@@ -187,23 +189,22 @@ public final class ConnectionsModel {
       return CursorPage(items: page.items, next: page.nextAfter)
     })
   }
-  public func remove(_ person: Person, kind: String, api: any FeatureAPI) async throws {
-    let version = generation
-    let index = people.firstIndex { $0.id == person.id }
-    pages.patch { $0.id == person.id ? nil : $0 }
-    do {
-      let path = kind == "followers" ? "/me/followers/\(person.id)" : "/profiles/\(person.id)/follow"
-      let _: Success = try await api.write(path, method: "DELETE")
-      guard version == generation else { throw CancellationError() }
-    } catch {
-      guard version == generation else { throw CancellationError() }
-      if removesDisplayedContent(error) { pages.reset() }
-      else if let index {
-        var restored = people
-        restored.insert(person, at: min(index, restored.count))
-        pages.replace(restored)
-      }
-      throw error
+  func remove(_ id: String) -> Int? {
+    let index = people.firstIndex { $0.id == id }
+    pages.patch { $0.id == id ? nil : $0 }
+    return index
+  }
+  func restore(_ person: Person, at index: Int) {
+    guard !people.contains(where: { $0.id == person.id }) else { return }
+    var restored = people
+    restored.insert(person, at: min(index, restored.count))
+    pages.replace(restored)
+  }
+  func patchFollow(id: String, status: String?) {
+    pages.patch { person in
+      var next = person
+      if person.id == id { next.followingStatus = status }
+      return next
     }
   }
 }

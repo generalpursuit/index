@@ -83,7 +83,24 @@ public final class FeedWeekModel {
   }
 
   public func clear() { generation += 1; feed = nil; busy = false; loading = false; deleted = [:]; error = nil }
-  func removePerson(_ id: String) { if var current = feed { current.people.removeAll { $0.id == id }; feed = current } }
+  func removePerson(_ id: String) -> (index: Int, person: PersonLinks)? {
+    guard var current = feed, let index = current.people.firstIndex(where: { $0.id == id }) else { return nil }
+    generation += 1; busy = false; loading = false
+    let person = current.people.remove(at: index)
+    feed = current
+    return (index, person)
+  }
+  func restorePerson(_ person: PersonLinks, at index: Int) {
+    guard var current = feed, !current.people.contains(where: { $0.id == person.id }) else { return }
+    current.people.insert(person, at: min(index, current.people.count))
+    feed = current
+  }
+  func patchFollow(id: String, status: String?) {
+    guard var current = feed else { return }
+    for i in current.people.indices where current.people[i].id == id { current.people[i].author.followingStatus = status }
+    generation += 1; busy = false; loading = false
+    feed = current
+  }
   func added(_ link: SavedLink) {
     guard var current = feed else { return }
     current.own.items = unique([link] + current.own.items)

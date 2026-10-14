@@ -49,6 +49,13 @@ public final class RecipientModel {
   }
   public var hasLoaded: Bool { pages.hasLoaded }
   public func clear() { pages.reset() }
+  func patchFollow(id: String, status: String?) {
+    pages.patch { person in
+      var next = person
+      if person.id == id { next.followingStatus = status }
+      return next
+    }
+  }
   public func load(api: any FeatureAPI, account: String, query: String, more: Bool = false) async throws {
     try await pages.load(key: account + ":" + query, more: more, cached: { nil }, fetch: { after in
       var params = ["limit": "30"]

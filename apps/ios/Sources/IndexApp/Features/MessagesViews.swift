@@ -81,7 +81,6 @@ struct MessagesView: View {
     return (message.senderId == app.userID ? "You: " : "") + text
   }
   private func load(more: Bool = false, force: Bool = false) async {
-    guard let api = app.api else { return }
     do {
       try await store.refreshInbox(query, more: more, force: force)
     }
@@ -196,7 +195,8 @@ struct ConversationView: View {
   @Environment(\.screenVisible) private var visible
   @Environment(\.scenePhase) private var scenePhase
   @Environment(AccountStore.self) private var store
-  private var model: ConversationModel { store.conversation(conversationID, opening: app.navigation.openingConversation) }
+  private var model: ConversationModel { store.conversation(conversationID, opening: openingConversation) }
+  private var openingConversation: Conversation? { app.navigation.openingConversation?.id == conversationID ? app.navigation.openingConversation : nil }
   private var conversation: Conversation? { model.conversation ?? (error == nil ? ContentPlaceholder.conversation() : nil) }
   private var messages: [Message] { !model.hasLoaded && model.messages.isEmpty && error == nil ? (0..<4).map(ContentPlaceholder.message) : model.messages }
   private var cursor: String? { model.cursor }
@@ -347,7 +347,7 @@ struct ConversationView: View {
     focused = true
   }
   private func refresh() async {
-    let opening = app.navigation.openingConversation
+    let opening = openingConversation
     app.navigation.openingConversation = nil
     do { try await store.refreshConversation(conversationID, opening: opening) }
     catch { app.handleSessionError(error) }

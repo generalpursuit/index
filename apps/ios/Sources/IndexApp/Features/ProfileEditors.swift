@@ -172,8 +172,8 @@ struct ConnectionsView: View {
                 PersonRow(person: person)
               }.buttonStyle(.plain)
               AsyncButton {
-                guard let api = app.api else { return }
-                try await model.remove(person, kind: kind, api: api)
+                if kind == "followers" { try await store.removeFollower(person) }
+                else { try await store.follow(person) }
               } label: {
                 Text(kind == "followers" ? "Remove" : "Unfollow")
               }.buttonStyle(PillStyle())

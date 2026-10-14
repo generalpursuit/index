@@ -17,6 +17,7 @@ public final class AccountStore {
   public private(set) var notificationPreferences: NotificationPreferences?
   public var inboxQuery: String?
   public var activityFilter: String?
+  public var discoveryQuery: String?
   public var conversationFocused = true
   public var openConversationID: String?
   public var active = false
@@ -32,6 +33,7 @@ public final class AccountStore {
   @ObservationIgnored private var connectionLists: [String: ConnectionsModel] = [:]
   @ObservationIgnored private var links: [String: LinkModel] = [:]
   @ObservationIgnored private var shownAt: [String: Date] = [:]
+  @ObservationIgnored private var accessedAt: [String: Date] = [:]
   @ObservationIgnored private var refreshing: Set<String> = []
   @ObservationIgnored private var pendingEdits: Set<String> = []
   @ObservationIgnored private var inboxVersions: [String: String] = [:]
@@ -73,6 +75,7 @@ public final class AccountStore {
     openConversationID = nil
     inboxQuery = nil
     activityFilter = nil
+    discoveryQuery = nil
     unreadMessages = 0
     unreadActivity = 0
     feedWeeks.clear()
@@ -91,9 +94,28 @@ public final class AccountStore {
     // The detached store can never publish again; its views leave with session identity.
     feeds = [:]; profiles = [:]; profileWeeks = [:]; inboxes = [:]
     conversations = [:]; activities = [:]; links = [:]; recipientLists = [:]; connectionLists = [:]
-    shownAt = [:]; refreshing = []; pendingEdits = []; conversationVersions = [:]; inboxVersions = [:]; activityVersions = [:]
+    shownAt = [:]; accessedAt = [:]; refreshing = []; pendingEdits = []; conversationVersions = [:]; inboxVersions = [:]; activityVersions = [:]
+  }
+  /// Bound retained models as a session visits new resources. Clear evicted models too:
+  /// a suspended load or an old view reference must not keep publishing private content.
+  private func retain<Resource>(_ key: String, in resources: inout [String: Resource], prefix: String,
+                                limit: Int = 32, keeping: Set<String> = [], clear: (Resource) -> Void) {
+    accessedAt[prefix + key] = .now
+    guard resources[key] == nil else { return }
+    while resources.count >= limit {
+      let candidate = resources.keys.filter {
+        !keeping.contains($0) && !refreshing.contains(prefix + $0) && !pendingEdits.contains(prefix + $0)
+      }.min { (accessedAt[prefix + $0] ?? .distantPast) < (accessedAt[prefix + $1] ?? .distantPast) }
+      guard let candidate, let removed = resources.removeValue(forKey: candidate) else { break }
+      clear(removed)
+      accessedAt[prefix + candidate] = nil
+      shownAt[prefix + candidate] = nil
+      if prefix == "inbox:" { inboxVersions[candidate] = nil }
+      if prefix == "conversation:" { conversationVersions[candidate] = nil }
+    }
   }
   public func feed(_ week: String) -> FeedWeekModel {
+    retain(week, in: &feeds, prefix: "feed:", clear: { $0.clear() })
     if let model = feeds[week] { return model }
     let model = FeedWeekModel(api: accepted ? api : DiscardedAccountAPI(), week: week)
     feeds[week] = model
@@ -101,6 +123,7 @@ public final class AccountStore {
   }
   public func profileModel(_ id: String, filter: String = "all", opening: Profile? = nil) -> ProfileModel {
     let key = id + ":" + filter
+    retain(key, in: &profiles, prefix: "profile:", keeping: [accountID + ":all"], clear: { $0.clear() })
     if let model = profiles[key] { return model }
     let model = ProfileModel(api: accepted ? api : DiscardedAccountAPI(), userID: id, opening: accepted ? (opening ?? (id == accountID ? profile : nil)) : nil, summaryOnly: id == accountID && summaryOnly, filter: filter)
     profiles[key] = model
@@ -108,23 +131,46 @@ public final class AccountStore {
   }
   public func seed(_ person: Person) {
     guard accepted else { return }
-    guard profiles[person.id + ":all"] == nil else { return }
-    profiles[person.id + ":all"] = ProfileModel(api: accepted ? api : DiscardedAccountAPI(), userID: person.id, opening: .summary(person), summaryOnly: true)
+    let key = person.id + ":all"
+    retain(key, in: &profiles, prefix: "profile:", keeping: [accountID + ":all"], clear: { $0.clear() })
+    guard profiles[key] == nil else { return }
+    profiles[key] = ProfileModel(api: api, userID: person.id, opening: .summary(person), summaryOnly: true)
+  }
+  @discardableResult
+  public func refreshProfile(_ id: String, filter: String = "all", force: Bool = false) async throws -> Bool {
+    let model = profileModel(id, filter: filter)
+    var applied = false
+    try await show("profile:\(id):\(filter)", path: "/profiles/\(id)", force: force || model.needsLoad) {
+      applied = try await model.load(api: self.api, userID: id, filter: filter)
+    }
+    return applied
+  }
+  public func refreshDiscovery(_ query: String, more: Bool = false) async throws {
+    let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    let path = query.isEmpty ? "/discovery/recommendations" : "/discovery/users"
+    let params = query.isEmpty ? [:] : ["query": query, "limit": "30"]
+    try await show("discovery:" + query, path: path, query: params,
+                   force: more || discovery.query != query || !discovery.hasLoaded || discovery.error != nil) {
+      try await self.discovery.load(api: self.api, query: query, more: more)
+    }
   }
   public func profileWeek(userID: String, week: String, filter: String) -> ProfileWeekModel {
     let key = userID + ":" + week + ":" + filter
+    retain(key, in: &profileWeeks, prefix: "profile-week:", clear: { $0.clear() })
     if let model = profileWeeks[key] { return model }
     let model = ProfileWeekModel(api: accepted ? api : DiscardedAccountAPI(), userID: userID, week: week, filter: filter)
     profileWeeks[key] = model
     return model
   }
   public func recipients(_ query: String = "") -> RecipientModel {
+    retain(query, in: &recipientLists, prefix: "recipients:", limit: 2, keeping: [""], clear: { $0.clear() })
     if let model = recipientLists[query] { return model }
     let model = RecipientModel(api: accepted ? api : DiscardedAccountAPI(), account: accountID, query: query)
     recipientLists[query] = model
     return model
   }
   public func connections(_ kind: String) -> ConnectionsModel {
+    retain(kind, in: &connectionLists, prefix: "connections:", limit: 2, clear: { $0.clear() })
     if let model = connectionLists[kind] { return model }
     let model = ConnectionsModel(api: accepted ? api : DiscardedAccountAPI(), account: accountID, kind: kind)
     connectionLists[kind] = model
@@ -167,6 +213,7 @@ public final class AccountStore {
     }
   }
   public func inbox(_ query: String = "") -> ConversationListModel {
+    retain(query, in: &inboxes, prefix: "inbox:", limit: 2, keeping: [""], clear: { $0.clear() })
     if let model = inboxes[query] { return model }
     let model = ConversationListModel(api: accepted ? api : DiscardedAccountAPI(), query: query)
     inboxes[query] = model
@@ -196,8 +243,10 @@ public final class AccountStore {
     try await readActivity(filter: filter)
   }
   public func conversation(_ id: String, opening: Conversation? = nil) -> ConversationModel {
+    let kept = Set(conversations.keys.filter { drafts.isSending($0) }).union(openConversationID.map { [$0] } ?? [])
+    retain(id, in: &conversations, prefix: "conversation:", keeping: kept, clear: { $0.clear() })
     if let model = conversations[id] { return model }
-    let summary = opening ?? inboxes.values.flatMap(\.conversations).first { $0.id == id }
+    let summary = (opening?.id == id ? opening : nil) ?? inboxes.values.flatMap(\.conversations).first { $0.id == id }
     let model = ConversationModel(api: accepted ? api : DiscardedAccountAPI(), id: id, opening: accepted ? summary : nil)
     conversations[id] = model
     return model
@@ -212,6 +261,7 @@ public final class AccountStore {
     if let messageVersion { conversationVersions[id] = messageVersion }
   }
   public func activity(_ filter: String = "all") -> ActivityModel {
+    retain(filter, in: &activities, prefix: "activity:", limit: 8, keeping: ["all"], clear: { $0.clear() })
     if let model = activities[filter] { return model }
     let model = ActivityModel(api: accepted ? api : DiscardedAccountAPI(), filter: filter)
     activities[filter] = model
@@ -223,6 +273,7 @@ public final class AccountStore {
     try? await show("link:" + link.id, path: "/links/\(link.id)") { try await model.load(id: link.id, api: self.api) }
   }
   public func link(_ id: String, opening: SavedLink? = nil) -> LinkModel {
+    retain(id, in: &links, prefix: "link:", clear: { $0.clear() })
     if let model = links[id] { return model }
     let model = LinkModel(id: id, api: accepted ? api : DiscardedAccountAPI(), opening: accepted ? opening : nil)
     links[id] = model
@@ -242,6 +293,7 @@ public final class AccountStore {
     try Task.checkCancellation()
     guard accepted, version == generation else { throw CancellationError() }
     shownAt[key] = .now
+    if shownAt.count > 256, let oldest = shownAt.min(by: { $0.value < $1.value })?.key { shownAt[oldest] = nil }
   }
   public func readActivity(filter: String) async throws {
     let model = activity(filter)
@@ -257,13 +309,13 @@ public final class AccountStore {
     async let weeks: Void? = try? show("feed-weeks", path: "/feed/weeks", query: ["limit": "100"]) {
       try await self.feedWeeks.load(api: self.api, selectedWeek: Week.monday())
     }
-    async let people: Void? = try? show("discovery", path: "/discovery/recommendations") {
-      try await self.discovery.load(api: self.api, query: "")
-    }
-    async let library: Void? = try? show("profile:" + accountID, path: "/profiles/\(accountID)") {
-      _ = try await self.profileModel(self.accountID).load(api: self.api, userID: self.accountID, filter: "all")
-    }
+    async let people: Void = warmDiscovery()
+    async let library: Bool? = try? refreshProfile(accountID)
     _ = await (weeks, people, library)
+  }
+  private func warmDiscovery() async {
+    guard discovery.query.isEmpty, (discoveryQuery ?? "").isEmpty else { return }
+    try? await refreshDiscovery("")
   }
   public func pulse() async throws {
     guard active, accepted, !pulsing else { return }
@@ -433,6 +485,11 @@ public final class AccountStore {
     defer { if version == generation { pendingEdits.remove(key) } }
     let old = profiles[person.id + ":all"]?.profile?.followingStatus ?? person.followingStatus
     let next = old == nil ? (person.profileVisibility == .private ? "pending" : "accepted") : nil
+    let list = connectionLists["following"]
+    let removedAt = old == nil ? nil : list?.remove(person.id)
+    let removedPeople = old == nil ? [] : feeds.values.compactMap { model in
+      model.removePerson(person.id).map { (model, $0.index, $0.person) }
+    }
     patchFollow(id: person.id, status: next, previous: old)
     do {
       if old == nil {
@@ -446,15 +503,40 @@ public final class AccountStore {
     } catch {
       try check(version)
       patchFollow(id: person.id, status: old, previous: next)
+      if !removesDisplayedContent(error) {
+        if let removedAt { list?.restore(person, at: removedAt) }
+        for (model, index, person) in removedPeople { model.restorePerson(person, at: index) }
+      }
       throw error
     }
     if old != nil {
-      for model in feeds.values { model.removePerson(person.id) }
       if person.profileVisibility == .private {
         for model in links.values where model.link?.ownerId == person.id { model.clear() }
         for model in profileWeeks.values { model.hideOwner(person.id) }
       }
     }
+  }
+  public func removeFollower(_ person: Person) async throws {
+    let key = "follower:" + person.id
+    let version = try beginEdit(key)
+    defer { if version == generation { pendingEdits.remove(key) } }
+    let list = connectionLists["followers"]
+    let index = list?.remove(person.id)
+    patchFollowerCount(-1)
+    do {
+      let _: Success = try await api.write("/me/followers/\(person.id)", method: "DELETE")
+      try check(version)
+    } catch {
+      try check(version)
+      patchFollowerCount(1)
+      if !removesDisplayedContent(error), let index { list?.restore(person, at: index) }
+      throw error
+    }
+  }
+  private func patchFollowerCount(_ delta: Int) {
+    if let count = profile.followerCount { profile.followerCount = max(0, count + delta) }
+    for model in profiles.values where model.profile?.id == accountID { model.patchProfile(profile) }
+    dirtyContent()
   }
   private func patchFollow(id: String, status: String?, previous: String?) {
     let delta = (status == "accepted" ? 1 : 0) - (previous == "accepted" ? 1 : 0)
@@ -462,6 +544,9 @@ public final class AccountStore {
     feedWeeks.following(profile.followingCount)
     for model in profiles.values where model.profile?.id == accountID { model.patchProfile(profile) }
     discovery.patchFollow(id: id, status: status)
+    for model in connectionLists.values { model.patchFollow(id: id, status: status) }
+    for model in recipientLists.values { model.patchFollow(id: id, status: status) }
+    for model in feeds.values { model.patchFollow(id: id, status: status) }
     for model in profiles.values where model.profile?.id == id {
       if var value = model.profile {
         value.followingStatus = status
@@ -501,11 +586,16 @@ public final class AccountStore {
     let key = "group:" + original.id
     let version = try beginEdit(key)
     defer { if version == generation { pendingEdits.remove(key) } }
+    var draft = GroupDraft(group: original)
+    draft.name = name
+    draft.locked = visibility == .private
+    if let error = draft.validationError { throw APIError.server(422, error) }
     var next = original
-    next.name = name; next.visibility = visibility
+    if draft.isCustom { next.name = draft.normalizedName }
+    next.visibility = draft.visibility
     patchGroup(next)
     do {
-      let saved: LinkGroup = try await api.write("/groups/\(original.id)", method: "PATCH", body: ["name": .string(name), "visibility": .string(visibility.rawValue)])
+      let saved: LinkGroup = try await api.write("/groups/\(original.id)", method: "PATCH", body: draft.body)
       try check(version)
       patchGroup(saved)
       return saved

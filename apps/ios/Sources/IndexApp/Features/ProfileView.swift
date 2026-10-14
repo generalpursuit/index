@@ -192,13 +192,9 @@ struct ProfileView: View {
     ).sorted(by: >)
   }
   private func load(force: Bool = false) async {
-    guard let api = app.api else { return }
     let generation = app.session.generation
     do {
-      var applied = false
-      try await store.show("profile:" + userID, path: "/profiles/\(userID)", force: force || error != nil) {
-        applied = try await model.load(api: api, userID: userID, filter: filter)
-      }
+      let applied = try await store.refreshProfile(userID, filter: filter, force: force)
       guard !Task.isCancelled, generation == app.session.generation else { return }
       if own && applied { app.profile = model.profile }
       try await loadWeeks()

@@ -107,13 +107,13 @@ private struct ManagedGroupLock: View {
     } message: { Text(GroupDraft.privacyDescription(locked: !locked)) }
   }
   private func save() {
-    guard !pending, group.kind == "custom", let api = app.api else { return }
+    guard !pending, group.kind == "custom", let store = app.store else { return }
     pending = true
     let account = app.userID
     Task { @MainActor in
       defer { pending = false }
       do {
-        _ = try await app.store?.editGroup(group, name: group.name, visibility: locked ? .public : .private)
+        _ = try await store.editGroup(group, name: group.name, visibility: locked ? .public : .private)
         guard account == app.userID else { return }
       } catch is CancellationError { return } catch {
         guard account == app.userID else { return }

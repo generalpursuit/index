@@ -847,6 +847,169 @@ final class OptimisticStoreTests: XCTestCase {
 }
 
 @MainActor
+final class ResourceRegressionTests: XCTestCase {
+  private func owner() throws -> Profile {
+    try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followerCount":3,"followingCount":2,"followedBy":{"users":[],"total":0}}"#)
+  }
+  private let person = #"{"id":"them","name":"Them","profileVisibility":"private","followingStatus":"accepted"}"#
+  private let fullProfile = #"{"id":"them","name":"Full name","profileVisibility":"private","followingStatus":"accepted","canViewContent":true,"linkCount":5,"followedBy":{"users":[],"total":0}}"#
+
+  func testSeedPrefersFullSnapshotAndLoadsMissingProfileResourcesImmediately() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/profiles/them", fullProfile)
+    let store = AccountStore(api: api, profile: try owner())
+    store.seed(try decode(person))
+    let model = store.profileModel("them")
+    XCTAssertFalse(model.summaryOnly)
+    XCTAssertEqual(model.profile?.name, "Full name")
+    XCTAssertEqual(model.profile?.linkCount, 5)
+    await api.enqueue("/profiles/them", fullProfile)
+    await api.enqueue("/groups", page([]))
+    await api.enqueue("/profiles/them/weeks", #"{"items":[],"nextBefore":null}"#)
+    let loaded = try await store.refreshProfile("them")
+    XCTAssertTrue(loaded)
+    XCTAssertFalse(model.needsLoad)
+    let fresh = try await store.refreshProfile("them")
+    XCTAssertFalse(fresh)
+    let calls = await api.recorded()
+    XCTAssertEqual(calls.filter { $0.path == "/profiles/them" }.count, 1)
+  }
+  func testSummaryAndFailedProfilesAlwaysRetry() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    store.seed(try decode(person))
+    XCTAssertTrue(store.profileModel("them").summaryOnly)
+    await api.fail("/profiles/them", URLError(.notConnectedToInternet))
+    await api.enqueue("/groups", page([]))
+    do { _ = try await store.refreshProfile("them"); XCTFail("Expected failure") } catch {}
+    await api.snapshot("/profiles/them", fullProfile)
+    await api.enqueue("/profiles/them", fullProfile)
+    await api.enqueue("/groups", page([]))
+    await api.enqueue("/profiles/them/weeks", #"{"items":[],"nextBefore":null}"#)
+    let retried = try await store.refreshProfile("them")
+    XCTAssertTrue(retried)
+    XCTAssertNil(store.profileModel("them").error)
+  }
+  func testClearingSearchRestoresRecommendationsAndWarmDoesNotReplaceSearch() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/discovery/recommendations", #"{"items":[]}"#)
+    let store = AccountStore(api: api, profile: try owner())
+    try await store.refreshDiscovery("")
+    await api.enqueue("/discovery/users?Them", "{\"items\":[" + person + "],\"nextAfter\":null}")
+    try await store.refreshDiscovery(" Them ")
+    XCTAssertEqual(store.discovery.query, "Them")
+    XCTAssertEqual(store.discovery.people.first?.id, "them")
+    store.active = true
+    store.discoveryQuery = "Them"
+    await store.warm()
+    XCTAssertEqual(store.discovery.query, "Them")
+    XCTAssertEqual(store.discovery.people.first?.id, "them")
+    await api.enqueue("/discovery/recommendations", #"{"items":[]}"#)
+    try await store.refreshDiscovery("")
+    XCTAssertEqual(store.discovery.query, "")
+    XCTAssertTrue(store.discovery.people.isEmpty)
+    let calls = await api.recorded()
+    XCTAssertEqual(calls.filter { $0.path == "/discovery/recommendations" }.count, 1)
+  }
+  func testUnfollowPatchesSharedCountsAndRollsBackConnectionMembership() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/profiles/me/following", "{\"items\":[" + person + "],\"nextAfter\":null}")
+    await api.snapshot("/profiles/them", fullProfile)
+    await api.snapshot("/discovery/recommendations", "{\"items\":[" + person + "]}")
+    let store = AccountStore(api: api, profile: try owner())
+    let list = store.connections("following")
+    let other = store.profileModel("them")
+    await api.fail("/profiles/them/follow", URLError(.notConnectedToInternet))
+    await api.pause("/profiles/them/follow")
+    let edit = Task { try await store.follow(try decode(self.person)) }
+    await api.started("/profiles/them/follow")
+    XCTAssertTrue(list.people.isEmpty)
+    XCTAssertEqual(store.profile.followingCount, 1)
+    XCTAssertNil(store.discovery.people.first?.followingStatus)
+    XCTAssertFalse(other.profile?.canViewContent == true)
+    await api.resume("/profiles/them/follow")
+    do { try await edit.value; XCTFail("Expected failure") } catch {}
+    XCTAssertEqual(list.people.map(\.id), ["them"])
+    XCTAssertEqual(store.profile.followingCount, 2)
+    XCTAssertEqual(other.profile?.followingStatus, "accepted")
+    await api.enqueue("/profiles/them/follow", #"{"success":true}"#)
+    let privateLink: SavedLink = try decode(link("private").replacingOccurrences(of: #""ownerId":"me""#, with: #""ownerId":"them""#))
+    let detail = store.link("private", opening: privateLink)
+    try await store.follow(try decode(person))
+    XCTAssertNil(detail.link)
+  }
+  func testRemovingFollowerIsImmediateRollsBackAndCannotRestoreAfterAccountClear() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/profiles/me/followers", "{\"items\":[" + person + "],\"nextAfter\":null}")
+    let store = AccountStore(api: api, profile: try owner())
+    let list = store.connections("followers")
+    for clear in [false, true] {
+      await api.fail("/me/followers/them", URLError(.notConnectedToInternet))
+      await api.pause("/me/followers/them")
+      let edit = Task { try await store.removeFollower(try decode(self.person)) }
+      await api.started("/me/followers/them")
+      XCTAssertTrue(list.people.isEmpty)
+      XCTAssertEqual(store.profile.followerCount, 2)
+      if clear { store.clear() }
+      await api.resume("/me/followers/them")
+      do { try await edit.value; XCTFail("Expected failure") } catch {}
+      if clear { XCTAssertTrue(list.people.isEmpty); XCTAssertNil(store.profile.followerCount) }
+      else { XCTAssertEqual(list.people.map(\.id), ["them"]); XCTAssertEqual(store.profile.followerCount, 3) }
+    }
+  }
+  func testQueryModelsAndResourceRetentionAreBoundedAndCurrentModelsReused() async throws {
+    let store = AccountStore(api: FeatureStub(), profile: try owner())
+    let inbox = store.inbox()
+    let recipients = store.recipients()
+    let firstInbox = store.inbox("first")
+    let firstRecipients = store.recipients("first")
+    for index in 0..<100 {
+      _ = store.inbox("query-\(index)")
+      _ = store.recipients("query-\(index)")
+    }
+    XCTAssertTrue(inbox === store.inbox())
+    XCTAssertTrue(recipients === store.recipients())
+    let current = store.inbox("query-99")
+    XCTAssertTrue(current === store.inbox("query-99"))
+    XCTAssertFalse(firstInbox === store.inbox("first"))
+    XCTAssertFalse(firstRecipients === store.recipients("first"))
+    let firstLink = store.link("first")
+    let firstProfile = store.profileModel("first")
+    store.openConversationID = "open"
+    let open = store.conversation("open")
+    let firstConversation = store.conversation("first")
+    for index in 0..<100 {
+      _ = store.link("link-\(index)")
+      _ = store.profileModel("profile-\(index)")
+      _ = store.conversation("chat-\(index)")
+    }
+    XCTAssertTrue(open === store.conversation("open"))
+    XCTAssertFalse(firstLink === store.link("first"))
+    XCTAssertFalse(firstProfile === store.profileModel("first"))
+    XCTAssertFalse(firstConversation === store.conversation("first"))
+  }
+  func testMismatchedConversationSummaryIsIgnored() async throws {
+    let store = AccountStore(api: FeatureStub(), profile: try owner())
+    let wrong: Conversation = try decode(conversation("other"))
+    XCTAssertNil(store.conversation("destination", opening: wrong).conversation)
+  }
+  func testGroupEditsNormalizeCustomNamesAndOmitSystemNames() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    let custom = #"{"id":"custom","ownerId":"me","name":"New name","kind":"custom","visibility":"private"}"#
+    await api.enqueue("/groups/custom", custom)
+    _ = try await store.editGroup(try decode(custom), name: "  New\t name  ", visibility: .private)
+    let favorites = #"{"id":"favorites","ownerId":"me","name":"Favorites","kind":"favorites","visibility":"public"}"#
+    await api.enqueue("/groups/favorites", favorites)
+    _ = try await store.editGroup(try decode(favorites), name: "ignored", visibility: .public)
+    let calls = await api.recorded()
+    let customBody = try JSONSerialization.jsonObject(with: payload(calls[0])) as? NSDictionary
+    XCTAssertEqual(customBody?["name"] as? String, "New name")
+    XCTAssertNil(calls[1].body?["name"])
+  }
+}
+
+@MainActor
 final class PulseFreshnessTests: XCTestCase {
   private func owner() throws -> Profile {
     try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)

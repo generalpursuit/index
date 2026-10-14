@@ -88,7 +88,7 @@ public struct PeoplePage: Codable, Sendable {
 }
 public struct Recommendations: Codable, Sendable { public let items: [Person] }
 public struct PersonLinks: Codable, Sendable, Identifiable {
-  public let author: Person
+  public var author: Person
   public var links: Page<SavedLink>
   public var id: String { author.id }
 }

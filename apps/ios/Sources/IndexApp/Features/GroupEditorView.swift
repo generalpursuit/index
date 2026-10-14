@@ -99,12 +99,13 @@ struct GroupEditorView: View {
     let account = app.userID
     let generation = app.session.generation
     Task { @MainActor in
-      guard generation == app.session.generation else { return }
       defer { pending = false }
+      guard generation == app.session.generation else { return }
       do {
         let group: LinkGroup
-        if let original = draft.original, let store = app.store {
-          group = try await store.editGroup(original, name: draft.name, visibility: draft.visibility)
+        if let original = draft.original {
+          guard let store = app.store else { throw CancellationError() }
+          group = try await store.editGroup(original, name: draft.normalizedName, visibility: draft.visibility)
         } else {
           group = try await api.request("/groups", method: "POST", body: draft.body)
           app.store?.created(group)
@@ -122,15 +123,15 @@ struct GroupEditorView: View {
     }
   }
   private func remove() {
-    guard !pending, let group = draft.original, group.kind == "custom", let api = app.api else { return }
+    guard !pending, let group = draft.original, group.kind == "custom", let store = app.store else { return }
     pending = true
     let account = app.userID
     let generation = app.session.generation
     Task { @MainActor in
-      guard generation == app.session.generation else { return }
       defer { pending = false }
+      guard generation == app.session.generation else { return }
       do {
-        try await app.store?.deleteGroup(group)
+        try await store.deleteGroup(group)
         guard account == app.userID, generation == app.session.generation else { return }
         dismiss()
       } catch is CancellationError { return } catch {
