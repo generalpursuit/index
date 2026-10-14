@@ -18,6 +18,10 @@ import { publicUserSelection } from "../profiles/repository";
 
 type Selection = { [key: string]: SQLWrapper | Selection };
 
+// Versions cover the largest first page a client can request, so a pulse costs the same however
+// long an inbox grows. Changes further down reach clients when they load those pages.
+const firstPage = 100;
+
 // Fingerprint the same fields as the lists, so joins and visibility changes cannot
 // silently leave cached summaries stale. Ordering makes identical reads stable.
 function selectionJson(selection: Selection): SQL {
@@ -32,7 +36,10 @@ function selectionJson(selection: Selection): SQL {
   )})`;
 }
 
-export function messagesPulse(db: QueryDatabase, actorId: string) {
+const fingerprint = (state: SQLWrapper) =>
+  sql<string>`md5(coalesce(string_agg(md5(${state}::text),'' order by place),''))`;
+
+export function messagesVersion(db: QueryDatabase, actorId: string) {
   const members = db
     .select({ state: selectionJson(publicUserSelection).as("state"), id: user.id })
     .from(conversationMembers)
@@ -48,8 +55,10 @@ export function messagesPulse(db: QueryDatabase, actorId: string) {
   const inbox = db.$with("pulse_inbox").as(
     db
       .select({
-        id: conversations.id,
-        unreadCount: conversationSelection(actorId).unreadCount.as("unread_count"),
+        place:
+          sql<number>`row_number() over (order by ${conversations.updatedAt} desc, ${conversations.id} desc)`.as(
+            "place",
+          ),
         state: sql`jsonb_build_object(
           'conversation', ${selectionJson(conversationSelection(actorId))},
           'participants', (select jsonb_agg(member.state order by member.id) from (${members}) member),
@@ -57,33 +66,43 @@ export function messagesPulse(db: QueryDatabase, actorId: string) {
         )`.as("state"),
       })
       .from(conversations)
-      .where(isMember(actorId, conversations.id)),
+      .where(isMember(actorId, conversations.id))
+      .orderBy(desc(conversations.updatedAt), desc(conversations.id))
+      .limit(firstPage),
   );
   return ResultAsync.fromPromise(
     db
       .with(inbox)
-      .select({
-        unreadCount: sql<number>`coalesce(sum(${inbox.unreadCount}),0)::int`,
-        version: sql<string>`md5(coalesce(string_agg(md5(${inbox.state}::text),'' order by ${inbox.id}),''))`,
-      })
+      .select({ version: fingerprint(inbox.state) })
       .from(inbox)
-      .then((rows) => rows[0]!),
+      .then((rows) => rows[0]!.version),
     databaseError,
   );
 }
 
-export function activityPulse(db: QueryDatabase, actorId: string) {
-  return ResultAsync.fromPromise(
+export function activityVersion(db: QueryDatabase, actorId: string) {
+  const page = db.$with("pulse_activity").as(
     db
       .select({
-        unreadCount: sql<number>`count(*) filter(where ${activities.readAt} is null)::int`,
-        version: sql<string>`md5(coalesce(string_agg(md5(${selectionJson(activitySelection)}::text),'' order by ${activities.id}),''))`,
+        place:
+          sql<number>`row_number() over (order by ${activities.createdAt} desc, ${activities.id} desc)`.as(
+            "place",
+          ),
+        state: selectionJson(activitySelection).as("state"),
       })
       .from(activities)
       .innerJoin(user, eq(user.id, activities.actorId))
       .leftJoin(comments, eq(comments.id, activities.commentId))
       .where(activityVisible(actorId))
-      .then((rows) => rows[0]!),
+      .orderBy(desc(activities.createdAt), desc(activities.id))
+      .limit(firstPage),
+  );
+  return ResultAsync.fromPromise(
+    db
+      .with(page)
+      .select({ version: fingerprint(page.state) })
+      .from(page)
+      .then((rows) => rows[0]!.version),
     databaseError,
   );
 }

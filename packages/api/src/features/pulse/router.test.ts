@@ -23,10 +23,10 @@ describe("pulse", () => {
     return alice.messages.createConversation({ recipientIds });
   }
 
-  it("uses two read statements, stays stable when empty and requires authentication", async (t) => {
+  it("uses four read statements, stays stable when empty and requires authentication", async (t) => {
     const statements = t.mock.method(api.postgres, "query");
     const state = await api.client("alice").pulse.get();
-    assert.equal(statements.mock.callCount(), 2);
+    assert.equal(statements.mock.callCount(), 4);
     for (const call of statements.mock.calls)
       assert.match(String(call.arguments[0]), /^select|^with/i);
     statements.mock.restore();

@@ -50,7 +50,7 @@ describe("independent screen reads", () => {
         initial: 2,
         total: 2,
       },
-      { name: "pulse", run: () => alice.pulse.get(), initial: 2, total: 2 },
+      { name: "pulse", run: () => alice.pulse.get(), initial: 4, total: 4 },
     ];
     const query = api.postgres.query.bind(api.postgres);
     let started = 0,
