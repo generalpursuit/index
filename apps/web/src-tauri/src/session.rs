@@ -22,8 +22,51 @@ use crate::session_revision::Revision;
 static VISIBLE_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 static TOKEN: Mutex<TokenCache> = Mutex::new(TokenCache::Unread);
 static REVISION: Mutex<Revision> = Mutex::new(Revision::new());
+static INITIALIZED: OnceLock<Result<(), String>> = OnceLock::new();
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 pub fn init(app: tauri::AppHandle) { let _ = APP.set(app); }
+fn revision_entry() -> Result<Entry, String> {
+    #[cfg(feature = "native-smoke")]
+    let service = "com.generalpursuit.index.native-smoke.cache-revision".to_string();
+    #[cfg(not(feature = "native-smoke"))]
+    let service = format!("{}.cache-revision", env!("INDEX_DESKTOP_IDENTIFIER"));
+    Entry::new(&service, env!("INDEX_API_SERVER"))
+        .map_err(|_| "Could not access your saved session revision. Unlock your credential store and reopen Index.".into())
+}
+fn restore_revision(value: Option<String>) -> Result<Revision, String> {
+    let counter = match value {
+        Some(value) => value.parse::<u64>().map_err(|_| "Could not read your saved session revision.".to_string())?,
+        // Never collide with a cache produced by a release that reset revisions to zero.
+        None => std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "Could not initialize your session revision.".to_string())?.as_millis() as u64,
+    };
+    Ok(Revision::restored(counter))
+}
+fn initialize() -> Result<(), String> {
+    INITIALIZED.get_or_init(|| {
+        let entry = revision_entry()?;
+        let (saved, missing) = match entry.get_password() {
+            Ok(value) => (Some(value), false),
+            Err(Error::NoEntry) => (None, true),
+            Err(_) => return Err("Could not read your saved session revision. Unlock your credential store and reopen Index.".into()),
+        };
+        let revision = restore_revision(saved)?;
+        if missing { persist_revision(revision.current())?; }
+        VISIBLE_REVISION.store(revision.current(), std::sync::atomic::Ordering::SeqCst);
+        *REVISION.lock().unwrap() = revision;
+        Ok(())
+    }).clone()
+}
+fn persist_revision(revision: u64) -> Result<(), String> {
+    revision_entry()?.set_password(&revision.to_string())
+        .map_err(|_| "Could not update your session revision. Unlock your credential store and reopen Index.".into())
+}
+fn initialized() -> Result<(), String> {
+    match INITIALIZED.get() {
+        Some(result) => result.clone(),
+        None => Err("Check your session first.".into()),
+    }
+}
 #[derive(Serialize)]
 pub struct Snapshot { token: Option<String>, revision: u64 }
 #[derive(Clone, Serialize)]
@@ -82,19 +125,23 @@ pub async fn session_read() -> Result<Option<String>, String> {
 #[tauri::command]
 pub async fn session_snapshot() -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(|| {
+        initialize()?;
         let revision = REVISION.lock().unwrap();
         Ok(Snapshot { token: cached_token()?, revision: revision.current() })
     }).await.map_err(|_| "The credential operation was interrupted.".to_string())?
 }
 #[tauri::command]
 pub async fn session_revision() -> Result<u64, String> {
-    tauri::async_runtime::spawn_blocking(|| REVISION.lock().unwrap().current())
-        .await.map_err(|_| "The credential operation was interrupted.".to_string())
+    tauri::async_runtime::spawn_blocking(|| {
+        initialize()?;
+        Ok(REVISION.lock().unwrap().current())
+    }).await.map_err(|_| "The credential operation was interrupted.".to_string())?
 }
 pub fn check_revision(expected: u64) -> Result<(), String> { with_revision(expected, || ()) }
 /// A native state mutation must be atomic with respect to credential replacement.
 /// Lock order is always session then notification runtime, never the reverse.
 pub fn with_revision<T>(expected: u64, operation: impl FnOnce() -> T) -> Result<T, String> {
+    initialized()?;
     let revision = REVISION.lock().unwrap();
     revision.apply(expected, operation)
 }
@@ -102,6 +149,7 @@ pub fn with_revision<T>(expected: u64, operation: impl FnOnce() -> T) -> Result<
 /// across Keychain I/O, which can be slow or show a prompt. None while the lock is held or once
 /// the revision has moved, without running the operation.
 pub fn try_with_revision<T>(expected: u64, operation: impl FnOnce() -> T) -> Option<T> {
+    initialized().ok()?;
     try_apply(&REVISION, expected, operation)
 }
 fn try_apply<T>(revision: &Mutex<Revision>, expected: u64, operation: impl FnOnce() -> T) -> Option<T> {
@@ -112,12 +160,15 @@ async fn update(token: Option<String>, expected: Option<u64>, source: Option<Str
         return Err("Invalid session credential.".into());
     }
     tauri::async_runtime::spawn_blocking(move || {
+        initialize()?;
         // All windows, legacy callers and background readers share this lock. A held
         // Keychain operation completes before any newer session can be accepted.
         let mut revision = REVISION.lock().unwrap();
         if let Some(expected) = expected { revision.check(expected)?; }
         if token.is_some() && cached_token()? == token { return Ok(revision.current()); }
-        let result = write(token.clone());
+        // Persist ordering before credentials: a crash or failed credential write must never
+        // let the next process accept an old account's disk cache under a reused revision.
+        let result = persist_revision(revision.current() + 1).and_then(|()| write(token.clone()));
         *TOKEN.lock().unwrap() = if result.is_ok() { TokenCache::Ready(token) } else { TokenCache::Unavailable };
         let next = revision.advance();
         // Also drop displayed content when the Keychain fails; never claim sign-out succeeded.
@@ -138,18 +189,33 @@ pub async fn session_compare_write(window: WebviewWindow, token: Option<String>,
 #[tauri::command]
 pub async fn session_touch(window: WebviewWindow, expected_revision: u64, invalidate_notifications: Option<bool>) -> Result<u64, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        initialize()?;
         let mut revision = REVISION.lock().unwrap();
         revision.check(expected_revision)?;
         if invalidate_notifications == Some(true) { crate::notifications::invalidate(); }
+        let result = persist_revision(revision.current() + 1);
+        if result.is_err() { *TOKEN.lock().unwrap() = TokenCache::Unavailable; }
         let next = revision.advance();
         changed(next, Some(window.label().into()));
-        Ok(next)
+        result.map(|()| next)
     }).await.map_err(|_| "The credential operation was interrupted.".to_string())?
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn restored_revision_never_reuses_an_old_account_after_restart() {
+        let mut revision = restore_revision(Some("7".into())).unwrap();
+        let cached = revision.current();
+        let saved = revision.advance().to_string();
+        let restarted = restore_revision(Some(saved)).unwrap();
+        assert_eq!(restarted.current(), 8);
+        assert!(restarted.check(cached).is_err());
+        assert!(restore_revision(Some("broken".into())).is_err());
+        assert!(restore_revision(None).unwrap().current() > 0);
+    }
 
     #[test]
     fn snapshots_load_secure_storage_once_and_keep_erasure_in_memory() {
