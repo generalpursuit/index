@@ -16,10 +16,22 @@ final class CursorCollection<Item: Identifiable & Sendable> {
   private(set) var cursor: String?
   private(set) var error: String?
   private(set) var busy = false
+  private(set) var hasLoaded = false
   var loading: Bool { busy && items.isEmpty }
   private var key = ""
   private var generation = 0
   private var pageCount = 1
+
+  func restore(key: String, page: CursorPage<Item>?) {
+    guard self.key != key || items.isEmpty else { return }
+    self.key = key
+    if let page { items = unique(page.items); cursor = page.next; hasLoaded = true }
+  }
+  func patch(_ transform: (Item) -> Item?) {
+    invalidate()
+    items = items.compactMap(transform)
+  }
+  func replace(_ items: [Item]) { invalidate(); self.items = unique(items) }
 
   func invalidate() {
     generation += 1
@@ -33,6 +45,7 @@ final class CursorCollection<Item: Identifiable & Sendable> {
     error = nil
     busy = false
     pageCount = 1
+    hasLoaded = false
   }
 
   @discardableResult
@@ -70,6 +83,7 @@ final class CursorCollection<Item: Identifiable & Sendable> {
         count += 1
         if next == nil { break }
       }
+      hasLoaded = true
       items = unique(more ? items + loaded : loaded)
       cursor = next
       pageCount = more ? pageCount + 1 : max(1, count)

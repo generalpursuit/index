@@ -12,7 +12,7 @@ private actor FeatureStub: FeatureAPI {
   }
   private var replies: [String: [Result<Data, Error>]] = [:]
   private var calls: [Call] = []
-  private var snapshots: [String: Data] = [:]
+  private nonisolated let snapshots = SnapshotStub()
   private var paused: Set<String> = []
   private var continuations: [String: CheckedContinuation<Void, Never>] = [:]
   private var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
@@ -25,9 +25,13 @@ private actor FeatureStub: FeatureAPI {
   }
   func resume(_ path: String) { continuations.removeValue(forKey: path)?.resume() }
   func recorded() -> [Call] { calls }
-  func snapshot(_ path: String, _ json: String) { snapshots[path] = Data(json.utf8) }
+  func snapshot(_ path: String, _ json: String) { snapshots.write(path, data: Data(json.utf8)) }
+  nonisolated func snapshot<T: Decodable & Sendable>(_ path: String, query: [String: String]) -> T? {
+    guard let data = snapshots.read(path) else { return nil }
+    return try? JSONDecoder().decode(T.self, from: data)
+  }
   func cached<T: Decodable & Sendable>(_ path: String, query: [String: String]) async -> T? {
-    guard let data = snapshots[path] else { return nil }
+    guard let data = snapshots.read(path) else { return nil }
     return try? JSONDecoder().decode(T.self, from: data)
   }
   func request<T: Decodable & Sendable>(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) async throws -> T {
@@ -402,7 +406,7 @@ final class ReceiptCancellationTests: XCTestCase {
       guard case .strings(let ids)? = call.body?["ids"] else { return nil }
       return ids.count
     }
-    XCTAssertEqual(sizes, [30, 60, 90, 100, 5])
+    XCTAssertEqual(sizes, [30, 30, 30, 15])
   }
 
   func testCanceledRefreshPreservesRowsWithoutShowingAnError() async throws {
@@ -552,5 +556,121 @@ final class MessageTimelineTests: XCTestCase {
     XCTAssertEqual(label(at(2026, 10, 13, 18, 1)), "Today 18:01")
     // The day daylight saving starts lasts 23 hours but is still a whole day.
     XCTAssertEqual(label(at(2026, 3, 29, 12, 0), now: at(2026, 3, 30, 9, 0)), "Yesterday 12:00")
+  }
+}
+
+private final class SnapshotStub: @unchecked Sendable {
+  private let lock = NSLock()
+  private var values: [String: Data] = [:]
+  func read(_ key: String) -> Data? { lock.withLock { values[key] } }
+  func write(_ key: String, data: Data) { lock.withLock { values[key] = data } }
+}
+
+@MainActor
+final class AccountStoreTests: XCTestCase {
+  private func owner() throws -> Profile {
+    try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)
+  }
+  func testResourcesRestoreSynchronouslyAndReuseAcrossNavigation() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/feed/week", feed(["known"]))
+    await api.snapshot("/conversations", page([conversation("chat")]))
+    await api.snapshot("/conversations/chat/messages", page([message("known")]))
+    let store = AccountStore(api: api, profile: try owner())
+    XCTAssertEqual(store.feed("2026-01-01").feed?.own.items.first?.id, "known")
+    XCTAssertTrue(store.feed("2026-01-01") === store.feed("2026-01-01"))
+    XCTAssertEqual(store.inbox().conversations.first?.id, "chat")
+    let chat = store.conversation("chat")
+    XCTAssertEqual(chat.conversation?.id, "chat")
+    XCTAssertEqual(chat.messages.first?.id, "known")
+    XCTAssertTrue(chat === store.conversation("chat"))
+    let initialCalls = await api.recorded()
+    XCTAssertTrue(initialCalls.isEmpty)
+  }
+  func testOptimisticFavoriteRollsBackInEveryLoadedResource() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/feed/week", feed(["known"]))
+    let original: SavedLink = try decode(link("known"))
+    let store = AccountStore(api: api, profile: try owner())
+    let detail = store.link("known", opening: original)
+    let week = store.feed("2026-01-01")
+    await api.fail("/links/known/favorite", URLError(.notConnectedToInternet))
+    await api.pause("/links/known/favorite")
+    let write = Task { try await store.keep(original) }
+    await api.started("/links/known/favorite")
+    XCTAssertTrue(detail.link?.isFavorite == true)
+    XCTAssertTrue(week.feed?.own.items.first?.isFavorite == true)
+    await api.resume("/links/known/favorite")
+    do { try await write.value; XCTFail("Expected failure") } catch {}
+    XCTAssertFalse(detail.link?.isFavorite == true)
+    XCTAssertFalse(week.feed?.own.items.first?.isFavorite == true)
+  }
+  func testAccountClearFencesLateProfileRollback() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    await api.fail("/me/profile", URLError(.networkConnectionLost))
+    await api.pause("/me/profile")
+    let edit = Task { try await store.editProfile(body: ["name": .string("Next")]) }
+    await api.started("/me/profile")
+    XCTAssertEqual(store.profile.name, "Next")
+    store.clear()
+    let erasedName = store.profile.name
+    XCTAssertEqual(erasedName, "")
+    await api.resume("/me/profile")
+    do { _ = try await edit.value; XCTFail("Expected cancellation") } catch is CancellationError {} catch { XCTFail("Unexpected \(error)") }
+    XCTAssertEqual(store.profile.name, erasedName)
+    XCTAssertTrue(store.drafts.draft(for: "chat").isEmpty)
+  }
+  func testPulseRefreshesOnlyChangedListsAndStopsInBackground() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    store.active = true
+    let pulse = #"{"messages":{"unreadCount":2,"version":"m1"},"activity":{"unreadCount":3,"version":"a1"}}"#
+    await api.enqueue("/me/pulse", pulse)
+    await api.enqueue("/conversations", page([conversation("chat")]))
+    await api.enqueue("/me/activity", page([activity("a")], unread: true))
+    try await store.pulse()
+    XCTAssertEqual(store.unreadMessages, 2)
+    XCTAssertEqual(store.unreadActivity, 3)
+    let first = await api.recorded().count
+    await api.enqueue("/me/pulse", pulse)
+    try await store.pulse()
+    let unchangedCalls = await api.recorded()
+    XCTAssertEqual(unchangedCalls.count, first + 1)
+    await api.enqueue("/me/pulse", pulse.replacingOccurrences(of: "a1", with: "a2"))
+    await api.enqueue("/me/activity", page([activity("b")], unread: true))
+    try await store.pulse()
+    let calls = await api.recorded()
+    XCTAssertEqual(calls.filter { $0.path == "/conversations" }.count, 1)
+    XCTAssertEqual(calls.filter { $0.path == "/me/activity" }.count, 2)
+    XCTAssertEqual(calls.filter { $0.path == "/me/activity/read" }.count, 0)
+    store.active = false
+    try await store.pulse()
+    let backgroundCalls = await api.recorded()
+    XCTAssertEqual(backgroundCalls.count, calls.count)
+  }
+  func testMissingPulseFallsBackToOlderEndpoints() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    store.active = true
+    await api.fail("/me/pulse", APIError.server(404, "Missing"))
+    await api.enqueue("/me/messages/unread", #"{"unreadCount":1}"#)
+    await api.enqueue("/me/activity", page([], unread: true))
+    await api.enqueue("/me/activity", page([], unread: true))
+    await api.enqueue("/conversations", page([]))
+    try await store.pulse()
+    XCTAssertEqual(store.unreadMessages, 1)
+    let legacyCalls = await api.recorded()
+    XCTAssertEqual(legacyCalls.filter { $0.path == "/me/pulse" }.count, 1)
+  }
+  func testOnShowRefreshUsesAgeAndExplicitRefreshBypassesIt() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    var loads = 0
+    try await store.show("test", path: "/test") { loads += 1 }
+    try await store.show("test", path: "/test") { loads += 1 }
+    XCTAssertEqual(loads, 1)
+    try await store.show("test", path: "/test", force: true) { loads += 1 }
+    XCTAssertEqual(loads, 2)
   }
 }

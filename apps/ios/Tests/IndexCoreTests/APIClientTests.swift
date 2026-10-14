@@ -173,7 +173,8 @@ struct APIClientTests {
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
     let _: Success = try await client.request("/links/a")
     HTTPStub.handler = { request in
-      #expect(try credentials.read() == nil)
+      let stored = try credentials.read()
+      #expect(stored == nil)
       #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer signed.signature")
       let cached: Success? = client.cached("/links/a")
       #expect(cached == nil)

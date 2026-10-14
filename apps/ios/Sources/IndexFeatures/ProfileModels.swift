@@ -7,8 +7,25 @@ public final class ProfileWeekModel {
   private let pages = CursorCollection<SavedLink>()
   public var links: [SavedLink] { pages.items }
   public var cursor: String? { pages.cursor }
+  public var hasLoaded: Bool { pages.hasLoaded }
   public var error: String? { pages.error }
-  public init() {}
+  public init(api: (any FeatureAPI)? = nil, userID: String = "", week: String = "", filter: String = "all") {
+    let path = filter == "all" ? "/profiles/\(userID)/links" : "/groups/\(filter)/links"
+    let page: Page<SavedLink>? = api?.snapshot(path, query: ["weekStart": week, "limit": "30"])
+    pages.restore(key: path + ":" + week, page: page.map { CursorPage(items: $0.items, next: $0.nextCursor) })
+  }
+  public func clear() { pages.reset(); deleted = [:] }
+  private var deleted: [String: Int] = [:]
+  func patchLinks(_ transform: (SavedLink) -> SavedLink?) {
+    for (index, link) in links.enumerated() where transform(link) == nil { deleted[link.id] = index }
+    pages.patch(transform)
+  }
+  func restoreDeleted(_ link: SavedLink) {
+    guard let index = deleted.removeValue(forKey: link.id) else { return }
+    var restored = links
+    restored.insert(link, at: min(index, restored.count))
+    pages.replace(restored)
+  }
   public func load(api: any FeatureAPI, userID: String, week: String, filter: String, more: Bool = false) async throws {
     let path = filter == "all" ? "/profiles/\(userID)/links" : "/groups/\(filter)/links"
     let params = ["weekStart": week, "limit": "30"]
@@ -26,6 +43,7 @@ public final class ProfileWeekModel {
 
 @MainActor @Observable
 public final class ProfileModel {
+  public private(set) var summaryOnly = false
   public private(set) var profile: Profile?
   public private(set) var groups: [LinkGroup] = []
   public var error: String? { profileError ?? weeksError }
@@ -37,7 +55,20 @@ public final class ProfileModel {
   public var nextBefore: String? { pages.cursor }
   private var generation = 0
   private var selectedFilter = "all"
-  public init() {}
+  public init(api: (any FeatureAPI)? = nil, userID: String = "", opening: Profile? = nil, summaryOnly: Bool = false, filter: String = "all") {
+    self.summaryOnly = summaryOnly
+    profile = opening ?? api?.snapshot("/profiles/\(userID)", query: [:])
+    let cachedGroups: Page<LinkGroup>? = api?.snapshot("/groups", query: ["ownerId": userID, "limit": "100"])
+    groups = cachedGroups?.items ?? []
+    var params = ["limit": "10"]
+    if filter != "all" { params["groupId"] = filter }
+    let weeks: LibraryWeeks? = api?.snapshot("/profiles/\(userID)/weeks", query: params)
+    pages.restore(key: userID + ":" + filter, page: weeks.map { CursorPage(items: $0.items, next: $0.nextBefore) })
+  }
+  func patchProfile(_ value: Profile) { generation += 1; loading = false; summaryOnly = false; profile = value }
+  func patchGroups(_ transform: (LinkGroup) -> LinkGroup?) { groups = groups.compactMap(transform) }
+  public func clear() { generation += 1; profile = nil; groups = []; pages.reset(); loading = false; profileError = nil; weeksError = nil }
+  func setGroups(_ groups: [LinkGroup]) { self.groups = unique(groups) }
   public func created(_ group: LinkGroup) { groups = unique(groups + [group]) }
   @discardableResult
   public func load(api: any FeatureAPI, userID: String, filter: String) async throws -> Bool {
@@ -53,6 +84,7 @@ public final class ProfileModel {
         try Task.checkCancellation()
         guard version == generation else { return false }
         profile = snapshot
+        loading = profile == nil
       }
       if groups.isEmpty {
         let snapshot: Page<LinkGroup>? = await api.cached("/groups", query: ["ownerId": userID, "limit": "100"])
@@ -60,10 +92,12 @@ public final class ProfileModel {
         guard version == generation else { return false }
         groups = snapshot?.items ?? []
       }
+      async let availableGroups = loadGroups(api: api, ownerID: userID)
       let result: Profile = try await api.get("/profiles/\(userID)")
       try Task.checkCancellation()
       guard version == generation else { return false }
       profile = result
+      summaryOnly = false
       guard result.canViewContent else {
         groups = []
         pages.reset()
@@ -71,7 +105,7 @@ public final class ProfileModel {
         weeksError = nil
         return true
       }
-      let available = try await loadGroups(api: api, ownerID: userID)
+      let available = try await availableGroups
       guard version == generation else { return false }
       groups = available
       profileError = nil
@@ -108,6 +142,48 @@ public final class ProfileModel {
       guard !Task.isCancelled, !(error is CancellationError) else { return }
       if removesDisplayedContent(error) { groups = []; pages.reset() }
       weeksError = error.localizedDescription
+      throw error
+    }
+  }
+}
+
+@MainActor @Observable
+public final class ConnectionsModel {
+  private let pages = CursorCollection<Person>()
+  public var people: [Person] { pages.items }
+  public var after: String? { pages.cursor }
+  public var error: String? { pages.error }
+  public var hasLoaded: Bool { pages.hasLoaded }
+  private var generation = 0
+  public init(api: any FeatureAPI, account: String, kind: String) {
+    let page: PeoplePage? = api.snapshot("/profiles/\(account)/\(kind)", query: ["limit": "30"])
+    pages.restore(key: kind, page: page.map { CursorPage(items: $0.items, next: $0.nextAfter) })
+  }
+  public func clear() { generation += 1; pages.reset() }
+  public func load(api: any FeatureAPI, account: String, kind: String, more: Bool = false) async throws {
+    try await pages.load(key: kind, more: more, cached: { nil }, fetch: { after in
+      var query = ["limit": "30"]
+      query["after"] = after
+      let page: PeoplePage = try await api.get("/profiles/\(account)/\(kind)", query: query)
+      return CursorPage(items: page.items, next: page.nextAfter)
+    })
+  }
+  public func remove(_ person: Person, kind: String, api: any FeatureAPI) async throws {
+    let version = generation
+    let index = people.firstIndex { $0.id == person.id }
+    pages.patch { $0.id == person.id ? nil : $0 }
+    do {
+      let path = kind == "followers" ? "/me/followers/\(person.id)" : "/profiles/\(person.id)/follow"
+      let _: Success = try await api.write(path, method: "DELETE")
+      guard version == generation else { throw CancellationError() }
+    } catch {
+      guard version == generation else { throw CancellationError() }
+      if removesDisplayedContent(error) { pages.reset() }
+      else if let index {
+        var restored = people
+        restored.insert(person, at: min(index, restored.count))
+        pages.replace(restored)
+      }
       throw error
     }
   }
