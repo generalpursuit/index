@@ -1,3 +1,4 @@
+import { restoreAccount } from "./data/account";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
@@ -69,6 +70,8 @@ if (!rootElement) {
 }
 
 async function mount() {
+  // Private mode and storage failures still permit an ordinary network-only start.
+  await restoreAccount().catch(() => {});
   const dispose = await installDesktopSync(
     queryClient,
     () => router.invalidate(),

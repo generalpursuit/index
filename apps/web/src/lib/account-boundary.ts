@@ -1,7 +1,7 @@
 import type { MutationFunctionContext, MutationOptions, QueryClient } from "@tanstack/react-query";
 
-const clearListeners = new Set<() => void>();
-export function onAccountClear(listener: () => void) {
+const clearListeners = new Set<() => void | Promise<unknown>>();
+export function onAccountClear(listener: () => void | Promise<unknown>) {
   clearListeners.add(listener);
   return () => {
     clearListeners.delete(listener);
@@ -16,14 +16,14 @@ export function assertCurrentAccount(expected: number) {
 /** Keep active session observers attached, but synchronously discard the previous identity. */
 export function clearAccountState(client: QueryClient, keepSessionRequest = false) {
   generation++;
-  for (const listener of clearListeners) listener();
+  const clearing = [...clearListeners].map((listener) => listener());
   const cancelled = client.cancelQueries({
     predicate: (query) => !keepSessionRequest || query.queryKey[0] !== "session",
   });
   client.setQueryData(["session"], null);
   client.removeQueries({ predicate: (query) => query.queryKey[0] !== "session" });
   client.getMutationCache().clear();
-  return cancelled;
+  return Promise.all([cancelled, ...clearing]);
 }
 
 // TanStack passes the same MutationFunctionContext to each callback of an attempt. Keeping

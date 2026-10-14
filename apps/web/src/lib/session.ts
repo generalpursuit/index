@@ -1,3 +1,4 @@
+import { rememberAccount, type AccountSession } from "@/data/account";
 import { queryOptions } from "@tanstack/react-query";
 import { redirect } from "@tanstack/react-router";
 import { accountGeneration, assertCurrentAccount, clearAccountState } from "./account-boundary";
@@ -7,7 +8,7 @@ import { queryClient } from "@/utils/orpc";
 
 export const sessionOptions = queryOptions({
   queryKey: ["session"],
-  queryFn: async () => {
+  queryFn: async (): Promise<AccountSession | null> => {
     const generation = accountGeneration();
     const result = await authClient.getSession();
     let nativeRevision = checkedSessionRevision();
@@ -39,7 +40,13 @@ export const sessionOptions = queryOptions({
     }
     assertCurrentAccount(acceptedGeneration);
     acceptDesktopSession(nativeRevision);
-    return result.data;
+    await rememberAccount(
+      result.data,
+      result.data ? new Date(result.data.session.expiresAt).getTime() : 0,
+      nativeRevision >= 0 ? nativeRevision : undefined,
+    );
+    assertCurrentAccount(acceptedGeneration);
+    return result.data ? { user: result.data.user } : null;
   },
   staleTime: 15_000,
   refetchInterval: 60_000,
