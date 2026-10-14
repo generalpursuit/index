@@ -14,6 +14,7 @@ public final class FeedWeeksModel {
     let profile: Profile? = api?.snapshot("/me/profile", query: [:])
     followingCount = profile?.followingCount
   }
+  func following(_ count: Int?) { followingCount = count }
   public func clear() { generation += 1; weeks = [Week.monday()]; followingCount = nil; error = nil }
   public func load(api: any FeatureAPI, selectedWeek: String) async throws {
     generation += 1
@@ -82,6 +83,7 @@ public final class FeedWeekModel {
   }
 
   public func clear() { generation += 1; feed = nil; busy = false; loading = false; deleted = [:]; error = nil }
+  func removePerson(_ id: String) { if var current = feed { current.people.removeAll { $0.id == id }; feed = current } }
   func added(_ link: SavedLink) {
     guard var current = feed else { return }
     current.own.items = unique([link] + current.own.items)

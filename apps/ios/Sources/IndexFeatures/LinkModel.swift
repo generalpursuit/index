@@ -14,6 +14,7 @@ public final class LinkModel {
   public private(set) var loading = false
   public private(set) var error: String?
   private var generation = 0
+  private var accountGeneration = 0
   public init(id: String, api: any FeatureAPI, opening: SavedLink? = nil) {
     link = opening ?? api.snapshot("/links/\(id)", query: [:])
     if let link {
@@ -23,8 +24,9 @@ public final class LinkModel {
     let comments: Page<Comment>? = api.snapshot("/links/\(id)/comments", query: ["limit": "30"])
     pages.restore(key: id, page: comments.map { CursorPage(items: $0.items, next: $0.nextCursor) })
   }
-  public func clear() { generation += 1; link = nil; author = nil; group = nil; pages.reset(); deleted = true; loading = false; error = nil }
+  public func clear() { generation += 1; accountGeneration += 1; link = nil; author = nil; group = nil; pages.reset(); deleted = true; loading = false; error = nil }
   func patch(_ value: SavedLink?) { generation += 1; loading = false; link = value; deleted = value == nil }
+  func patchGroup(_ value: LinkGroup?) { group = value }
   public func load(id: String, api: any FeatureAPI) async throws {
     generation += 1
     let version = generation
@@ -68,16 +70,16 @@ public final class LinkModel {
     })
   }
   public func addComment(id: String, body: String, author: Person, api: any FeatureAPI) async throws {
-    let version = generation
+    let version = accountGeneration
     let pending = Comment.pending(linkID: id, author: author, body: body)
     pages.replace(comments + [pending])
     do {
       let saved: Comment = try await api.write("/links/\(id)/comments", body: ["body": .string(body)])
       try Task.checkCancellation()
-      guard version == generation else { throw CancellationError() }
+      guard version == accountGeneration else { throw CancellationError() }
       pages.patch { $0.id == pending.id ? saved : $0 }
     } catch {
-      guard version == generation else { throw CancellationError() }
+      guard version == accountGeneration else { throw CancellationError() }
       if removesDisplayedContent(error) { link = nil; pages.reset() }
       else { pages.patch { $0.id == pending.id ? nil : $0 } }
       self.error = error.localizedDescription
@@ -85,16 +87,21 @@ public final class LinkModel {
     }
   }
   public func deleteComment(_ comment: Comment, api: any FeatureAPI) async throws {
-    let old = comments
-    let version = generation
+    let index = comments.firstIndex { $0.id == comment.id }
+    let version = accountGeneration
     pages.patch { $0.id == comment.id ? nil : $0 }
     do {
       let _: Success = try await api.write("/comments/\(comment.id)", method: "DELETE")
       try Task.checkCancellation()
-      guard version == generation else { throw CancellationError() }
+      guard version == accountGeneration else { throw CancellationError() }
     } catch {
-      guard version == generation else { throw CancellationError() }
-      if removesDisplayedContent(error) { link = nil; pages.reset() } else { pages.replace(old) }
+      guard version == accountGeneration else { throw CancellationError() }
+      if removesDisplayedContent(error) { link = nil; pages.reset() }
+      else if let index {
+        var restored = comments
+        restored.insert(comment, at: min(index, restored.count))
+        pages.replace(restored)
+      }
       self.error = error.localizedDescription
       throw error
     }

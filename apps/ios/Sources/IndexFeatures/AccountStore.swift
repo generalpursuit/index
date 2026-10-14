@@ -14,7 +14,9 @@ public final class AccountStore {
   public private(set) var unreadMessages = 0
   public private(set) var unreadActivity = 0
   public private(set) var pulseError: String?
-  public var notificationPreferences: NotificationPreferences?
+  public private(set) var notificationPreferences: NotificationPreferences?
+  public var inboxQuery: String?
+  public var activityFilter: String?
   public var openConversationID: String?
   public var active = false
   public var pulseInterval: Duration { openConversationID == nil ? .seconds(15) : .seconds(4) }
@@ -31,6 +33,9 @@ public final class AccountStore {
   @ObservationIgnored private var shownAt: [String: Date] = [:]
   @ObservationIgnored private var refreshing: Set<String> = []
   @ObservationIgnored private var pendingEdits: Set<String> = []
+  @ObservationIgnored private var inboxVersions: [String: String] = [:]
+  @ObservationIgnored private var activityVersions: [String: String] = [:]
+  @ObservationIgnored private var conversationVersions: [String: String] = [:]
   @ObservationIgnored private var messageVersion: String?
   @ObservationIgnored private var activityVersion: String?
   @ObservationIgnored private var legacyPulse = false
@@ -56,6 +61,7 @@ public final class AccountStore {
     guard accepted, value.id == accountID else { return }
     profile = value
     summaryOnly = false
+    shownAt["settings-profile"] = .now
     for model in profiles.values where model.profile?.id == accountID { model.patchProfile(value) }
   }
   public func clear() {
@@ -64,6 +70,8 @@ public final class AccountStore {
     active = false
     drafts.clear()
     openConversationID = nil
+    inboxQuery = nil
+    activityFilter = nil
     unreadMessages = 0
     unreadActivity = 0
     feedWeeks.clear()
@@ -82,7 +90,7 @@ public final class AccountStore {
     // The detached store can never publish again; its views leave with session identity.
     feeds = [:]; profiles = [:]; profileWeeks = [:]; inboxes = [:]
     conversations = [:]; activities = [:]; links = [:]; recipientLists = [:]; connectionLists = [:]
-    shownAt = [:]; refreshing = []; pendingEdits = []
+    shownAt = [:]; refreshing = []; pendingEdits = []; conversationVersions = [:]; inboxVersions = [:]; activityVersions = [:]
   }
   public func feed(_ week: String) -> FeedWeekModel {
     if let model = feeds[week] { return model }
@@ -121,6 +129,35 @@ public final class AccountStore {
     connectionLists[kind] = model
     return model
   }
+  public func setPreferences(_ keys: [String], value: Bool) async throws {
+    let key = "notification-preferences"
+    let version = try beginEdit(key)
+    defer { if version == generation { pendingEdits.remove(key) } }
+    guard let old = notificationPreferences else { throw APIError.invalidResponse }
+    var next = old
+    for key in keys {
+      switch key {
+      case "message": next.message = value
+      case "comment": next.comment = value
+      case "mention": next.mention = value
+      case "request": next.request = value
+      case "follow": next.follow = value
+      case "accepted": next.accepted = value
+      case "previews": next.previews = value
+      default: throw APIError.invalidResponse
+      }
+    }
+    notificationPreferences = next
+    do {
+      let saved: NotificationPreferences = try await api.write("/me/notifications/preferences", method: "PATCH", body: Dictionary(uniqueKeysWithValues: keys.map { ($0, .bool(value)) }))
+      try check(version)
+      notificationPreferences = saved
+    } catch {
+      try check(version)
+      notificationPreferences = old
+      throw error
+    }
+  }
   public func refreshPreferences() async throws {
     try await show("notification-preferences", path: "/me/notifications/preferences", stable: true) {
       let value: NotificationPreferences = try await self.api.get("/me/notifications/preferences")
@@ -134,6 +171,29 @@ public final class AccountStore {
     inboxes[query] = model
     return model
   }
+  public func refreshInbox(_ query: String, more: Bool = false, force: Bool = false) async throws {
+    let model = inbox(query)
+    var params = ["limit": "30"]
+    if !query.isEmpty { params["query"] = query }
+    let changed = inboxVersions[query] != messageVersion
+    try await show("inbox:" + query, path: "/conversations", query: params, force: more || force || changed || model.error != nil) {
+      try await model.load(api: self.api, query: query, more: more)
+    }
+    guard accepted else { throw CancellationError() }
+    if let messageVersion { inboxVersions[query] = messageVersion }
+  }
+  public func refreshActivity(_ filter: String, more: Bool = false, force: Bool = false) async throws {
+    let model = activity(filter)
+    var params = ["limit": "30"]
+    if filter != "all" { params["type"] = filter }
+    let changed = activityVersions[filter] != activityVersion
+    try await show("activity:" + filter, path: "/me/activity", query: params, force: more || force || changed || model.error != nil) {
+      try await model.load(api: self.api, filter: filter, more: more, acknowledge: false)
+    }
+    guard accepted else { throw CancellationError() }
+    if let activityVersion { activityVersions[filter] = activityVersion }
+    try await readActivity(filter: filter)
+  }
   public func conversation(_ id: String, opening: Conversation? = nil) -> ConversationModel {
     if let model = conversations[id] { return model }
     let summary = opening ?? inboxes.values.flatMap(\.conversations).first { $0.id == id }
@@ -141,11 +201,25 @@ public final class AccountStore {
     conversations[id] = model
     return model
   }
+  public func refreshConversation(_ id: String, opening: Conversation? = nil) async throws {
+    let model = conversation(id, opening: opening)
+    let changedWhileClosed = conversationVersions[id] != messageVersion
+    try await show("conversation:" + id, path: "/conversations/\(id)", force: changedWhileClosed || model.error != nil) {
+      try await model.load(api: self.api, id: id, opening: opening)
+    }
+    guard accepted else { throw CancellationError() }
+    if let messageVersion { conversationVersions[id] = messageVersion }
+  }
   public func activity(_ filter: String = "all") -> ActivityModel {
     if let model = activities[filter] { return model }
     let model = ActivityModel(api: accepted ? api : DiscardedAccountAPI(), filter: filter)
     activities[filter] = model
     return model
+  }
+  public func prefetch(_ link: SavedLink) async {
+    guard active, accepted else { return }
+    let model = self.link(link.id, opening: link)
+    try? await show("link:" + link.id, path: "/links/\(link.id)") { try await model.load(id: link.id, api: self.api) }
   }
   public func link(_ id: String, opening: SavedLink? = nil) -> LinkModel {
     if let model = links[id] { return model }
@@ -207,12 +281,10 @@ public final class AccountStore {
           unreadActivity = value.activity.unreadCount
           messagesChanged = messageVersion != value.messages.version
           activityChanged = activityVersion != value.activity.version
-          // Commit versions after all changed resources refreshed. Failed reads retry
-          // on the next pulse even if the server's version did not change again.
-          try await refreshLive(messages: messagesChanged, activity: activityChanged)
+          // Each successful list advances independently. A failing sibling does not
+          // make the next pulse repeat reads that already reached the right version.
+          try await refreshLive(messages: messagesChanged, activity: activityChanged, messageVersion: value.messages.version, activityVersion: value.activity.version)
           guard active, accepted, version == generation else { return }
-          messageVersion = value.messages.version
-          activityVersion = value.activity.version
           pulseError = nil
           return
         } catch APIError.server(404, _) { legacyPulse = true }
@@ -232,19 +304,41 @@ public final class AccountStore {
       throw error
     }
   }
-  private func refreshLive(messages: Bool, activity: Bool) async throws {
-    async let inbox: Void = refreshMessages(changed: messages)
-    async let events: Void = refreshActivity(changed: activity)
+  private func refreshLive(messages: Bool, activity: Bool, messageVersion: String? = nil, activityVersion: String? = nil) async throws {
+    async let inbox: Void = refreshMessages(changed: messages, version: messageVersion)
+    async let events: Void = refreshActivity(changed: activity, version: activityVersion)
     _ = try await (inbox, events)
   }
-  private func refreshMessages(changed: Bool) async throws {
+  private func refreshMessages(changed: Bool, version: String? = nil) async throws {
+    let accountVersion = generation
     guard changed, active, accepted else { return }
-    for (query, model) in inboxes { try await model.load(api: api, query: query) }
+    let selected = Set(["", inboxQuery].compactMap { $0 })
+    for query in selected {
+      if let version, inboxVersions[query] == version { continue }
+      try await inbox(query).load(api: api, query: query)
+      try Task.checkCancellation()
+      if let version { inboxVersions[query] = version }
+    }
     if let id = openConversationID { try await conversation(id).load(api: api, id: id) }
+    try check(accountVersion)
+    try Task.checkCancellation()
+    guard active else { throw CancellationError() }
+    if let version { messageVersion = version; if let id = openConversationID { conversationVersions[id] = version } }
   }
-  private func refreshActivity(changed: Bool) async throws {
+  private func refreshActivity(changed: Bool, version: String? = nil) async throws {
+    let accountVersion = generation
     guard changed, active, accepted else { return }
-    for (filter, model) in activities { try await model.load(api: api, filter: filter, acknowledge: false) }
+    let selected = Set(["all", activityFilter].compactMap { $0 })
+    for filter in selected {
+      if let version, activityVersions[filter] == version { continue }
+      try await self.activity(filter).load(api: api, filter: filter, acknowledge: false)
+      try Task.checkCancellation()
+      if let version { activityVersions[filter] = version }
+    }
+    try check(accountVersion)
+    try Task.checkCancellation()
+    guard active else { throw CancellationError() }
+    if let version { activityVersion = version }
   }
 
   private func check(_ version: Int) throws {
@@ -261,7 +355,15 @@ public final class AccountStore {
   private func patchLink(_ id: String, with value: SavedLink?) {
     let transform: (SavedLink) -> SavedLink? = { $0.id == id ? value : $0 }
     for model in feeds.values { model.patchLinks(transform) }
-    for model in profileWeeks.values { model.patchLinks(transform) }
+    let groups = profiles.values.flatMap(\.groups)
+    for model in profileWeeks.values {
+      model.patchLinks { link in
+        guard link.id == id else { return link }
+        guard let value, model.includes(value, groups: groups) else { return nil }
+        return value
+      }
+      if let value, model.includes(value, groups: groups) { model.restoreDeleted(value) }
+    }
     links[id]?.patch(value)
     dirtyContent()
   }
@@ -330,26 +432,42 @@ public final class AccountStore {
     defer { if version == generation { pendingEdits.remove(key) } }
     let old = profiles[person.id + ":all"]?.profile?.followingStatus ?? person.followingStatus
     let next = old == nil ? (person.profileVisibility == .private ? "pending" : "accepted") : nil
-    patchFollow(id: person.id, status: next)
+    patchFollow(id: person.id, status: next, previous: old)
     do {
       if old == nil {
         let saved: FollowState = try await api.write("/profiles/\(person.id)/follow")
         try check(version)
-        patchFollow(id: person.id, status: saved.status)
+        patchFollow(id: person.id, status: saved.status, previous: next)
       } else {
         let _: Success = try await api.write("/profiles/\(person.id)/follow", method: "DELETE")
         try check(version)
       }
     } catch {
       try check(version)
-      patchFollow(id: person.id, status: old)
+      patchFollow(id: person.id, status: old, previous: next)
       throw error
     }
+    if old != nil {
+      for model in feeds.values { model.removePerson(person.id) }
+      if person.profileVisibility == .private {
+        for model in links.values where model.link?.ownerId == person.id { model.clear() }
+        for model in profileWeeks.values { model.hideOwner(person.id) }
+      }
+    }
   }
-  private func patchFollow(id: String, status: String?) {
+  private func patchFollow(id: String, status: String?, previous: String?) {
+    let delta = (status == "accepted" ? 1 : 0) - (previous == "accepted" ? 1 : 0)
+    if let count = profile.followingCount { profile.followingCount = max(0, count + delta) }
+    feedWeeks.following(profile.followingCount)
+    for model in profiles.values where model.profile?.id == accountID { model.patchProfile(profile) }
     discovery.patchFollow(id: id, status: status)
     for model in profiles.values where model.profile?.id == id {
-      if var value = model.profile { value.followingStatus = status; model.patchProfile(value) }
+      if var value = model.profile {
+        value.followingStatus = status
+        value.canViewContent = value.profileVisibility == .public || status == "accepted" || id == accountID
+        if !value.canViewContent { value.linkCount = nil }
+        model.patchProfile(value)
+      }
     }
     dirtyContent()
   }
@@ -400,7 +518,14 @@ public final class AccountStore {
     let key = "group:" + original.id
     let version = try beginEdit(key)
     defer { if version == generation { pendingEdits.remove(key) } }
+    let affected = storedLinks().filter { $0.groupId == original.id }
     for model in profiles.values { model.patchGroups { $0.id == original.id ? nil : $0 } }
+    for link in affected {
+      var next = link
+      next.groupId = nil
+      patchLink(link.id, with: next)
+      links[link.id]?.patchGroup(nil)
+    }
     do {
       let _: Success = try await api.write("/groups/\(original.id)", method: "DELETE", body: ["deleteLinks": .bool(false)])
       try check(version)
@@ -408,10 +533,17 @@ public final class AccountStore {
     } catch {
       try check(version)
       for model in profiles.values where model.profile?.id == original.ownerId { model.created(original) }
+      for link in affected {
+        var restored = storedLinks().first(where: { $0.id == link.id }) ?? link
+        restored.groupId = original.id
+        patchLink(link.id, with: restored)
+        links[link.id]?.patchGroup(original)
+      }
       throw error
     }
-    // A successful deletion cannot roll back because a later membership read failed.
-    for (week, model) in feeds { try? await model.load(api: api, week: week) }
+  }
+  private func storedLinks() -> [SavedLink] {
+    unique(links.values.compactMap(\.link) + feeds.values.flatMap { ($0.feed?.own.items ?? []) + ($0.feed?.people.flatMap { $0.links.items } ?? []) } + profileWeeks.values.flatMap(\.links))
   }
   public func added(_ link: SavedLink) {
     guard accepted, link.ownerId == accountID else { return }
@@ -438,7 +570,7 @@ public final class AccountStore {
     }
   }
   public func refreshGroups(force: Bool = false) async throws {
-    try await show("groups:" + accountID, path: "/groups", query: ["ownerId": accountID, "limit": "100"], stable: true, force: force) {
+    try await show("groups:" + accountID, path: "/groups", query: ["ownerId": accountID, "limit": "100"], force: force) {
       let result = try await loadGroups(api: self.api, ownerID: self.accountID)
       guard self.accepted else { throw CancellationError() }
       self.profileModel(self.accountID).setGroups(result)
@@ -447,6 +579,7 @@ public final class AccountStore {
   public func created(_ group: LinkGroup) { guard accepted else { return }; for model in profiles.values where model.profile?.id == group.ownerId { model.created(group) }; dirtyContent() }
   private func patchGroup(_ group: LinkGroup) {
     for model in profiles.values { model.patchGroups { $0.id == group.id ? group : $0 } }
+    for model in links.values where model.link?.groupId == group.id { model.patchGroup(group) }
     dirtyContent()
   }
   public func send(in id: String) async throws {

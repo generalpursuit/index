@@ -75,28 +75,4 @@ public final class ActivityModel {
       return next
     }
   }
-  public func resolve(_ activity: Activity, accept: Bool, api: any FeatureAPI) async throws {
-    let old = items
-    let version = generation
-    pages.patch { item in
-      guard item.id == activity.id else { return item }
-      var next = item
-      next.requestStatus = accept ? "accepted" : "declined"
-      return next
-    }
-    do {
-      if accept {
-        let _: FollowState = try await api.write("/me/follow-requests/\(activity.actor.id)/accept")
-      } else {
-        let _: Success = try await api.write("/me/follow-requests/\(activity.actor.id)", method: "DELETE")
-      }
-      try Task.checkCancellation()
-      guard version == generation else { return }
-    } catch {
-      guard version == generation else { throw CancellationError() }
-      if removesDisplayedContent(error) { pages.reset() } else { pages.replace(old) }
-      receiptError = error.localizedDescription
-      throw error
-    }
-  }
 }

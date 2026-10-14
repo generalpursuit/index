@@ -26,6 +26,19 @@ struct PersistentCacheTests {
     await afterLogout.accept(scope: "https://one.example", account: "alice")
     #expect(afterLogout.snapshot("/links/b") == nil)
   }
+  @Test func serverChangeErasesPreviouslyAcceptedServers() async throws {
+    let directory = folder()
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let first = ResponseCache(directory: directory)
+    await first.accept(scope: "https://one.example", account: "alice")
+    _ = try await first.load("/links/a") { Data("private".utf8) }
+    let switched = ResponseCache(directory: directory)
+    await switched.accept(scope: "https://two.example", account: "alice")
+    #expect(switched.snapshot("/links/a") == nil)
+    let originalServer = ResponseCache(directory: directory)
+    await originalServer.accept(scope: "https://one.example", account: "alice")
+    #expect(originalServer.snapshot("/links/a") == nil)
+  }
   @Test func rejectsWrongScopeFormatAndExpiredDiskEntries() async throws {
     for changed in ["format", "stored", "scope", "account"] {
       let directory = folder()

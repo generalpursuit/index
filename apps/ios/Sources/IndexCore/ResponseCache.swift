@@ -113,6 +113,9 @@ final class ResponseSnapshots: @unchecked Sendable {
       if let directory {
         let selected = accountDirectory!
         let server = selected.deletingLastPathComponent()
+        if let servers = try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil) {
+          for other in servers where other != server { try? FileManager.default.removeItem(at: other) }
+        }
         if let children = try? FileManager.default.contentsOfDirectory(at: server, includingPropertiesForKeys: nil) {
           for child in children where child != selected { try? FileManager.default.removeItem(at: child) }
         }

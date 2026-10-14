@@ -328,6 +328,12 @@ public enum ContentPlaceholder {
       body: "A good find to share with you", createdAt: Date().formatted(.iso8601),
       attachment: nil, hasAttachment: false, restrictedAuthor: nil, replyTo: nil)
   }
+  public static var notificationPreferences: NotificationPreferences {
+    NotificationPreferences(message: false, comment: false, mention: false, request: false, follow: false, accepted: false, previews: false)
+  }
+  public static func group(_ index: Int = 0) -> LinkGroup {
+    LinkGroup(id: "placeholder-\(index)", slug: nil, ownerId: "placeholder", name: "A collection of links", kind: "custom", visibility: .public)
+  }
   public static func activity(_ index: Int = 0) -> Activity {
     Activity(id: "placeholder-\(index)", type: "follow", actor: person(index), createdAt: Date().formatted(.iso8601),
       readAt: nil, linkId: nil, commentId: nil, body: nil, requestStatus: nil)

@@ -11,7 +11,7 @@ public struct MessageTimelineRow: Identifiable, Sendable {
   public let startsRun: Bool
   /// Whether this message closes its sender's run, so its bubble takes the run's tail.
   public let endsRun: Bool
-  public var id: String { message.id }
+  public var id: String { message.clientId }
 }
 
 /// A stamp's emphasised day and its time, such as "Today" and "11:15".

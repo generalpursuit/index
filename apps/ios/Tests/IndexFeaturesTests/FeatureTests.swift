@@ -26,6 +26,9 @@ private actor FeatureStub: FeatureAPI {
   func resume(_ path: String) { continuations.removeValue(forKey: path)?.resume() }
   func recorded() -> [Call] { calls }
   func snapshot(_ path: String, _ json: String) { snapshots.write(path, data: Data(json.utf8)) }
+  nonisolated func snapshotDate(_ path: String, query: [String: String]) -> Date? {
+    snapshots.read(path) == nil ? nil : .now
+  }
   nonisolated func snapshot<T: Decodable & Sendable>(_ path: String, query: [String: String]) -> T? {
     guard let data = snapshots.read(path) else { return nil }
     return try? JSONDecoder().decode(T.self, from: data)
@@ -672,5 +675,185 @@ final class AccountStoreTests: XCTestCase {
     XCTAssertEqual(loads, 1)
     try await store.show("test", path: "/test", force: true) { loads += 1 }
     XCTAssertEqual(loads, 2)
+  }
+}
+
+@MainActor
+final class OptimisticStoreTests: XCTestCase {
+  private func owner() throws -> Profile {
+    try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followingCount":2,"followedBy":{"users":[],"total":0}}"#)
+  }
+  func testSendAppearsBeforeResponseAndRetryPreservesBubbleIdentity() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    let summary: Conversation = try decode(conversation("chat"))
+    let model = store.conversation("chat", opening: summary)
+    store.drafts.edit("hello", in: "chat")
+    await api.fail("/conversations/chat/messages", URLError(.networkConnectionLost))
+    await api.pause("/conversations/chat/messages")
+    let send = Task { try await store.send(in: "chat") }
+    await api.started("/conversations/chat/messages")
+    let pending = try XCTUnwrap(store.drafts.draft(for: "chat").pending)
+    XCTAssertEqual(model.messages.first?.id, pending.clientID)
+    XCTAssertEqual(model.sendStates[pending.clientID], "Sending…")
+    let date = model.messages.first?.createdAt
+    await api.resume("/conversations/chat/messages")
+    do { try await send.value; XCTFail("Expected unknown outcome") } catch {}
+    XCTAssertEqual(model.sendStates[pending.clientID], "Not confirmed · retry")
+    let saved = message("server-id").replacingOccurrences(of: #""clientId":"client""#, with: #""clientId":"\#(pending.clientID)""#)
+    await api.enqueue("/conversations/chat/messages", saved)
+    await api.pause("/conversations/chat/messages")
+    let retry = Task { try await store.send(in: "chat") }
+    await api.started("/conversations/chat/messages")
+    XCTAssertEqual(model.messages.first?.createdAt, date)
+    await api.resume("/conversations/chat/messages")
+    try await retry.value
+    XCTAssertEqual(model.messages.map(\.id), ["server-id"])
+    XCTAssertEqual(MessageTimeline.rows(model.messages).first?.id, pending.clientID)
+    XCTAssertTrue(model.sendStates.isEmpty)
+    XCTAssertTrue(store.drafts.draft(for: "chat").isEmpty)
+    let calls = await api.recorded()
+    let firstPayload = try JSONSerialization.jsonObject(with: payload(calls[0])) as? NSDictionary
+    let retryPayload = try JSONSerialization.jsonObject(with: payload(calls[1])) as? NSDictionary
+    XCTAssertEqual(firstPayload, retryPayload)
+  }
+  func testDeleteRestoresListPositionAndLinkEditsUseCanonicalResponse() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/feed/week", feed(["a", "b"]))
+    let store = AccountStore(api: api, profile: try owner())
+    let original: SavedLink = try decode(link("a"))
+    let model = store.link("a", opening: original)
+    let week = store.feed("2026-01-01")
+    await api.fail("/links/a", URLError(.notConnectedToInternet))
+    await api.pause("/links/a")
+    let deletion = Task { try await store.deleteLink(original) }
+    await api.started("/links/a")
+    XCTAssertEqual(week.feed?.own.items.map(\.id), ["b"])
+    XCTAssertNil(model.link)
+    await api.resume("/links/a")
+    do { try await deletion.value; XCTFail("Expected rejection") } catch {}
+    XCTAssertEqual(week.feed?.own.items.map(\.id), ["a", "b"])
+    let canonical = link("a").replacingOccurrences(of: #""title":"a""#, with: #""title":"Canonical""#)
+    await api.enqueue("/links/a", canonical)
+    await api.pause("/links/a")
+    let edit = Task { try await store.editLink(original, body: ["title": .string("Instant")]) }
+    await api.started("/links/a")
+    XCTAssertEqual(model.link?.title, "Instant")
+    await api.resume("/links/a")
+    try await edit.value
+    XCTAssertEqual(model.link?.title, "Canonical")
+    XCTAssertEqual(week.feed?.own.items.first?.title, "Canonical")
+  }
+  func testFollowAndGroupEditRollBackSharedFields() async throws {
+    let api = FeatureStub()
+    let person: Person = try decode(#"{"id":"them","name":"Them","profileVisibility":"public"}"#)
+    let group: LinkGroup = try decode(#"{"id":"g","ownerId":"me","name":"Old","kind":"custom","visibility":"public"}"#)
+    await api.snapshot("/discovery/recommendations", #"{"items":[{"id":"them","name":"Them","profileVisibility":"public"}]}"#)
+    let store = AccountStore(api: api, profile: try owner())
+    store.created(group)
+    store.seed(person)
+    await api.fail("/profiles/them/follow", URLError(.notConnectedToInternet))
+    await api.pause("/profiles/them/follow")
+    let follow = Task { try await store.follow(person) }
+    await api.started("/profiles/them/follow")
+    XCTAssertEqual(store.discovery.people.first?.followingStatus, "accepted")
+    XCTAssertEqual(store.profile.followingCount, 3)
+    await api.resume("/profiles/them/follow")
+    do { try await follow.value; XCTFail("Expected rejection") } catch {}
+    XCTAssertNil(store.discovery.people.first?.followingStatus)
+    XCTAssertEqual(store.profile.followingCount, 2)
+    await api.fail("/groups/g", URLError(.networkConnectionLost))
+    await api.pause("/groups/g")
+    let groupEdit = Task { try await store.editGroup(group, name: "New", visibility: .private) }
+    await api.started("/groups/g")
+    XCTAssertEqual(store.profileModel("me").groups.first?.name, "New")
+    XCTAssertEqual(store.profileModel("me").groups.first?.visibility, .private)
+    await api.resume("/groups/g")
+    do { _ = try await groupEdit.value; XCTFail("Expected rejection") } catch {}
+    XCTAssertEqual(store.profileModel("me").groups.first?.name, "Old")
+    XCTAssertEqual(store.profileModel("me").groups.first?.visibility, .public)
+  }
+  func testCommentRollbackSurvivesAnOverlappingLinkPatch() async throws {
+    let api = FeatureStub()
+    let original: SavedLink = try decode(link("a"))
+    let model = LinkModel(id: "a", api: api, opening: original)
+    await api.fail("/links/a/comments", URLError(.notConnectedToInternet))
+    await api.pause("/links/a/comments")
+    let send = Task { try await model.addComment(id: "a", body: "Instant", author: self.owner().person, api: api) }
+    await api.started("/links/a/comments")
+    XCTAssertEqual(model.comments.first?.body, "Instant")
+    var kept = original
+    kept.isFavorite = true
+    model.patch(kept)
+    await api.resume("/links/a/comments")
+    do { try await send.value; XCTFail("Expected rejection") } catch {}
+    XCTAssertTrue(model.comments.isEmpty)
+    XCTAssertTrue(model.link?.isFavorite == true)
+  }
+  func testFavoriteRemovalAndRollbackRestoreCollectionMembership() async throws {
+    let api = FeatureStub()
+    let kept = link("a").replacingOccurrences(of: #""isFavorite":false"#, with: #""isFavorite":true"#)
+    await api.snapshot("/groups", page([#"{"id":"favorites","ownerId":"me","name":"Favorites","kind":"favorites","visibility":"public"}"#]))
+    await api.snapshot("/groups/favorites/links", page([kept]))
+    let store = AccountStore(api: api, profile: try owner())
+    let model = store.profileWeek(userID: "me", week: "2026-01-01", filter: "favorites")
+    let original: SavedLink = try decode(kept)
+    await api.fail("/links/a/favorite", URLError(.networkConnectionLost))
+    await api.pause("/links/a/favorite")
+    let edit = Task { try await store.keep(original) }
+    await api.started("/links/a/favorite")
+    XCTAssertTrue(model.links.isEmpty)
+    await api.resume("/links/a/favorite")
+    do { try await edit.value; XCTFail("Expected rejection") } catch {}
+    XCTAssertEqual(model.links.map(\.id), ["a"])
+  }
+}
+
+@MainActor
+final class PulseFreshnessTests: XCTestCase {
+  private func owner() throws -> Profile {
+    try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)
+  }
+  func testSuccessfulPulseSiblingDoesNotRefetchAfterAnotherListFails() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    store.active = true
+    let pulse = #"{"messages":{"unreadCount":0,"version":"m1"},"activity":{"unreadCount":0,"version":"a1"}}"#
+    await api.enqueue("/me/pulse", pulse)
+    await api.enqueue("/conversations", page([conversation("chat")]))
+    await api.fail("/me/activity", APIError.server(500, "Unavailable"))
+    await api.pause("/me/activity")
+    let first = Task { try await store.pulse() }
+    await api.started("/me/activity")
+    while !store.inbox().hasLoaded { await Task.yield() }
+    for _ in 0..<20 { await Task.yield() }
+    await api.resume("/me/activity")
+    do { try await first.value; XCTFail("Expected failure") } catch {}
+    await api.enqueue("/me/pulse", pulse)
+    await api.enqueue("/me/activity", page([], unread: true))
+    try await store.pulse()
+    let calls = await api.recorded()
+    XCTAssertEqual(calls.filter { $0.path == "/conversations" }.count, 1)
+    XCTAssertEqual(calls.filter { $0.path == "/me/activity" }.count, 2)
+  }
+  func testOpeningConversationRefreshesWhenPulseChangedWhileItWasClosed() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/conversations/chat", conversation("chat"))
+    await api.snapshot("/conversations/chat/messages", page([message("old")]))
+    let store = AccountStore(api: api, profile: try owner())
+    let model = store.conversation("chat")
+    store.active = true
+    await api.enqueue("/me/pulse", #"{"messages":{"unreadCount":0,"version":"new"},"activity":{"unreadCount":0,"version":"a1"}}"#)
+    await api.enqueue("/conversations", page([conversation("chat")]))
+    await api.enqueue("/me/activity", page([], unread: true))
+    try await store.pulse()
+    XCTAssertEqual(model.messages.first?.id, "old")
+    await api.enqueue("/conversations/chat", conversation("chat"))
+    await api.enqueue("/conversations/chat/messages", page([message("new")]))
+    await api.enqueue("/conversations/chat/read", #"{"success":true}"#)
+    try await store.refreshConversation("chat")
+    XCTAssertEqual(model.messages.first?.id, "new")
+    let calls = await api.recorded()
+    XCTAssertEqual(calls.filter { $0.path == "/conversations/chat/messages" }.count, 1)
   }
 }
