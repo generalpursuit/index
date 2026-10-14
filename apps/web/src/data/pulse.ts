@@ -69,10 +69,13 @@ export function mergeNewestPage<
   const oldest = newest.items.at(-1);
   const boundary = oldest?.updatedAt ?? oldest?.createdAt;
   const tail =
-    current.pages[0]?.items.filter(
-      (item) =>
-        !ids.has(item.id) && (!boundary || (item.updatedAt ?? item.createdAt ?? "") < boundary),
-    ) ?? [];
+    current.pages[0]?.items.filter((item) => {
+      const at = item.updatedAt ?? item.createdAt ?? "";
+      return (
+        !ids.has(item.id) &&
+        (!boundary || at < boundary || (at === boundary && item.id < oldest!.id))
+      );
+    }) ?? [];
   return {
     ...current,
     pages: [

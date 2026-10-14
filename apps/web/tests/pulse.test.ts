@@ -85,3 +85,20 @@ test("newest-page refresh keeps loaded history and never duplicates an overlappi
   assert.deepEqual(merged.pageParams, current.pageParams);
   assert.equal(merged.pages[0]!.nextCursor, "a");
 });
+
+test("newest-page refresh preserves the cursor's ID tie-breaker when messages share a timestamp", () => {
+  const item = (id: string) => ({ id, createdAt: "2026-10-14T12:00:00.000Z" });
+  const current = {
+    pages: [{ items: [item("b"), item("a")], nextCursor: "a" }],
+    pageParams: [undefined],
+  };
+  const merged = mergeNewestPage(current, {
+    items: [item("c"), item("b")],
+    nextCursor: "b",
+  });
+  assert.deepEqual(
+    merged.pages[0]!.items.map((message) => message.id),
+    ["c", "b", "a"],
+  );
+  assert.equal(merged.pages[0]!.nextCursor, "a");
+});
