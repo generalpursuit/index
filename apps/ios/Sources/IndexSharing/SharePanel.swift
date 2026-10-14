@@ -76,6 +76,7 @@ public struct SharePanel: View {
       if let error = model.error { Text(error).font(.subheadline).foregroundStyle(IndexPalette.destructive).textSelection(.enabled) }
     }.padding(20).frame(minWidth: 280, idealWidth: 380)
     }
+      .scrollIndicators(.hidden)
       .foregroundStyle(IndexPalette.foreground).background(IndexPalette.background).tint(IndexPalette.primary)
       .task { await model.connect() }.onDisappear { model.cancel() }
       .interactiveDismissDisabled(creatingPending)

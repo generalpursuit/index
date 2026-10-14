@@ -25,16 +25,16 @@ struct ProfileView: View {
   private var starredSection: Bool { filter == "starred" || selected?.kind == "starred" }
   @State private var pickingWeek = false
   @State private var readingWeek = Week.monday()
-  @State private var listTop: CGFloat = 160
   private var canAdd: Bool { own && !starredSection && (filter == "all" || selected?.kind == "custom") }
   var body: some View {
     GeometryReader { geometry in
+      let height = geometry.size.height
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
             LoadingError(error: error, loading: loading, retry: { await load() })
             if let profile {
-              profileHeader(profile).padding(.bottom, 32)
+              profileHeader(profile).padding(.top, 40).padding(.bottom, 32)
               if !own && profile.followedBy.total > 0 {
                 Text(socialText(profile.followedBy)).font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
                   .padding(.bottom, 28)
@@ -64,7 +64,6 @@ struct ProfileView: View {
                   }.id(week)
                 }
                 if weekIDs.isEmpty {
-                  HStack { Spacer(); filterMenu }.frame(height: 52)
                   Text(starredSection ? "No starred links yet" : "No links yet")
                     .foregroundStyle(IndexPalette.subtleForeground).frame(maxWidth: .infinity)
                     .padding(.vertical, 60)
@@ -73,30 +72,24 @@ struct ProfileView: View {
                 // Let the last heading reach the top when selected from the week picker.
                 if let last = weekIDs.last {
                   let rows = weeks.first { $0.weekStart == last }?.count ?? 0
-                  Color.clear.frame(height: max(0, geometry.size.height - 52 - CGFloat(rows) * 46
+                  Color.clear.frame(height: max(0, height - 52 - CGFloat(rows) * 46
                     - (canAdd && last == Week.monday() ? 48 : 0)))
                 }
               }
             }
-          }.padding(.top, 40).padding(.leading, 20).padding(.trailing, 36)
+          }.padding(.leading, 20).padding(.trailing, 36).padding(.bottom, 68)
         }.coordinateSpace(name: "profile-scroll").scrollIndicators(.hidden)
+          .frame(width: geometry.size.width, height: height, alignment: .top).clipped()
           .refreshable { await load() }
           .onPreferenceChange(ProfileWeekPositions.self) { positions in
             if let nearest = positions.min(by: { abs($0.value) < abs($1.value) }) { readingWeek = nearest.key }
-            listTop = max(52, (positions[weekIDs.first ?? ""] ?? -52) + 52)
           }
-          .overlay(alignment: .topTrailing) {
+          .overlay(alignment: .trailing) {
             if profile?.canViewContent == true {
               WeekScrubber(weeks: weekIDs, selected: readingWeek) { week in
                 withAnimation { proxy.scrollTo(week, anchor: .top) }
-              }.frame(height: max(0, geometry.size.height - listTop - 24), alignment: .top)
-                .padding(.top, listTop).padding(.trailing, 4)
-            }
-          }
-          .overlay(alignment: .topTrailing) {
-            if profile?.canViewContent == true && !weekIDs.isEmpty {
-              filterMenu.frame(maxWidth: 120, alignment: .trailing)
-                .padding(.trailing, 36).offset(y: max(0, listTop - 52) + 4)
+              }.frame(height: min(height * 0.6, CGFloat(weekIDs.count) * 12))
+                .padding(.trailing, 4)
             }
           }
           .sheet(isPresented: $pickingWeek) {
@@ -104,8 +97,13 @@ struct ProfileView: View {
               withAnimation { proxy.scrollTo(week, anchor: .top) }
             }
           }
+          .overlay(alignment: .bottom) {
+            if profile?.canViewContent == true && (own || !groups.isEmpty) {
+              listDock.padding(.horizontal, 16).padding(.bottom, 12)
+            }
+          }
       }
-    }.background(IndexPalette.background)
+    }.clipped().background(IndexPalette.background)
       .task(id: "\(userID)-\(app.revision)") { await load() }
       .sheet(isPresented: $creatingGroup) {
         GroupEditorView { group in
@@ -125,7 +123,7 @@ struct ProfileView: View {
         VStack(alignment: .leading, spacing: 10) {
           HStack(spacing: 10) {
             Text(profile.name).font(IndexFont.serif(40, weight: .semibold)).tracking(-0.6)
-              .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
+              .lineLimit(1).minimumScaleFactor(0.01).accessibilityAddTraits(.isHeader)
             Image(systemName: profile.profileVisibility == .private ? "lock" : "globe")
               .font(.system(size: 16)).foregroundStyle(IndexPalette.subtleForeground)
               .accessibilityLabel(profile.profileVisibility == .private ? "Private profile" : "Public profile")
@@ -159,30 +157,44 @@ struct ProfileView: View {
         }.frame(minHeight: 52, alignment: .leading)
       }.buttonStyle(.plain).accessibilityLabel("Jump to a week, now \(Week.label(week))")
         .accessibilityAddTraits(.isHeader)
-      Spacer(minLength: 68)
+      Spacer(minLength: 0)
     }.frame(minHeight: 52).background(IndexPalette.background)
   }
-  private var filterMenu: some View {
-    Menu {
-      Button("All") { filter = "all" }
-      ForEach(groups.filter { $0.kind != "starred" }.sorted { $0.kind == "favorites" && $1.kind != "favorites" }) { group in
-        Button { filter = group.id } label: {
-          Label(group.name, systemImage: group.visibility == .private ? "lock" : group.kind == "favorites" ? "heart" : "folder")
-        }
-      }
-      if own {
-        Divider()
-        Button("Starred", systemImage: "star") { filter = starredGroup?.id ?? "starred" }
-        Divider()
-        Button("New group", systemImage: "plus") { creatingGroup = true }
-      }
-    } label: {
-      HStack(spacing: 6) {
-        if selected?.visibility == .private { Image(systemName: "lock").font(.system(size: 12)) }
-        Text(starredSection ? "Starred" : selected?.name ?? "All").lineLimit(1)
-        Image(systemName: "chevron.down").font(.system(size: 12)).foregroundStyle(IndexPalette.subtleForeground)
-      }.font(IndexFont.sans(14, weight: .medium)).frame(minHeight: 44)
-    }.accessibilityLabel("Showing \(starredSection ? "Starred" : selected?.name ?? "All")")
+  private var listDock: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal) {
+        HStack(spacing: 2) {
+          listChip("All", id: "all")
+          ForEach(groups.filter { $0.kind != "starred" }.sorted { $0.kind == "favorites" && $1.kind != "favorites" }) { group in
+            listChip(group.name, id: group.id, locked: group.visibility == .private)
+          }
+          if own {
+            listChip("Starred", id: starredGroup?.id ?? "starred")
+            Button { creatingGroup = true } label: {
+              Image(systemName: "plus").font(.system(size: 16)).foregroundStyle(IndexPalette.subtleForeground)
+                .frame(width: 32, height: 32)
+            }.buttonStyle(.plain).accessibilityLabel("New group")
+          }
+        }.padding(6)
+      }.scrollIndicators(.hidden).fixedSize(horizontal: false, vertical: true)
+        .background(IndexPalette.card, in: Capsule())
+        .clipShape(Capsule())
+        .overlay(Capsule().stroke(IndexPalette.foreground.opacity(0.08), lineWidth: 1))
+        .shadow(color: .black.opacity(0.1), radius: 3, y: 1)
+        .accessibilityElement(children: .contain).accessibilityLabel("Lists")
+        .onChange(of: filter, initial: true) { _, value in proxy.scrollTo(value, anchor: .center) }
+    }
+  }
+  private func listChip(_ title: String, id: String, locked: Bool = false) -> some View {
+    Button { filter = id } label: {
+      HStack(spacing: 4) {
+        Text(title).font(IndexFont.sans(13)).lineLimit(1)
+        if locked { Image(systemName: "lock").font(.system(size: 12)).foregroundStyle(IndexPalette.subtleForeground) }
+      }.padding(.horizontal, 14).frame(height: 32)
+        .background(filter == id ? IndexPalette.muted : .clear, in: Capsule())
+    }.buttonStyle(.plain).id(id)
+      .accessibilityLabel(locked ? "\(title), only you" : title)
+      .accessibilityAddTraits(filter == id ? .isSelected : [])
   }
   private var weekIDs: [String] {
     Array(

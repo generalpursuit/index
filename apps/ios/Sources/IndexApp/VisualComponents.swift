@@ -45,12 +45,14 @@ extension View {
 
 private struct IndexSheetStyle: ViewModifier {
   @Environment(AppModel.self) private var app
+  @Environment(\.dismiss) private var dismiss
   @State private var presentationID = UUID()
   func body(content: Content) -> some View {
     content.environment(\.indexSheet, true)
       .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
       .presentationBackground(IndexPalette.surface).presentationCornerRadius(22)
       .presentationDragIndicator(.visible)
+      .accessibilityAction(.escape) { dismiss() }
       .onAppear {
         if !app.sheetPresentations.contains(presentationID) { app.sheetPresentations.append(presentationID) }
       }
@@ -83,7 +85,15 @@ struct BackButton: View {
 }
 struct SheetCloseButton: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.indexSheet) private var isSheet
   var body: some View {
+    #if os(iOS)
+      if !isSheet { closeButton }
+    #else
+      closeButton
+    #endif
+  }
+  private var closeButton: some View {
     Button { dismiss() } label: {
       Image(systemName: "xmark").font(.system(size: 18, weight: .regular))
         .frame(width: 44, height: 44)
@@ -110,6 +120,7 @@ struct CategoryMark: View {
 
 /// CSS's minmax(0, 1fr) / auto columns: a short domain only takes its actual width;
 /// a long domain is capped at 120 points and the title receives the remaining space.
+/// Columns share a vertical center even when a text field and menu have different heights.
 struct LinkRowLayout: Layout {
   private let gap: CGFloat = 12
   func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -125,7 +136,7 @@ struct LinkRowLayout: Layout {
     let trailing = trailingWidth(bounds.width, subviews)
     let leading = max(0, bounds.width - trailing - (subviews.count > 1 ? gap : 0))
     for (index, view) in subviews.enumerated() {
-      view.place(at: CGPoint(x: index == 0 ? bounds.minX : bounds.maxX - trailing, y: bounds.minY),
+      view.place(at: CGPoint(x: index == 0 ? bounds.minX : bounds.maxX - trailing, y: bounds.midY), anchor: .leading,
         proposal: ProposedViewSize(width: index == 0 ? leading : trailing, height: bounds.height))
     }
   }

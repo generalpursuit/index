@@ -9,6 +9,7 @@ struct GroupEditorView: View {
   let onCreated: ((LinkGroup) -> Void)?
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.indexSheet) private var isSheet
   @State private var draft: GroupDraft
   @State private var pending = false
   @State private var error: String?
@@ -25,7 +26,7 @@ struct GroupEditorView: View {
   private var feedback: String? { attempted ? draft.validationError ?? error : error }
   var body: some View {
     if draft.original == nil, let api = app.api {
-      GroupCreationForm(api: api, onCancel: { dismiss() }, onCreated: { group in
+      GroupCreationForm(api: api, showsCloseButton: showsCloseButton, onCancel: { dismiss() }, onCreated: { group in
         onCreated?(group); app.changed(); dismiss()
       }, onAuthError: { app.handle($0) })
     } else {
@@ -83,6 +84,13 @@ struct GroupEditorView: View {
           : "Its links stay on your profile without a group.")
       }
     }
+  }
+  private var showsCloseButton: Bool {
+    #if os(iOS)
+      !isSheet
+    #else
+      true
+    #endif
   }
   private func submit() {
     guard !pending, !confirmingPrivacy else { return }

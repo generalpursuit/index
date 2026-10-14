@@ -5,6 +5,7 @@ import IndexCore
 public struct GroupCreationForm: View {
   let api: APIClient
   let onCancel: () -> Void
+  let showsCloseButton: Bool
   let onCreated: (LinkGroup) -> Void
   let onAuthError: (Error) -> Void
   let onPendingChange: (Bool) -> Void
@@ -13,9 +14,9 @@ public struct GroupCreationForm: View {
   @State private var error: String?
   @State private var operation: Task<Void, Never>?
   @FocusState private var focused: Bool
-  public init(api: APIClient, onCancel: @escaping () -> Void, onCreated: @escaping (LinkGroup) -> Void,
+  public init(api: APIClient, showsCloseButton: Bool = true, onCancel: @escaping () -> Void, onCreated: @escaping (LinkGroup) -> Void,
               onAuthError: @escaping (Error) -> Void = { _ in }, onPendingChange: @escaping (Bool) -> Void = { _ in }) {
-    self.api = api; self.onCancel = onCancel; self.onCreated = onCreated
+    self.api = api; self.showsCloseButton = showsCloseButton; self.onCancel = onCancel; self.onCreated = onCreated
     self.onAuthError = onAuthError; self.onPendingChange = onPendingChange
   }
   public var body: some View {
@@ -24,10 +25,12 @@ public struct GroupCreationForm: View {
         HStack {
           Text("Create group").font(IndexTypography.serif(26)).accessibilityAddTraits(.isHeader)
           Spacer()
-          Button(action: onCancel) {
-            Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44)
-          }.buttonStyle(.plain).disabled(pending).accessibilityLabel("Close")
-        }
+          if showsCloseButton {
+            Button(action: onCancel) {
+              Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44)
+            }.buttonStyle(.plain).disabled(pending).accessibilityLabel("Close")
+          }
+        }.frame(minHeight: 44)
         HStack {
           TextField("Group name", text: $draft.name).textFieldStyle(.plain).font(IndexTypography.sans(16))
             .padding(.horizontal, 14).padding(.vertical, 11)

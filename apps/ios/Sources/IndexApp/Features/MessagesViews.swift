@@ -101,6 +101,7 @@ struct ParticipantAvatars: View {
 struct RecipientView: View {
   let attachment: SavedLink?
   @Environment(AppModel.self) private var app
+  @Environment(\.indexSheet) private var isSheet
   @State private var model = RecipientModel()
   private var people: [Person] { model.people }
   @State private var selected: [Person] = []
@@ -150,7 +151,7 @@ struct RecipientView: View {
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
     }.indexPage()
-      .safeAreaInset(edge: .bottom) {
+      .safeAreaInset(edge: .bottom, spacing: 0) {
         AsyncButton {
           guard let api = app.api else { return }
           let generation = app.session.generation
@@ -165,7 +166,7 @@ struct RecipientView: View {
           Text("Continue\(selected.isEmpty ? "" : " · \(selected.count)")").frame(
             maxWidth: .infinity)
         }.buttonStyle(PillStyle(selected: true)).disabled(selected.isEmpty).padding(20).background(
-          IndexPalette.background)
+          isSheet ? IndexPalette.surface : IndexPalette.background)
       }
       .task(id: query) {
         do {

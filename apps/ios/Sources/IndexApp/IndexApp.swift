@@ -13,6 +13,7 @@ struct IndexApp: App {
   var body: some Scene {
     WindowGroup {
       RootView().environment(app).preferredColorScheme(ThemePreference(storedValue: storedTheme).colorScheme)
+        .scrollIndicators(.hidden)
         .tint(IndexPalette.foreground)
         .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
         .task(id: storedTheme) {
@@ -48,24 +49,25 @@ struct RootView: View {
       } else if app.profile == nil {
         LoginView()
       } else {
-        NavigationStack(path: $navigation.path) {
-          Group {
-            switch app.navigation.tab {
-            case .feed: FeedView()
-            case .discover: DiscoverView()
-            case .activity: ActivityView()
-            case .messages: MessagesView()
-            case .profile: ProfileView(userID: app.userID)
+        // Geometry-based pages need navigation's height reserved in the layout.
+        VStack(spacing: 0) {
+          NavigationStack(path: $navigation.path) {
+            Group {
+              switch app.navigation.tab {
+              case .feed: FeedView()
+              case .discover: DiscoverView()
+              case .activity: ActivityView()
+              case .messages: MessagesView()
+              case .profile: ProfileView(userID: app.userID)
+              }
             }
+            .hideNativeNavigation()
+            .navigationDestination(for: Destination.self) { destination in
+              destinationView(destination).hideNativeNavigation()
+            }
+            .background(IndexPalette.background)
           }
-          .hideNativeNavigation()
-          .navigationDestination(for: Destination.self) { destination in
-            destinationView(destination).hideNativeNavigation()
-          }
-          .background(IndexPalette.background)
-        }
-        .id(app.session.generation)
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+          .id(app.session.generation)
           if app.showsTabs {
             HStack(spacing: 0) {
               ForEach(AppTab.allCases, id: \.self) { tab in

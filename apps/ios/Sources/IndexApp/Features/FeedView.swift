@@ -14,7 +14,8 @@ struct FeedView: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let compact = geometry.size.height < 640
+      let height = geometry.size.height
+      let compact = height < 640
       VStack(alignment: .leading, spacing: compact ? 14 : 20) {
         Button { pickingWeek = true } label: {
           Text(Week.label(selectedWeek)).font(IndexFont.serif(compact ? 36 : 44, relativeTo: .largeTitle))
@@ -25,9 +26,11 @@ struct FeedView: View {
           .id(selectedWeek)
       }.padding(.leading, 20).padding(.trailing, 36)
         .padding(.top, compact ? 28 : 40).padding(.bottom, compact ? 20 : 40)
-        .overlay(alignment: .topTrailing) {
+        .frame(width: geometry.size.width, height: height, alignment: .topLeading)
+        .overlay(alignment: .trailing) {
           WeekScrubber(weeks: weeks, selected: selectedWeek, onSelect: select)
-            .padding(.top, compact ? 78 : 104).padding(.bottom, 24).padding(.trailing, 4)
+            .frame(height: min(height * 0.6, CGFloat(weeks.count) * 12))
+            .padding(.trailing, 4)
         }
     }.background(IndexPalette.background)
       .sheet(isPresented: $pickingWeek) {
@@ -65,6 +68,7 @@ private struct FeedWeekView: View {
     GeometryReader { geometry in
       let gap: CGFloat = compact ? 14 : 20
       let ownHeight = max(100, (geometry.size.height - gap) * (compact ? 0.425 : 0.5))
+      let peopleHeight = max(0, geometry.size.height - gap - ownHeight)
       VStack(alignment: .leading, spacing: gap) {
         VStack(alignment: .leading, spacing: 0) {
           if week == Week.monday() { QuickAddView() }
@@ -95,23 +99,25 @@ private struct FeedWeekView: View {
               PageEnd(cursor: feed.nextAfter) { try await morePeople() }.frame(width: 44)
             }.scrollTargetLayout()
           }.scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
+            .frame(height: peopleHeight)
             .accessibilityLabel("Your people")
         } else if feed != nil {
-          VStack(alignment: .leading, spacing: 12) {
-            Text(followingCount == 0 ? "Find your people" : "Nothing shared this week yet.")
-              .font(IndexFont.sans(14, weight: .medium))
-            Text("Links from people you follow will appear here.")
-              .font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
-            if followingCount == 0 {
-              Button { app.navigation.path = []; app.navigation.tab = .discover } label: {
-                Text("Discover people →").font(IndexFont.sans())
-              }.buttonStyle(.plain).padding(.top, 4)
-            }
-            Spacer(minLength: 0)
-          }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+          ScrollView {
+            VStack(spacing: 12) {
+              Text(followingCount == 0 ? "Find people whose taste you trust" : week == Week.monday()
+                ? "Nothing shared this week yet" : "Nothing shared this week")
+                .font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
+              if followingCount == 0 {
+                Button { app.navigation.path = []; app.navigation.tab = .discover } label: {
+                  Text("Discover").font(IndexFont.sans())
+                }.buttonStyle(.plain)
+              }
+            }.multilineTextAlignment(.center).padding(24)
+              .frame(maxWidth: .infinity, minHeight: peopleHeight)
+          }.scrollIndicators(.hidden).frame(height: peopleHeight)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(IndexPalette.border))
         } else { Spacer(minLength: 0) }
-      }
+      }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
     }.task(id: app.revision) { await load() }
   }
   private func personColumn(_ person: PersonLinks) -> some View {
