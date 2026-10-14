@@ -133,6 +133,7 @@ struct RootView: View {
     }
     .onChange(of: app.verifiedSessionRevision, initial: true) { _, _ in
       if app.sessionReady {
+        NotificationController.shared.attach(app)
         app.resumeReadableURL()
         Task { await NotificationController.shared.synchronize(app) }
       }

@@ -74,6 +74,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
         let status: NotificationDeviceStatus = try await api.request("/me/notifications/devices/status", method: "POST", body: deviceBody())
         guard version == generation, app.userID == account else { return }
         registered = status.registered
+        await setActive(app: app, foreground: foreground)
         #if os(iOS)
         UIApplication.shared.registerForRemoteNotifications()
         #endif
