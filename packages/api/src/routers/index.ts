@@ -3,6 +3,7 @@ import { requireVerifiedSession } from "../procedures";
 import { routesRouter } from "../features/routes/router";
 import { activityRouter } from "../features/activity/router";
 import { messagesRouter } from "../features/messages/router";
+import { pulseRouter } from "../features/pulse/router";
 import { favoritesRouter } from "../features/favorites/router";
 import { implement } from "@orpc/server";
 
@@ -33,6 +34,7 @@ export const appRouter = api.router({
   stars: starsRouter,
   activity: activityRouter,
   messages: messagesRouter,
+  pulse: pulseRouter,
   favorites: favoritesRouter,
   comments: commentsRouter,
   feed: feedRouter,

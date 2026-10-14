@@ -117,6 +117,7 @@ describe("HTTP API transports", () => {
       "/conversations/{conversationId}/messages",
       "/conversations/{conversationId}/read",
       "/me/messages/unread",
+      "/me/pulse",
       "/discovery/users",
       "/discovery/recommendations",
     ]) {
@@ -181,6 +182,15 @@ describe("HTTP API transports", () => {
     assert.equal(sent.status, 200);
     assert.equal((await request(`/conversations/${c.id}/messages`, null)).status, 401);
     assert.equal((await request("/me/activity?limit=1", "bob")).status, 200);
+    const pulse = await request("/me/pulse", "bob");
+    assert.equal(pulse.status, 200);
+    const state = (await pulse.json()) as {
+      messages: { unreadCount: number; version: string };
+      activity: { unreadCount: number; version: string };
+    };
+    assert.equal(state.messages.unreadCount, 1);
+    assert.equal(typeof state.activity.version, "string");
+    assert.equal((await request("/me/pulse", null)).status, 401);
     assert.equal((await request("/feed/week?weekStart=2026-01-05", "alice")).status, 200);
     assert.equal((await request("/feed/week?weekStart=2026-01-06", "alice")).status, 400);
     assert.equal((await request("/profiles/alice/weeks", null)).status, 200);
@@ -214,5 +224,6 @@ describe("HTTP API transports", () => {
     assert.deepEqual(await rpc.links.get({ id: created.id }), created);
     assert.deepEqual(await rpc.links.listMine({}), { items: [created], nextCursor: null });
     assert.equal(await rpc.healthCheck(), "OK");
+    assert.equal((await rpc.pulse.get()).messages.unreadCount, 0);
   });
 });

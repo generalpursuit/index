@@ -153,6 +153,7 @@ describe("mounted server application", () => {
       new Headers({ Cookie: `__Secure-better-auth.session_token=${token}` }),
     ]) {
       assert.equal((await request("/api/v1/me/profile", { headers })).status, 403);
+      assert.equal((await request("/api/v1/me/pulse", { headers })).status, 403);
     }
     const verified = await post("/security/verify-email", { code: mail.at(-1)!.code }, token);
     assert.equal(verified.status, 200);
