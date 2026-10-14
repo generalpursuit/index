@@ -9,15 +9,16 @@ struct ProfileView: View {
     _filter = State(initialValue: groupID ?? "all")
   }
   @Environment(AppModel.self) private var app
-  @State private var model = ProfileModel()
-  private var profile: Profile? { model.profile }
+  @Environment(\.screenVisible) private var visible
+  @Environment(AccountStore.self) private var store
+  private var model: ProfileModel { store.profileModel(userID, filter: filter) }
+  private var profile: Profile? { model.profile ?? (error == nil ? ContentPlaceholder.profile : nil) }
   private var groups: [LinkGroup] { model.groups }
   @State private var creatingGroup = false
   @State private var filter = "all"
   private var weeks: [LibraryWeek] { model.weeks }
   private var nextBefore: String? { model.nextBefore }
   private var error: String? { model.error }
-  private var loading: Bool { model.loading }
   var own: Bool { userID == app.userID }
   var selected: LinkGroup? { groups.first { $0.id == filter } }
   // Starred holds other people's links, so it is a section of its own rather than a filter.
@@ -32,14 +33,14 @@ struct ProfileView: View {
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
-            LoadingError(error: error, loading: loading, retry: { await load() })
+            RequestError(error: error, retry: { await load() })
             if let profile {
               profileHeader(profile).padding(.bottom, 32)
               if !own && profile.followedBy.total > 0 {
                 Text(socialText(profile.followedBy)).font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
                   .padding(.bottom, 28)
               }
-              if !profile.canViewContent {
+              if !profile.canViewContent && !model.summaryOnly {
                 VStack(spacing: 16) {
                   Divider()
                   Image(systemName: "lock").font(.system(size: 32)).padding(.top, 48)
@@ -80,7 +81,7 @@ struct ProfileView: View {
             }
           }.padding(.top, 40).padding(.leading, 20).padding(.trailing, 36)
         }.coordinateSpace(name: "profile-scroll").scrollIndicators(.hidden)
-          .refreshable { await load() }
+          .refreshable { await load(force: true) }
           .onPreferenceChange(ProfileWeekPositions.self) { positions in
             if let nearest = positions.min(by: { abs($0.value) < abs($1.value) }) { readingWeek = nearest.key }
             listTop = max(52, (positions[weekIDs.first ?? ""] ?? -52) + 52)
@@ -106,16 +107,14 @@ struct ProfileView: View {
           }
       }
     }.background(IndexPalette.background)
-      .task(id: "\(userID)-\(app.revision)") { await load() }
+      .task(id: "\(userID)-\(visible)") { if visible { await load() } }
       .sheet(isPresented: $creatingGroup) {
         GroupEditorView { group in
           model.created(group)
           filter = group.id
         }.indexSheetStyle().presentationDetents([.height(360), .large])
       }
-      .task(id: filter) {
-        do { try await loadWeeks() } catch { app.handle(error) }
-      }
+      .task(id: filter) { if visible { await load() } }
   }
   private func profileHeader(_ profile: Profile) -> some View {
     VStack(alignment: .leading, spacing: 12) {
@@ -146,7 +145,7 @@ struct ProfileView: View {
             IndexSymbol("NavSettings").frame(width: 25, height: 25).frame(width: 44, height: 44)
           }.buttonStyle(.plain).accessibilityLabel("Settings")
         } else if profile.canViewContent { FollowButton(profile: profile) }
-      }
+      }.calmPlaceholder(active: model.profile == nil && error == nil)
     }
   }
   private func weekHeader(_ week: String) -> some View {
@@ -185,19 +184,24 @@ struct ProfileView: View {
     }.accessibilityLabel("Showing \(starredSection ? "Starred" : selected?.name ?? "All")")
   }
   private var weekIDs: [String] {
-    Array(
+    if model.profile == nil || model.summaryOnly { return [Week.monday()] }
+    return Array(
       Set(
         weeks.map(\.weekStart)
           + (canAdd ? [Week.monday()] : []))
     ).sorted(by: >)
   }
-  private func load() async {
+  private func load(force: Bool = false) async {
     guard let api = app.api else { return }
     let generation = app.session.generation
     do {
-      let applied = try await model.load(api: api, userID: userID, filter: filter)
-      guard applied, !Task.isCancelled, generation == app.session.generation else { return }
-      if own { app.profile = model.profile }
+      var applied = false
+      try await store.show("profile:" + userID, path: "/profiles/\(userID)", force: force || error != nil) {
+        applied = try await model.load(api: api, userID: userID, filter: filter)
+      }
+      guard !Task.isCancelled, generation == app.session.generation else { return }
+      if own && applied { app.profile = model.profile }
+      try await loadWeeks()
       if filter != "all" && filter != "starred" && !groups.contains(where: { $0.id == filter }) {
         filter = "all"
       }
@@ -205,7 +209,11 @@ struct ProfileView: View {
   }
   private func loadWeeks(more: Bool = false) async throws {
     guard let api = app.api else { return }
-    try await model.loadWeeks(api: api, userID: userID, filter: filter, more: more)
+    var params = ["limit": "10"]
+    if filter != "all" { params["groupId"] = filter }
+    try await store.show("profile-weeks:\(userID):\(filter)", path: "/profiles/\(userID)/weeks", query: params, force: more || error != nil) {
+      try await model.loadWeeks(api: api, userID: userID, filter: filter, more: more)
+    }
   }
 }
 struct ProfileWeekView: View {
@@ -215,8 +223,10 @@ struct ProfileWeekView: View {
   let canAdd: Bool
   var lockedGroups: Set<String> = []
   @Environment(AppModel.self) private var app
-  @State private var model = ProfileWeekModel()
-  private var links: [SavedLink] { model.links }
+  @Environment(\.screenVisible) private var visible
+  @Environment(AccountStore.self) private var store
+  private var model: ProfileWeekModel { store.profileWeek(userID: userID, week: week, filter: filter) }
+  private var links: [SavedLink] { !model.hasLoaded && model.error == nil ? (0..<5).map(ContentPlaceholder.link) : model.links }
   private var cursor: String? { model.cursor }
   private var error: String? { model.error }
   var body: some View {
@@ -225,29 +235,25 @@ struct ProfileWeekView: View {
       ForEach(links) { link in
         LinkRow(link: link, locked: link.groupId.map { lockedGroups.contains($0) } ?? false)
       }
-      LoadingError(error: error, loading: false, retry: { await load() })
+      RequestError(error: error, retry: { await load() })
       LoadMore(hasMore: cursor != nil) { await load(more: true) }
-    }.task(id: app.revision) { await load() }
+    }.calmPlaceholder(active: !model.hasLoaded && error == nil).task(id: visible) { if visible { await load() } }
   }
   private func load(more: Bool = false) async {
     guard let api = app.api else { return }
-    do { try await model.load(api: api, userID: userID, week: week, filter: filter, more: more) }
+    do { try await store.show("profile-week:\(userID):\(week):\(filter)", path: filter == "all" ? "/profiles/\(userID)/links" : "/groups/\(filter)/links", query: ["weekStart": week, "limit": "30"], force: more || error != nil) {
+      try await model.load(api: api, userID: userID, week: week, filter: filter, more: more)
+    } }
     catch { app.handleSessionError(error) }
   }
 }
 struct FollowButton: View {
   let profile: Profile
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   var body: some View {
     AsyncButton {
-      if profile.followingStatus != nil {
-        let _: Success? = try await app.api?.request(
-          "/profiles/\(profile.id)/follow", method: "DELETE")
-      } else {
-        let _: FollowState? = try await app.api?.request(
-          "/profiles/\(profile.id)/follow", method: "POST", body: [:])
-      }
-      app.changed()
+      try await app.store?.follow(profile.person)
     } label: {
       Text(
         profile.followingStatus == "accepted"

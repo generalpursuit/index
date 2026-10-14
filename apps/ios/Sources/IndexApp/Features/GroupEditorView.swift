@@ -24,10 +24,12 @@ struct GroupEditorView: View {
   }
   private var feedback: String? { attempted ? draft.validationError ?? error : error }
   var body: some View {
+    let generation = app.session.generation
     if draft.original == nil, let api = app.api {
       GroupCreationForm(api: api, onCancel: { dismiss() }, onCreated: { group in
-        onCreated?(group); app.changed(); dismiss()
-      }, onAuthError: { app.handle($0) })
+        guard generation == app.session.generation else { return }
+        app.store?.created(group); onCreated?(group); dismiss()
+      }, onAuthError: { if generation == app.session.generation { app.handle($0) } })
     } else {
       ScrollView {
         VStack(alignment: .leading, spacing: 20) {
@@ -95,18 +97,23 @@ struct GroupEditorView: View {
     guard !pending, let api = app.api else { return }
     pending = true
     let account = app.userID
+    let generation = app.session.generation
     Task { @MainActor in
+      guard generation == app.session.generation else { return }
       defer { pending = false }
       do {
-        let group: LinkGroup = try await api.request(
-          draft.original.map { "/groups/\($0.id)" } ?? "/groups",
-          method: draft.original == nil ? "POST" : "PATCH", body: draft.body)
-        guard account == app.userID else { return }
+        let group: LinkGroup
+        if let original = draft.original, let store = app.store {
+          group = try await store.editGroup(original, name: draft.name, visibility: draft.visibility)
+        } else {
+          group = try await api.request("/groups", method: "POST", body: draft.body)
+          app.store?.created(group)
+        }
+        guard account == app.userID, generation == app.session.generation else { return }
         if draft.original == nil { onCreated?(group) }
-        app.changed()
         dismiss()
       } catch is CancellationError { return } catch {
-        guard account == app.userID else { return }
+        guard account == app.userID, generation == app.session.generation else { return }
         self.error = GroupDraft.saveError(error)
         errorFocused = true
         if case APIError.unauthenticated = error { app.handle(error) }
@@ -118,15 +125,16 @@ struct GroupEditorView: View {
     guard !pending, let group = draft.original, group.kind == "custom", let api = app.api else { return }
     pending = true
     let account = app.userID
+    let generation = app.session.generation
     Task { @MainActor in
+      guard generation == app.session.generation else { return }
       defer { pending = false }
       do {
-        let _: Success = try await api.request("/groups/\(group.id)", method: "DELETE", body: ["deleteLinks": .bool(false)])
-        guard account == app.userID else { return }
-        app.changed()
+        try await app.store?.deleteGroup(group)
+        guard account == app.userID, generation == app.session.generation else { return }
         dismiss()
       } catch is CancellationError { return } catch {
-        guard account == app.userID else { return }
+        guard account == app.userID, generation == app.session.generation else { return }
         self.error = GroupDraft.saveError(error)
         errorFocused = true
         if case APIError.unauthenticated = error { app.handle(error) }

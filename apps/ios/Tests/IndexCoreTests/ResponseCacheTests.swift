@@ -58,6 +58,22 @@ struct ResponseCacheTests {
     #expect(cache.snapshot("/links/a") == nil)
     #expect(cache.snapshot("/conversations/a") == Data("fresh".utf8))
   }
+  @Test func lateDiskWriteCannotReplaceAnotherAccountsResponse() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = ResponseCache(directory: directory)
+    await cache.accept(scope: "https://api.example", account: "alice")
+    let probe = ReadProbe()
+    let late = Task { try await cache.load("/links/a") { await probe.read() } }
+    while await probe.count == 0 { await Task.yield() }
+    await cache.accept(scope: "https://api.example", account: "bob")
+    _ = try await cache.load("/links/a") { Data("bob".utf8) }
+    await probe.finish()
+    await #expect(throws: ResponseCache.Invalidated.self) { try await late.value }
+    let restored = ResponseCache(directory: directory)
+    await restored.accept(scope: "https://api.example", account: "bob")
+    #expect(restored.snapshot("/links/a") == Data("bob".utf8))
+  }
   @Test func failedRefreshRetainsSnapshotButStillThrows() async throws {
     let cache = ResponseCache()
     let _ = try await cache.load("post") { Data("known".utf8) }

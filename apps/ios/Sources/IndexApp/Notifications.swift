@@ -167,6 +167,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     let click = data.flatMap { try? JSONDecoder().decode(NotificationDestination.self, from: $0) }
     return await MainActor.run {
       guard let click, self.app?.userID == click.recipientId, self.app?.verificationUser == nil, self.registered else { return [] }
+      Task { await self.app?.refreshPulse() }
       if self.foreground && click.conversationId != nil && click.conversationId == self.activeConversationID { return [] }
       return [.banner, .sound]
     }
@@ -183,6 +184,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
     guard let url = click.url(webURL: web, accountID: account) else { pendingClick = nil; return }
     // Transfer to the existing pending URL gate. Restricted same-ID sessions retain this
     // destination until verifiedSessionRevision resumes authorized resolution.
+    Task { await app.refreshPulse() }
     app.open(url)
     app.navigation.pendingRouteAccountID = click.recipientId
     pendingClick = nil
@@ -191,7 +193,7 @@ final class NotificationController: NSObject, UNUserNotificationCenterDelegate {
 
 struct NotificationSettings: View {
   @Environment(AppModel.self) private var app
-  @State private var preferences: NotificationPreferences?
+  private var preferences: NotificationPreferences? { app.store?.notificationPreferences }
   @State private var saving = false
   @State private var failure: String?
   // A profile gets a follow request while private and a follow while public, never both for
@@ -230,7 +232,8 @@ struct NotificationSettings: View {
         }
         #endif
       }
-      if let preferences {
+      Group {
+        let preferences = self.preferences ?? ContentPlaceholder.notificationPreferences
         ForEach(rows, id: \.label) { row in
           Toggle(isOn: Binding(get: { row.keys.allSatisfy { value(preferences, $0) } }, set: { newValue in
             Task { await update(row.keys, newValue) }
@@ -242,10 +245,11 @@ struct NotificationSettings: View {
           }.disabled(saving)
         }
       }
+      .calmPlaceholder(active: preferences == nil && failure == nil)
       if let message = failure ?? notifications.error { Text(message).font(.footnote).foregroundStyle(IndexPalette.destructive) }
     }.task {
       await notifications.synchronize(app)
-      do { preferences = try await app.api?.request("/me/notifications/preferences") } catch { failure = "Could not load notification preferences." }
+      do { try await app.store?.refreshPreferences() } catch { failure = "Could not load notification preferences." }
     }
   }
   private func value(_ p: NotificationPreferences, _ key: String) -> Bool {
@@ -253,11 +257,7 @@ struct NotificationSettings: View {
   }
   private func update(_ keys: [String], _ value: Bool) async {
     saving = true; defer { saving = false }
-    let account = app.userID, revision = app.verifiedSessionRevision
-    do {
-      let next: NotificationPreferences? = try await app.api?.request("/me/notifications/preferences", method: "PATCH", body: Dictionary(uniqueKeysWithValues: keys.map { ($0, JSONValue.bool(value)) }))
-      guard app.userID == account, app.verifiedSessionRevision == revision else { return }
-      preferences = next
-    } catch { if app.userID == account { failure = "Could not save notification preferences." } }
+    do { try await app.store?.setPreferences(keys, value: value) }
+    catch { failure = "Could not save notification preferences." }
   }
 }

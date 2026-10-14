@@ -599,7 +599,7 @@ public final class AccountStore {
       }
     }, failed: { pending, error in
       guard self.accepted, self.generation == version else { return }
-      if case APIError.server(let status, _) = error, (400..<500).contains(status) {
+      if rejectsMessage(error) {
         model.removePending(pending.clientID)
       } else if removesDisplayedContent(error) { model.removePending(pending.clientID) }
       else { model.failPending(pending.clientID) }

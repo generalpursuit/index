@@ -46,7 +46,7 @@ public struct MessageDraft: Sendable {
   }
   mutating func recover(from error: Error) {
     // Only definite validation rejection permits changing the attempted payload.
-    if case APIError.server(let status, _) = error, (400..<500).contains(status) { pending = nil }
+    if rejectsMessage(error) { pending = nil }
   }
 }
 public enum DraftError: LocalizedError {
@@ -106,4 +106,11 @@ public final class MessageDrafts {
       throw error
     }
   }
+}
+
+func rejectsMessage(_ error: Error) -> Bool {
+  guard case APIError.server(let status, _) = error else { return false }
+  // Timeout and throttling responses do not prove that an intermediary or delayed
+  // operation did not commit. Keep the same identity for those uncertain outcomes.
+  return [400, 403, 404, 409, 422].contains(status)
 }

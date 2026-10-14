@@ -42,28 +42,21 @@ struct RootView: View {
         ContentUnavailableView(
           "Configuration needed", systemImage: "gear", description: Text(message))
       } else if app.restoring {
-        ProgressView().task { await app.restore() }
+        SessionPlaceholder().task { await app.restore() }
       } else if let pending = app.verificationUser {
         VerificationView(email: pending.email)
       } else if app.profile == nil {
         LoginView()
-      } else {
+      } else if let store = app.store {
         NavigationStack(path: $navigation.path) {
-          Group {
-            switch app.navigation.tab {
-            case .feed: FeedView()
-            case .discover: DiscoverView()
-            case .activity: ActivityView()
-            case .messages: MessagesView()
-            case .profile: ProfileView(userID: app.userID)
-            }
-          }
+          AccountTabs()
           .hideNativeNavigation()
           .navigationDestination(for: Destination.self) { destination in
             destinationView(destination).hideNativeNavigation()
           }
           .background(IndexPalette.background)
         }
+        .environment(store)
         .id(app.session.generation)
         .safeAreaInset(edge: .bottom, spacing: 0) {
           if app.showsTabs {
@@ -92,15 +85,21 @@ struct RootView: View {
           }
         }
         .sheet(item: $navigation.sheet) { destination in
-          destinationView(destination).id(destination).indexSheetStyle()
+          destinationView(destination).environment(store).id(destination).indexSheetStyle()
             .presentationDetents(sheetDetents(destination))
         }
-        .task(id: scenePhase) {
-          guard scenePhase == .active else { return }
+        .task(id: "\(scenePhase)-\(app.dataBudget.constrained)") {
+          guard scenePhase == .active, !app.dataBudget.constrained, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+          do { try await Task.sleep(for: .seconds(1)) } catch { return }
+          await store.warm()
+        }
+        .task(id: "\(scenePhase)-\(store.openConversationID ?? "")") {
+          store.active = scenePhase == .active
+          guard store.active else { return }
           while !Task.isCancelled {
-            await app.pollUnread()
+            await app.refreshPulse()
             await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
-            do { try await Task.sleep(for: .seconds(15)) } catch { return }
+            do { try await Task.sleep(for: store.pulseInterval) } catch { return }
           }
         }
       }
@@ -121,6 +120,7 @@ struct RootView: View {
       Task { await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active) }
     }
     .onChange(of: scenePhase) { _, phase in
+      app.store?.active = phase == .active
       Task {
         if phase == .active { await NotificationController.shared.synchronize(app) }
         await NotificationController.shared.setActive(app: app, foreground: phase == .active)
@@ -147,6 +147,79 @@ struct RootView: View {
     case .group: [.height(360), .large]
     case .connections, .recipients: [.medium, .large]
     default: [.large]
+    }
+  }
+}
+
+private struct ScreenVisibleKey: EnvironmentKey {
+  static let defaultValue = true
+}
+extension EnvironmentValues {
+  var screenVisible: Bool {
+    get { self[ScreenVisibleKey.self] }
+    set { self[ScreenVisibleKey.self] = newValue }
+  }
+}
+private struct AccountTabs: View {
+  @Environment(AppModel.self) private var app
+  var body: some View {
+    ZStack {
+      ForEach(AppTab.allCases, id: \.self) { tab in
+        MountedTabRoot(tab: tab, selected: app.navigation.tab == tab && app.navigation.path.isEmpty)
+      }
+    }
+  }
+}
+private struct MountedTabRoot: View {
+  let tab: AppTab
+  let selected: Bool
+  @Environment(AppModel.self) private var app
+  @State private var visited: Bool
+  init(tab: AppTab, selected: Bool) {
+    self.tab = tab
+    self.selected = selected
+    _visited = State(initialValue: selected)
+  }
+  var body: some View {
+    Group {
+      if visited {
+        Group {
+          switch tab {
+          case .feed: FeedView()
+          case .discover: DiscoverView()
+          case .activity: ActivityView()
+          case .messages: MessagesView()
+          case .profile: ProfileView(userID: app.userID)
+          }
+        }
+      } else { Color.clear }
+    }
+    .environment(\.screenVisible, selected)
+    .opacity(selected ? 1 : 0)
+    .allowsHitTesting(selected)
+    .accessibilityHidden(!selected)
+    .onChange(of: selected) { _, selected in if selected { visited = true } }
+  }
+}
+
+private struct SessionPlaceholder: View {
+  var body: some View {
+    GeometryReader { _ in
+      VStack(alignment: .leading, spacing: 20) {
+        Text(Week.label(Week.monday())).font(IndexFont.serif(44, relativeTo: .largeTitle)).tracking(-0.66)
+        VStack(spacing: 0) {
+          ForEach(0..<5, id: \.self) { LinkRow(link: ContentPlaceholder.link($0)) }
+        }.calmPlaceholder(active: true)
+        Spacer()
+      }.padding(.top, 40).padding(.leading, 20).padding(.trailing, 36)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+          HStack(spacing: 0) {
+            ForEach(AppTab.allCases, id: \.self) { tab in
+              NavigationIcon(tab: tab).frame(width: 44, height: 44).frame(maxWidth: .infinity)
+            }
+          }.padding(.horizontal, 8).frame(height: 66).foregroundStyle(IndexPalette.subtleForeground)
+            .accessibilityHidden(true)
+        }
     }
   }
 }

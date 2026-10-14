@@ -1,4 +1,5 @@
 import IndexCore
+import IndexFeatures
 import SwiftUI
 
 struct SettingsView: View {
@@ -35,13 +36,30 @@ struct SettingsView: View {
         }.buttonStyle(.plain).settingsBox()
       }.padding(.bottom, 20)
     }.indexPage()
+      .task {
+        guard let store = app.store, let api = app.api else { return }
+        let generation = app.session.generation
+        do {
+          try await store.show("settings-profile", path: "/me/profile", stable: true) {
+            let profile: Profile = try await api.request("/me/profile")
+            try Task.checkCancellation()
+            guard generation == app.session.generation else { throw CancellationError() }
+            app.profile = profile
+          }
+        } catch { app.handleSessionError(error) }
+      }
       .sheet(isPresented: $editingProfile) {
-        EditProfileView().indexSheetStyle().presentationDetents([.medium, .large])
+        if let profile = app.profile { EditProfileView(profile: profile).indexSheetStyle().presentationDetents([.medium, .large]) }
       }
   }
 }
 
 private struct EditProfileView: View {
+  init(profile: Profile) {
+    _name = State(initialValue: profile.name)
+    _username = State(initialValue: profile.username ?? "")
+    _initialized = State(initialValue: true)
+  }
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   @State private var name = ""
@@ -67,8 +85,8 @@ private struct EditProfileView: View {
         AsyncButton {
           var body: [String: JSONValue] = ["name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines))]
           if !username.isEmpty { body["username"] = .string(username.lowercased()) }
-          app.profile = try await app.api?.request("/me/profile", method: "PATCH", body: body)
-          app.changed(); dismiss()
+          _ = try await app.store?.editProfile(body: body)
+          dismiss()
         } label: { Text("Save changes").frame(maxWidth: .infinity) }
           .buttonStyle(PillStyle(selected: true)).disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
       }.padding(.bottom, 20)
@@ -110,9 +128,8 @@ private struct ProfileVisibilitySettings: View {
           guard let selection else { return }
           Task {
             do {
-              let updated: Profile? = try await app.api?.request("/me/profile", method: "PATCH",
-                body: ["profileVisibility": .string(selection.rawValue)])
-              app.profile = updated; self.selection = nil; app.changed()
+              _ = try await app.store?.editProfile(body: ["profileVisibility": .string(selection.rawValue)])
+              self.selection = nil
             } catch { app.handle(error) }
           }
         }
@@ -126,11 +143,13 @@ private struct ProfileVisibilitySettings: View {
 struct ConnectionsView: View {
   let initial: String
   @Environment(AppModel.self) private var app
-  @State private var kind = "followers"
-  @State private var people: [Person] = []
-  @State private var after: String?
-  @State private var error: String?
-  @State private var initialized = false
+  @Environment(AccountStore.self) private var store
+  @State private var kind: String
+  private var model: ConnectionsModel { store.connections(kind) }
+  private var people: [Person] { !model.hasLoaded && model.error == nil ? (0..<5).map(ContentPlaceholder.person) : model.people }
+  private var after: String? { model.after }
+  private var error: String? { model.error }
+  init(initial: String) { self.initial = initial; _kind = State(initialValue: initial) }
   var body: some View {
     ScrollView {
       VStack(spacing: 16) {
@@ -143,53 +162,38 @@ struct ConnectionsView: View {
           }
           Spacer()
         }
-        LoadingError(error: error, loading: false, retry: { await load() })
-        ForEach(people) { person in
-          HStack {
-            Button {
-              app.navigate(.profile(person.id))
-            } label: {
-              PersonRow(person: person)
-            }.buttonStyle(.plain)
-            AsyncButton {
-              let path =
-                kind == "followers" ? "/me/followers/\(person.id)" : "/profiles/\(person.id)/follow"
-              let _: Success? = try await app.api?.request(path, method: "DELETE")
-              people.removeAll { $0.id == person.id }
-              app.changed()
-            } label: {
-              Text(kind == "followers" ? "Remove" : "Unfollow")
-            }.buttonStyle(PillStyle())
+        RequestError(error: error, retry: { await load() })
+        Group {
+          ForEach(people) { person in
+            HStack {
+              Button {
+                app.openProfile(person)
+              } label: {
+                PersonRow(person: person)
+              }.buttonStyle(.plain)
+              AsyncButton {
+                guard let api = app.api else { return }
+                try await model.remove(person, kind: kind, api: api)
+              } label: {
+                Text(kind == "followers" ? "Remove" : "Unfollow")
+              }.buttonStyle(PillStyle())
+            }
           }
-        }
-        if people.isEmpty && error == nil {
+        }.calmPlaceholder(active: !model.hasLoaded && error == nil)
+        if model.hasLoaded && people.isEmpty && error == nil {
           Text(kind == "followers" ? "No followers yet." : "You’re not following anyone yet.")
             .foregroundStyle(IndexPalette.subtleForeground).padding()
         }
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
-    }.indexPage().task {
-      if !initialized {
-        kind = initial
-        initialized = true
-      }
-      await load()
-    }.task(id: kind) { if initialized { await load() } }
+    }.indexPage().task(id: kind) { await load() }
   }
   private func load(more: Bool = false) async {
-    var query = ["limit": "30"]
-    if more { query["after"] = after }
+    guard let api = app.api else { return }
     do {
-      if let page: PeoplePage = try await app.api?.request(
-        "/profiles/\(app.userID)/\(kind)", query: query)
-      {
-        people = more ? people + page.items : page.items
-        after = page.nextAfter
-        error = nil
+      try await store.show("connections:" + kind, path: "/profiles/\(app.userID)/\(kind)", query: ["limit": "30"], force: more || error != nil) {
+        try await model.load(api: api, account: app.userID, kind: kind, more: more)
       }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
+    } catch { app.handleSessionError(error) }
   }
 }

@@ -17,7 +17,7 @@ final class CursorCollection<Item: Identifiable & Sendable> {
   private(set) var error: String?
   private(set) var busy = false
   private(set) var hasLoaded = false
-  var loading: Bool { busy && items.isEmpty }
+  var loading: Bool { busy && !hasLoaded }
   private var key = ""
   private var generation = 0
   private var pageCount = 1
@@ -67,6 +67,7 @@ final class CursorCollection<Item: Identifiable & Sendable> {
         try Task.checkCancellation()
         guard version == generation else { return false }
         items = unique(snapshot.items)
+        hasLoaded = true
         cursor = snapshot.next
       }
       var loaded: [Item] = []

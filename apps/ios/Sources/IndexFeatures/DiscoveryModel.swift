@@ -22,7 +22,7 @@ public final class DiscoveryModel {
   public func load(api: any FeatureAPI, query: String, more: Bool = false) async throws {
     generation += 1
     let version = generation
-    loading = people.isEmpty
+    loading = !hasLoaded
     error = nil
     defer { if version == generation { loading = false } }
     do {

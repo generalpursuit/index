@@ -107,6 +107,19 @@ final class MessagingTests: XCTestCase {
     XCTAssertTrue(drafts.draft(for: "chat").isEmpty)
   }
 
+  func testTimeoutAndThrottleKeepImmutablePendingPayload() async throws {
+    for status in [408, 429] {
+      let api = FeatureStub()
+      let drafts = MessageDrafts()
+      drafts.edit("original", in: "chat")
+      await api.fail("/conversations/chat/messages", APIError.server(status, "Retry later"))
+      do { try await drafts.send(in: "chat", api: api); XCTFail("Expected failure") } catch {}
+      let pending = try XCTUnwrap(drafts.draft(for: "chat").pending)
+      drafts.edit("changed", in: "chat")
+      XCTAssertEqual(drafts.draft(for: "chat").pending, pending)
+      XCTAssertEqual(drafts.draft(for: "chat").body, "original")
+    }
+  }
   func testValidationRecoveryAllowsCorrectionAndUsesNewIdentity() async throws {
     let api = FeatureStub()
     let drafts = MessageDrafts()
@@ -181,6 +194,22 @@ final class MessagingTests: XCTestCase {
     XCTAssertFalse(drafts.isSending("chat"))
   }
 
+  func testCachedEmptyListStaysVisibleDuringRefresh() async throws {
+    let api = FeatureStub()
+    await api.snapshot("/conversations", page([]))
+    let model = ConversationListModel(api: api)
+    XCTAssertTrue(model.hasLoaded)
+    await api.enqueue("/conversations", page([]))
+    await api.pause("/conversations")
+    let refresh = Task { try await model.load(api: api, query: "") }
+    await api.started("/conversations")
+    XCTAssertTrue(model.hasLoaded)
+    XCTAssertFalse(model.loading)
+    await api.resume("/conversations")
+    try await refresh.value
+    XCTAssertTrue(model.hasLoaded)
+    XCTAssertFalse(model.loading)
+  }
   func testConversationPollingReplaysLoadedPagesAndDeduplicatesBoundaries() async throws {
     let api = FeatureStub()
     let model = ConversationListModel()

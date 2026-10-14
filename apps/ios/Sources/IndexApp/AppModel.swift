@@ -2,16 +2,20 @@ import Foundation
 import IndexCore
 import IndexFeatures
 import Observation
+import Network
 
 @MainActor @Observable
 final class AppModel {
   var api: APIClient?
   let session = AccountSession()
   let navigation = AppNavigation()
-  let drafts = MessageDrafts()
+  private let emptyDrafts = MessageDrafts()
+  var store: AccountStore?
+  let dataBudget = DataBudget()
+  var drafts: MessageDrafts { store?.drafts ?? emptyDrafts }
   var profile: Profile? {
-    get { session.profile }
-    set { session.profile = newValue }
+    get { store?.profile ?? session.profile }
+    set { session.profile = newValue; if let newValue { store?.updateProfile(newValue) } }
   }
   var verificationUser: AuthUser? { session.verificationUser }
   // Routing resumes deferred external URLs when this changes, including a verified
@@ -24,14 +28,18 @@ final class AppModel {
   var configurationError: String?
   // Errors are presented by the frontmost sheet, including local/nested sheets.
   var sheetPresentations: [UUID] = []
-  var revision = 0
-  var unreadMessages = 0
-  var unreadActivity = 0
+  var unreadMessages: Int { store?.unreadMessages ?? 0 }
+  var unreadActivity: Int { store?.unreadActivity ?? 0 }
   var undoLink: SavedLink?
   var webURL: URL?
-  func openLink(_ link: SavedLink) { navigation.openLink(link) }
+  func openLink(_ link: SavedLink) { _ = store?.link(link.id, opening: link); navigation.openLink(link) }
   func present(_ destination: Destination) { navigation.present(destination) }
   func navigate(_ destination: Destination) { navigation.navigate(destination) }
+  func preload(_ link: SavedLink) {
+    guard let store, store.active, !dataBudget.constrained, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
+    Task { await store.prefetch(link) }
+  }
+  func openProfile(_ person: Person) { store?.seed(person); navigate(.profile(person.id)) }
   var showsTabs: Bool { navigation.showsTabs }
   var activeTab: AppTab? { navigation.activeTab(account: userID) }
   var userID: String { profile?.id ?? "" }
@@ -78,13 +86,25 @@ final class AppModel {
   func signIn(identifier: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
     await NotificationController.shared.disable()
+    beginAuthentication()
     let session = try await api.signIn(identifier: identifier, password: password)
     try await acceptSession(session)
   }
   func signUp(name: String, username: String, email: String, password: String) async throws {
     guard let api else { throw APIError.invalidServer }
+    beginAuthentication()
     let session = try await api.signUp(name: name, username: username, email: email, password: password)
     try await acceptSession(session)
+  }
+  private func beginAuthentication() {
+    session.clear()
+    navigation.resetPresentation()
+    clearPrivateFeatures()
+  }
+  func securityChanged() async {
+    restoring = true
+    beginAuthentication()
+    await restore()
   }
   private func acceptSession(_ session: AuthSession) async throws {
     guard let api else { throw APIError.invalidServer }
@@ -94,15 +114,20 @@ final class AppModel {
     let generation = self.session.begin(session.user)
     if session.user.emailVerified {
       do {
+        let cached: Profile? = api.cached("/me/profile")
+        let identity = cached ?? Profile.summary(Person.accountIdentity(session.user))
+        try self.session.verified(identity, generation: generation)
+        store = AccountStore(api: api, profile: identity, summaryOnly: cached == nil)
+        restoring = false
         let profile: Profile = try await api.request("/me/profile")
         try Task.checkCancellation()
-        try self.session.verified(profile, generation: generation)
+        guard generation == self.session.generation else { throw CancellationError() }
+        self.profile = profile
       } catch {
         guard generation == self.session.generation else { throw CancellationError() }
         throw error
       }
     }
-    revision += 1
   }
   func verifyEmail(code: String) async throws {
     guard let api else { throw APIError.invalidServer }
@@ -125,14 +150,13 @@ final class AppModel {
     navigation.clearAccount(preserveUnownedRoute: preserveUnownedRoute)
     session.clear()
     clearPrivateFeatures()
-    revision += 1
   }
   private func clearPrivateFeatures() {
-    drafts.clear()
+    store?.clear()
+    store = nil
+    emptyDrafts.clear()
     undoLink = nil
     sheetPresentations = []
-    unreadMessages = 0
-    unreadActivity = 0
   }
   func handle(_ error: Error) {
     if error is CancellationError || Task.isCancelled { return }
@@ -154,18 +178,24 @@ final class AppModel {
     default: break
     }
   }
-  func changed() { revision += 1 }
   func open(_ url: URL) { openReadableURL(url) }
-  func pollUnread() async {
-    guard let api, profile != nil else { return }
+  func refreshPulse() async {
+    guard let store else { return }
     let generation = session.generation
-    do {
-      async let messages: UnreadCount = api.request("/me/messages/unread")
-      async let activity: ActivityPage = api.request("/me/activity", query: ["limit": "1"])
-      let counts = try await (messages.unreadCount, activity.unreadCount)
-      guard generation == session.generation, profile != nil else { return }
-      unreadMessages = counts.0
-      unreadActivity = counts.1
-    } catch { if generation == session.generation { handleSessionError(error) } }
+    do { try await store.pulse() }
+    catch { if generation == session.generation { handleSessionError(error) } }
+  }
+}
+
+@MainActor @Observable
+final class DataBudget {
+  private(set) var constrained = true
+  private let monitor = NWPathMonitor()
+  init() {
+    monitor.pathUpdateHandler = { [weak self] path in
+      let constrained = path.isConstrained || path.status != .satisfied
+      Task { @MainActor [weak self] in self?.constrained = constrained }
+    }
+    monitor.start(queue: DispatchQueue(label: "com.generalpursuit.index.prefetch"))
   }
 }

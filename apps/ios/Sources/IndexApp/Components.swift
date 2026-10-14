@@ -73,11 +73,13 @@ struct AsyncButton<Label: View>: View {
   @State private var busy = false
   @Environment(AppModel.self) private var app
   var body: some View {
+    let generation = app.session.generation
     Button {
       busy = true
       Task {
+        guard generation == app.session.generation else { return }
         defer { busy = false }
-        do { try await action() } catch { app.handle(error) }
+        do { try await action() } catch { if generation == app.session.generation { app.handle(error) } }
       }
     } label: {
       ZStack {
@@ -88,12 +90,10 @@ struct AsyncButton<Label: View>: View {
     .disabled(busy)
   }
 }
-struct LoadingError: View {
+struct RequestError: View {
   let error: String?
-  let loading: Bool
   var retry: (() async -> Void)? = nil
   var body: some View {
-    if loading { ProgressView().frame(maxWidth: .infinity).padding() }
     if let error {
       VStack(spacing: 12) {
         Text(error).foregroundStyle(IndexPalette.subtleForeground).multilineTextAlignment(.center)
@@ -132,6 +132,7 @@ struct LinkRow: View {
           .frame(minHeight: compact ? max(36, rowHeight - 10) : rowHeight)
       }.buttonStyle(.plain)
         .accessibilityLabel(link.title + (locked ? ", locked group" : ""))
+        .simultaneousGesture(LongPressGesture(minimumDuration: 0.15).onEnded { _ in app.preload(link) })
       if let url = URL(string: link.url) {
         Link(destination: url) {
           HStack(spacing: 4) {
@@ -169,10 +170,7 @@ struct LinkLabel: View {
         Text("·").accessibilityHidden(true)
       }
       AsyncButton {
-        let path = own ? "favorite" : "star"
-        let _: Success? = try await app.api?.request("/links/\(link.id)/\(path)",
-          method: kept ? "DELETE" : "PUT", body: [:])
-        app.changed()
+        try await app.store?.keep(link)
       } label: {
         Image(systemName: (own ? "heart" : "star") + (kept ? ".fill" : "")).font(.system(size: 14))
           .foregroundStyle(kept ? IndexPalette.foreground : IndexPalette.subtleForeground)
@@ -228,4 +226,38 @@ private struct ActionIcon: View {
       .frame(width: 44, height: 44).background(IndexPalette.card, in: Circle())
       .overlay(Circle().stroke(IndexPalette.border, lineWidth: 1)).contentShape(Circle())
   }
+}
+
+/// Delay cold placeholders and hold them long enough to avoid a flash. Content keeps
+/// the same view tree and layout through both transitions.
+private struct CalmPlaceholder: ViewModifier {
+  let active: Bool
+  @State private var shown = false
+  @State private var shownAt: Date?
+  func body(content: Content) -> some View {
+    content
+      .redacted(reason: shown ? .placeholder : [])
+      .opacity(active && !shown ? 0 : 1)
+      .allowsHitTesting(!active && !shown)
+      .accessibilityHidden(active || shown)
+      .task(id: active) {
+        do {
+          if active {
+            try await Task.sleep(for: .milliseconds(300))
+            try Task.checkCancellation()
+            shownAt = .now
+            shown = true
+          } else if let shownAt {
+            let remaining = max(0, 0.4 - Date().timeIntervalSince(shownAt))
+            if remaining > 0 { try await Task.sleep(for: .seconds(remaining)) }
+            try Task.checkCancellation()
+            shown = false
+            self.shownAt = nil
+          }
+        } catch {}
+      }
+  }
+}
+extension View {
+  func calmPlaceholder(active: Bool) -> some View { modifier(CalmPlaceholder(active: active)) }
 }

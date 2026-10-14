@@ -6,6 +6,14 @@ import SwiftUI
 /// week's field, so this is the only form for a link.
 struct EditLinkView: View {
   let link: SavedLink
+  init(link: SavedLink) {
+    self.link = link
+    _url = State(initialValue: link.url)
+    _title = State(initialValue: link.title)
+    _note = State(initialValue: link.description ?? "")
+    _groupID = State(initialValue: link.groupId ?? "")
+    _initialized = State(initialValue: true)
+  }
   @Environment(AppModel.self) private var app
   @Environment(\.dismiss) private var dismiss
   @State private var url = ""
@@ -140,17 +148,15 @@ struct EditLinkView: View {
       "description": .string(note),
       "groupId": groupID.isEmpty ? .null : .string(groupID),
     ]
-    let _: SavedLink? = try await app.api?.request("/links/\(link.id)", method: "PATCH", body: body)
-    app.changed()
+    try await app.store?.editLink(link, body: body)
     dismiss()
   }
   private func delete() async {
     do {
-      let _: Success? = try await app.api?.request("/links/\(link.id)", method: "DELETE")
+      try await app.store?.deleteLink(link)
       app.navigation.sheet = nil
       // The link's own page has nothing left to show.
       if app.navigation.path.last == .link(link.id) { app.navigation.path.removeLast() }
-      app.changed()
     } catch { app.handle(error) }
   }
 }
@@ -164,35 +170,36 @@ func allGroups(api: APIClient?, ownerID: String) async throws -> [LinkGroup] {
 struct LinkDetailView: View {
   let linkID: String
   @Environment(AppModel.self) private var app
-  @State private var link: SavedLink?
-  @State private var author: Profile?
-  @State private var group: LinkGroup?
-  @State private var comments: [Comment] = []
-  @State private var cursor: String?
+  @Environment(AccountStore.self) private var store
+  private var model: LinkModel { store.link(linkID, opening: app.navigation.openingLink?.id == linkID ? app.navigation.openingLink : nil) }
+  private var link: SavedLink? { model.link ?? (error == nil && !model.deleted ? ContentPlaceholder.link() : nil) }
+  private var author: Profile? { model.author }
+  private var group: LinkGroup? { model.group }
+  private var comments: [Comment] { model.comments }
+  private var cursor: String? { model.cursor }
+  private var error: String? { model.error }
   @State private var bodyText = ""
   @State private var replying: Person?
-  @State private var error: String?
-  @State private var loading = true
   @State private var deleting: Comment?
   @FocusState private var focus: Bool
   @Environment(\.indexSheet) private var isSheet
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: 22) {
-        LoadingError(error: error, loading: loading, retry: { await load() })
+        RequestError(error: error, retry: { await load() })
         if let link {
           HStack(spacing: 8) {
-            if !isSheet { BackButton() }
+            if !isSheet { Color.clear.frame(width: 44, height: 44) }
             LinkLabel(link: link, group: group)
             Spacer(minLength: 0)
-            if isSheet { SheetCloseButton() }
+            if isSheet { Color.clear.frame(width: 44, height: 44) }
           }
           VStack(alignment: .leading, spacing: 12) {
             Text(link.title).font(IndexFont.serif(32)).tracking(-0.48).textSelection(.enabled)
               .accessibilityAddTraits(.isHeader)
             HStack(spacing: 8) {
               if let author {
-                Button { app.navigate(.profile(author.id)) } label: {
+                Button { app.openProfile(author.person) } label: {
                   HStack(spacing: 8) {
                     PersonAvatar(person: author.person, size: 22)
                     Text(author.username ?? author.name).font(IndexFont.sans(13, weight: .medium))
@@ -215,7 +222,7 @@ struct LinkDetailView: View {
             HStack(alignment: .top, spacing: 10) {
               if let person = comment.author {
                 Button {
-                  app.navigate(.profile(person.id))
+                  app.openProfile(person)
                 } label: {
                   PersonAvatar(person: person, size: 32)
                 }.buttonStyle(.plain)
@@ -244,9 +251,11 @@ struct LinkDetailView: View {
           LoadMore(hasMore: cursor != nil) { try await loadComments(more: true) }
         }
       }.padding(.bottom, 20)
-    }.indexPage()
+    }.calmPlaceholder(active: model.link == nil && !model.deleted && error == nil).indexPage()
+      .overlay(alignment: .topTrailing) { if isSheet { SheetCloseButton().padding(20) } }
+      .overlay(alignment: .topLeading) { if !isSheet { BackButton().padding(20) } }
       .safeAreaInset(edge: .bottom) {
-        if link != nil {
+        if model.link != nil {
           VStack(alignment: .leading, spacing: 8) {
             if let replying {
               HStack {
@@ -262,12 +271,12 @@ struct LinkDetailView: View {
                 .overlay(Capsule().stroke(IndexPalette.border, lineWidth: 1))
               AsyncButton {
                 let text = (replying.map { "@\($0.label) " } ?? "") + bodyText
-                let _: Comment? = try await app.api?.request(
-                  "/links/\(linkID)/comments", method: "POST", body: ["body": .string(text)])
+                guard let api = app.api, let profile = app.profile else { return }
+                let originalText = bodyText
                 bodyText = ""
                 replying = nil
-                try await loadComments()
-                app.changed()
+                do { try await model.addComment(id: linkID, body: text, author: profile.person, api: api) }
+                catch { bodyText = originalText; throw error }
               } label: {
                 Image(systemName: "arrow.up").frame(width: 40, height: 40).background(
                   IndexPalette.muted, in: Circle())
@@ -287,79 +296,24 @@ struct LinkDetailView: View {
           guard let comment = deleting else { return }
           Task {
             do {
-              let _: Success? = try await app.api?.request(
-                "/comments/\(comment.id)", method: "DELETE")
+              guard let api = app.api else { return }
+              try await model.deleteComment(comment, api: api)
               deleting = nil
-              try await loadComments()
             } catch { app.handle(error) }
           }
         }
       }
-      .task(id: app.revision) { await load() }
+      .task(id: linkID) { await load() }
   }
   private func load() async {
-    if link == nil {
-      if app.navigation.openingLink?.id == linkID {
-        link = app.navigation.openingLink
-        app.navigation.openingLink = nil
-      } else {
-        link = await app.api?.cached("/links/\(linkID)")
-      }
-    }
-    if let link, author == nil { author = await app.api?.cached("/profiles/\(link.ownerId)") }
-    if let id = link?.groupId, group == nil { group = await app.api?.cached("/groups/\(id)") }
-    if comments.isEmpty,
-      let cached: Page<Comment> = await app.api?.cached(
-        "/links/\(linkID)/comments", query: ["limit": "30"])
-    {
-      comments = cached.items
-      cursor = cached.nextCursor
-    }
-    loading = link == nil
-    error = nil
+    guard let api = app.api else { return }
     do {
-      async let firstComments: Page<Comment>? = app.api?.request(
-        "/links/\(linkID)/comments", query: ["limit": "30"])
-      let result: SavedLink? = try await app.api?.request("/links/\(linkID)")
-      try Task.checkCancellation()
-      link = result
-      loading = false
-      if let result {
-        async let profile: Profile? = app.api?.request("/profiles/\(result.ownerId)")
-        async let linkGroup = loadGroup(result.groupId)
-        if let page = try await firstComments {
-          comments = page.items
-          cursor = page.nextCursor
-        }
-        author = try await profile
-        // The label and forwarding need the group, but the post doesn't fail without it.
-        group = try? await linkGroup
-      }
-    } catch is CancellationError { return } catch {
-      if case APIError.server(let status, _) = error, [403, 404].contains(status) {
-        link = nil
-        author = nil
-        group = nil
-        comments = []
-      }
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
-  }
-  private func loadGroup(_ id: String?) async throws -> LinkGroup? {
-    guard let id else { return nil }
-    return try await app.api?.request("/groups/\(id)")
+      try await store.show("link:" + linkID, path: "/links/\(linkID)", force: error != nil) { try await model.load(id: linkID, api: api) }
+    } catch { app.handleSessionError(error) }
   }
   private func loadComments(more: Bool = false) async throws {
-    var query = ["limit": "30"]
-    if more { query["cursor"] = cursor }
-    if let page: Page<Comment> = try await app.api?.request(
-      "/links/\(linkID)/comments", query: query)
-    {
-      comments = more ? comments + page.items : page.items
-      cursor = page.nextCursor
-    }
+    guard let api = app.api else { return }
+    try await model.loadComments(id: linkID, api: api, more: more)
   }
 }
 func relativeTime(_ value: String) -> String {
