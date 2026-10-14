@@ -102,3 +102,23 @@ test("newest-page refresh preserves the cursor's ID tie-breaker when messages sh
   );
   assert.equal(merged.pages[0]!.nextCursor, "a");
 });
+
+for (const ordering of ["createdAt", "updatedAt"] as const) {
+  test(`disconnected ${ordering} pages restart at the newest cursor without skipping arrivals`, () => {
+    const item = (id: string, at: string) => ({ id, [ordering]: at });
+    const current = {
+      pages: [
+        { items: [item("c", "3"), item("b", "2")], nextCursor: "b" },
+        { items: [item("a", "1")], nextCursor: null },
+      ],
+      pageParams: [undefined, "b"],
+    };
+    const newest = { items: [item("g", "7"), item("f", "6")], nextCursor: "f" };
+    assert.deepEqual(mergeNewestPage(current, newest), {
+      pages: [newest],
+      pageParams: [undefined],
+    });
+    const full = { ...newest, nextCursor: null };
+    assert.deepEqual(mergeNewestPage(current, full), { pages: [full], pageParams: [undefined] });
+  });
+}

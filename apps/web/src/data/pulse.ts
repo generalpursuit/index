@@ -66,6 +66,10 @@ export function mergeNewestPage<
   if (!current) return { pages: [newest], pageParams: [undefined] };
   if (!newest.nextCursor) return { pages: [newest], pageParams: [undefined] };
   const ids = new Set(newest.items.map((item) => item.id));
+  // Without overlap the old cursor skips an unknown number of arrivals. Start a
+  // contiguous history at the new cursor; load more can recover every missing item.
+  if (!current.pages[0]?.items.some((item) => ids.has(item.id)))
+    return { pages: [newest], pageParams: [undefined] };
   const oldest = newest.items.at(-1);
   const boundary = oldest?.updatedAt ?? oldest?.createdAt;
   const tail =
