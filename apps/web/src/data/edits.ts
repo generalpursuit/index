@@ -1,4 +1,4 @@
-import type { MutationOptions, QueryClient, QueryKey } from "@tanstack/react-query";
+import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import {
   accountGeneration,
   accountMutationOptions,
@@ -26,7 +26,7 @@ export function instantEdit<TData, TVariables>(
     invalidate,
   }: {
     key: QueryKey;
-    mutationFn: NonNullable<MutationOptions<TData, Error, TVariables>["mutationFn"]>;
+    mutationFn: (input: TVariables) => Promise<TData>;
     affects: (key: QueryKey) => boolean;
     optimistic: (input: TVariables) => Patch;
     response?: (data: TData, input: TVariables) => Patch;
@@ -44,7 +44,7 @@ export function instantEdit<TData, TVariables>(
   };
   return accountMutationOptions<TData, Error, TVariables, { layer: Layer; edit: Edit }>({
     mutationKey: key,
-    mutationFn,
+    mutationFn: (input) => mutationFn(input),
     onMutate: async (input) => {
       const generation = accountGeneration();
       await cache.cancelQueries({ predicate: (query) => affects(query.queryKey) });

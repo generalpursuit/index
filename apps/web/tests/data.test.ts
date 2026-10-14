@@ -158,3 +158,37 @@ test("account clearing prevents an instant edit's late rollback from recreating 
   assert.equal(cache.getQueryData(["item"]), undefined);
   cache.clear();
 });
+
+test("a confirmed edit survives immediate reload while optimistic drafts stay off disk", async () => {
+  const memoryStore = memory();
+  const cache = new QueryClient();
+  const disk = createContentPersistence(cache, "api", "v1", memoryStore.storage);
+  await disk.accept(identity("alice"));
+  const queryKey = key("alice");
+  cache.setQueryData(queryKey, "server value");
+  const answer = deferred<string>();
+  const mutation = new MutationObserver(
+    cache,
+    instantEdit(cache, {
+      key: ["edit"],
+      affects: () => true,
+      mutationFn: () => answer.promise,
+      optimistic: () => () => "unconfirmed draft",
+      response: (value) => () => value,
+    }),
+  );
+  const pending = mutation.mutate(undefined);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  const before = await memoryStore.storage("index.content.api.alice").getItem("cache");
+  assert.ok(!before?.includes("unconfirmed draft"));
+  answer.resolve("confirmed content");
+  await pending;
+  const restored = new QueryClient();
+  const next = createContentPersistence(restored, "api", "v1", memoryStore.storage);
+  await next.restore();
+  assert.equal(restored.getQueryData(queryKey), "confirmed content");
+  await disk.erase();
+  await next.erase();
+  cache.clear();
+  restored.clear();
+});

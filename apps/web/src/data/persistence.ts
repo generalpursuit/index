@@ -2,6 +2,7 @@ import type { Query, QueryClient } from "@tanstack/react-query";
 import { createAsyncStoragePersister } from "@tanstack/query-async-storage-persister";
 import {
   persistQueryClientRestore,
+  persistQueryClientSave,
   persistQueryClientSubscribe,
 } from "@tanstack/query-persist-client-core";
 import { cacheMaxAge } from "./client";
@@ -26,6 +27,11 @@ const content = new Set([
   "stars",
   "discovery",
 ]);
+function hasDraft(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Record<string, unknown>;
+  return item.delivery === "pending" || item.pending === true || Object.values(item).some(hasDraft);
+}
 export function persistContent(query: Query, account: string) {
   const [path, options] = query.queryKey as [
     string[],
@@ -36,9 +42,11 @@ export function persistContent(query: Query, account: string) {
     path[0] === "viewer" &&
     path[1] === account &&
     content.has(path[2]!) &&
+    !query.queryKey.includes("pulse") &&
     path[3] !== "searchUsers" &&
     !options?.input?.query &&
     query.state.status === "success" &&
+    !hasDraft(query.state.data) &&
     query.state.dataUpdatedAt > Date.now() - cacheMaxAge
   );
 }
@@ -54,12 +62,20 @@ export function createContentPersistence<T extends Identity>(
   let accepted: T | undefined;
   let unsubscribe: (() => void) | undefined;
   let epoch = 0;
+  let flush: (() => Promise<void>) | undefined;
+  const mutations = cache.getMutationCache();
+  const settled = mutations.config.onSettled;
+  mutations.config.onSettled = async (...args) => {
+    await settled?.(...args);
+    if (cache.isMutating() === 1) await flush?.();
+  };
   let erasing: Promise<unknown> = Promise.resolve();
   const storage = (id: string) => storageFor(`index.content.${origin}.${id}`);
   async function erase() {
     ++epoch;
     unsubscribe?.();
     unsubscribe = undefined;
+    flush = undefined;
     const prior = accepted;
     accepted = undefined;
     // Queue deletion after any already-started transaction, before a new account can bind.
@@ -94,18 +110,29 @@ export function createContentPersistence<T extends Identity>(
     const expected = ++epoch;
     accepted = identity;
     const underlying = storage(identity.user.id);
+    let latestWrite = 0;
     const guarded: ContentStorage = {
       getItem: async (key) => (expected === epoch ? underlying.getItem(key) : null),
       setItem: async (key, value) => {
-        if (expected === epoch) await underlying.setItem(key, value);
+        const timestamp = (JSON.parse(value) as { timestamp: number }).timestamp;
+        if (expected === epoch && timestamp >= latestWrite) {
+          latestWrite = timestamp;
+          await underlying.setItem(key, value);
+        }
       },
       removeItem: (key) => underlying.removeItem(key),
     };
-    const persister = createAsyncStoragePersister({
+    const throttled = createAsyncStoragePersister({
       storage: guarded,
       key: "cache",
       throttleTime: 1000,
     });
+    const persister = {
+      ...throttled,
+      // Optimistic bubbles and comments are still drafts until the server accepts them.
+      persistClient: (client: Parameters<typeof throttled.persistClient>[0]) =>
+        cache.isMutating() ? Promise.resolve() : throttled.persistClient(client),
+    };
     const options = {
       queryClient: cache,
       persister,
@@ -126,6 +153,13 @@ export function createContentPersistence<T extends Identity>(
     await metadata.setItem("account", JSON.stringify({ ...identity, buster }));
     if (epoch !== expected) return;
     unsubscribe = persistQueryClientSubscribe(options);
+    // A completed edit must survive an immediate reload. Delayed older snapshots cannot overwrite it.
+    const immediate = createAsyncStoragePersister({
+      storage: guarded,
+      key: "cache",
+      throttleTime: 0,
+    });
+    flush = () => persistQueryClientSave({ ...options, persister: immediate });
   }
   async function restore(revision?: number): Promise<T | undefined> {
     const expected = epoch;
