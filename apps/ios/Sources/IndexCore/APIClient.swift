@@ -41,6 +41,7 @@ public actor APIClient {
   private var token: String?
   private nonisolated let externallyManagedSession: Bool
   private var generation = 0
+  private var accountID: String?
   private nonisolated let responses: ResponseCache
   private nonisolated let initialToken: String?
   private let onUpdateRequired: (@Sendable () -> Void)?
@@ -87,7 +88,7 @@ public actor APIClient {
         guard version == generation else { throw CancellationError() }
         do {
           data = try await responses.load(key) {
-            try await self.performData("/api/v1" + path, method: method, query: query, body: body)
+            try await self.performData("/api/v1" + path, method: method, query: query, body: body, accepting: version)
           }
           break
         } catch is ResponseCache.Invalidated {
@@ -110,8 +111,9 @@ public actor APIClient {
       }
     }
     let affected = Self.affectedResources(path)
-    await responses.invalidate(affected)
     let version = generation
+    await responses.invalidate(affected)
+    guard version == generation else { throw CancellationError() }
     do {
       let value: T = try await perform("/api/v1" + path, method: method, query: query, body: body)
       guard version == generation else { throw CancellationError() }
@@ -129,10 +131,10 @@ public actor APIClient {
     if path.hasPrefix("/me/notifications/") || path.hasSuffix("/read") { return [] }
     if path.hasPrefix("/conversations") { return ["/conversations"] }
     if path.hasPrefix("/links") || path.hasPrefix("/comments") {
-      return ["/links", "/feed", "/profiles", "/groups", "/me/activity"]
+      return ["/links", "/feed", "/profiles", "/me/profile", "/groups", "/me/activity"]
     }
     if path.hasPrefix("/groups") { return ["/groups", "/links", "/feed", "/profiles"] }
-    if path.hasPrefix("/profiles") || path.hasPrefix("/me/follow-requests") {
+    if path.hasPrefix("/profiles") || (path.hasPrefix("/me/follow-requests") || path.hasPrefix("/me/followers")) {
       return ["/profiles", "/me/profile", "/feed", "/discovery", "/me/activity"]
     }
     if path == "/me/profile" { return ["/me/profile", "/profiles", "/feed", "/discovery"] }
@@ -163,11 +165,11 @@ public actor APIClient {
     let result: AuthSession = try await perform(path, method: "POST", body: body)
     guard generation == version else { throw CancellationError() }
     guard token != nil else { throw APIError.missingToken }
-    if result.user.emailVerified { await responses.accept(scope: baseURL.absoluteString, account: result.user.id) }
+    if result.user.emailVerified { try await acceptAccount(result.user.id) }
     return result
   }
   public func restore() async throws -> AuthSession? {
-    guard token != nil else { return nil }
+    guard token != nil else { await responses.clear(); return nil }
     let version = generation
     let result: AuthSession? = try await perform("/api/auth/get-session")
     guard generation == version else { throw CancellationError() }
@@ -179,10 +181,15 @@ public actor APIClient {
       guard generation == restrictedVersion else { throw CancellationError() }
     }
     if let result, result.user.emailVerified {
-      await responses.accept(scope: baseURL.absoluteString, account: result.user.id)
-      guard generation == version else { throw CancellationError() }
+      try await acceptAccount(result.user.id)
     }
     return result
+  }
+  private func acceptAccount(_ id: String) async throws {
+    if accountID != id { generation += 1; accountID = id }
+    let version = generation
+    await responses.accept(scope: baseURL.absoluteString, account: id)
+    guard version == generation else { throw CancellationError() }
   }
   public func securityStatus() async throws -> AccountSecurityStatus {
     try await perform("/api/auth/security/status")
@@ -219,20 +226,24 @@ public actor APIClient {
     await responses.clear()
   }
   public func signOut() async throws {
-    // Always erase locally, and surface a Keychain failure rather than hiding it.
-    let version = generation
-    var requestError: Error?
-    do {
-      let _: Success = try await perform("/api/auth/sign-out", method: "POST", body: [:])
-    } catch { requestError = error }
-    guard generation == version else { throw requestError ?? CancellationError() }
+    // Capture the signed request, then erase local content and credentials before any
+    // network suspension. An offline or interrupted sign-out cannot resurrect a cache.
+    let request = try makeRequest("/api/auth/sign-out", method: "POST", query: [:], body: [:])
     try await clearSession()
-    if let requestError { throw requestError }
+    let version = generation
+    let (data, response) = try await session.data(for: request)
+    guard version == generation else { throw CancellationError() }
+    guard let response = response as? HTTPURLResponse else { throw APIError.invalidResponse }
+    guard (200..<300).contains(response.statusCode) else {
+      let error = try? JSONDecoder().decode(ErrorBody.self, from: data)
+      throw APIError.server(response.statusCode, error?.message ?? "Sign-out could not reach the server. Your session was removed from this device.")
+    }
   }
   public func clearSession() async throws {
     generation += 1
     let version = generation
     token = nil
+    accountID = nil
     await responses.clear()
     guard generation == version else { throw CancellationError() }
     if !externallyManagedSession { try credentials.write(nil) }
@@ -240,11 +251,12 @@ public actor APIClient {
   /// A synchronous snapshot for first render; the network always rechecks permissions.
   public nonisolated func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) -> T? {
     if externallyManagedSession && (try? credentials.read()) != initialToken { return nil }
-    let version = responses.snapshots.version
-    guard let data = responses.snapshot(Self.responseKey(path, query: query)), version == responses.snapshots.version else { return nil }
+    let key = Self.responseKey(path, query: query)
+    let version = responses.snapshots.ticket(key)
+    guard let data = responses.snapshot(key), version == responses.snapshots.ticket(key) else { return nil }
     if externallyManagedSession && (try? credentials.read()) != initialToken { return nil }
     let value = try? JSONDecoder().decode(T.self, from: data)
-    guard version == responses.snapshots.version else { return nil }
+    guard version == responses.snapshots.ticket(key) else { return nil }
     return value
   }
   public nonisolated func cachedAt(_ path: String, query: [String: String] = [:]) -> Date? {
@@ -263,7 +275,7 @@ public actor APIClient {
     body: [String: JSONValue]? = nil
   ) async throws -> T {
     let version = generation
-    let data = try await performData(path, method: method, query: query, body: body)
+    let data = try await performData(path, method: method, query: query, body: body, accepting: version)
     guard generation == version else { throw CancellationError() }
     try checkExternalSession()
     do { return try JSONDecoder().decode(T.self, from: data) } catch {
@@ -275,16 +287,7 @@ public actor APIClient {
       guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
     }
   }
-  private func performData(
-    _ path: String, method: String = "GET", query: [String: String] = [:],
-    body: [String: JSONValue]? = nil
-  ) async throws -> Data {
-    let startGeneration = generation
-    // An extension instance is pinned to the credential it started with. Signing in to a
-    // different account requires a new client and a fresh explicit destination selection.
-    if externallyManagedSession {
-      guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
-    }
+  private func makeRequest(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) throws -> URLRequest {
     var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
     components.path =
       components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
@@ -303,6 +306,20 @@ public actor APIClient {
       request.httpBody = try JSONEncoder().encode(body)
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     }
+    return request
+  }
+  private func performData(
+    _ path: String, method: String = "GET", query: [String: String] = [:],
+    body: [String: JSONValue]? = nil, accepting: Int? = nil
+  ) async throws -> Data {
+    if let accepting, accepting != generation { throw CancellationError() }
+    let startGeneration = generation
+    // An extension instance is pinned to the credential it started with. Signing in to a
+    // different account requires a new client and a fresh explicit destination selection.
+    if externallyManagedSession {
+      guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
+    }
+    let request = try makeRequest(path, method: method, query: query, body: body)
     let (data, response) = try await session.data(for: request)
     try Task.checkCancellation()
     if externallyManagedSession {

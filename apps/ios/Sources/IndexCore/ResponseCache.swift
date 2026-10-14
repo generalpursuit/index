@@ -16,13 +16,13 @@ actor ResponseCache {
   }
   nonisolated func snapshot(_ key: String) -> Data? { snapshots.snapshot(key)?.data }
   func load(_ key: String, operation: @escaping @Sendable () async throws -> Data) async throws -> Data {
-    let version = snapshots.version
+    let version = snapshots.ticket(key)
     let existing = flights[key]
     let flight = existing ?? Flight(task: Task { try await operation() })
     if existing == nil { flights[key] = flight }
     do {
       let data = try await flight.task.value
-      guard version == snapshots.version else { throw Invalidated() }
+      guard version == snapshots.ticket(key) else { throw Invalidated() }
       if flights[key]?.id == flight.id {
         flights[key] = nil
         guard snapshots.store(data, key: key, version: version) else { throw Invalidated() }
@@ -30,7 +30,7 @@ actor ResponseCache {
       return data
     } catch {
       if flights[key]?.id == flight.id { flights[key] = nil }
-      if version != snapshots.version && (error is CancellationError || (error as? URLError)?.code == .cancelled) { throw Invalidated() }
+      if version != snapshots.ticket(key) && (error is CancellationError || (error as? URLError)?.code == .cancelled) { throw Invalidated() }
       throw error
     }
   }
@@ -64,6 +64,10 @@ actor ResponseCache {
 /// The envelope repeats scope/account/key so filenames never grant identity or access.
 /// A mismatched or expired envelope is discarded before its payload is decoded.
 final class ResponseSnapshots: @unchecked Sendable {
+  struct Ticket: Equatable, Sendable {
+    let account: Int
+    let resource: Int
+  }
   struct Entry: Codable {
     let format: Int
     let scope: String
@@ -77,6 +81,7 @@ final class ResponseSnapshots: @unchecked Sendable {
   private var scope: String?
   private var account: String?
   private var generation = 0
+  private var revisions: [String: Int] = [:]
   private let capacity: Int
   private let maxAge: TimeInterval
   private let directory: URL?
@@ -90,6 +95,12 @@ final class ResponseSnapshots: @unchecked Sendable {
     self.directory = directory
   }
   var version: Int { lock.withLock { generation } }
+  func ticket(_ key: String) -> Ticket {
+    lock.withLock {
+      if revisions[key] == nil { revisions[key] = 0 }
+      return Ticket(account: generation, resource: revisions[key]!)
+    }
+  }
   @discardableResult func accept(scope: String, account: String) -> Bool {
     lock.withLock {
       guard self.scope != scope || self.account != account else { return false }
@@ -128,9 +139,9 @@ final class ResponseSnapshots: @unchecked Sendable {
       return entry
     }
   }
-  @discardableResult func store(_ data: Data, key: String, version: Int) -> Bool {
+  @discardableResult func store(_ data: Data, key: String, version: Ticket) -> Bool {
     lock.withLock {
-      guard version == generation else { return false }
+      guard version == Ticket(account: generation, resource: revisions[key] ?? 0) else { return false }
       let entry = Entry(format: 1, scope: scope ?? "", account: account ?? "", key: key, stored: .now, data: data)
       remember(entry)
       if Self.persists(key), let folder = accountDirectory {
@@ -157,10 +168,10 @@ final class ResponseSnapshots: @unchecked Sendable {
       return true
     }
   }
-  func remove(_ key: String) { lock.withLock { removeLocked(key) } }
+  func remove(_ key: String) { lock.withLock { revisions[key, default: 0] += 1; removeLocked(key) } }
   func invalidate(_ prefixes: [String]) {
     lock.withLock {
-      generation += 1
+      for key in Array(revisions.keys) where prefixes.contains(where: { ResponseCache.matches(key, $0) }) { revisions[key, default: 0] += 1 }
       for key in Array(entries.keys) where prefixes.contains(where: { ResponseCache.matches(key, $0) }) { removeLocked(key) }
       if let folder = accountDirectory,
         let files = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) {
@@ -185,6 +196,7 @@ final class ResponseSnapshots: @unchecked Sendable {
   }
   private func eraseAcceptedAccount() {
     entries.removeAll()
+    revisions.removeAll()
     if let folder = accountDirectory { try? FileManager.default.removeItem(at: folder) }
   }
   private func removeLocked(_ key: String) {

@@ -167,6 +167,20 @@ struct APIClientTests {
     await #expect(throws: APIError.self) { let _: Success = try await client.request("/private") }
     #expect(try credentials.read() == nil)
   }
+  @Test func logoutErasesLocallyBeforeSendingItsCapturedCredential() async throws {
+    let credentials = MemoryCredentials("signed.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/links/a")
+    HTTPStub.handler = { request in
+      #expect(try credentials.read() == nil)
+      #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer signed.signature")
+      let cached: Success? = client.cached("/links/a")
+      #expect(cached == nil)
+      return (200, [:], Data(#"{"success":true}"#.utf8))
+    }
+    try await client.signOut()
+  }
   @Test func offlineLogoutErasesCredentials() async throws {
     let credentials = MemoryCredentials("signed.signature")
     let client = try make(credentials)
