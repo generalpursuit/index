@@ -110,6 +110,19 @@ The integration test resets **only the disposable fixture API** and checks real 
 
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
 
+## Distribution
+
+Archive the `Index` scheme and upload it from Xcode's Organizer. Endpoints and the signing team come from the ignored `Config/Local.xcconfig`; scope the endpoints to Release so Debug keeps the fixture backend:
+
+```
+INDEX_API_URL[config=Release] = https:/$()/api.example.com
+INDEX_WEB_URL[config=Release] = https:/$()/index.example.com
+```
+
+`Resources/PrivacyInfo.xcprivacy` is the app's privacy manifest. It declares UserDefaults (`CA92.1`) for the device-local theme and notification state. App Store Connect rejects uploads that use other required-reason APIs (file timestamps, boot time, disk space, active keyboards) without declaring them there. The Share extension and the packages it links use none, so it has no manifest; add one if that changes. `Config/Info.plist` declares that the app uses only exempt encryption (HTTPS and Keychain).
+
+The generated project sets build number `1` for the app and Share extension. Each upload needs a higher one: Xcode's upload option "Manage Version and Build Number" (on by default) assigns it to every bundle, or pass `CURRENT_PROJECT_VERSION=N` to `xcodebuild archive`. `Local.xcconfig` cannot override it because target settings take precedence.
+
 ## Readable links
 
 Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. Run the route, account-lifetime and navigation tests with the documented Swift/Xcode checks on a Mac before distribution.
