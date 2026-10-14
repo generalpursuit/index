@@ -66,7 +66,9 @@ export function NotificationLifecycle() {
       }
     }
     void update();
-    const interval = setInterval(() => void update(), 15_000);
+    const interval = setInterval(() => {
+      if (!document.hidden) void update();
+    }, 15_000);
     const refresh = () => void update();
     window.addEventListener("focus", refresh);
     window.addEventListener("blur", refresh);

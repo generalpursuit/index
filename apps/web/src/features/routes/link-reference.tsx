@@ -1,3 +1,4 @@
+import { PostPlaceholder } from "@/features/links/link-detail";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
@@ -40,7 +41,7 @@ export function LinkReference({
 }) {
   const api = useAPI(),
     navigate = useNavigate();
-  const resolved = useQuery({ ...referenceOptions(api, value), staleTime: 0 });
+  const resolved = useQuery(referenceOptions(api, value));
   const target = resolved.data?.kind === "link" ? resolved.data : undefined;
   useEffect(() => {
     if (target && isUUID(value))
@@ -55,6 +56,7 @@ export function LinkReference({
   }, [target, value, mode, navigate]);
   return (
     <QueryState
+      placeholder={<PostPlaceholder />}
       pending={resolved.isPending}
       hasData={!!target}
       error={resolved.error}

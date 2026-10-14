@@ -225,12 +225,14 @@ test("the keyboard moves through messages as one tab stop and opens their menus 
   await expect(post.getByRole("heading", { name: link.title, exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(post).toHaveCount(0);
+  await expect(message("Look")).toBeFocused();
 
   // Shift+F10 opens the focused message's menu; replying hands focus to the composer.
   await message("Adding it to my list.").focus();
   await page.keyboard.press("Shift+F10");
   const menu = page.getByRole("menu");
   await expect(menu.getByRole("menuitem", { name: "Reply", exact: true })).toBeVisible();
+  await expect(menu).toBeFocused();
   await page.keyboard.press("ArrowDown");
   await expect(menu.getByRole("menuitem", { name: "Reply", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");

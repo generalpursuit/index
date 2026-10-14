@@ -1,3 +1,5 @@
+import { seedConversation } from "@/data/seeding";
+import { placeholderConversation, placeholderMessages } from "@/data/placeholders";
 import { ChatAvatars, conversationName } from "./conversation-presentation";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
@@ -70,6 +72,13 @@ export function MessagesPage() {
         />
       </label>
       <QueryState
+        placeholder={
+          <>
+            {[0, 1, 2].map((key) => (
+              <ConversationRow key={key} placeholder />
+            ))}
+          </>
+        }
         pending={list.isPending}
         hasData={!!list.data}
         error={list.error}
@@ -79,37 +88,7 @@ export function MessagesPage() {
           {list.data?.pages
             .flatMap((p) => p.items)
             .map((chat) => (
-              <Link
-                className={
-                  "conversation-row [&>small]:text-subtle-foreground [&>small]:text-[11px] [&>small]:flex-none relative flex items-center gap-4 p-[18px_0] [&>.person-label]:flex-1"
-                }
-                to="/messages/$conversationId"
-                params={{ conversationId: chat.shortId }}
-                state={{ conversationId: chat.id }}
-                key={chat.id}
-              >
-                <ChatAvatars chat={chat} viewerId={viewer.id} />
-                <span className={personLabelClassName}>
-                  <strong>{conversationName(chat, viewer.id)}</strong>
-                  <small>
-                    {chat.lastMessage?.body ||
-                      (chat.lastMessage?.restrictedAuthor
-                        ? "Private post"
-                        : chat.lastMessage?.attachment?.title) ||
-                      (chat.lastMessage?.hasAttachment
-                        ? "Post unavailable"
-                        : "Start the conversation")}
-                  </small>
-                </span>
-                <small>{chat.lastMessage ? timeAgo(chat.lastMessage.createdAt) : ""}</small>
-                {chat.unreadCount > 0 && (
-                  <i
-                    className={
-                      "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]"
-                    }
-                  />
-                )}
-              </Link>
+              <ConversationRow chat={chat} viewerId={viewer.id} key={chat.id} />
             ))}
         </div>
         {list.data?.pages[0]?.items.length === 0 && (
@@ -162,13 +141,15 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       void navigate({ to: ".", search: (old) => ({ ...old, attach: undefined }), replace: true });
     }
   }, [attached.data, attach, navigate]);
+  const chat = detail.data ?? placeholderConversation;
   const recipient =
     detail.data?.participants.length === 2
       ? detail.data.participants.find((person) => person.id !== viewer.id)
       : undefined;
   const markRead = actions.read.mutate;
   const newest = list.data?.pages[0]?.items[0],
-    lastId = newest?.id;
+    lastId =
+      newest && !("delivery" in newest && newest.delivery === "pending") ? newest.id : undefined;
   useEffect(() => {
     if (nearBottom.current) end.current?.scrollIntoView({ block: "end" });
     if (lastId && nearBottom.current && !document.hidden)
@@ -239,8 +220,11 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       error={detail.error}
       retry={() => void detail.refetch()}
     >
-      {detail.data && (
-        <div className={"chat-page h-full flex flex-col min-h-0"}>
+      {(chat || detail.isPending) && (
+        <div
+          className={"chat-page h-full flex flex-col min-h-0"}
+          data-placeholder={!detail.data || undefined}
+        >
           <header
             className={
               "chat-heading flex gap-2.5 items-center mb-5.5 flex-none [&_.avatar-stack]:w-10 [&_.avatar-stack]:h-10 [&_.user-avatar]:w-8.5 [&_.user-avatar]:h-8.5 [&_.person-label]:flex-1 [&_.person-label_small]:whitespace-normal [&_.person-label_small]:max-h-10 [&_.person-label_small]:overflow-y-auto [@media(width<=700px)]:[&_.person-label_strong]:text-[14px] [@media(width<=700px)]:[&_.person-label_small]:text-[11px]"
@@ -249,21 +233,21 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             <Back fallback="/messages" />
             {recipient ? (
               <ProfileLink person={recipient} aria-label={"View " + recipient.name + "’s profile"}>
-                <ChatAvatars chat={detail.data} viewerId={viewer.id} />
+                <ChatAvatars chat={chat} viewerId={viewer.id} />
               </ProfileLink>
             ) : (
-              <ChatAvatars chat={detail.data} viewerId={viewer.id} />
+              <ChatAvatars chat={chat} viewerId={viewer.id} />
             )}
             <div className={personLabelClassName}>
               <strong>
                 {recipient ? (
                   <ProfileLink person={recipient}>{recipient.name}</ProfileLink>
                 ) : (
-                  conversationName(detail.data, viewer.id)
+                  conversationName(chat, viewer.id)
                 )}
               </strong>
               <small>
-                {detail.data.participants
+                {chat.participants
                   .filter((p) => p.id !== viewer.id)
                   .map((p, i) => (
                     <span key={p.id}>
@@ -283,7 +267,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               const el = scroller.current;
               if (el) {
                 nearBottom.current = atNewest(el);
-                if (nearBottom.current && lastId && detail.data?.unreadCount && !document.hidden)
+                if (nearBottom.current && lastId && chat?.unreadCount && !document.hidden)
                   markRead({ conversationId: id, messageId: lastId });
               }
             }}
@@ -301,6 +285,16 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               }}
             />
             <QueryState
+              placeholder={
+                <MessageThread
+                  messages={placeholderMessages}
+                  chat={chat}
+                  viewerId={viewer.id}
+                  canReply={false}
+                  onReply={() => {}}
+                  composer={input}
+                />
+              }
               pending={list.isPending}
               hasData={!!list.data}
               error={list.error}
@@ -308,7 +302,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
             >
               <MessageThread
                 messages={messages}
-                chat={detail.data}
+                chat={chat}
                 viewerId={viewer.id}
                 canReply={draft.status !== "sending" && draft.status !== "uncertain"}
                 onReply={reply}
@@ -358,7 +352,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               }}
             />
             <Composer
-              chat={detail.data}
+              chat={chat}
               viewerId={viewer.id}
               draft={draft}
               owner={draftOwner}
@@ -369,5 +363,55 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
         </div>
       )}
     </QueryState>
+  );
+}
+
+function ConversationRow({
+  chat = placeholderConversation,
+  viewerId = "",
+  placeholder = false,
+}: {
+  chat?: import("@/lib/types").Conversation;
+  viewerId?: string;
+  placeholder?: boolean;
+}) {
+  const cache = useQueryClient(),
+    api = useAPI();
+  const prepare = () => {
+    if (!placeholder) seedConversation(cache, api, chat);
+  };
+  return (
+    <Link
+      data-placeholder={placeholder || undefined}
+      onPointerEnter={prepare}
+      onFocus={prepare}
+      onPointerDown={prepare}
+      className={
+        "conversation-row [&>small]:text-subtle-foreground [&>small]:text-[11px] [&>small]:flex-none relative flex items-center gap-4 p-[18px_0] [&>.person-label]:flex-1"
+      }
+      to="/messages/$conversationId"
+      params={{ conversationId: chat.shortId }}
+      state={{ conversationId: chat.id }}
+    >
+      <ChatAvatars chat={chat} viewerId={viewerId} />
+      <span className={personLabelClassName}>
+        <strong>{conversationName(chat, viewerId)}</strong>
+        <small>
+          {chat.lastMessage?.body ||
+            (chat.lastMessage?.restrictedAuthor
+              ? "Private post"
+              : chat.lastMessage?.attachment?.title) ||
+            (chat.lastMessage?.hasAttachment ? "Post unavailable" : "Start the conversation")}
+        </small>
+      </span>
+      <small>{chat.lastMessage ? timeAgo(chat.lastMessage.createdAt) : ""}</small>
+      {chat.unreadCount > 0 && (
+        <i
+          className={
+            "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]"
+          }
+        />
+      )}
+    </Link>
   );
 }

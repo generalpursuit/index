@@ -78,7 +78,7 @@ async function dialogLayout(page: Page, name: string) {
     const bodyBox = await body.boundingBox();
     expect
       .soft(bodyBox!.y + bodyBox!.height, `${name}: body bottom`)
-      .toBeLessThanOrEqual(await page.evaluate(() => innerHeight));
+      .toBeLessThanOrEqual(await page.evaluate(() => visualViewport?.height ?? innerHeight));
   }
   return dialog;
 }

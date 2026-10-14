@@ -162,8 +162,9 @@ export async function installDesktopSync(
         if (disposed || payload.source === label || payload.revision !== revision) return;
         window.dispatchEvent(new Event("index:pulse"));
         void cache.invalidateQueries({
-          predicate: (q) => q.queryKey[0] !== "session",
-          refetchType: "none",
+          predicate: (query) =>
+            Array.isArray(query.queryKey[0]) &&
+            ["feed", "links", "profiles", "groups", "discovery"].includes(query.queryKey[0][2]),
         });
       }),
     );

@@ -10,7 +10,11 @@ export default defineConfig({
   reporter: "list",
   use: {
     baseURL: webURL,
-    launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH },
+    launchOptions: {
+      executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
+      // This VM has ample shared memory; the default fallback fills its small /tmp mount.
+      ignoreDefaultArgs: process.platform === "linux" ? ["--disable-dev-shm-usage"] : undefined,
+    },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
   },

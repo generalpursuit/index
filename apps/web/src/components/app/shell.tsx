@@ -28,7 +28,11 @@ const navItemClassName =
 const unreadDotClassName =
   "unread-dot absolute w-1.5 h-1.5 right-1.75 top-1.75 bg-foreground rounded-full [box-shadow:0_0_0_3px_var(--background)]";
 
-export function AppShell() {
+export function AppShell({
+  pending = queryClient.getQueryState(["session"])?.status === "pending",
+}: {
+  pending?: boolean;
+}) {
   const viewer = useViewer(),
     unread = useUnread(),
     navigate = useNavigate(),
@@ -59,9 +63,9 @@ export function AppShell() {
     !path.startsWith("/u/") &&
     !path.startsWith("/l/");
   useEffect(() => {
-    if (!viewer && protectedPage)
+    if (!pending && !viewer && protectedPage)
       void navigate({ to: "/login", search: { next: router.state.location.href }, replace: true });
-  }, [viewer, protectedPage, navigate, router]);
+  }, [viewer, protectedPage, navigate, router, pending]);
   return (
     <MessageDraftProvider key={viewer?.id ?? "guest"}>
       <LinkDraftProvider>
@@ -134,11 +138,7 @@ export function AppShell() {
             id="app-content"
             className={
               "app-main h-full pl-25 [@media(width<=700px)]:[&_.app-content:has(.week-scrubber)]:pr-9 [@media(width<=700px)]:pl-0 [@media(width<=700px)]:pb-[calc(66px_+_env(safe-area-inset-bottom))] " +
-              (feed
-                ? "feed-main [&_.app-content]:h-full [&_.app-content]:pt-0 [&_.app-content]:pb-0 [&_.app-scroll]:overflow-hidden [@media(width<=700px)]:[&_.app-content]:p-[0_20px]"
-                : chat
-                  ? "chat-main [&_.app-content]:h-full [&_.app-content]:pt-7 [&_.app-content]:pb-6 [&_.app-scroll]:overflow-hidden [@media(width<=700px)]:[&_.app-content]:p-[20px_16px_12px] [@media(width<=700px)]:[&_.chat-heading]:mb-4.5"
-                  : "")
+              (feed ? "feed-main" : chat ? "chat-main" : "")
             }
             {...(!feed ? swipe : {})}
           >
@@ -152,7 +152,7 @@ export function AppShell() {
                   "app-content [--page-top-space:40px] w-[min(100%,_820px)] p-[var(--page-top-space)_40px_50px] m-auto [@media(width<=700px)]:p-[var(--page-top-space)_20px_28px] [@media(width<=700px)_and_(height<=740px)]:[--page-top-space:36px]"
                 }
               >
-                {!viewer && protectedPage ? <QueryState pending /> : <Outlet />}
+                {pending ? null : !viewer && protectedPage ? <QueryState pending /> : <Outlet />}
               </div>
             </div>
           </main>

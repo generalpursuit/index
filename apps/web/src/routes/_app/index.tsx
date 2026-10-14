@@ -1,3 +1,4 @@
+import { PendingPage } from "@/components/app/query-state";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { FeedPage } from "@/features/feed/feed-page";
@@ -13,22 +14,22 @@ export const Route = createFileRoute("/_app/")({
   beforeLoad: requireSession,
   validateSearch: z.object({ week: weekSearch }),
   loaderDeps: ({ search }) => ({ week: search.week ?? monday() }),
-  // Everything on the first screen, so nothing arrives after the page appears. Only the week
-  // itself is required; the rest show their own errors and retry once the page is up.
   loader: ({ context, deps }) => {
     const api = apiFor(context.session.user.id),
       cache = context.queryClient;
-    return Promise.all([
-      cache.ensureInfiniteQueryData(feedWeekOptions(api, deps.week)),
-      cache.prefetchInfiniteQuery({ ...feedWeeksOptions(api), retry: false }),
-      cache.prefetchQuery({ ...profileOptions(api, context.session.user.id), retry: false }),
-      cache.prefetchQuery({ ...api.profiles.me.queryOptions(), retry: false }),
-      cache.prefetchInfiniteQuery({
-        ...groupsOptions(api, context.session.user.id),
-        retry: false,
-      }),
-    ]);
+    void cache.prefetchInfiniteQuery({ ...feedWeeksOptions(api), retry: false });
+    void cache.prefetchQuery({ ...profileOptions(api, context.session.user.id), retry: false });
+    void cache.prefetchInfiniteQuery({
+      ...groupsOptions(api, context.session.user.id),
+      retry: false,
+    });
+    return cache.ensureInfiniteQueryData(feedWeekOptions(api, deps.week)).then(() => {});
   },
+  pendingComponent: () => (
+    <PendingPage>
+      <FeedPage week={monday()} />
+    </PendingPage>
+  ),
   component: () => {
     const { week } = Route.useSearch();
     return <FeedPage week={week ?? monday()} />;

@@ -1,3 +1,5 @@
+import { clearAccountState } from "@/lib/account-boundary";
+import { queryClient } from "@/data/client";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { RecoveryForm, VerificationForm } from "@/features/auth/security-forms";
@@ -137,6 +139,8 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
     onSubmit: async ({ value }) => {
       setError("");
       try {
+        // Fence old drafts and requests before credentials can change, including native login.
+        await clearAccountState(queryClient);
         const result = await authenticate(signUp, value);
         if (result.error) {
           setError(result.error.message ?? "Could not sign in.");

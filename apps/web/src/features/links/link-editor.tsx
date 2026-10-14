@@ -92,23 +92,19 @@ function LinkForm({
         groupId: createLinkInputSchema.shape.groupId.unwrap(),
       }),
     },
-    onSubmit: async ({ value }) => {
+    onSubmit: ({ value }) => {
       const { url, title, description, groupId } = value;
       const submitted = drafts.read(existing.id, saved);
-      try {
-        await actions.update.mutateAsync({
-          id: existing.id,
-          url,
-          title: title.trim(),
-          description,
-          groupId,
-        });
-        drafts.complete(existing.id, submitted);
-        toast.success("Link saved");
-        onDone();
-      } catch {
-        /* Mutation errors are shown by the query client; keep the draft. */
-      }
+      actions.update.mutate(
+        { id: existing.id, url, title: title.trim(), description, groupId },
+        {
+          onSuccess: () => {
+            drafts.complete(existing.id, submitted);
+            toast.success("Link saved");
+          },
+        },
+      );
+      onDone();
     },
   });
   const saving = actions.update.isPending;

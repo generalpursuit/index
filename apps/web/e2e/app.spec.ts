@@ -128,9 +128,12 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await page.getByRole("button", { name: "Requests", exact: true }).click();
   const row = page.locator(".activity-row").filter({ hasText: "mia" });
   await expect(row.getByRole("button", { name: "Accept", exact: true })).toBeVisible();
-  const body = await row.locator(".activity-body").boundingBox(),
-    accept = await row.getByRole("button", { name: "Accept", exact: true }).boundingBox();
-  expect(Math.abs(body!.y - accept!.y)).toBeLessThan(30);
+  const alignment = await row.evaluate((element) => {
+    const body = element.querySelector(".activity-body")!.getBoundingClientRect();
+    const accept = element.querySelector(".request-actions button")!.getBoundingClientRect();
+    return Math.abs(body.y - accept.y);
+  });
+  expect(alignment).toBeLessThan(30);
   await row.getByRole("button", { name: "Accept", exact: true }).click();
   await expect(row).toContainText("Follow request accepted.");
   await page.getByRole("link", { name: "Your profile", exact: true }).click();

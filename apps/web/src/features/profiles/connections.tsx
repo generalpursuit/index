@@ -1,10 +1,9 @@
+import { PeoplePlaceholder, PersonRow } from "@/components/app/person-row";
 import { useState } from "react";
-import { ProfileLink } from "@/components/app/profile-link";
 import { Button } from "@index/ui/components/button";
 import { Tabs, TabsList, TabsTrigger } from "@index/ui/components/tabs";
 import { Modal } from "@index/ui/components/modal";
 import { More, QueryState } from "@/components/app/query-state";
-import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
 import { useConnections, useProfileActions } from "./hooks/use-profiles";
 export function Connections({
@@ -39,6 +38,7 @@ export function Connections({
         }
       >
         <QueryState
+          placeholder={<PeoplePlaceholder />}
           pending={list.isPending}
           hasData={!!list.data}
           error={list.error}
@@ -47,32 +47,26 @@ export function Connections({
           {list.data?.pages
             .flatMap((p) => p.items)
             .map((p) => (
-              <div
-                className={
-                  "person-row flex items-center justify-between gap-4 p-[13px_0] [&>.person-inline]:flex-1 [&_.person-label]:max-w-full [&>button]:shrink-0 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.person-label_small]:max-w-45"
-                }
+              <PersonRow
+                person={p}
+                onOpen={onClose}
                 key={p.id}
+                action={
+                  <Button
+                    variant="outline"
+                    disabled={actions.removeFollower.isPending || actions.unfollow.isPending}
+                    onClick={() =>
+                      tab === "followers"
+                        ? actions.removeFollower.mutate({ userId: p.id })
+                        : actions.unfollow.mutate({ userId: p.id })
+                    }
+                  >
+                    {tab === "followers" ? "Remove" : "Unfollow"}
+                  </Button>
+                }
               >
-                <ProfileLink
-                  person={p}
-                  onClick={onClose}
-                  className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
-                >
-                  <UserAvatar person={p} />
-                  <span>{p.username ?? p.name}</span>
-                </ProfileLink>
-                <Button
-                  variant="outline"
-                  disabled={actions.removeFollower.isPending || actions.unfollow.isPending}
-                  onClick={() =>
-                    tab === "followers"
-                      ? actions.removeFollower.mutate({ userId: p.id })
-                      : actions.unfollow.mutate({ userId: p.id })
-                  }
-                >
-                  {tab === "followers" ? "Remove" : "Unfollow"}
-                </Button>
-              </div>
+                <span>{p.username ?? p.name}</span>
+              </PersonRow>
             ))}
           {list.data?.pages[0]?.items.length === 0 && (
             <p

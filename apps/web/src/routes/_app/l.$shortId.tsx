@@ -1,5 +1,6 @@
+import { PendingPage } from "@/components/app/query-state";
 import { createFileRoute } from "@tanstack/react-router";
-import { LinkDetail } from "@/features/links/link-detail";
+import { LinkDetail, PostPlaceholder } from "@/features/links/link-detail";
 import { loadPost } from "@/features/links/queries";
 import { apiFor } from "@/utils/orpc";
 import { resolveLocation } from "@/lib/routes";
@@ -10,5 +11,10 @@ export const Route = createFileRoute("/_app/l/$shortId")({
     await loadPost(context.queryClient, apiFor(context.session?.user.id ?? null), result.linkId);
     return result;
   },
+  pendingComponent: () => (
+    <PendingPage>
+      <PostPlaceholder standalone />
+    </PendingPage>
+  ),
   component: () => <LinkDetail id={Route.useLoaderData().linkId} standalone />,
 });

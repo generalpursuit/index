@@ -1,3 +1,4 @@
+import { PendingPage } from "@/components/app/query-state";
 import { createFileRoute } from "@tanstack/react-router";
 import { apiFor } from "@/utils/orpc";
 import { conversationsOptions } from "@/features/messages/queries";
@@ -6,8 +7,13 @@ import { requireSession } from "@/lib/session";
 export const Route = createFileRoute("/_app/messages/")({
   beforeLoad: requireSession,
   loader: ({ context }) =>
-    context.queryClient.ensureInfiniteQueryData(
-      conversationsOptions(apiFor(context.session.user.id)),
-    ),
+    context.queryClient
+      .ensureInfiniteQueryData(conversationsOptions(apiFor(context.session.user.id)))
+      .then(() => {}),
+  pendingComponent: () => (
+    <PendingPage>
+      <MessagesPage />
+    </PendingPage>
+  ),
   component: MessagesPage,
 });

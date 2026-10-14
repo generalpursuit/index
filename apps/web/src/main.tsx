@@ -1,34 +1,36 @@
+import { canPrefetch } from "./data/client";
 import { restoreAccount } from "./data/account";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { RouterProvider, createRouter } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
 
-import { clearAccountState } from "./lib/account-boundary";
+import { clearAccountState, onAccountClear } from "./lib/account-boundary";
 import { resetSession } from "./lib/session";
 import { installDesktopSync } from "./lib/desktop/sync";
 import { installDesktopLinks } from "./lib/desktop";
 import { toast } from "sonner";
 
-import Loader from "./components/loader";
+import { AppShell } from "./components/app/shell";
 import { UpdateRequired } from "./components/app/update-required";
 import { routeTree } from "./routeTree.gen";
 import { orpc, queryClient } from "./utils/orpc";
 
 const router = createRouter({
   routeTree,
-  defaultPreload: "intent",
+  defaultPreload: canPrefetch() ? "intent" : false,
   defaultPreloadStaleTime: 0,
-  // The current page stays, under a progress bar, until the next one is ready. Only a very slow
-  // load replaces it with a spinner.
-  defaultPendingMs: 3000,
+  defaultPendingMs: 300,
+  defaultPendingMinMs: 400,
   scrollToTopSelectors: ["#app-scroll"],
   scrollRestoration: true,
-  defaultPendingComponent: () => <Loader />,
+  defaultPendingComponent: () => <AppShell pending />,
   context: { orpc, queryClient },
   Wrap: function WrapComponent({ children }: { children: React.ReactNode }) {
     return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
   },
 });
+
+onAccountClear(() => router.clearCache());
 
 declare module "@tanstack/react-router" {
   interface Register {

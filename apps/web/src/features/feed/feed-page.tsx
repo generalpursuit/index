@@ -1,3 +1,5 @@
+import { placeholderProfile } from "@/data/placeholders";
+import { LinksPlaceholder } from "@/features/links/link-row";
 import { useEffect, useRef, useState } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -19,7 +21,9 @@ function FriendCard({
   week,
   seed,
   updatedAt,
+  placeholder = false,
 }: {
+  placeholder?: boolean;
   person: Person;
   week: string;
   seed: { items: SavedLink[]; nextCursor: string | null };
@@ -27,6 +31,7 @@ function FriendCard({
 }) {
   return (
     <article
+      data-placeholder={placeholder || undefined}
       className={
         "friend-card [flex:0_0_calc((100%_-_16px)_/_2)] min-w-0 h-full flex flex-col gap-1 p-[var(--person-top)_14px_6px] [scroll-snap-align:start] [transition:opacity_150ms_ease] [&[data-peeking]]:opacity-[0.3] [&[data-peeking]]:cursor-pointer [&[data-peeking]_*]:cursor-pointer [&[data-peeking]:hover]:opacity-[0.55] [&>.person-inline]:flex-none [&>.person-inline]:h-[var(--person-heading-height)] [&_.user-avatar]:w-8 [&_.user-avatar]:h-8"
       }
@@ -39,7 +44,11 @@ function FriendCard({
         <strong>{person.username ?? person.name}</strong>
       </ProfileLink>
       <div className={"friend-links flex-1 min-h-0 flex flex-col"}>
-        <WeekLinks userId={person.id} week={week} seed={seed} updatedAt={updatedAt} />
+        {placeholder ? (
+          <LinksPlaceholder />
+        ) : (
+          <WeekLinks userId={person.id} week={week} seed={seed} updatedAt={updatedAt} />
+        )}
       </div>
     </article>
   );
@@ -162,7 +171,9 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
           Yours
         </h2>
         {/* A neighboring week waits for its feed, which carries these links. */}
-        {feed.isPending ? null : ownEmpty && !current ? (
+        {feed.isPending ? (
+          <LinksPlaceholder />
+        ) : ownEmpty && !current ? (
           <p
             className={
               "week-empty p-[4px_0_12px] text-subtle-foreground leading-[1.6] [&_a]:text-foreground [&_a]:whitespace-nowrap [&_a:hover]:underline [&_a:hover]:underline-offset-[4px]"
@@ -214,6 +225,20 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
           }}
         >
           <QueryState
+            placeholder={
+              <>
+                {[0, 1].map((key) => (
+                  <FriendCard
+                    key={key}
+                    person={placeholderProfile}
+                    week={week}
+                    seed={{ items: [], nextCursor: null }}
+                    updatedAt={0}
+                    placeholder
+                  />
+                ))}
+              </>
+            }
             pending={feed.isPending}
             hasData={!!feed.data}
             error={feed.error}

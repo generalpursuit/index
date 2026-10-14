@@ -34,12 +34,21 @@ export function instantEdit<TData, TVariables>(
   },
 ) {
   const group = JSON.stringify(key);
+  const write = (queryKey: QueryKey, data: unknown) => {
+    if (data === undefined)
+      cache.getQueryCache().find({ queryKey, exact: true })?.setState({
+        data: undefined,
+        dataUpdatedAt: 0,
+        error: null,
+        status: "pending",
+      });
+    else cache.setQueryData(queryKey, data);
+  };
   const replay = (layer: Layer) => {
     for (const entry of layer.base.values()) {
       let data = entry.data;
       for (const edit of layer.edits) data = edit.patch(data, entry.key);
-      if (data === undefined) cache.removeQueries({ queryKey: entry.key, exact: true });
-      else cache.setQueryData(entry.key, data);
+      write(entry.key, data);
     }
   };
   const completeDestinations = (layer: Layer) => {
@@ -50,8 +59,7 @@ export function instantEdit<TData, TVariables>(
     })) {
       let data = query.state.data;
       for (const edit of layer.edits) data = edit.patch(data, query.queryKey);
-      if (data === undefined) cache.removeQueries({ queryKey: query.queryKey, exact: true });
-      else cache.setQueryData(query.queryKey, data);
+      write(query.queryKey, data);
     }
   };
   return accountMutationOptions<TData, Error, TVariables, { layer: Layer; edit: Edit }>({

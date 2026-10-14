@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
@@ -18,6 +18,10 @@ export function PulseLifecycle() {
   const viewer = useViewer(),
     api = useAPI(),
     cache = useQueryClient();
+  const applied = useRef({ account: viewer?.id, versions: new Map<string, string>() });
+  if (applied.current.account !== viewer?.id)
+    applied.current = { account: viewer?.id, versions: new Map() };
+  const path = useRouterState({ select: (state) => state.location.pathname });
   const conversationId = useRouterState({
     select: (state) =>
       (state.matches.at(-1)?.loaderData as { conversationId?: string } | undefined)?.conversationId,
@@ -25,6 +29,16 @@ export function PulseLifecycle() {
   useEffect(() => {
     if (!viewer || isMenuBar) return;
     const generation = accountGeneration();
+    const newestPage = <T,>(
+      key: import("@tanstack/react-query").QueryKey,
+      load: (signal: AbortSignal) => Promise<T>,
+    ) =>
+      cache.fetchQuery({
+        queryKey: [...key, "pulse"],
+        queryFn: ({ signal }) => load(signal),
+        staleTime: 0,
+        gcTime: 0,
+      });
     let legacy = false,
       legacyVersion = 0;
     const driver = createPulseDriver({
@@ -53,42 +67,62 @@ export function PulseLifecycle() {
           activity: { unreadCount: activity.unreadCount, version },
         };
       },
-      changed: async (pulse: Pulse, messagesChanged, activityChanged) => {
+      changed: async (pulse: Pulse) => {
+        const needs = (key: import("@tanstack/react-query").QueryKey, version: string) =>
+          applied.current.versions.get(JSON.stringify(key)) !== version;
+        const remember = (key: import("@tanstack/react-query").QueryKey, version: string) =>
+          applied.current.versions.set(JSON.stringify(key), version);
         assertCurrentAccount(generation);
         cache.setQueryData(pulseKey(viewer.id), pulse);
         const jobs: Promise<unknown>[] = [];
-        if (messagesChanged) {
-          const options = conversationsOptions(api);
-          if (
-            cache
-              .getQueryCache()
-              .find({ queryKey: options.queryKey, exact: true })
-              ?.getObserversCount()
-          )
+        {
+          for (const query of cache.getQueryCache().findAll({
+            predicate: (query) =>
+              viewerPath(query.queryKey, viewer.id, "messages") &&
+              (query.queryKey[0] as string[])[3] === "conversations" &&
+              query.getObserversCount() > 0,
+          })) {
+            if (!needs(query.queryKey, pulse.messages.version)) continue;
+            const input = (query.queryKey[1] as { input?: { query?: string } }).input;
+            const options = conversationsOptions(api, input?.query);
             jobs.push(
-              api.messages.conversations.call({ limit: 30 }).then((page) => {
+              newestPage(options.queryKey, (signal) =>
+                api.messages.conversations.call({ limit: 30, query: input?.query }, { signal }),
+              ).then((page) => {
                 assertCurrentAccount(generation);
                 cache.setQueryData(options.queryKey, (current) => mergeNewestPage(current, page));
+                remember(options.queryKey, pulse.messages.version);
               }),
-            );
-          if (conversationId) {
-            const options = messagesOptions(api, conversationId);
-            jobs.push(
-              api.messages.list.call({ conversationId, limit: 30 }).then((page) => {
-                assertCurrentAccount(generation);
-                cache.setQueryData(options.queryKey, (current) => mergeNewestPage(current, page));
-              }),
-            );
-            jobs.push(
-              cache.fetchQuery({ ...conversationOptions(api, conversationId), staleTime: 0 }),
             );
           }
+          if (conversationId) {
+            const options = messagesOptions(api, conversationId);
+            if (needs(options.queryKey, pulse.messages.version))
+              jobs.push(
+                newestPage(options.queryKey, (signal) =>
+                  api.messages.list.call({ conversationId, limit: 30 }, { signal }),
+                ).then((page) => {
+                  assertCurrentAccount(generation);
+                  cache.setQueryData(options.queryKey, (current) => mergeNewestPage(current, page));
+                  remember(options.queryKey, pulse.messages.version);
+                }),
+              );
+            const detail = conversationOptions(api, conversationId);
+            if (needs(detail.queryKey, pulse.messages.version))
+              jobs.push(
+                cache.fetchQuery({ ...detail, staleTime: 0 }).then(() => {
+                  assertCurrentAccount(generation);
+                  remember(detail.queryKey, pulse.messages.version);
+                }),
+              );
+          }
         }
-        if (activityChanged) {
+        {
           for (const query of cache.getQueryCache().findAll({
             predicate: (query) =>
               viewerPath(query.queryKey, viewer.id, "activity") && query.getObserversCount() > 0,
           })) {
+            if (!needs(query.queryKey, pulse.activity.version)) continue;
             const options = query.options as { queryKey: typeof query.queryKey };
             const input = (
               options.queryKey[1] as
@@ -96,11 +130,14 @@ export function PulseLifecycle() {
                 | undefined
             )?.input;
             jobs.push(
-              api.activity.list.call({ type: input?.type, limit: 30 }).then((page) => {
+              newestPage(options.queryKey, (signal) =>
+                api.activity.list.call({ type: input?.type, limit: 30 }, { signal }),
+              ).then((page) => {
                 assertCurrentAccount(generation);
                 cache.setQueryData(activityOptions(api, input?.type).queryKey, (current) =>
                   mergeNewestPage(current, page),
                 );
+                remember(query.queryKey, pulse.activity.version);
               }),
             );
           }
@@ -119,6 +156,6 @@ export function PulseLifecycle() {
       window.removeEventListener("index:pulse", refresh);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [viewer?.id, conversationId, cache, api]);
+  }, [viewer?.id, conversationId, path, cache, api]);
   return null;
 }

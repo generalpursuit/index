@@ -1,3 +1,4 @@
+import { PendingPage } from "@/components/app/query-state";
 import { createFileRoute } from "@tanstack/react-router";
 import { apiFor } from "@/utils/orpc";
 import { activityOptions } from "@/features/activity/queries";
@@ -11,8 +12,13 @@ export const Route = createFileRoute("/_app/activity")({
   }),
   loaderDeps: ({ search }) => ({ type: search.filter === "all" ? undefined : search.filter }),
   loader: ({ context, deps }) =>
-    context.queryClient.ensureInfiniteQueryData(
-      activityOptions(apiFor(context.session.user.id), deps.type),
-    ),
+    context.queryClient
+      .ensureInfiniteQueryData(activityOptions(apiFor(context.session.user.id), deps.type))
+      .then(() => {}),
+  pendingComponent: () => (
+    <PendingPage>
+      <ActivityPage />
+    </PendingPage>
+  ),
   component: () => <ActivityPage filter={Route.useSearch().filter} />,
 });

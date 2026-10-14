@@ -1,3 +1,4 @@
+import { personSummaryKey } from "@/data/seeding";
 import { redirect } from "@tanstack/react-router";
 import { client, apiFor } from "@/utils/orpc";
 import type { QueryClient } from "@tanstack/react-query";
@@ -25,13 +26,15 @@ const routeOptions = (context: RouteContext, location: RouteLocation) =>
       path: location.pathname,
       group: new URLSearchParams(location.searchStr).get("group") ?? undefined,
     },
-    // A hover preload's answer serves the navigation that follows it, not later ones.
-    staleTime: 5_000,
+    staleTime: 30_000,
   });
-/** Revalidate on each navigation, before disclosing even a canonical redirect. */
+/** Cached resolutions serve navigation; destination reads still enforce current access. */
 export async function resolveLocation(context: RouteContext, location: RouteLocation) {
   const search = new URLSearchParams(location.searchStr);
-  const result = await context.queryClient.fetchQuery(routeOptions(context, location));
+  const result = await context.queryClient.ensureQueryData({
+    ...routeOptions(context, location),
+    revalidateIfStale: true,
+  });
   search.delete("group");
   // Old modal/attachment URLs remain usable, but addresses written back contain short IDs.
   for (const key of ["post", "edit", "attach"]) {
@@ -87,11 +90,20 @@ export function seedLinkRoute(
     linkId: link.id,
     canonicalPath: linkPath(link.shortId),
   };
-  if (!cache.getQueryData(queryKey)) cache.setQueryData(queryKey, route, { updatedAt: 0 });
+  if (!cache.getQueryData(queryKey)) cache.setQueryData(queryKey, route);
 }
 export async function preloadProfile(context: RouteContext, userId: string, groupId?: string) {
   const cache = context.queryClient,
     profileApi = api(context);
+  if (
+    cache.getQueryData(personSummaryKey(profileApi, userId)) &&
+    !cache.getQueryData(profileOptions(profileApi, userId).queryKey)
+  ) {
+    void cache.prefetchQuery(profileOptions(profileApi, userId));
+    void cache.prefetchInfiniteQuery(groupsOptions(profileApi, userId));
+    void cache.prefetchInfiniteQuery(weeksOptions(profileApi, userId, groupId));
+    return;
+  }
   const profile = cache.ensureQueryData(profileOptions(profileApi, userId));
   // Each list applies the profile's visibility itself, so they can start alongside it.
   const groups = cache.ensureInfiniteQueryData(groupsOptions(profileApi, userId));
@@ -111,7 +123,7 @@ export async function preloadProfile(context: RouteContext, userId: string, grou
   // A failed week shows its own retry; it doesn't hold the page.
   await Promise.all(
     shown.map((week) =>
-      cache.prefetchInfiniteQuery({
+      cache.ensureInfiniteQueryData({
         ...weekLinksOptions(profileApi, userId, week, groupId),
         retry: false,
       }),

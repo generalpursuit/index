@@ -1,3 +1,7 @@
+import { canPrefetch } from "@/data/client";
+import { placeholderProfile } from "@/data/placeholders";
+import { LinksPlaceholder } from "@/features/links/link-row";
+import { useRouterState } from "@tanstack/react-router";
 import { groupPath } from "@index/api/routes";
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -79,19 +83,37 @@ export function FollowButton({
 }
 const followLabels = ["Follow", "Request", "Requested", "Following"];
 export function ProfilePage({ userId, group = "all" }: { userId: string; group?: string }) {
+  const hinted = useRouterState({ select: (state) => state.location.state.userId });
+  userId ||= hinted ?? "";
   const profile = useProfile(userId);
   return (
     <QueryState
+      placeholder={<ProfileContent profile={placeholderProfile} filter={group} placeholder />}
       pending={profile.isPending}
       hasData={!!profile.data}
       error={profile.error}
       retry={() => void profile.refetch()}
     >
-      {profile.data && <ProfileContent key={userId} profile={profile.data} filter={group} />}
+      {profile.data && (
+        <ProfileContent
+          key={userId}
+          profile={profile.data}
+          filter={group}
+          placeholder={profile.isPlaceholderData}
+        />
+      )}
     </QueryState>
   );
 }
-function ProfileContent({ profile, filter }: { profile: Profile; filter: string }) {
+function ProfileContent({
+  profile,
+  filter,
+  placeholder = false,
+}: {
+  profile: Profile;
+  filter: string;
+  placeholder?: boolean;
+}) {
   const viewer = useViewer(),
     own = viewer?.id === profile.id,
     navigate = useNavigate();
@@ -103,11 +125,12 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
     api = useAPI();
   // Both tabs, so switching between them is instant too.
   const prefetchConnections = () => {
+    if (!canPrefetch()) return;
     for (const kind of ["followers", "following"] as const)
       void cache.prefetchInfiniteQuery(connectionsOptions(api, profile.id, kind));
   };
   return (
-    <div className="profile-page">
+    <div className="profile-page" data-placeholder={(placeholder && !profile.id) || undefined}>
       <header
         className={
           "profile-heading flex items-center gap-5 mb-8 [@media(width<=700px)]:[&_.user-avatar.large]:w-16 [@media(width<=700px)]:[&_.user-avatar.large]:h-16 [@media(width<=700px)]:[&_.user-avatar.large_[data-slot='avatar-fallback']]:text-[20px] [&_h1]:font-serif [&_h1]:font-bold [&_h1]:[font-variation-settings:'opsz'_60] [&_h1]:tracking-[-0.015em] [&_h1]:leading-[1] [&_h1]:text-[clamp(30px,_3.4vw,_40px)]"
@@ -123,6 +146,7 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
             <h1>{profile.name}</h1>
             <span
               className={"profile-visibility inline-flex flex-none text-subtle-foreground"}
+              data-placeholder={placeholder || undefined}
               role="img"
               aria-label={
                 profile.profileVisibility === "private" ? "Private profile" : "Public profile"
@@ -196,7 +220,9 @@ function ProfileContent({ profile, filter }: { profile: Profile; filter: string 
           <FollowedBy context={profile.followedBy} linked />
         </p>
       )}
-      {hidden ? (
+      {placeholder ? (
+        <ProfileLinks key={filter} userId={profile.id} own={own} filter={filter} />
+      ) : hidden ? (
         <div
           className={
             "private-profile text-center border-t border-t-border p-[65px_24px] flex flex-col items-center gap-4 [&_h2]:text-[18px] [&_p]:max-w-75 [&_button]:mt-2 [&_button]:min-w-40"
@@ -287,6 +313,7 @@ function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; f
       className={"profile-links [--row:48px] relative [@media(width<=700px)]:[--row:46px]"}
     >
       <QueryState
+        placeholder={<LinksPlaceholder />}
         pending={!groups.error && (!ready || (!missing && list.isPending))}
         hasData={ready && !!list.data}
         error={groups.error ?? list.error}
@@ -420,7 +447,9 @@ function WeekPlaceholder({ rows }: { rows: number }) {
     <div
       className={"profile-week-placeholder h-[calc(var(--rows)_*_var(--row))]"}
       style={{ "--rows": rows } as CSSProperties}
-    />
+    >
+      <LinksPlaceholder rows={rows} />
+    </div>
   );
 }
 /** The weeks with some of their section on screen, as you scroll. */

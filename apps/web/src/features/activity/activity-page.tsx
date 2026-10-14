@@ -1,3 +1,5 @@
+import { canPrefetch } from "@/data/client";
+import { placeholderProfile } from "@/data/placeholders";
 import { useEffect } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useNavigate } from "@tanstack/react-router";
@@ -22,12 +24,27 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
     cache = useQueryClient(),
     api = useAPI();
   const prefetchFilter = (value: Filter) =>
+    canPrefetch() &&
     void cache.prefetchInfiniteQuery(activityOptions(api, value === "all" ? undefined : value));
   const preparePostFor = (item: { linkId: string | null; linkShortId: string | null }) => {
     if (item.linkId && item.linkShortId)
       preparePostReference(cache, api, { id: item.linkId, shortId: item.linkShortId });
   };
-  const items = list.data?.pages.flatMap((p) => p.items) ?? [];
+  const items =
+    list.data?.pages.flatMap((p) => p.items) ??
+    (list.isPending
+      ? [0, 1, 2].map((index) => ({
+          id: `placeholder-${index}`,
+          actor: placeholderProfile,
+          type: "follow" as const,
+          readAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          body: null,
+          linkId: null,
+          linkShortId: null,
+          requestStatus: null,
+        }))
+      : []);
   const unread = items
     .filter((i) => !i.readAt)
     .map((i) => i.id)
@@ -90,6 +107,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
         <div className="activity-list">
           {items.map((a) => (
             <article
+              data-placeholder={list.isPending || undefined}
               className={
                 "activity-row [&_small]:text-subtle-foreground flex items-center gap-3 p-[14px_0] [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:p-[14px_0] [@media(width<=700px)]:[&_.user-avatar]:w-8.5 [@media(width<=700px)]:[&_.user-avatar]:h-8.5"
               }

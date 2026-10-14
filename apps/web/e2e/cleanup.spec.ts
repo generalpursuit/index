@@ -1,3 +1,4 @@
+import { routeRPC } from "./rpc";
 import { test, expect, type Page } from "@playwright/test";
 import { apiURL } from "./urls";
 
@@ -201,8 +202,8 @@ test("saved link edits reopen with the saved values; failed edits keep unsaved i
   await page.route("**/rpc/v1/links/update", (route) => route.abort("failed"));
   await editor.getByLabel("Title", { exact: true }).fill("Unsaved title");
   await editor.getByRole("button", { name: "Save changes", exact: true }).click();
-  await expect(editor.getByRole("button", { name: "Save changes", exact: true })).toBeEnabled();
-  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(post.getByRole("heading", { name: "Updated title", exact: true })).toBeVisible();
+  await post.getByRole("button", { name: "Close", exact: true }).click();
   await openEditor("Updated title");
   await expect(editor.getByLabel("Title", { exact: true })).toHaveValue("Unsaved title");
 });
@@ -267,7 +268,7 @@ test("a profile group beyond page one remains unknown on failure, then loads on 
   }
   let requests = 0;
   let fail = true;
-  await page.route("**/rpc/v1/groups/list**", async (route) => {
+  await routeRPC(page, "**/rpc/v1/groups/list**", async (route) => {
     requests++;
     if (requests > 1 && fail)
       await route.fulfill({
@@ -302,7 +303,7 @@ test("a profile group beyond page one remains unknown on failure, then loads on 
 });
 
 test("week index errors expose retry without hiding the loaded feed", async ({ page }) => {
-  await page.route("**/rpc/v1/feed/weeks**", (route) =>
+  await routeRPC(page, "**/rpc/v1/feed/weeks**", (route) =>
     route.fulfill({
       status: 503,
       json: { json: { code: "INTERNAL_SERVER_ERROR", status: 503, message: "Weeks unavailable" } },

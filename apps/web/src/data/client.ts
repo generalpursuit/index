@@ -15,8 +15,9 @@ export function createQueryClient() {
       },
     }),
     mutationCache: new MutationCache({
-      onError: (error) => {
-        if (error.name !== "AbortError") toast.error(error.message);
+      onError: (error, _variables, _context, mutation) => {
+        if (error.name !== "AbortError" && !mutation.options.meta?.inlineError)
+          toast.error(error.message);
       },
     }),
     defaultOptions: {

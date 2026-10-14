@@ -1,3 +1,4 @@
+import { placeholderProfile } from "@/data/placeholders";
 import { NotificationSettings } from "@/features/notifications/settings";
 import { DesktopUpdates } from "@/lib/desktop/updates";
 import { AccountSecurity } from "@/features/auth/security-forms";
@@ -71,6 +72,7 @@ function SettingsContent({ userId }: { userId: string }) {
   const profile = useProfile(userId);
   return (
     <QueryState
+      placeholder={<SettingsBoxes profile={placeholderProfile} placeholder />}
       pending={profile.isPending}
       hasData={!!profile.data}
       error={profile.error}
@@ -82,13 +84,22 @@ function SettingsContent({ userId }: { userId: string }) {
 }
 
 /** One box per concern: who you are, who sees your links, your lists, imports, and signing out. */
-function SettingsBoxes({ profile }: { profile: Profile }) {
+function SettingsBoxes({
+  profile,
+  placeholder = false,
+}: {
+  profile: Profile;
+  placeholder?: boolean;
+}) {
   const signOut = useSignOut();
   // Editing opens with a freshly picked photo when the avatar was tapped.
   const [editing, setEditing] = useState<{ photo?: File } | null>(null);
   const picker = useRef<HTMLInputElement>(null);
   return (
-    <div className={"settings-content flex flex-col gap-3.5"}>
+    <div
+      className={"settings-content flex flex-col gap-3.5"}
+      data-placeholder={placeholder || undefined}
+    >
       <section
         className={
           "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-profile grid grid-cols-[auto_minmax(0,_1fr)_auto] items-center gap-4.5"

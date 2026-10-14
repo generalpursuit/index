@@ -1,8 +1,6 @@
-import {
-  accountMutationOptions,
-  accountGeneration,
-  assertCurrentAccount,
-} from "@/lib/account-boundary";
+import { instantEdit, mapItems, viewerPath } from "@/data/edits";
+import { onAccountClear } from "@/lib/account-boundary";
+import { useViewer } from "@/hooks/use-api";
 import {
   useInfiniteQuery,
   useMutation,
@@ -15,8 +13,12 @@ import { useAPI } from "@/hooks/use-api";
 import type { SavedLink } from "@/lib/types";
 import { linkOptions, weekLinksOptions, weeksOptions, commentsOptions } from "../queries";
 type API = ReturnType<typeof useAPI>;
+let membershipChanged = new WeakMap<QueryClient, boolean>();
+onAccountClear(() => {
+  membershipChanged = new WeakMap();
+});
 export function useLink(id: string) {
-  return useQuery(linkOptions(useAPI(), id));
+  return useQuery({ ...linkOptions(useAPI(), id), enabled: !!id });
 }
 export function useWeekLinks(
   userId: string,
@@ -27,12 +29,16 @@ export function useWeekLinks(
 ) {
   return useInfiniteQuery({
     ...weekLinksOptions(useAPI(), userId, weekStart, groupId),
+    enabled: !!userId,
     initialData: seed ? () => ({ pages: [seed], pageParams: [undefined] }) : undefined,
     initialDataUpdatedAt: updatedAt,
   });
 }
 export function useLibraryWeeks(userId: string, groupId?: string, enabled = true) {
-  return useInfiniteQuery({ ...weeksOptions(useAPI(), userId, groupId), enabled });
+  return useInfiniteQuery({
+    ...weeksOptions(useAPI(), userId, groupId),
+    enabled: !!userId && enabled,
+  });
 }
 /** Everything that lists links or counts them, after the library changes. */
 export function refreshLibrary(cache: QueryClient, api: API) {
@@ -42,40 +48,54 @@ export function refreshLibrary(cache: QueryClient, api: API) {
       api.links.listByOwner.key(),
       api.links.listInGroup.key(),
       api.links.weeks.key(),
-      api.groups.key(),
+      api.groups.list.key(),
       api.feed.key(),
-      api.favorites.key(),
-      api.stars.key(),
-      api.profiles.key(),
-      api.messages.key(),
-      api.routes.key(),
+      api.profiles.get.key(),
     ].map((queryKey) => cache.invalidateQueries({ queryKey })),
   );
 }
 export function useLibraryActions() {
   const api = useAPI(),
-    cache = useQueryClient();
-  const refresh = () => refreshLibrary(cache, api);
-  const saved = async (link: SavedLink) => {
-    const generation = accountGeneration();
-    const queryKey = linkOptions(api, link.id).queryKey;
-    await cache.cancelQueries({ queryKey, exact: true });
-    assertCurrentAccount(generation);
-    cache.setQueryData(queryKey, link);
-    return refresh();
+    cache = useQueryClient(),
+    viewer = useViewer();
+  const affects = (key: import("@tanstack/react-query").QueryKey) =>
+    viewerPath(key, viewer?.id ?? null, "links", "feed", "messages", "favorites", "stars");
+  const patch =
+    (id: string, change: (link: Record<string, unknown>) => unknown) => (data: unknown) =>
+      mapItems(data, (item) => item.id === id && "url" in item && "shortId" in item, change);
+  const membership = () => {
+    if (!membershipChanged.get(cache)) return;
+    membershipChanged.delete(cache);
+    void cache.invalidateQueries({ queryKey: api.links.listInGroup.key() });
+    for (const queryKey of [api.links.weeks.key(), api.groups.list.key(), api.profiles.get.key()])
+      void cache.invalidateQueries({ queryKey });
   };
   const update = useMutation(
-    accountMutationOptions(api.links.update.mutationOptions({ onSuccess: saved })),
+    instantEdit(cache, {
+      key: ["link-edits", viewer?.id],
+      affects,
+      mutationFn: api.links.update.call,
+      optimistic: ({ id, ...changes }) => {
+        const previous = cache.getQueryData(linkOptions(api, id).queryKey);
+        if (changes.groupId !== undefined && changes.groupId !== previous?.groupId)
+          membershipChanged.set(cache, true);
+        return patch(id, (link) => ({ ...link, ...changes }));
+      },
+      response: (link) => patch(link.id, (current) => ({ ...current, ...link })),
+      invalidate: membership,
+    }),
   );
   const remove = useMutation(
-    accountMutationOptions(
-      api.links.delete.mutationOptions({
-        onSuccess: async (_, input) => {
-          cache.removeQueries({ queryKey: linkOptions(api, input.id).queryKey, exact: true });
-          await refresh();
-        },
-      }),
-    ),
+    instantEdit(cache, {
+      key: ["link-edits", viewer?.id],
+      affects,
+      mutationFn: api.links.delete.call,
+      optimistic: ({ id }) => {
+        membershipChanged.set(cache, true);
+        return patch(id, () => undefined);
+      },
+      invalidate: membership,
+    }),
   );
   return { update, remove, collect: useCollect() };
 }
@@ -88,9 +108,12 @@ const collectKey = ["collect"];
 export function useCollect() {
   const api = useAPI(),
     cache = useQueryClient();
+  const viewer = useViewer();
   return useMutation(
-    accountMutationOptions({
-      mutationKey: collectKey,
+    instantEdit(cache, {
+      key: collectKey,
+      affects: (key) =>
+        viewerPath(key, viewer?.id ?? null, "links", "feed", "messages", "favorites", "stars"),
       mutationFn: async ({ link, own }: Collect) => {
         if (own)
           return link.isFavorite
@@ -100,25 +123,41 @@ export function useCollect() {
           ? api.stars.remove.call({ linkId: link.id })
           : api.stars.add.call({ linkId: link.id });
       },
-      onMutate: async ({ link, own }) => {
-        const generation = accountGeneration();
-        const queryKey = linkOptions(api, link.id).queryKey;
-        await cache.cancelQueries({ queryKey, exact: true });
-        assertCurrentAccount(generation);
-        const previous = cache.getQueryData(queryKey);
-        cache.setQueryData(queryKey, {
-          ...(previous ?? link),
-          ...(own ? { isFavorite: !link.isFavorite } : { isStarred: !link.isStarred }),
-        });
-        return { queryKey, previous };
+      optimistic: ({ link, own }) => {
+        const removing = own ? link.isFavorite : link.isStarred;
+        const collectionIds = new Set<string>();
+        for (const query of cache.getQueryCache().findAll({ queryKey: api.groups.list.key() })) {
+          mapItems(
+            query.state.data,
+            (item) => item.ownerId === viewer?.id && item.kind === (own ? "favorites" : "starred"),
+            (item) => {
+              collectionIds.add(String(item.id));
+              return item;
+            },
+          );
+        }
+        return (data, key) => {
+          const input = (key[1] as { input?: { groupId?: string } } | undefined)?.input;
+          const removeFromCollection =
+            removing && !!input?.groupId && collectionIds.has(input.groupId);
+          return mapItems(
+            data,
+            (item) => item.id === link.id && "url" in item,
+            (item) =>
+              removeFromCollection
+                ? undefined
+                : {
+                    ...item,
+                    ...(own ? { isFavorite: !link.isFavorite } : { isStarred: !link.isStarred }),
+                  },
+          );
+        };
       },
-      onError: (_, __, context) => {
-        if (context?.previous) cache.setQueryData(context.queryKey, context.previous);
-        else if (context) cache.removeQueries({ queryKey: context.queryKey, exact: true });
-        if (context) void cache.invalidateQueries({ queryKey: context.queryKey, exact: true });
+      invalidate: () => {
+        void cache.invalidateQueries({ queryKey: api.links.listInGroup.key() });
+        void cache.invalidateQueries({ queryKey: api.links.weeks.key() });
+        void cache.invalidateQueries({ queryKey: api.groups.list.key() });
       },
-      // Settling waits for the lists, so `useKept` shows the change until they have it.
-      onSettled: () => refreshLibrary(cache, api),
     }),
   );
 }
@@ -141,15 +180,85 @@ export function useKept(link: SavedLink, own: boolean) {
 }
 export function useComments(linkId: string) {
   const api = useAPI(),
-    cache = useQueryClient();
-  const list = useInfiniteQuery(commentsOptions(api, linkId));
-  const refresh = () =>
-    cache.invalidateQueries({ queryKey: api.comments.list.key({ input: { linkId } }) });
+    cache = useQueryClient(),
+    viewer = useViewer();
+  const options = commentsOptions(api, linkId);
+  const list = useInfiniteQuery({ ...options, enabled: !!linkId });
+  const ids = new WeakMap<object, string>();
+  type Create = Parameters<typeof api.comments.create.call>[0];
   const create = useMutation(
-    accountMutationOptions(api.comments.create.mutationOptions({ onSuccess: refresh })),
+    instantEdit(cache, {
+      key: ["comments", viewer?.id, linkId],
+      affects: (key) => JSON.stringify(key) === JSON.stringify(options.queryKey),
+      mutationFn: api.comments.create.call,
+      optimistic: (input: Create) => {
+        const id = crypto.randomUUID();
+        ids.set(input, id);
+        const now = new Date().toISOString();
+        const comment = {
+          ...input,
+          id,
+          authorId: viewer!.id,
+          author: viewer,
+          createdAt: now,
+          updatedAt: now,
+        };
+        return (data) => {
+          const current = (data as typeof list.data) ?? {
+            pages: [{ items: [], nextCursor: null }],
+            pageParams: [undefined],
+          };
+          return (
+            current && {
+              ...current,
+              pages: current.pages.map((page, index) =>
+                index ? page : { ...page, items: [...page.items, comment] },
+              ),
+            }
+          );
+        };
+      },
+      response: (comment, input) => (data) => {
+        const current = (data as typeof list.data) ?? {
+          pages: [{ items: [], nextCursor: null }],
+          pageParams: [undefined],
+        };
+
+        const returned = { ...comment, author: viewer! };
+        const temporary = ids.get(input);
+        const present = current.pages.some((page) =>
+          page.items.some((item) => item.id === temporary || item.id === comment.id),
+        );
+        return {
+          ...current,
+          pages: current.pages.map((page, index) => ({
+            ...page,
+            items: present
+              ? page.items.map((item) =>
+                  item.id === temporary || item.id === comment.id ? returned : item,
+                )
+              : index
+                ? page.items
+                : [...page.items, returned],
+          })),
+        };
+      },
+    }),
   );
   const remove = useMutation(
-    accountMutationOptions(api.comments.delete.mutationOptions({ onSuccess: refresh })),
+    instantEdit(cache, {
+      key: ["comments", viewer?.id, linkId],
+      affects: (key) => JSON.stringify(key) === JSON.stringify(options.queryKey),
+      mutationFn: api.comments.delete.call,
+      optimistic:
+        ({ id }) =>
+        (data) =>
+          mapItems(
+            data,
+            (item) => item.id === id,
+            () => undefined,
+          ),
+    }),
   );
   return { list, create, remove };
 }

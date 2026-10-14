@@ -216,3 +216,29 @@ test("an edit patches a destination that read the previous value while its write
   assert.equal(cache.getQueryData(["destination"]), "confirmed");
   cache.clear();
 });
+
+test("hiding a cached item keeps its observer attached for rollback", async () => {
+  const { QueryObserver } = await import("@tanstack/react-query");
+  const cache = new QueryClient();
+  cache.setQueryData(["private"], "previously authorized");
+  const observer = new QueryObserver(cache, { queryKey: ["private"], enabled: false });
+  const unsubscribe = observer.subscribe(() => {});
+  const answer = deferred<string>();
+  const mutation = new MutationObserver(
+    cache,
+    instantEdit(cache, {
+      key: ["edit"],
+      affects: () => true,
+      mutationFn: () => answer.promise,
+      optimistic: () => () => undefined,
+    }),
+  );
+  const pending = mutation.mutate(undefined).catch(() => {});
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(observer.getCurrentResult().data, undefined);
+  answer.reject(new Error("write failed"));
+  await pending;
+  assert.equal(observer.getCurrentResult().data, "previously authorized");
+  unsubscribe();
+  cache.clear();
+});

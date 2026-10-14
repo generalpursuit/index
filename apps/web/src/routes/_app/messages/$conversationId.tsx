@@ -1,3 +1,4 @@
+import { PendingPage } from "@/components/app/query-state";
 import { resolveLocation, linkReferencePath, routeHint } from "@/lib/routes";
 import { client } from "@/utils/orpc";
 import { conversationOptions, messagesOptions } from "@/features/messages/queries";
@@ -28,6 +29,11 @@ export const Route = createFileRoute("/_app/messages/$conversationId")({
     const [attached] = await Promise.all([attachment, load(result.conversationId)]);
     return { ...result, attach: attached?.kind === "link" ? attached.linkId : undefined };
   },
+  pendingComponent: () => (
+    <PendingPage>
+      <ConversationPage id="" />
+    </PendingPage>
+  ),
   component: () => (
     <ConversationPage
       key={Route.useLoaderData().conversationId}

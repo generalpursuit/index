@@ -1,10 +1,9 @@
+import { PersonRow, PeoplePlaceholder } from "@/components/app/person-row";
 import { useNavigate } from "@tanstack/react-router";
-import { ProfileLink } from "@/components/app/profile-link";
 import { Input } from "@index/ui/components/input";
 import { LockKeyhole, Search } from "lucide-react";
 import { Heading } from "@/components/app/navigation";
 import { QueryState, More } from "@/components/app/query-state";
-import { UserAvatar } from "@/components/app/user-avatar";
 import { useDiscovery } from "./hooks/use-discovery";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useViewer } from "@/hooks/use-api";
@@ -15,8 +14,10 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
     search = useDebounced(query.trim()),
     { suggested, search: found } = useDiscovery(search),
     viewer = useViewer();
-  const active = search ? found : suggested,
-    people = search ? found.data?.pages.flatMap((p) => p.items) : suggested.data?.items;
+  const people = search
+    ? (found.data?.pages.flatMap((p) => p.items) ?? suggested.data?.items)
+    : suggested.data?.items;
+  const active = search && found.data ? found : suggested;
   return (
     <div
       className={
@@ -46,6 +47,7 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
         />
       </label>
       <QueryState
+        placeholder={<PeoplePlaceholder />}
         pending={active.isPending}
         hasData={!!active.data}
         error={active.error}
@@ -55,38 +57,30 @@ export function DiscoverPage({ query = "" }: { query?: string }) {
           {people
             ?.filter((p) => p.id !== viewer?.id)
             .map((p) => (
-              <div
-                className={
-                  "person-row flex items-center justify-between gap-4 p-[13px_0] [&>.person-inline]:flex-1 [&_.person-label]:max-w-full [&>button]:shrink-0 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.person-label_small]:max-w-45"
-                }
+              <PersonRow
                 key={p.id}
+                person={p}
+                action={<FollowButton person={p} followingStatus={p.followingStatus} />}
               >
-                <ProfileLink
-                  person={p}
-                  className={"person-inline flex items-center gap-3 min-w-0 [&_strong]:font-medium"}
+                <span
+                  className={
+                    "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle"
+                  }
                 >
-                  <UserAvatar person={p} />
-                  <span
-                    className={
-                      "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle"
-                    }
-                  >
-                    <strong>
-                      {p.name} {p.profileVisibility === "private" && <LockKeyhole size={13} />}
-                    </strong>
-                    <small>
-                      @{p.username ?? p.name}
-                      {p.followedBy.total > 0 && (
-                        <>
-                          {" · "}
-                          <FollowedBy context={p.followedBy} />
-                        </>
-                      )}
-                    </small>
-                  </span>
-                </ProfileLink>
-                <FollowButton person={p} followingStatus={p.followingStatus} />
-              </div>
+                  <strong>
+                    {p.name} {p.profileVisibility === "private" && <LockKeyhole size={13} />}
+                  </strong>
+                  <small>
+                    @{p.username ?? p.name}
+                    {p.followedBy.total > 0 && (
+                      <>
+                        {" · "}
+                        <FollowedBy context={p.followedBy} />
+                      </>
+                    )}
+                  </small>
+                </span>
+              </PersonRow>
             ))}
         </div>
         {people?.length === 0 && (
