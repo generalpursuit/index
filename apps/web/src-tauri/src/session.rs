@@ -20,6 +20,7 @@ use tauri::{Emitter, WebviewWindow};
 use crate::session_revision::Revision;
 
 static VISIBLE_REVISION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static TOKEN: Mutex<TokenCache> = Mutex::new(TokenCache::Unread);
 static REVISION: Mutex<Revision> = Mutex::new(Revision::new());
 static APP: OnceLock<tauri::AppHandle> = OnceLock::new();
 pub fn init(app: tauri::AppHandle) { let _ = APP.set(app); }
@@ -34,6 +35,21 @@ fn changed(revision: u64, source: Option<String>) {
         crate::menu_bar::hide_on_session_change(app);
         let _ = app.emit("index:desktop-session", Changed { revision, source });
     }
+}
+// The Share extension only reads this item. The host is the sole writer, and every host
+// write is serialized by REVISION, so an accepted process snapshot needs no Keychain I/O.
+enum TokenCache { Unread, Ready(Option<String>), Unavailable }
+impl TokenCache {
+    fn snapshot(&mut self, load: impl FnOnce() -> Result<Option<String>, String>) -> Result<Option<String>, String> {
+        if matches!(self, Self::Unread) { *self = Self::Ready(load()?); }
+        match self {
+            Self::Ready(token) => Ok(token.clone()),
+            _ => Err("Could not update your secure session. Unlock your credential store and try again.".into()),
+        }
+    }
+}
+fn cached_token() -> Result<Option<String>, String> {
+    TOKEN.lock().unwrap().snapshot(read)
 }
 fn read() -> Result<Option<String>, String> {
     #[cfg(all(target_os = "macos", not(feature = "native-smoke")))]
@@ -67,7 +83,7 @@ pub async fn session_read() -> Result<Option<String>, String> {
 pub async fn session_snapshot() -> Result<Snapshot, String> {
     tauri::async_runtime::spawn_blocking(|| {
         let revision = REVISION.lock().unwrap();
-        Ok(Snapshot { token: read()?, revision: revision.current() })
+        Ok(Snapshot { token: cached_token()?, revision: revision.current() })
     }).await.map_err(|_| "The credential operation was interrupted.".to_string())?
 }
 #[tauri::command]
@@ -100,8 +116,9 @@ async fn update(token: Option<String>, expected: Option<u64>, source: Option<Str
         // Keychain operation completes before any newer session can be accepted.
         let mut revision = REVISION.lock().unwrap();
         if let Some(expected) = expected { revision.check(expected)?; }
-        if token.is_some() && read()? == token { return Ok(revision.current()); }
-        let result = write(token);
+        if token.is_some() && cached_token()? == token { return Ok(revision.current()); }
+        let result = write(token.clone());
+        *TOKEN.lock().unwrap() = if result.is_ok() { TokenCache::Ready(token) } else { TokenCache::Unavailable };
         let next = revision.advance();
         // Also drop displayed content when the Keychain fails; never claim sign-out succeeded.
         changed(next, source);
@@ -133,6 +150,20 @@ pub async fn session_touch(window: WebviewWindow, expected_revision: u64, invali
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snapshots_load_secure_storage_once_and_keep_erasure_in_memory() {
+        let mut cache = TokenCache::Unread;
+        let mut reads = 0;
+        for _ in 0..10 {
+            assert_eq!(cache.snapshot(|| { reads += 1; Ok(Some("signed-token".into())) }).unwrap(), Some("signed-token".into()));
+        }
+        assert_eq!(reads, 1);
+        cache = TokenCache::Ready(None);
+        assert_eq!(cache.snapshot(|| panic!("erased credentials must not be restored")).unwrap(), None);
+        cache = TokenCache::Unavailable;
+        assert!(cache.snapshot(|| panic!("a failed erasure must not resurrect credentials")).is_err());
+    }
 
     #[test]
     fn main_thread_revision_checks_never_wait_or_run_for_a_moved_revision() {
