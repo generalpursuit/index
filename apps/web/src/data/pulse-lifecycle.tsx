@@ -4,7 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { isMenuBar } from "@/lib/desktop";
-import { editRevision, viewerPath } from "./edits";
+import { editRevision, hasEdits, viewerPath } from "./edits";
 import { createPulseDriver, mergeNewestPage, type Pulse } from "./pulse";
 import {
   conversationsOptions,
@@ -73,11 +73,9 @@ export function PulseLifecycle() {
       },
       changed: async (pulse: Pulse) => {
         const conversationId = openConversation.current;
-        const messageKey = ["message-edits", viewer.id];
-        const messageRevision = editRevision(cache, messageKey);
+        const messageRevision = editRevision(cache);
         const messagesIdle = () =>
-          !cache.isMutating({ mutationKey: messageKey }) &&
-          editRevision(cache, messageKey) === messageRevision;
+          !hasEdits(cache, api.messages.key()) && editRevision(cache) === messageRevision;
         const needs = (key: import("@tanstack/react-query").QueryKey, version: string) =>
           applied.current.versions.get(JSON.stringify(key)) !== version;
         const remember = (key: import("@tanstack/react-query").QueryKey, version: string) =>

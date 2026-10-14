@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { createContentPersistence } from "../src/data/persistence";
 import { cacheMaxAge } from "../src/data/client";
-import { instantEdit } from "../src/data/edits";
+import { editRevision, hasEdits, instantEdit, viewerPath } from "../src/data/edits";
 import { clearAccountState } from "../src/lib/account-boundary";
 
 function memory() {
@@ -445,5 +445,35 @@ test("unchanged response trees never publish an edit write or extend freshness",
   assert.equal(cache.getQueryData(["unchanged"]), data);
   assert.equal(cache.getQueryState(["unchanged"])?.dataUpdatedAt, 123);
   unsubscribe();
+  cache.clear();
+});
+
+test("message refresh guards include link edits and detect an edit that settled during a read", async () => {
+  const cache = new QueryClient();
+  const messages = [["viewer", "alice", "messages", "list"]];
+  cache.setQueryData(messages, "before");
+  const answer = deferred<string>();
+  const before = editRevision(cache);
+  const mutation = new MutationObserver(
+    cache,
+    instantEdit(cache, {
+      key: ["link-edits", "alice"],
+      affects: (key) => viewerPath(key, "alice", "links", "messages"),
+      mutationFn: () => answer.promise,
+      optimistic: () => () => "pending link title",
+      response: (value) => () => value,
+    }),
+  );
+  const pending = mutation.mutate(undefined);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(hasEdits(cache, [["viewer", "alice", "messages"]]), true);
+  assert.equal(hasEdits(cache, [["viewer", "alice", "comments"]]), false);
+  assert.equal(hasEdits(cache, [["viewer", "bob", "messages"]]), false);
+  assert.ok(editRevision(cache) > before);
+  const during = editRevision(cache);
+  answer.resolve("confirmed link title");
+  await pending;
+  assert.equal(hasEdits(cache, messages), false);
+  assert.ok(editRevision(cache) > during);
   cache.clear();
 });

@@ -9,18 +9,21 @@ type Patch = (data: unknown, key: QueryKey) => unknown;
 type Edit = { patch: Patch };
 type Layer = {
   generation: number;
+  affects: (key: QueryKey) => boolean;
   base: Map<string, { key: QueryKey; data: unknown; applied: unknown }>;
   edits: Edit[];
 };
 const layers = new WeakMap<QueryClient, Map<string, Layer>>();
 
-const revisions = new WeakMap<QueryClient, Map<string, number>>();
-export const editRevision = (cache: QueryClient, key: QueryKey) =>
-  revisions.get(cache)?.get(JSON.stringify(key)) ?? 0;
-function advanceRevision(cache: QueryClient, group: string) {
-  let values = revisions.get(cache);
-  if (!values) revisions.set(cache, (values = new Map()));
-  values.set(group, (values.get(group) ?? 0) + 1);
+const revisions = new WeakMap<QueryClient, number>();
+export const editRevision = (cache: QueryClient) => revisions.get(cache) ?? 0;
+export const hasEdits = (cache: QueryClient, key: QueryKey) =>
+  [...(layers.get(cache)?.values() ?? [])].some(
+    (layer) =>
+      layer.generation === accountGeneration() && layer.edits.length > 0 && layer.affects(key),
+  );
+function advanceRevision(cache: QueryClient) {
+  revisions.set(cache, editRevision(cache) + 1);
 }
 
 const same = (a: unknown, b: unknown) => replaceEqualDeep(a, b) === a;
@@ -141,12 +144,12 @@ export function instantEdit<TData, TVariables>(
         predicate: (query) => affects(query.queryKey) && query.state.data !== undefined,
       });
       assertCurrentAccount(generation);
-      advanceRevision(cache, group);
+      advanceRevision(cache);
       let groups = layers.get(cache);
       if (!groups) layers.set(cache, (groups = new Map()));
       let layer = groups.get(group);
       if (!layer || layer.generation !== generation)
-        groups.set(group, (layer = { generation, base: new Map(), edits: [] }));
+        groups.set(group, (layer = { generation, affects, base: new Map(), edits: [] }));
       for (const query of cache.getQueryCache().findAll({
         predicate: (query) => affects(query.queryKey) && query.state.data !== undefined,
       }))
@@ -174,7 +177,7 @@ export function instantEdit<TData, TVariables>(
       completeDestinations(context.layer);
     },
     onSettled: () => {
-      advanceRevision(cache, group);
+      advanceRevision(cache);
       if (cache.isMutating({ mutationKey: key }) === 1) {
         layers.get(cache)?.delete(group);
         invalidate?.();
