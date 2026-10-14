@@ -1,3 +1,4 @@
+import { freshness } from "@/data/client";
 import type { apiFor } from "@/utils/orpc";
 export const activityOptions = (
   api: ReturnType<typeof apiFor>,
@@ -7,5 +8,5 @@ export const activityOptions = (
     input: (cursor: string | undefined) => ({ type, cursor, limit: 30 }),
     initialPageParam: undefined,
     getNextPageParam: (p) => p.nextCursor ?? undefined,
-    refetchInterval: 30_000,
+    staleTime: freshness.live,
   });

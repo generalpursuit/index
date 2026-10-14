@@ -23,12 +23,12 @@ public struct Profile: Codable, Sendable {
   public var username: String?
   public var image: String?
   public var profileVisibility: Visibility
-  public let canViewContent: Bool
-  public let followerCount: Int?
-  public let followingCount: Int?
-  public let linkCount: Int?
+  public var canViewContent: Bool
+  public var followerCount: Int?
+  public var followingCount: Int?
+  public var linkCount: Int?
   public let followedBy: SocialContext
-  public let followingStatus: String?
+  public var followingStatus: String?
   public var person: Person {
     Person(
       id: id, name: name, username: username, image: image,
@@ -54,16 +54,16 @@ public struct SavedLink: Codable, Identifiable, Hashable, Sendable {
   public let id: String
   public let shortId: String?
   public let ownerId: String
-  public let groupId: String?
-  public let url: String
-  public let title: String
-  public let description: String?
-  public let category: Category
+  public var groupId: String?
+  public var url: String
+  public var title: String
+  public var description: String?
+  public var category: Category
   public var isFavorite: Bool
   public var isStarred: Bool
   public let savedOn: String
   public let createdAt: String
-  public let updatedAt: String
+  public var updatedAt: String
   public var domain: String {
     (URL(string: url)?.host ?? url).replacingOccurrences(
       of: "^www\\.", with: "", options: .regularExpression)
@@ -88,7 +88,7 @@ public struct PeoplePage: Codable, Sendable {
 }
 public struct Recommendations: Codable, Sendable { public let items: [Person] }
 public struct PersonLinks: Codable, Sendable, Identifiable {
-  public let author: Person
+  public var author: Person
   public var links: Page<SavedLink>
   public var id: String { author.id }
 }
@@ -122,16 +122,16 @@ public struct Activity: Codable, Identifiable, Sendable {
   public let type: String
   public let actor: Person
   public let createdAt: String
-  public let readAt: String?
+  public var readAt: String?
   public let linkId: String?
   public let commentId: String?
   public let body: String?
-  public let requestStatus: String?
+  public var requestStatus: String?
 }
 public struct ActivityPage: Codable, Sendable {
   public let items: [Activity]
   public let nextCursor: String?
-  public let unreadCount: Int
+  public var unreadCount: Int
 }
 /// The start of a replied message. Its attachment stays behind its own visibility rules,
 /// so a reply only learns that there was one.
@@ -168,11 +168,11 @@ public struct Conversation: Codable, Identifiable, Sendable {
   public let shortId: String?
   public let participants: [Person]
   public let canSend: Bool
-  public let unreadCount: Int
+  public var unreadCount: Int
   /// The viewer's newest message that every other member has read.
   public let readReceiptMessageId: String?
-  public let lastMessage: Message?
-  public let updatedAt: String
+  public var lastMessage: Message?
+  public var updatedAt: String
   public func title(viewerId: String) -> String {
     let others = participants.filter { $0.id != viewerId }
     return others.map {
@@ -195,7 +195,7 @@ public enum APITimestamp {
   }
 }
 public struct Success: Codable, Sendable { public let success: Bool }
-public struct UnreadCount: Codable, Sendable { public let unreadCount: Int }
+public struct UnreadCount: Codable, Sendable { public var unreadCount: Int }
 public struct FollowState: Codable, Sendable { public let status: String }
 public struct AuthUser: Codable, Sendable {
   public let id: String
@@ -258,5 +258,84 @@ extension WeekFeed {
     WeekFeed(
       weekStart: weekStart, olderWeek: olderWeek, newerWeek: newerWeek, own: own,
       people: people + next.people, nextAfter: next.nextAfter)
+  }
+}
+
+public struct Pulse: Codable, Sendable {
+  public struct ListState: Codable, Sendable {
+    public let unreadCount: Int
+    public let version: String
+  }
+  public let messages: ListState
+  public let activity: ListState
+}
+
+extension Message {
+  public static func pending(clientID: String, conversationID: String, senderID: String, body: String, attachment: SavedLink?, reply: MessageReply?) -> Message {
+    Message(id: clientID, conversationId: conversationID, senderId: senderID, clientId: clientID, body: body,
+      createdAt: Date().formatted(.iso8601), attachment: attachment, hasAttachment: attachment != nil, restrictedAuthor: nil, replyTo: reply)
+  }
+}
+extension Comment {
+  public static func pending(linkID: String, author: Person, body: String) -> Comment {
+    Comment(id: UUID().uuidString, linkId: linkID, authorId: author.id, body: body, createdAt: Date().formatted(.iso8601), author: author)
+  }
+}
+
+extension Profile {
+  public static func summary(_ person: Person) -> Profile {
+    Profile(id: person.id, name: person.name, username: person.username, image: person.image,
+      profileVisibility: person.profileVisibility, canViewContent: false, followerCount: nil, followingCount: nil,
+      linkCount: nil, followedBy: SocialContext(users: [], total: 0), followingStatus: person.followingStatus)
+  }
+}
+
+extension Person {
+  public static func clearedAccount(_ id: String) -> Person { Person(id: id, name: "", profileVisibility: .public) }
+  public static func accountIdentity(_ user: AuthUser) -> Person {
+    Person(id: user.id, name: user.name, profileVisibility: .public)
+  }
+}
+
+/// Placeholder values only enter disabled, redacted presentation; they are never stored
+/// or navigated. The same domain values let the real layouts own their loading geometry.
+public enum ContentPlaceholder {
+  public static func person(_ index: Int = 0) -> Person {
+    Person(id: "placeholder-\(index)", name: "A familiar person", username: "someone", profileVisibility: .public)
+  }
+  public static func link(_ index: Int = 0) -> SavedLink {
+    SavedLink(id: "placeholder-\(index)", shortId: nil, ownerId: "placeholder", groupId: nil,
+      url: "https://example.com", title: "Something worth coming back to", description: "A few thoughts to remember.",
+      category: .article, isFavorite: false, isStarred: false, savedOn: Week.monday(),
+      createdAt: Date().formatted(.iso8601), updatedAt: Date().formatted(.iso8601))
+  }
+  public static var profile: Profile {
+    var value = Profile.summary(person())
+    value.canViewContent = true
+    return value
+  }
+  public static func feed(_ week: String) -> WeekFeed {
+    WeekFeed(weekStart: week, olderWeek: nil, newerWeek: nil,
+      own: Page(items: (0..<5).map(link), nextCursor: nil),
+      people: [PersonLinks(author: person(), links: Page(items: (0..<5).map(link), nextCursor: nil))], nextAfter: nil)
+  }
+  public static func conversation(_ index: Int = 0) -> Conversation {
+    Conversation(id: "placeholder-\(index)", shortId: nil, participants: [person(index)], canSend: false,
+      unreadCount: 0, readReceiptMessageId: nil, lastMessage: message(index), updatedAt: Date().formatted(.iso8601))
+  }
+  public static func message(_ index: Int = 0) -> Message {
+    Message(id: "placeholder-\(index)", conversationId: "placeholder", senderId: "placeholder-0", clientId: "placeholder-\(index)",
+      body: "A good find to share with you", createdAt: Date().formatted(.iso8601),
+      attachment: nil, hasAttachment: false, restrictedAuthor: nil, replyTo: nil)
+  }
+  public static var notificationPreferences: NotificationPreferences {
+    NotificationPreferences(message: false, comment: false, mention: false, request: false, follow: false, accepted: false, previews: false)
+  }
+  public static func group(_ index: Int = 0) -> LinkGroup {
+    LinkGroup(id: "placeholder-\(index)", slug: nil, ownerId: "placeholder", name: "A collection of links", kind: "custom", visibility: .public)
+  }
+  public static func activity(_ index: Int = 0) -> Activity {
+    Activity(id: "placeholder-\(index)", type: "follow", actor: person(index), createdAt: Date().formatted(.iso8601),
+      readAt: nil, linkId: nil, commentId: nil, body: nil, requestStatus: nil)
   }
 }

@@ -6,6 +6,7 @@ import { createAuth } from "@index/auth";
 import type { SecurityEmail } from "@index/auth/delivery";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
+import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createApp } from "./app";
 import { minimumClientVersions } from "./client-version";
 import { mediaCacheControl, readPhoto } from "./media";
@@ -152,6 +153,7 @@ describe("mounted server application", () => {
       new Headers({ Cookie: `__Secure-better-auth.session_token=${token}` }),
     ]) {
       assert.equal((await request("/api/v1/me/profile", { headers })).status, 403);
+      assert.equal((await request("/api/v1/me/pulse", { headers })).status, 403);
     }
     const verified = await post("/security/verify-email", { code: mail.at(-1)!.code }, token);
     assert.equal(verified.status, 200);
@@ -212,6 +214,59 @@ describe("mounted server application", () => {
     });
     assert.equal(await current.text(), "OK");
   });
+
+  for (const mode of ["streaming", "buffered"] as const) {
+    it(`shares one authenticated context and preserves per-call errors in a ${mode} batch`, async () => {
+      const token = await signup();
+      await post("/security/verify-email", { code: mail.at(-1)!.code }, token);
+      const requests: Request[] = [];
+      const rpc: AppRouterClient = createORPCClient(
+        new RPCLink({
+          url: `${origin}/rpc/v1`,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-Index-Client": `web/${minimumClientVersions.web}`,
+          },
+          plugins: [
+            new BatchLinkPlugin({ mode, groups: [{ condition: () => true, context: {} }] }),
+          ],
+          fetch: async (request) => {
+            requests.push(request.clone());
+            return fetchApp(request);
+          },
+        }),
+      );
+      const results = await Promise.allSettled([
+        rpc.healthCheck(),
+        rpc.profiles.me(),
+        rpc.links.get({ id: crypto.randomUUID() }),
+      ]);
+      assert.equal(requests.length, 1);
+      assert.equal(requests[0]!.headers.get("x-orpc-batch"), mode);
+      assert.equal(contexts, 1);
+      assert.deepEqual(results[0], { status: "fulfilled", value: "OK" });
+      assert.equal(results[1]!.status, "fulfilled");
+      assert.equal(results[2]!.status, "rejected");
+      if (results[2]!.status === "rejected") assert.equal(results[2]!.reason.code, "NOT_FOUND");
+
+      const outdated = await fetchApp(
+        new Request(requests[0]!, { headers: { "X-Index-Client": "web/0.0.1" } }),
+      );
+      assert.equal(outdated.status, 426);
+      assert.equal(contexts, 1);
+      const preflight = await request("/rpc/v1", {
+        method: "OPTIONS",
+        headers: {
+          Origin: web,
+          "Access-Control-Request-Method": "POST",
+          "Access-Control-Request-Headers": "content-type,x-index-client,x-orpc-batch",
+        },
+      });
+      assert.equal(preflight.status, 204);
+      assert.match(preflight.headers.get("access-control-allow-headers")!, /X-ORPC-Batch/);
+      assert.equal(contexts, 1);
+    });
+  }
 
   it("allows configured desktop origins and withholds CORS permission from untrusted origins", async () => {
     const desktop = await request("/", { headers: { Origin: "tauri://localhost" } });

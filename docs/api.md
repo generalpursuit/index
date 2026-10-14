@@ -6,6 +6,8 @@ The application exposes REST at `/api/v1` and typed oRPC at `/rpc/v1`, with `/rp
 
 Browser calls include the secure HttpOnly session cookie. Native clients retain the signed `set-auth-token` response header and send it as `Authorization: Bearer <token>`; the JSON token is unsigned and unsuitable. See [authentication](authentication.md) for verification and credential lifetime.
 
+RPC clients can add `BatchLinkPlugin` from `@orpc/client/plugins` to their `RPCLink`, with `groups: [{ condition: () => true, context: {} }]`. Its default `streaming` mode returns each result as it finishes; `buffered` is also supported. The plugin sends `X-ORPC-Batch: streaming` (or `buffered`), allowed by CORS. A batch of up to ten calls shares one API context and session lookup; each call retains its own result or error. Group only calls for the same server and account, and keep authorization and `X-Index-Client` on the outer request. The client-version gate applies before context creation. REST calls remain individual requests.
+
 ## Client versions
 
 Clients send `X-Index-Client: <platform>/<version>` (`web`, `desktop` or `ios`) with the product version they were built from. [client-version.ts](../apps/server/src/client-version.ts) answers releases below their platform's minimum with `426` and `CLIENT_UPDATE_REQUIRED` before auth or API context runs; a staging build counts as its release, and unidentified clients are not gated. Clients then block until updated: web reloads, desktop restarts into its newest release and iOS asks for an App Store update.
@@ -33,6 +35,8 @@ Most lists use opaque `(createdAt, id)` keyset cursors; inboxes use `(updatedAt,
 Neon HTTP does not provide interactive transactions. Multi-write invariants use atomic SQL statements/functions: relationship/activity changes, group deletion, message/inbox updates and share receipts must succeed together. Checked-in migrations include custom triggers and functions; follow the [migration rules](deployment.md#database-and-recovery).
 
 ## Messages and retries
+
+The verified viewer's pulse returns `messages` and `activity`, each with an `unreadCount` and opaque `version`. Counts match the existing unread and activity reads. Versions fingerprint the visible state of each list's first page (up to the largest page size), so a pulse costs the same however long an inbox grows, and remain stable until that state changes, including membership, last messages, receipts, activity removal, request status and read state. Changes further down reach clients when they load those pages. Clients remember each version and refresh only changed lists, plus the open conversation's newest messages when the messages version changes; they must not interpret or order versions. Older servers may return 404, so clients fall back to their existing refresh behavior.
 
 An exact participant set identifies a conversation. Its creator must have accepted outgoing follows to the other participants; existing members can keep reading and replying after unfollowing. Nonmembers cannot inspect, send or mark read. Read state is a monotonic message watermark; acknowledging an older message cannot clear newer arrivals. A conversation's read receipt is the viewer's newest message at or below every other member's watermark, so members learn read state only for their own messages.
 

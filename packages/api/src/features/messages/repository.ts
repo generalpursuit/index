@@ -13,7 +13,7 @@ import { linkSelection, collectionSelection } from "../links/repository";
 import { publicUserSelection } from "../profiles/repository";
 import type { messageReplySchema, SendMessageInput } from "./schemas";
 
-function isMember(actorId: string, conversationId: SQLWrapper) {
+export function isMember(actorId: string, conversationId: SQLWrapper) {
   return sql<boolean>`exists(select 1 from conversation_members member where member.conversation_id=${conversationId} and member.user_id=${actorId})`;
 }
 function canSend(actorId: string, conversationId: SQLWrapper) {
@@ -43,7 +43,7 @@ export function createConversation(db: QueryDatabase, actorId: string, recipient
     databaseError,
   );
 }
-const conversationSelection = (actorId: string) => ({
+export const conversationSelection = (actorId: string) => ({
   id: conversations.id,
   shortId: conversations.shortId,
   // The shared cursor uses createdAt internally; inbox ordering uses last activity.
@@ -114,7 +114,7 @@ export function participants(db: QueryDatabase, actorId: string, id: string) {
     databaseError,
   );
 }
-const messageSelection = (actorId: string) => ({
+export const messageSelection = (actorId: string) => ({
   id: messages.id,
   conversationId: messages.conversationId,
   senderId: messages.senderId,

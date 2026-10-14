@@ -17,6 +17,10 @@ export default defineConfig({
     tanstackRouter({
       target: "react",
       autoCodeSplitting: true,
+      codeSplittingOptions: {
+        defaultBehavior: [["component", "pendingComponent"]],
+        splitBehavior: ({ routeId }) => (routeId === "/_app" ? [] : undefined),
+      },
     }),
     react(),
   ],

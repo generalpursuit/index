@@ -55,23 +55,30 @@ export async function resolveRoute(
           userId: owner.id,
           canonicalPath: profilePath(owner.username),
         });
-      if (viewer === owner.id && (collection === "starred" || collection === "favorites")) {
+      const findGroup = () =>
+        db
+          .select({ id: groups.id, slug: groups.slug })
+          .from(groups)
+          .where(
+            and(
+              eq(groups.ownerId, owner.id),
+              groupVisible(viewer),
+              uuid.test(collection) && !slug
+                ? eq(groups.id, collection)
+                : sql`${groups.id} = (select ${groupAliases.groupId} from ${groupAliases} where ${groupAliases.ownerId} = ${owner.id} and ${groupAliases.slug} = ${collection.toLowerCase()})`,
+            ),
+          )
+          .limit(1);
+      let [group] = await findGroup();
+      if (
+        !group &&
+        viewer === owner.id &&
+        (collection === "starred" || collection === "favorites")
+      ) {
         const ensured = await ensureSystemGroup(db, owner.id, collection);
         if (ensured.isErr()) return err(ensured.error);
+        [group] = await findGroup();
       }
-      const [group] = await db
-        .select({ id: groups.id, slug: groups.slug })
-        .from(groups)
-        .where(
-          and(
-            eq(groups.ownerId, owner.id),
-            groupVisible(viewer),
-            uuid.test(collection) && !slug
-              ? eq(groups.id, collection)
-              : sql`${groups.id} = (select ${groupAliases.groupId} from ${groupAliases} where ${groupAliases.ownerId} = ${owner.id} and ${groupAliases.slug} = ${collection.toLowerCase()})`,
-          ),
-        )
-        .limit(1);
       if (!group) return err(notFound("Destination"));
       return ok({
         kind: "group",

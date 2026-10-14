@@ -12,7 +12,7 @@ export function getProfile(
   viewerId: string | null,
   lookup: { userId: string } | { username: string },
 ) {
-  return repository
+  const profile = repository
     .findProfile(
       db,
       viewerId,
@@ -20,12 +20,17 @@ export function getProfile(
         ? eq(user.id, lookup.userId)
         : sql`${user.id} = (select ${usernameAliases.userId} from ${usernameAliases} where ${usernameAliases.username} = ${lookup.username})`,
     )
-    .andThen((profile) => (profile ? ok(profile) : err(notFound("Profile"))))
-    .andThen((profile) =>
-      repository
-        .followedBy(db, viewerId, profile.id)
-        .map((followedBy) => ({ ...profile, followedBy })),
+    .andThen((profile) => (profile ? ok(profile) : err(notFound("Profile"))));
+  if ("userId" in lookup) {
+    return ResultAsync.combine([profile, repository.followedBy(db, viewerId, lookup.userId)]).map(
+      ([profile, followedBy]) => ({ ...profile, followedBy }),
     );
+  }
+  return profile.andThen((profile) =>
+    repository
+      .followedBy(db, viewerId, profile.id)
+      .map((followedBy) => ({ ...profile, followedBy })),
+  );
 }
 
 /** Removing the photo (`image: null`) also deletes it from storage. */

@@ -18,7 +18,7 @@ extension AppModel {
     resumeReadableURL()
   }
   func resumeReadableURL() {
-    guard let url = navigation.pendingRouteURL, verificationUser == nil, profile != nil, !userID.isEmpty else { return }
+    guard let url = navigation.pendingRouteURL, sessionReady, !userID.isEmpty else { return }
     navigation.routeTask?.cancel()
     navigation.routeTask = Task { await resolveReadableURL(url) }
   }
@@ -31,8 +31,12 @@ extension AppModel {
       guard !Task.isCancelled, userID == account else { return }
       guard let session else { handle(APIError.unauthenticated); return }
       guard session.user.emailVerified else { handle(APIError.emailNotVerified); return }
-      guard ReadableRouteReadiness.canResolve(userID: session.user.id, emailVerified: session.user.emailVerified),
-        session.user.id == account else { return }
+      guard session.user.id == account else {
+        clearAccount()
+        try await api.clearSession()
+        return
+      }
+      guard ReadableRouteReadiness.canResolve(userID: session.user.id, emailVerified: session.user.emailVerified) else { return }
       var query = ["path": request.path]
       if let group = request.query["group"] { query["group"] = group }
       let target: RouteResolution = try await api.request("/routes/resolve", query: query)

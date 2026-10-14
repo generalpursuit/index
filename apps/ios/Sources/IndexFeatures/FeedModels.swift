@@ -8,12 +8,19 @@ public final class FeedWeeksModel {
   public private(set) var followingCount: Int?
   public private(set) var error: String?
   private var generation = 0
-  public init() {}
+  public init(api: (any FeatureAPI)? = nil) {
+    let snapshot: LibraryWeeks? = api?.snapshot("/feed/weeks", query: ["limit": "100"])
+    weeks = Array(Set(weeks + (snapshot?.items.map(\.weekStart) ?? []))).sorted(by: >)
+    let profile: Profile? = api?.snapshot("/me/profile", query: [:])
+    followingCount = profile?.followingCount
+  }
+  func following(_ count: Int?) { followingCount = count }
+  public func clear() { generation += 1; weeks = [Week.monday()]; followingCount = nil; error = nil }
   public func load(api: any FeatureAPI, selectedWeek: String) async throws {
     generation += 1
     let version = generation
     do {
-      async let profile: Profile = api.get("/me/profile")
+      async let profile: Profile = ownProfile(api: api)
       var loaded = [Week.monday(), selectedWeek]
       var before: String?
       var visited = Set<String>()
@@ -40,6 +47,11 @@ public final class FeedWeeksModel {
       throw error
     }
   }
+  private func ownProfile(api: any FeatureAPI) async throws -> Profile {
+    if let cached: Profile = api.snapshot("/me/profile", query: [:]) { return cached }
+    return try await api.get("/me/profile")
+  }
+
 }
 
 @MainActor @Observable
@@ -51,9 +63,61 @@ public final class FeedWeekModel {
   private var generation = 0
   private var ownPageCount = 1
   private var peoplePageCount = 1
+  private var deleted: [String: WeekFeed] = [:]
   private var personPageCounts: [String: Int] = [:]
-  public init() {}
+  public init(api: (any FeatureAPI)? = nil, week: String = Week.monday()) {
+    feed = api?.snapshot("/feed/week", query: ["weekStart": week, "linkLimit": "20"])
+  }
+  func patchLinks(_ transform: (SavedLink) -> SavedLink?) {
+    generation += 1
+    busy = false
+    loading = false
+    if let old = feed {
+      for link in old.own.items + old.people.flatMap({ $0.links.items }) where transform(link) == nil { deleted[link.id] = old }
+    }
+    if var result = feed {
+      result.own.items = result.own.items.compactMap(transform)
+      for i in result.people.indices { result.people[i].links.items = result.people[i].links.items.compactMap(transform) }
+      feed = result
+    }
+  }
 
+  public func clear() { generation += 1; feed = nil; busy = false; loading = false; deleted = [:]; error = nil }
+  func removePerson(_ id: String) -> (index: Int, person: PersonLinks)? {
+    guard var current = feed, let index = current.people.firstIndex(where: { $0.id == id }) else { return nil }
+    generation += 1; busy = false; loading = false
+    let person = current.people.remove(at: index)
+    feed = current
+    return (index, person)
+  }
+  func restorePerson(_ person: PersonLinks, at index: Int) {
+    guard var current = feed, !current.people.contains(where: { $0.id == person.id }) else { return }
+    current.people.insert(person, at: min(index, current.people.count))
+    feed = current
+  }
+  func patchFollow(id: String, status: String?) {
+    guard var current = feed else { return }
+    for i in current.people.indices where current.people[i].id == id { current.people[i].author.followingStatus = status }
+    generation += 1; busy = false; loading = false
+    feed = current
+  }
+  func added(_ link: SavedLink) {
+    guard var current = feed else { return }
+    current.own.items = unique([link] + current.own.items)
+    feed = current
+  }
+  func restoreDeleted(_ link: SavedLink) {
+    guard let old = deleted.removeValue(forKey: link.id), var current = feed else { return }
+    if let index = old.own.items.firstIndex(where: { $0.id == link.id }) {
+      current.own.items.insert(link, at: min(index, current.own.items.count))
+    }
+    for person in old.people where person.links.items.contains(where: { $0.id == link.id }) {
+      if let i = current.people.firstIndex(where: { $0.id == person.id }), let index = person.links.items.firstIndex(where: { $0.id == link.id }) {
+        current.people[i].links.items.insert(link, at: min(index, current.people[i].links.items.count))
+      }
+    }
+    feed = current
+  }
   public func load(api: any FeatureAPI, week: String) async throws {
     try Task.checkCancellation()
     generation += 1
@@ -68,6 +132,7 @@ public final class FeedWeekModel {
         try Task.checkCancellation()
         guard version == generation else { return }
         feed = snapshot
+        loading = feed == nil
       }
       var result: WeekFeed = try await api.get("/feed/week", query: ["weekStart": week, "linkLimit": "20"])
       for _ in 1..<peoplePageCount {

@@ -5,58 +5,59 @@ import SwiftUI
 private struct DiscoveryFollowButton: View {
   let person: Person
   @Environment(AppModel.self) private var app
-  @State private var status: String?
+  @Environment(\.screenVisible) private var visible
   var body: some View {
     AsyncButton {
-      if status != nil {
-        let _: Success? = try await app.api?.request("/profiles/\(person.id)/follow", method: "DELETE")
-        status = nil
-      } else {
-        let state: FollowState? = try await app.api?.request("/profiles/\(person.id)/follow", method: "POST", body: [:])
-        status = state?.status
-      }
-      app.changed()
+      try await app.store?.follow(person)
     } label: {
-      Text(status == "accepted" ? "Following" : status == "pending" ? "Requested" : person.profileVisibility == .private ? "Request" : "Follow")
+      Text(person.followingStatus == "accepted" ? "Following" : person.followingStatus == "pending" ? "Requested" : person.profileVisibility == .private ? "Request" : "Follow")
         .fixedSize()
-    }.buttonStyle(PillStyle()).task(id: person.followingStatus) { status = person.followingStatus }
+    }.buttonStyle(PillStyle())
   }
 }
 
 struct DiscoverView: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @State private var query = ""
-  @State private var people: [Person] = []
-  @State private var after: String?
-  @State private var loading = false
-  @State private var error: String?
+  @Environment(AccountStore.self) private var store
+  private var model: DiscoveryModel { store.discovery }
+  private var people: [Person] { !model.hasLoaded && error == nil ? (0..<5).map(ContentPlaceholder.person) : model.people }
+  private var after: String? { model.after }
+  private var loading: Bool { model.loading }
+  private var error: String? { model.error }
   var body: some View {
     ScrollView {
       LazyVStack(alignment: .leading, spacing: 0) {
         PageHeading(title: "Discover").padding(.bottom, 26)
         SearchField(placeholder: "Search people", text: $query).padding(.bottom, 20)
-        LoadingError(error: error, loading: loading, retry: { await load() })
-        ForEach(people.filter { $0.id != app.userID }) { person in
-          HStack {
-            Button {
-              app.navigate(.profile(person.id))
-            } label: {
-              PersonRow(person: person)
-            }.buttonStyle(.plain)
-            if person.profileVisibility == .private {
-              Image(systemName: "lock").foregroundStyle(IndexPalette.subtleForeground).font(IndexFont.sans(12))
-            }
-            DiscoveryFollowButton(person: person)
-          }.padding(.vertical, 5)
-        }
-        if !loading && people.isEmpty && error == nil {
+        RequestError(error: error, retry: { await load() })
+        Group {
+          ForEach(people.filter { $0.id != app.userID }) { person in
+            HStack {
+              Button {
+                app.openProfile(person)
+              } label: {
+                PersonRow(person: person)
+              }.buttonStyle(.plain)
+              if person.profileVisibility == .private {
+                Image(systemName: "lock").foregroundStyle(IndexPalette.subtleForeground).font(IndexFont.sans(12))
+              }
+              DiscoveryFollowButton(person: person)
+            }.padding(.vertical, 5)
+          }
+        }.calmPlaceholder(active: !model.hasLoaded && error == nil)
+        if model.hasLoaded && !loading && people.isEmpty && error == nil {
           Text(query.isEmpty ? "Find your people with a search." : "No people found.")
             .foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: after != nil) { await load(more: true) }
       }
     }.indexPage().scrollDismissesKeyboard(.interactively)
-      .task(id: query) {
+      .onChange(of: query, initial: true) { _, query in store.discoveryQuery = query }
+      .onDisappear { store.discoveryQuery = nil }
+      .task(id: "\(query)-\(visible)") {
+        guard visible else { return }
         do {
           if !query.isEmpty { try await Task.sleep(for: .milliseconds(250)) }
           await load()
@@ -64,40 +65,19 @@ struct DiscoverView: View {
       }
   }
   private func load(more: Bool = false) async {
-    loading = true
-    error = nil
     do {
-      if query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        if people.isEmpty,
-          let cached: Recommendations = await app.api?.cached("/discovery/recommendations")
-        {
-          people = cached.items
-          loading = false
-        }
-        let page: Recommendations? = try await app.api?.request("/discovery/recommendations")
-        people = page?.items ?? []
-        after = nil
-      } else {
-        var params = ["query": query, "limit": "30"]
-        if more { params["after"] = after }
-        if let page: PeoplePage = try await app.api?.request("/discovery/users", query: params) {
-          people = more ? people + page.items : page.items
-          after = page.nextAfter
-        }
-      }
-    } catch is CancellationError { return } catch {
-      self.error = error.localizedDescription
-      if case APIError.unauthenticated = error { app.handle(error) }
-    }
-    loading = false
+      try await store.refreshDiscovery(query, more: more)
+    } catch { app.handleSessionError(error) }
   }
 }
 struct ActivityView: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @Environment(\.scenePhase) private var scenePhase
   @State private var filter = "all"
-  @State private var model = ActivityModel()
-  private var items: [Activity] { model.items }
+  @Environment(AccountStore.self) private var store
+  private var model: ActivityModel { store.activity(filter) }
+  private var items: [Activity] { !model.hasLoaded && error == nil ? (0..<5).map(ContentPlaceholder.activity) : model.items }
   private var cursor: String? { model.cursor }
   private var error: String? { model.error }
   private var loading: Bool { model.loading }
@@ -117,72 +97,66 @@ struct ActivityView: View {
             }
           }
         }.scrollIndicators(.hidden).padding(.bottom, 24)
-        LoadingError(error: error, loading: loading, retry: { await load() })
-        ForEach(items) { activity in
-          HStack(alignment: .center, spacing: 10) {
-            Button {
-              app.navigate(.profile(activity.actor.id))
-            } label: {
-              PersonAvatar(person: activity.actor, size: 34)
-            }.buttonStyle(.plain)
-            VStack(alignment: .leading, spacing: 5) {
-              HStack(spacing: 6) {
-                Text(activity.actor.label).font(IndexFont.sans(12)).bold()
-                Text(relativeTime(activity.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
-              }
-              Text(activityText(activity)).font(IndexFont.sans(12))
-            }.frame(maxWidth: .infinity, alignment: .leading)
-            if activity.type == "request" && activity.requestStatus == "pending" {
-              HStack(spacing: 5) {
-                AsyncButton {
-                  try await resolve(activity, accept: true)
-                } label: {
-                  Text("Accept").font(IndexFont.sans(11))
-                }.buttonStyle(PillStyle(selected: true))
-                AsyncButton {
-                  try await resolve(activity, accept: false)
-                } label: {
-                  Text("Decline")
-                }.buttonStyle(PillStyle()).accessibilityLabel(
-                  "Decline \(activity.actor.name)’s request")
-              }
-            } else if let id = activity.linkId {
+        RequestError(error: error, retry: { await load() })
+        Group {
+          ForEach(items) { activity in
+            HStack(alignment: .center, spacing: 10) {
               Button {
-                app.present(.link(id))
+                app.openProfile(activity.actor)
               } label: {
-                Image(systemName: "chevron.right").frame(width: 32, height: 44)
-              }.accessibilityLabel("Open post")
-            }
-          }.padding(.vertical, 14)
-        }
-        if !loading && items.isEmpty && error == nil {
+                PersonAvatar(person: activity.actor, size: 34)
+              }.buttonStyle(.plain)
+              VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                  Text(activity.actor.label).font(IndexFont.sans(12)).bold()
+                  Text(relativeTime(activity.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+                }
+                Text(activityText(activity)).font(IndexFont.sans(12))
+              }.frame(maxWidth: .infinity, alignment: .leading)
+              if activity.type == "request" && activity.requestStatus == "pending" {
+                HStack(spacing: 5) {
+                  AsyncButton {
+                    try await resolve(activity, accept: true)
+                  } label: {
+                    Text("Accept").font(IndexFont.sans(11))
+                  }.buttonStyle(PillStyle(selected: true))
+                  AsyncButton {
+                    try await resolve(activity, accept: false)
+                  } label: {
+                    Text("Decline")
+                  }.buttonStyle(PillStyle()).accessibilityLabel(
+                    "Decline \(activity.actor.name)’s request")
+                }
+              } else if let id = activity.linkId {
+                Button {
+                  app.present(.link(id))
+                } label: {
+                  Image(systemName: "chevron.right").frame(width: 32, height: 44)
+                }.accessibilityLabel("Open post")
+              }
+            }.padding(.vertical, 14)
+          }
+        }.calmPlaceholder(active: !model.hasLoaded && error == nil)
+        if model.hasLoaded && !loading && items.isEmpty && error == nil {
           Text("You’re all caught up.").foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: cursor != nil) { await load(more: true) }
       }
-    }.indexPage().refreshable { await load() }
-      .task(id: "\(filter)-\(scenePhase)") {
-        guard scenePhase == .active else { return }
+    }.indexPage().refreshable { await load(force: true) }
+      .onChange(of: visible, initial: true) { _, visible in store.activityFilter = visible ? filter : nil }
+      .onDisappear { if store.activityFilter == filter { store.activityFilter = nil } }
+      .task(id: "\(filter)-\(scenePhase)-\(visible)") {
+        if visible { store.activityFilter = filter }
+        guard visible, scenePhase == .active else { return }
         await load()
-        while !Task.isCancelled {
-          do { try await Task.sleep(for: .seconds(30)) } catch { return }
-          await load()
-        }
       }
   }
   private func resolve(_ activity: Activity, accept: Bool) async throws {
-    guard let api = app.api else { return }
-    let generation = app.session.generation
-    try await model.resolve(activity, accept: accept, api: api)
-    guard !Task.isCancelled, generation == app.session.generation else { return }
-    app.changed()
-    await load()
+    try await store.resolve(activity, accept: accept)
   }
-  private func load(more: Bool = false) async {
-    guard let api = app.api else { return }
+  private func load(more: Bool = false, force: Bool = false) async {
     do {
-      try await model.load(api: api, filter: filter, more: more)
-      await app.pollUnread()
+      try await store.refreshActivity(filter, more: more, force: force)
     } catch { app.handleSessionError(error) }
   }
 }

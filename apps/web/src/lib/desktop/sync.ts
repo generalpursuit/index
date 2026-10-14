@@ -5,6 +5,7 @@ import { accountGeneration, assertCurrentAccount, clearAccountState } from "../a
 import { sessionOptions } from "../session";
 import { client } from "@/utils/orpc";
 import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./index";
+import { contentFeatures } from "@/data/content";
 
 type RevisionEvent = { revision: number; source: string | null };
 /** The host shows the panel at once when it already holds content for the current account. */
@@ -102,8 +103,10 @@ export async function installDesktopSync(
         refreshAgain = false;
         try {
           await cache.fetchQuery({ ...sessionOptions, staleTime: 0 });
-          await invalidateRouter();
-          await cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+          if (isMenuBar) {
+            await invalidateRouter();
+            await cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+          }
           await pendingNavigation();
         } catch {
           /* No fallback identity when offline; panel offers Retry. */
@@ -132,7 +135,12 @@ export async function installDesktopSync(
     try {
       const next = await desktopInvoke<number>("session_revision");
       if (next > revision) acceptSession({ revision: next, source: null });
-      await refresh();
+      if (isMenuBar || acceptedDesktopRevision() !== next) await refresh();
+      else {
+        void cache.prefetchQuery(sessionOptions);
+        window.dispatchEvent(new Event("index:pulse"));
+        await pendingNavigation();
+      }
     } catch {
       void clearAccountState(cache);
     } finally {
@@ -153,7 +161,13 @@ export async function installDesktopSync(
     cleanups.push(
       await listen<RevisionEvent>("index:desktop-data", ({ payload }) => {
         if (disposed || payload.source === label || payload.revision !== revision) return;
-        void cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+        window.dispatchEvent(new Event("index:pulse"));
+        void cache.invalidateQueries({
+          predicate: (query) =>
+            Array.isArray(query.queryKey[0]) &&
+            contentFeatures.has(query.queryKey[0][2]) &&
+            !["messages", "activity", "routes"].includes(query.queryKey[0][2]),
+        });
       }),
     );
     // Each window hears only of its own opening, so opening the panel leaves main alone.
@@ -169,7 +183,9 @@ export async function installDesktopSync(
         ),
       );
     const initial = await desktopInvoke<number>("session_revision");
-    revision = Math.max(revision, initial);
+    if (acceptedDesktopRevision() !== undefined && acceptedDesktopRevision() !== initial)
+      acceptSession({ revision: initial, source: null });
+    else revision = Math.max(revision, initial);
   } catch (error) {
     cleanups.forEach((cleanup) => cleanup());
     throw error;

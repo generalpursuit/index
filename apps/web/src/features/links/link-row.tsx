@@ -1,3 +1,5 @@
+import { usePendingPage } from "@/components/app/query-state";
+import { placeholderLink } from "@/data/placeholders";
 import { preparePost } from "./queries";
 import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -11,20 +13,26 @@ import { domain } from "./url";
  * your own link in a locked group, so what is private shows without filtering.
  */
 export function LinkRow({
-  link,
+  link = placeholderLink,
+  placeholder = false,
   owner,
   locked = false,
 }: {
-  link: SavedLink;
+  link?: SavedLink;
+  placeholder?: boolean;
   owner?: string;
   locked?: boolean;
 }) {
+  const ready = usePendingPage();
   const navigate = useNavigate(),
     cache = useQueryClient(),
     api = useAPI();
   const prepare = () => preparePost(cache, api, link);
   return (
     <div
+      data-ready={ready || undefined}
+      data-placeholder={placeholder || link === placeholderLink || undefined}
+      aria-hidden={placeholder || link === placeholderLink || undefined}
       className={
         "link-row [&_small]:text-subtle-foreground [--mark-column:32px] grid grid-cols-[var(--mark-column)_minmax(0,_1fr)_auto] items-center gap-x-3 min-w-0 min-h-12 [@media(width<=700px)]:min-h-11.5 [@media(width<=700px)]:gap-x-3"
       }
@@ -77,3 +85,11 @@ export function LinkRow({
     </div>
   );
 }
+
+export const LinksPlaceholder = ({ rows = 4 }: { rows?: number }) => (
+  <>
+    {Array.from({ length: rows }, (_, key) => (
+      <LinkRow key={key} placeholder />
+    ))}
+  </>
+);

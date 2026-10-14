@@ -7,7 +7,7 @@ struct QuickAddView: View {
   @Environment(AppModel.self) private var app
   @State private var text = ""
   @State private var draft = ShareDraft()
-  @State private var groups: [LinkGroup] = []
+  private var groups: [LinkGroup] { app.store?.profileModel(app.userID).groups ?? [] }
   @State private var selected: LinkGroup?
   @State private var initialized = false
   @State private var groupsLoaded = false
@@ -71,10 +71,10 @@ struct QuickAddView: View {
         Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).padding(.vertical, 8)
       }
     }
-    .task(id: "\(app.userID)-\(app.revision)") { await loadGroups() }
+    .task(id: app.userID) { await loadGroups() }
     .sheet(isPresented: $creatingGroup) {
       GroupEditorView { group in
-        groups.append(group); selected = group; initialized = true
+        app.store?.created(group); selected = group; initialized = true
       }.indexSheetStyle().presentationDetents([.height(360), .large])
     }
     .sheet(item: $duplicate, onDismiss: {
@@ -98,7 +98,7 @@ struct QuickAddView: View {
   }
   private func loadGroups() async {
     do {
-      groups = try await allGroups(api: app.api, ownerID: app.userID)
+      try await app.store?.refreshGroups()
       try Task.checkCancellation()
       groupsLoaded = true
       if !initialized {
@@ -127,7 +127,7 @@ struct QuickAddView: View {
       if result.status == "existing" { duplicate = result.link; return }
       text = ""; draft = ShareDraft(); focused = false
       app.undoLink = result.link
-      app.changed()
+      app.store?.added(result.link)
     } catch is CancellationError {} catch {
       guard account == app.userID else { return }
       self.error = error.localizedDescription
@@ -145,9 +145,8 @@ struct SavedLinkToast: View {
         Text("Link added")
         AsyncButton {
           guard app.userID == link.ownerId else { return }
-          let _: Success? = try await app.api?.request("/links/\(link.id)", method: "DELETE")
+          try await app.store?.deleteLink(link)
           if app.undoLink?.id == link.id { app.undoLink = nil }
-          app.changed()
         } label: { Text("Undo").font(IndexFont.sans(13, weight: .semibold)) }
           .buttonStyle(.plain)
       }.font(IndexFont.sans()).padding(.horizontal, 20).padding(.vertical, 14)

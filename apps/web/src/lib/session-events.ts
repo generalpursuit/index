@@ -1,6 +1,6 @@
 import { accountGeneration, assertCurrentAccount } from "./account-boundary";
 
-type SessionEvent =
+export type SessionEvent =
   | "index:session-expired"
   | "index:verification-required"
   | "index:update-required";
@@ -14,9 +14,13 @@ export function createSessionEventFetch(
     const generation = accountGeneration();
     const response = await network(input, init);
     assertCurrentAccount(generation);
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    // RPC's link interceptor handles each decoded result, including errors inside a
+    // successful batch. Fetch handles auth/REST and the outer client-version gate.
+    const rpc = url.pathname.startsWith("/rpc/");
     if (response.status === 426) {
       notify("index:update-required");
-    } else if (response.status === 403) {
+    } else if (response.status === 403 && !rpc) {
       const body = await response
         .clone()
         .json()
@@ -26,13 +30,8 @@ export function createSessionEventFetch(
       if (error?.code === "EMAIL_NOT_VERIFIED" || error?.data?.code === "EMAIL_NOT_VERIFIED") {
         notify("index:verification-required");
       }
-    } else if (response.status === 401) {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (
-        url.pathname.startsWith("/api/v1/") ||
-        url.pathname.startsWith("/rpc/") ||
-        url.pathname.startsWith("/api/auth/security/")
-      ) {
+    } else if (response.status === 401 && !rpc) {
+      if (url.pathname.startsWith("/api/v1/") || url.pathname.startsWith("/api/auth/security/")) {
         notify("index:session-expired");
       }
     }

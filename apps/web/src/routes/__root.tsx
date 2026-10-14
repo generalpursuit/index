@@ -1,3 +1,4 @@
+import { PulseLifecycle } from "@/data/pulse-lifecycle";
 import { useTheme } from "@/lib/appearance/use-theme";
 import { NotificationLifecycle } from "@/features/notifications/lifecycle";
 import { isMenuBar } from "@/lib/desktop";
@@ -80,6 +81,7 @@ function Root() {
       <HeadContent />
       <DesktopTheme />
       {!isMenuBar && <NotificationLifecycle />}
+      <PulseLifecycle />
       <Outlet />
       <Toaster
         theme={resolved}

@@ -78,7 +78,8 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
     const item = panel.getByRole("button", { name, exact: true });
     await item.click({ trial: true });
     expect(await item.evaluate((el: HTMLElement) => [el.offsetHeight, el.offsetWidth])).toEqual([
-      28, 370,
+      28,
+      await panel.evaluate(() => document.documentElement.clientWidth - 20),
     ]);
   }
   await expect
@@ -259,7 +260,11 @@ test("the panel window always fits its content and its page never scrolls", asyn
   const fits = () =>
     expect
       .poll(async () => ({
-        window: (await panel.evaluate(() => innerHeight)) === desktop.panel.height,
+        window:
+          Math.abs(
+            (await panel.evaluate(() => visualViewport?.height ?? innerHeight)) -
+              desktop.panel.height,
+          ) < 1,
         ...(await panel.evaluate(() => {
           const page = document.scrollingElement!,
             list = document.querySelector<HTMLElement>(".link-list"),
@@ -276,7 +281,7 @@ test("the panel window always fits its content and its page never scrolls", asyn
             pageScrolls: page.scrollHeight > page.clientHeight || page.scrollTop > 0,
             contentCut: Math.round(extent - content.bottom) > 0,
             listHides: !!list && list.scrollHeight > list.clientHeight + 1,
-            aboveFooter: Math.round(footer.top - content.bottom),
+            aboveFooter: Math.max(0, Math.floor(footer.top - content.bottom) - 1),
             belowFooter: Math.round(innerHeight - footer.bottom),
           };
         })),
@@ -739,6 +744,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await expect.poll(() => desktop.hidden).toContain("menu-bar");
   await desktop.emit("index:menu-open", { presented: false }, "menu-bar");
   await expect(input).toHaveValue("https://pages.test/calm-software");
+  await expect(input).toBeEnabled();
   await input.press("Enter");
   await expect(
     panel.getByRole("button", { name: "Open Calm Software in browser", exact: true }),

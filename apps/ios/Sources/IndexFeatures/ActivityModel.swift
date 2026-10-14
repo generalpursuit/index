@@ -7,12 +7,19 @@ public final class ActivityModel {
   private let pages = CursorCollection<Activity>()
   public var items: [Activity] { pages.items }
   public var cursor: String? { pages.cursor }
+  public var hasLoaded: Bool { pages.hasLoaded }
   public var loading: Bool { pages.loading }
   public var error: String? { pages.error ?? receiptError }
   private var receiptError: String?
   private var generation = 0
-  public init() {}
-  public func load(api: any FeatureAPI, filter: String, more: Bool = false) async throws {
+  public init(api: (any FeatureAPI)? = nil, filter: String = "all") {
+    var params = ["limit": "30"]
+    if filter != "all" { params["type"] = filter }
+    let page: ActivityPage? = api?.snapshot("/me/activity", query: params)
+    pages.restore(key: filter, page: page.map { CursorPage(items: $0.items, next: $0.nextCursor) })
+  }
+  public func clear() { generation += 1; pages.reset(); receiptError = nil }
+  public func load(api: any FeatureAPI, filter: String, more: Bool = false, acknowledge: Bool = true) async throws {
     try Task.checkCancellation()
     if more && (pages.busy || pages.cursor == nil) { return }
     generation += 1
@@ -32,14 +39,9 @@ public final class ActivityModel {
         return CursorPage(items: page.items, next: page.nextCursor)
       })
       guard applied, version == generation, !Task.isCancelled else { return }
-      let ids = items.filter { $0.readAt == nil }.map(\.id)
-      // The API accepts at most 100 IDs; a refreshed loaded extent can be larger.
-      for offset in stride(from: 0, to: ids.count, by: 100) {
-        let batch = Array(ids[offset..<min(offset + 100, ids.count)])
-        let _: Success = try await api.write("/me/activity/read", body: ["ids": .strings(batch)])
-        try Task.checkCancellation()
-        guard version == generation else { return }
-      }
+      guard acknowledge else { return }
+      try await markRead(api: api)
+
     } catch {
       guard version == generation, !Task.isCancelled, !(error is CancellationError) else { return }
       if removesDisplayedContent(error) { pages.reset() }
@@ -47,11 +49,30 @@ public final class ActivityModel {
       throw error
     }
   }
-  public func resolve(_ activity: Activity, accept: Bool, api: any FeatureAPI) async throws {
-    if accept {
-      let _: FollowState = try await api.write("/me/follow-requests/\(activity.actor.id)/accept")
-    } else {
-      let _: Success = try await api.write("/me/follow-requests/\(activity.actor.id)", method: "DELETE")
+  public func markRead(api: any FeatureAPI) async throws {
+    let version = generation
+    let ids = items.filter { $0.readAt == nil }.map(\.id)
+    for offset in stride(from: 0, to: ids.count, by: 100) {
+      let batch = Array(ids[offset..<min(offset + 100, ids.count)])
+      let _: Success = try await api.write("/me/activity/read", body: ["ids": .strings(batch)])
+      try Task.checkCancellation()
+      guard version == generation else { return }
+      let accepted = Set(batch)
+      pages.patch { item in
+        guard accepted.contains(item.id) else { return item }
+        var next = item
+        next.readAt = Date().formatted(.iso8601)
+        return next
+      }
+    }
+  }
+  func patchRequest(actor: String, status: String?) {
+    generation += 1
+    pages.patch { item in
+      guard item.actor.id == actor && item.type == "request" else { return item }
+      var next = item
+      next.requestStatus = status
+      return next
     }
   }
 }

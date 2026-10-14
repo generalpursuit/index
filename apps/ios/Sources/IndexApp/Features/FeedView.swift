@@ -4,8 +4,10 @@ import SwiftUI
 
 struct FeedView: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
-  @State private var model = FeedWeeksModel()
+  @Environment(AccountStore.self) private var store
+  private var model: FeedWeeksModel { store.feedWeeks }
   private var weeks: [String] { model.weeks }
   @State private var selectedWeek = Week.monday()
   @State private var pickingWeek = false
@@ -36,7 +38,7 @@ struct FeedView: View {
       .sheet(isPresented: $pickingWeek) {
         WeekPicker(weeks: weeks, selected: selectedWeek, onSelect: select)
       }
-      .task(id: app.revision) { await loadWeeks() }
+      .task(id: visible) { if visible { await loadWeeks() } }
       .overlay(alignment: .bottom) {
         if let weeksError {
           Button("Couldn’t load weeks. Retry") { Task { await loadWeeks() } }
@@ -50,7 +52,7 @@ struct FeedView: View {
   }
   private func loadWeeks() async {
     guard let api = app.api else { return }
-    do { try await model.load(api: api, selectedWeek: selectedWeek) }
+    do { try await store.show("feed-weeks", path: "/feed/weeks", query: ["limit": "100"], force: model.error != nil) { try await model.load(api: api, selectedWeek: selectedWeek) } }
     catch { app.handleSessionError(error) }
   }
 }
@@ -60,10 +62,11 @@ private struct FeedWeekView: View {
   let followingCount: Int?
   let compact: Bool
   @Environment(AppModel.self) private var app
-  @State private var model = FeedWeekModel()
-  private var feed: WeekFeed? { model.feed }
+  @Environment(\.screenVisible) private var visible
+  @Environment(AccountStore.self) private var store
+  private var model: FeedWeekModel { store.feed(week) }
+  private var feed: WeekFeed? { model.feed ?? (error == nil ? ContentPlaceholder.feed(week) : nil) }
   private var error: String? { model.error }
-  private var loading: Bool { model.loading }
   var body: some View {
     GeometryReader { geometry in
       let gap: CGFloat = compact ? 14 : 20
@@ -74,7 +77,7 @@ private struct FeedWeekView: View {
           if week == Week.monday() { QuickAddView() }
           ScrollView {
             LazyVStack(alignment: .leading, spacing: 0) {
-              LoadingError(error: error, loading: loading, retry: { await load() })
+              RequestError(error: error, retry: { await load() })
               if let feed {
                 ForEach(feed.own.items) { LinkRow(link: $0, compact: compact) }
                 PageEnd(cursor: feed.own.nextCursor) { try await moreOwn() }
@@ -118,11 +121,11 @@ private struct FeedWeekView: View {
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(IndexPalette.border))
         } else { Spacer(minLength: 0) }
       }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
-    }.task(id: app.revision) { await load() }
+    }.calmPlaceholder(active: model.feed == nil && error == nil).task(id: visible) { if visible { await load() } }
   }
   private func personColumn(_ person: PersonLinks) -> some View {
     VStack(alignment: .leading, spacing: 4) {
-      Button { app.navigate(.profile(person.id)) } label: {
+      Button { app.openProfile(person.author) } label: {
         HStack(spacing: 12) {
           PersonAvatar(person: person.author, size: 32)
           Text(person.author.label).font(IndexFont.sans(13, weight: .medium)).lineLimit(1)
@@ -139,7 +142,7 @@ private struct FeedWeekView: View {
   }
   private func load() async {
     guard let api = app.api else { return }
-    do { try await model.load(api: api, week: week) }
+    do { try await store.show("feed:" + week, path: "/feed/week", query: ["weekStart": week, "linkLimit": "20"], force: model.error != nil) { try await model.load(api: api, week: week) } }
     catch { app.handleSessionError(error) }
   }
   private func moreOwn() async throws {

@@ -290,6 +290,7 @@ function MessageItem({
             (outgoing ? "outgoing items-end" : "incoming items-start")
           }
           data-highlighted={highlighted || undefined}
+          data-delivery={"delivery" in message ? String(message.delivery) : undefined}
           title={exactTime(message.createdAt)}
         >
           {quote}
@@ -306,6 +307,11 @@ function MessageItem({
             </p>
           )}
           <SharedPost message={message} />
+          {"delivery" in message && message.delivery === "pending" && (
+            <span className="text-[11px] text-subtle-foreground" role="status">
+              Sending…
+            </span>
+          )}
         </div>
         <span id={label + "sender"} hidden>
           {sender}

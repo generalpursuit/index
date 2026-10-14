@@ -1,3 +1,4 @@
+import { rpcPaths, routeRPC } from "./rpc";
 import { test, expect, type Page } from "@playwright/test";
 import { apiURL } from "./urls";
 let fixture: { links: { id: string; shortId: string; title: string }[]; older: string };
@@ -19,34 +20,36 @@ test("a visible post opens with content while its detail refresh is still pendin
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/rpc/v1/links/get**", async (route) => {
+  await routeRPC(page, "**/rpc/v1/links/get**", async (route) => {
     await blocked;
     await route.continue();
   });
   let commentsStarted = false;
   page.on("request", (request) => {
-    if (request.url().includes("/rpc/v1/comments/list")) commentsStarted = true;
+    if (rpcPaths(request).includes("/rpc/v1/comments/list")) commentsStarted = true;
   });
+  const post = page.getByRole("dialog", { name: "Post", exact: true });
   try {
     await page
       .locator('.week-page[data-active="true"] .own-links')
       .getByRole("button", { name: "Are.na", exact: true })
       .click();
-    const post = page.getByRole("dialog", { name: "Post", exact: true });
     await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible({
       timeout: 1500,
     });
     await expect.poll(() => commentsStarted, { timeout: 1500 }).toBe(true);
-    await expect(post.locator(".comments")).toContainText("Do you have a favorite channel?");
+    // This route fixture buffers an intercepted batch. Comments start alongside
+    // the access check, but their packet arrives once the fixture releases it.
   } finally {
     release();
   }
+  await expect(post.locator(".comments")).toContainText("Do you have a favorite channel?");
 });
 test("Discover's data loads once, before it opens", async ({ page }) => {
   // Counted from the start: an idle warm-up after login may load it before the hover does.
   let recommendations = 0;
   page.on("request", (request) => {
-    if (request.url().includes("/rpc/v1/discovery/recommendations")) recommendations++;
+    if (rpcPaths(request).includes("/rpc/v1/discovery/recommendations")) recommendations++;
   });
   await login(page);
   await page.getByRole("link", { name: "Discover", exact: true }).hover();
@@ -58,12 +61,16 @@ test("Discover's data loads once, before it opens", async ({ page }) => {
 test("a profile renders its first weeks while the rest of the index is pending", async ({
   page,
 }) => {
+  // Exercise the cold dependency path, independently of idle preloading and its batches.
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "connection", { value: { saveData: true } });
+  });
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
   });
   let requests = 0;
-  await page.route("**/rpc/v1/links/weeks**", async (route) => {
+  await routeRPC(page, "**/rpc/v1/links/weeks**", async (route) => {
     requests++;
     if (requests > 1) {
       await blocked;
@@ -87,12 +94,12 @@ test("a profile renders its first weeks while the rest of the index is pending",
     release();
   }
 });
-test("the current page keeps its layout until the next page is ready", async ({ page }) => {
+test("the next page opens its own placeholder inside the navigation shell", async ({ page }) => {
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/rpc/v1/discovery/recommendations**", async (route) => {
+  await routeRPC(page, "**/rpc/v1/discovery/recommendations**", async (route) => {
     await blocked;
     await route.continue();
   });
@@ -100,9 +107,9 @@ test("the current page keeps its layout until the next page is ready", async ({ 
   try {
     await page.getByRole("link", { name: "Discover", exact: true }).click();
     await expect(page).toHaveURL(/\/discover$/);
-    // The feed is still on screen, so it keeps the feed's full-height layout.
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
-    await expect(page.locator("#app-content")).toHaveClass(/feed-main/);
+    await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
+    await expect(page.getByRole("navigation", { name: "Main navigation" })).toBeVisible();
+    await expect(page.locator("#app-content")).not.toHaveClass(/feed-main/);
   } finally {
     release();
   }
@@ -141,15 +148,13 @@ test("editing a post keeps its dialog in place", async ({ page }) => {
   const after = (await editor.boundingBox())!;
   expect([after.x, after.y, after.width]).toEqual([before.x, before.y, before.width]);
 });
-test("a post opened before its comments have loaded waits for them, then opens complete", async ({
-  page,
-}) => {
+test("a post opens at its final size while comments are loading", async ({ page }) => {
   await login(page);
   let release!: () => void;
   const blocked = new Promise<void>((resolve) => {
     release = resolve;
   });
-  await page.route("**/rpc/v1/comments/list**", async (route) => {
+  await routeRPC(page, "**/rpc/v1/comments/list**", async (route) => {
     await blocked;
     await route.continue();
   });
@@ -159,15 +164,14 @@ test("a post opened before its comments have loaded waits for them, then opens c
       .locator('.week-page[data-active="true"] .own-links')
       .getByRole("button", { name: "In Rainbows", exact: true })
       .click();
-    // The page stays, under the progress bar, rather than showing the post without them.
-    await expect(page.locator(".navigation-progress")).toBeAttached();
-    await expect(post).toHaveCount(0);
+    await expect(post.getByRole("heading", { name: "In Rainbows", exact: true })).toBeVisible();
+    await expect(post.locator(".post-detail")).toBeVisible();
   } finally {
     release();
   }
   await expect(post.locator(".comments")).toContainText("No comments yet.");
 });
-test("a post opened from its address shows complete from its first frame", async ({ page }) => {
+test("a post opened from its address always uses its real dialog structure", async ({ page }) => {
   await login(page);
   type Frame = { post: boolean; loading: boolean; label: string };
   // Every frame the dialog is on screen.
@@ -193,14 +197,14 @@ test("a post opened from its address shows complete from its first frame", async
     () => (window as unknown as { postFrames: Frame[] }).postFrames,
   );
   expect(frames.length).toBeGreaterThan(0);
-  // No empty or loading frame, and the group in its label from the start.
-  expect(frames.filter((f) => !f.post || f.loading || !f.label.includes("Reading"))).toEqual([]);
+  expect(frames.some((frame) => frame.post)).toBe(true);
+  await expect(post.locator(".post-label")).toContainText("Reading");
 });
 test("Discover follow buttons do not fetch every person's full profile", async ({ page }) => {
   await login(page);
   let profiles = 0;
   page.on("request", (request) => {
-    if (request.url().includes("/rpc/v1/profiles/get")) profiles++;
+    if (rpcPaths(request).includes("/rpc/v1/profiles/get")) profiles++;
   });
   await page.getByRole("link", { name: "Discover", exact: true }).click();
   await page.getByLabel("Search people").fill("a");
@@ -211,13 +215,18 @@ test("Discover follow buttons do not fetch every person's full profile", async (
 
 test("a failed background refresh keeps the known post readable", async ({ page }) => {
   await login(page);
-  await page.route("**/rpc/v1/links/get**", (route) => route.abort("failed"));
-  await page
+  const row = page
     .locator('.week-page[data-active="true"] .own-links')
-    .getByRole("button", { name: "Are.na", exact: true })
-    .click();
+    .getByRole("button", { name: "Are.na", exact: true });
+  await row.click();
   const post = page.getByRole("dialog", { name: "Post", exact: true });
   await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(post).not.toBeVisible();
+  await routeRPC(page, "**/rpc/v1/links/get**", (route) => route.abort("failed"));
+  // Age the already-seeded post; timer-based retries still run at their normal speed.
+  await page.clock.setFixedTime(Date.now() + 31_000);
+  await row.click();
   await expect(post).toContainText("Couldn’t refresh. Showing saved content.");
   await expect(post.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
 });

@@ -9,10 +9,12 @@ import AppKit
 
 struct MessagesView: View {
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @Environment(\.scenePhase) private var scenePhase
-  @State private var model = ConversationListModel()
+  @Environment(AccountStore.self) private var store
+  private var model: ConversationListModel { store.inbox(query) }
   @State private var query = ""
-  private var conversations: [Conversation] { model.conversations }
+  private var conversations: [Conversation] { !model.hasLoaded && error == nil ? (0..<5).map(ContentPlaceholder.conversation) : model.conversations }
   private var cursor: String? { model.cursor }
   private var error: String? { model.error }
   private var loading: Bool { model.loading }
@@ -28,39 +30,40 @@ struct MessagesView: View {
           }.accessibilityLabel("New message")
         }
         SearchField(placeholder: "Search conversations", text: $query).padding(.top, 26).padding(.bottom, 20)
-        LoadingError(error: error, loading: loading, retry: { await load() })
-        ForEach(conversations) { conversation in
-          Button {
-            app.navigation.openingConversation = conversation
-            app.navigate(.conversation(conversation.id))
-          } label: {
-            HStack(spacing: 16) {
-              ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
-              VStack(alignment: .leading, spacing: 1) {
-                Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(14)).bold().lineLimit(
-                  1)
-                Text(preview(conversation)).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground).lineLimit(1)
-              }
-              Spacer(minLength: 0)
-              if conversation.unreadCount > 0 { Circle().frame(width: 7, height: 7) }
-              Text(relativeTime(conversation.updatedAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
-            }.padding(.vertical, 18).contentShape(Rectangle())
-          }.buttonStyle(.plain)
-        }
-        if conversations.isEmpty && !loading && error == nil {
+        RequestError(error: error, retry: { await load() })
+        Group {
+          ForEach(conversations) { conversation in
+            Button {
+              app.navigation.openingConversation = conversation
+              app.navigate(.conversation(conversation.id))
+            } label: {
+              HStack(spacing: 16) {
+                ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
+                VStack(alignment: .leading, spacing: 1) {
+                  Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(14)).bold().lineLimit(
+                    1)
+                  Text(preview(conversation)).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground).lineLimit(1)
+                }
+                Spacer(minLength: 0)
+                if conversation.unreadCount > 0 { Circle().frame(width: 7, height: 7) }
+                Text(relativeTime(conversation.updatedAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+              }.padding(.vertical, 18).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+          }
+        }.calmPlaceholder(active: !model.hasLoaded && error == nil)
+        if model.hasLoaded && conversations.isEmpty && !loading && error == nil {
           Text("Good finds start conversations.").foregroundStyle(IndexPalette.subtleForeground).padding(.vertical, 30)
         }
         LoadMore(hasMore: cursor != nil) { await load(more: true) }
       }
-    }.indexPage().refreshable { await load() }
-      .task(id: "\(query)-\(scenePhase)") {
-        guard scenePhase == .active else { return }
+    }.indexPage().refreshable { await load(force: true) }
+      .onChange(of: visible, initial: true) { _, visible in store.inboxQuery = visible ? query : nil }
+      .onDisappear { if store.inboxQuery == query { store.inboxQuery = nil } }
+      .task(id: "\(query)-\(scenePhase)-\(visible)") {
+        if visible { store.inboxQuery = query }
+        guard visible, scenePhase == .active else { return }
         if !query.isEmpty { do { try await Task.sleep(for: .milliseconds(200)) } catch { return } }
         await load()
-        while !Task.isCancelled {
-          do { try await Task.sleep(for: .seconds(10)) } catch { return }
-          await load()
-        }
       }
   }
   private func preview(_ conversation: Conversation) -> String {
@@ -77,9 +80,10 @@ struct MessagesView: View {
           ? "Private post" : message.hasAttachment ? "Post unavailable" : "Message")
     return (message.senderId == app.userID ? "You: " : "") + text
   }
-  private func load(more: Bool = false) async {
-    guard let api = app.api else { return }
-    do { try await model.load(api: api, query: query, more: more) }
+  private func load(more: Bool = false, force: Bool = false) async {
+    do {
+      try await store.refreshInbox(query, more: more, force: force)
+    }
     catch { app.handleSessionError(error) }
   }
 }
@@ -102,8 +106,10 @@ struct RecipientView: View {
   let attachment: SavedLink?
   @Environment(AppModel.self) private var app
   @Environment(\.indexSheet) private var isSheet
-  @State private var model = RecipientModel()
-  private var people: [Person] { model.people }
+  @Environment(\.screenVisible) private var visible
+  @Environment(AccountStore.self) private var store
+  private var model: RecipientModel { store.recipients(query) }
+  private var people: [Person] { !model.hasLoaded && error == nil ? (0..<5).map(ContentPlaceholder.person) : model.people }
   @State private var selected: [Person] = []
   private var after: String? { model.after }
   @State private var query = ""
@@ -127,25 +133,27 @@ struct RecipientView: View {
           }
         }
         SearchField(placeholder: "Search people you follow", text: $query)
-        LoadingError(error: error, loading: loading, retry: { await load() })
-        ForEach(people) { person in
-          Button {
-            if selected.contains(where: { $0.id == person.id }) {
-              selected.removeAll { $0.id == person.id }
-            } else if selected.count < 19 {
-              selected.append(person)
-            }
-          } label: {
-            HStack {
-              PersonRow(person: person)
-              Image(
-                systemName: selected.contains(where: { $0.id == person.id })
-                  ? "checkmark.circle.fill" : "circle"
-              ).font(.title3)
-            }
-          }.buttonStyle(.plain)
-        }
-        if people.isEmpty && !loading && error == nil {
+        RequestError(error: error, retry: { await load() })
+        Group {
+          ForEach(people) { person in
+            Button {
+              if selected.contains(where: { $0.id == person.id }) {
+                selected.removeAll { $0.id == person.id }
+              } else if selected.count < 19 {
+                selected.append(person)
+              }
+            } label: {
+              HStack {
+                PersonRow(person: person)
+                Image(
+                  systemName: selected.contains(where: { $0.id == person.id })
+                    ? "checkmark.circle.fill" : "circle"
+                ).font(.title3)
+              }
+            }.buttonStyle(.plain)
+          }
+        }.calmPlaceholder(active: !model.hasLoaded && error == nil)
+        if model.hasLoaded && people.isEmpty && !loading && error == nil {
           Text("Follow someone to start a conversation.").foregroundStyle(IndexPalette.subtleForeground).padding()
         }
         LoadMore(hasMore: after != nil) { await load(more: true) }
@@ -185,10 +193,13 @@ struct RecipientView: View {
 struct ConversationView: View {
   let conversationID: String
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @Environment(\.scenePhase) private var scenePhase
-  @State private var model = ConversationModel()
-  private var conversation: Conversation? { model.conversation }
-  private var messages: [Message] { model.messages }
+  @Environment(AccountStore.self) private var store
+  private var model: ConversationModel { store.conversation(conversationID, opening: openingConversation) }
+  private var openingConversation: Conversation? { app.navigation.openingConversation?.id == conversationID ? app.navigation.openingConversation : nil }
+  private var conversation: Conversation? { model.conversation ?? (error == nil ? ContentPlaceholder.conversation() : nil) }
+  private var messages: [Message] { !model.hasLoaded && model.messages.isEmpty && error == nil ? (0..<4).map(ContentPlaceholder.message) : model.messages }
   private var cursor: String? { model.cursor }
   private var error: String? { model.error }
   private var loading: Bool { model.loading }
@@ -215,15 +226,17 @@ struct ConversationView: View {
       if let conversation {
         HStack(spacing: 12) {
           BackButton()
-          ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
-          VStack(alignment: .leading, spacing: 3) {
-            Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
-            Menu("Participants") {
-              ForEach(conversation.participants.filter { $0.id != app.userID }) { person in
-                Button(person.name) { app.navigate(.profile(person.id)) }
-              }
-            }.font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
-          }
+          Group {
+            ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
+            VStack(alignment: .leading, spacing: 3) {
+              Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
+              Menu("Participants") {
+                ForEach(conversation.participants.filter { $0.id != app.userID }) { person in
+                  Button(person.name) { app.openProfile(person) }
+                }
+              }.font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
+            }
+          }.calmPlaceholder(active: model.conversation == nil && error == nil)
           Spacer()
         }.padding(.vertical, 8).padding(.bottom, 20)
       } else {
@@ -232,25 +245,29 @@ struct ConversationView: View {
       ScrollViewReader { proxy in
         ScrollView {
           LazyVStack(spacing: 0) {
-            LoadingError(error: error, loading: loading, retry: { await refresh() })
+            RequestError(error: error, retry: { await refresh() })
             LoadMore(hasMore: cursor != nil) { try await more() }
             if let conversation {
               let loaded = Set(messages.map(\.id))
               ForEach(MessageTimeline.rows(messages.reversed())) { row in
                 let original = row.message.replyTo?.id
                 MessageRow(
-                  row: row, conversation: conversation, read: row.id == readMessageID,
-                  highlighted: row.id == highlighted, canReply: canReply, reply: { reply(to: row.message) },
+                  row: row, conversation: conversation, read: row.message.id == readMessageID,
+                  highlighted: row.message.id == highlighted, canReply: canReply, reply: { reply(to: row.message) },
                   showOriginal: original.flatMap { id in loaded.contains(id) ? { showOriginal(id, proxy: proxy) } : nil }
                 ).id(row.id)
+                if let status = model.sendStates[row.message.clientId] {
+                  Text(status).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+                    .frame(maxWidth: .infinity, alignment: .trailing).padding(.bottom, 6)
+                }
               }
             }
             Color.clear.frame(height: 1).id("bottom").onAppear { nearBottom = true }.onDisappear {
               nearBottom = false
             }
-          }.padding(.bottom, 20)
+          }.calmPlaceholder(active: !model.hasLoaded && model.messages.isEmpty && error == nil).padding(.bottom, 20)
         }.defaultScrollAnchor(.bottom)
-          .onChange(of: messages.first?.id) { _, _ in
+          .onChange(of: messages.first?.clientId) { _, _ in
             if nearBottom || scrollAfterSend {
               proxy.scrollTo("bottom", anchor: .bottom)
               scrollAfterSend = false
@@ -259,15 +276,13 @@ struct ConversationView: View {
           .scrollDismissesKeyboard(.interactively)
       }
     }.indexPage()
-      .safeAreaInset(edge: .bottom) { if conversation != nil { composer } }
+      .safeAreaInset(edge: .bottom) { if model.conversation != nil { composer } }
+      .onAppear { store.openConversationID = conversationID }
+      .onDisappear { if store.openConversationID == conversationID { store.openConversationID = nil } }
       .task(id: scenePhase) {
-        guard scenePhase == .active else { return }
+        guard visible, scenePhase == .active else { return }
         await refresh()
         focused = draft.attachment != nil
-        while !Task.isCancelled {
-          do { try await Task.sleep(for: .seconds(5)) } catch { return }
-          await refresh()
-        }
       }
       .task(id: highlighted) {
         guard highlighted != nil else { return }
@@ -323,21 +338,19 @@ struct ConversationView: View {
     focused = true
   }
   private func showOriginal(_ id: String, proxy: ScrollViewProxy) {
-    withAnimation(reduceMotion ? nil : .smooth) { proxy.scrollTo(id, anchor: .center) }
+    let rowID = messages.first(where: { $0.id == id })?.clientId ?? id
+    withAnimation(reduceMotion ? nil : .smooth) { proxy.scrollTo(rowID, anchor: .center) }
     highlighted = id
   }
   private func send() async throws {
-    guard let api = app.api else { return }
-    try await app.drafts.send(in: conversationID, api: api)
-    scrollAfterSend = true
+    scrollAfterSend = draft.pending == nil
+    try await store.send(in: conversationID)
     focused = true
-    await refresh()
   }
   private func refresh() async {
-    guard let api = app.api else { return }
-    let opening = app.navigation.openingConversation
+    let opening = openingConversation
     app.navigation.openingConversation = nil
-    do { try await model.load(api: api, id: conversationID, opening: opening) }
+    do { try await store.refreshConversation(conversationID, opening: opening) }
     catch { app.handleSessionError(error) }
   }
   private func more() async throws {
@@ -381,6 +394,7 @@ struct MessageRow: View {
   /// Shows the replied message; nil while it is not loaded.
   let showOriginal: (() -> Void)?
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   private var message: Message { row.message }
   private var own: Bool { message.senderId == app.userID }
   // In 1:1 chats the header already names and pictures the other person.
@@ -533,6 +547,7 @@ struct SharedPostCard: View {
   let message: Message
   var highlighted = false
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   var body: some View {
     if let attachment = message.attachment {
       Button { app.openLink(attachment) } label: {

@@ -1,8 +1,9 @@
-//! Process-local ordering only. Credentials stay in session.rs and the OS store.
+//! Session ordering. session.rs restores and persists the counter in the OS store.
 #[derive(Default)]
 pub struct Revision(u64);
 impl Revision {
     pub const fn new() -> Self { Self(0) }
+    pub fn restored(value: u64) -> Self { Self(value) }
     pub fn current(&self) -> u64 { self.0 }
     pub fn check(&self, expected: u64) -> Result<(), String> {
         if self.0 == expected { Ok(()) } else { Err("Session changed".into()) }

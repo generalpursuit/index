@@ -4,8 +4,9 @@ import SwiftUI
 
 struct GroupSettingsView: View {
   @Environment(AppModel.self) private var app
-  @State private var groups: [LinkGroup] = []
-  @State private var loading = true
+  private var groups: [LinkGroup] {
+    (app.store?.profileModel(app.userID).groupsLoaded == false && error == nil ? (0..<3).map(ContentPlaceholder.group) : (app.store?.profileModel(app.userID).groups ?? [])).sorted { $0.kind == $1.kind ? $0.name < $1.name : $0.kind < $1.kind }
+  }
   @State private var error: String?
   @State private var creating = false
   @State private var editing: LinkGroup?
@@ -20,33 +21,35 @@ struct GroupSettingsView: View {
       }
       Text("Lock a group to keep its links to yourself.")
         .font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
-      LoadingError(error: error, loading: loading, retry: { await load() })
-      // Favorites and Starred are never locked here: Favorites follows each link's own group,
-      // Starred is always private.
-      ForEach(groups.filter { $0.kind != "custom" }) { group in
-        HStack { name(group); Spacer() }.frame(minHeight: 44)
-      }
-      if groups.contains(where: { $0.kind == "custom" }) {
-        HStack(spacing: 10) {
-          Text("YOUR GROUPS").font(IndexFont.mono(11)).tracking(0.66)
-            .foregroundStyle(IndexPalette.subtleForeground)
-          Rectangle().fill(IndexPalette.border).frame(height: 1)
-        }.padding(.top, 4).accessibilityElement(children: .ignore)
-          .accessibilityLabel("Your groups").accessibilityAddTraits(.isHeader)
-        ForEach(groups.filter { $0.kind == "custom" }) { group in
-          HStack {
-            name(group)
-            Spacer()
-            ManagedGroupLock(group: group)
-            Button { editing = group } label: {
-              Image(systemName: "pencil").frame(width: 44, height: 44)
-            }.accessibilityLabel("Edit \(group.name)")
+      RequestError(error: error, retry: { await load() })
+      Group {
+        // Favorites and Starred are never locked here: Favorites follows each link's own group,
+        // Starred is always private.
+        ForEach(groups.filter { $0.kind != "custom" }) { group in
+          HStack { name(group); Spacer() }.frame(minHeight: 44)
+        }
+        if groups.contains(where: { $0.kind == "custom" }) {
+          HStack(spacing: 10) {
+            Text("YOUR GROUPS").font(IndexFont.mono(11)).tracking(0.66)
+              .foregroundStyle(IndexPalette.subtleForeground)
+            Rectangle().fill(IndexPalette.border).frame(height: 1)
+          }.padding(.top, 4).accessibilityElement(children: .ignore)
+            .accessibilityLabel("Your groups").accessibilityAddTraits(.isHeader)
+          ForEach(groups.filter { $0.kind == "custom" }) { group in
+            HStack {
+              name(group)
+              Spacer()
+              ManagedGroupLock(group: group)
+              Button { editing = group } label: {
+                Image(systemName: "pencil").frame(width: 44, height: 44)
+              }.accessibilityLabel("Edit \(group.name)")
+            }
           }
         }
-      }
+      }.calmPlaceholder(active: app.store?.profileModel(app.userID).groupsLoaded == false && error == nil)
     }
     .foregroundStyle(IndexPalette.foreground)
-    .task(id: "\(app.userID)-\(app.revision)") { await load() }
+    .task(id: app.userID) { await load() }
     .sheet(isPresented: $creating) {
       GroupEditorView().indexSheetStyle().presentationDetents([.height(360), .large])
     }
@@ -70,22 +73,15 @@ struct GroupSettingsView: View {
     }
   }
   private func load() async {
-    loading = groups.isEmpty
     do {
-      let available = try await allGroups(api: app.api, ownerID: app.userID)
+      try await app.store?.refreshGroups(force: error != nil)
       try Task.checkCancellation()
-      let order = ["favorites": 0, "starred": 1, "custom": 2]
-      groups = available.sorted {
-        let lhs = order[$0.kind] ?? 2, rhs = order[$1.kind] ?? 2
-        return lhs == rhs ? $0.name.localizedStandardCompare($1.name) == .orderedAscending : lhs < rhs
-      }
       error = nil
     } catch is CancellationError { return } catch {
       self.error = error.localizedDescription
       if case APIError.unauthenticated = error { app.handle(error) }
       if case APIError.emailNotVerified = error { app.handle(error) }
     }
-    loading = false
   }
 }
 
@@ -104,7 +100,6 @@ private struct ManagedGroupLock: View {
         confirming = true
       }
       if let error { Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
-      if pending { ProgressView().accessibilityLabel("Saving group") }
     }
     .alert(locked ? "Unlock group?" : "Lock group?", isPresented: $confirming) {
       Button("Cancel", role: .cancel) {}
@@ -112,16 +107,14 @@ private struct ManagedGroupLock: View {
     } message: { Text(GroupDraft.privacyDescription(locked: !locked)) }
   }
   private func save() {
-    guard !pending, group.kind == "custom", let api = app.api else { return }
+    guard !pending, group.kind == "custom", let store = app.store else { return }
     pending = true
     let account = app.userID
     Task { @MainActor in
       defer { pending = false }
       do {
-        let _: LinkGroup = try await api.request("/groups/\(group.id)", method: "PATCH",
-          body: ["visibility": .string(locked ? "public" : "private")])
+        _ = try await store.editGroup(group, name: group.name, visibility: locked ? .public : .private)
         guard account == app.userID else { return }
-        app.changed()
       } catch is CancellationError { return } catch {
         guard account == app.userID else { return }
         self.error = GroupDraft.saveError(error)

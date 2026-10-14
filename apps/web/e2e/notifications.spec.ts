@@ -1,3 +1,4 @@
+import { routeRPC } from "./rpc";
 import { test, expect, type Page } from "@playwright/test";
 import { apiURL } from "./urls";
 async function login(page: Page, account = "alice") {
@@ -117,7 +118,7 @@ test("device status waits for server capabilities and hides enabling when push i
   let answer!: () => void;
   const answered = new Promise<void>((resolve) => (answer = resolve));
   let hold = false;
-  await page.route("**/rpc/v1/notifications/capabilities", async (route) => {
+  await routeRPC(page, "**/rpc/v1/notifications/capabilities", async (route) => {
     // The page loader waits for this check. Failing it until the page is up leaves the
     // section checking again, as after a slow or flaky server.
     if (!hold) return route.abort();

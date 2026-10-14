@@ -73,8 +73,15 @@ public final class AccountSession {
   public private(set) var verificationUser: AuthUser?
   public private(set) var generation = 0
   public private(set) var verifiedRevision = 0
+  public private(set) var provisional = false
   private var accountID: String?
   public init() {}
+  public func provision(_ profile: Profile) {
+    clear()
+    accountID = profile.id
+    self.profile = profile
+    provisional = true
+  }
   @discardableResult public func begin(_ user: AuthUser) -> Int {
     clear()
     accountID = user.id
@@ -86,6 +93,7 @@ public final class AccountSession {
     guard profile.id == accountID else { throw APIError.invalidResponse }
     self.profile = profile
     verificationUser = nil
+    provisional = false
     verifiedRevision += 1
   }
   public func clear() {
@@ -93,5 +101,6 @@ public final class AccountSession {
     accountID = nil
     profile = nil
     verificationUser = nil
+    provisional = false
   }
 }

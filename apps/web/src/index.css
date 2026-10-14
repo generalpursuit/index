@@ -59,3 +59,72 @@ html.menu-bar-surface
     opacity: 0;
   }
 }
+
+/* Placeholder components keep their real geometry; only their ink is provisional. */
+.content-placeholder {
+  display: contents;
+}
+.content-placeholder:not([data-ready]) > * {
+  visibility: hidden;
+}
+[data-placeholder] {
+  animation: loading-reveal 1ms 300ms backwards;
+  pointer-events: none;
+  user-select: none;
+  color: transparent;
+}
+[data-placeholder]
+  :is(strong, small, h1, p, .link-open, .link-domain, .person-label, .message-bubble) {
+  color: transparent !important;
+  background: var(--surface);
+  border-radius: 4px;
+}
+[data-placeholder] :is(svg, img) {
+  visibility: hidden;
+}
+
+/* Pending and completed pages share their layout before the router commits its matches. */
+.app-main .app-content {
+  height: auto;
+  padding: var(--page-top-space) 40px 50px;
+}
+.app-main .app-scroll {
+  overflow-y: auto;
+}
+.app-main:has(.week-feed, .chat-page) .app-content {
+  height: 100%;
+}
+.app-main:has(.week-feed, .chat-page) .app-scroll {
+  overflow: hidden;
+}
+.app-main:has(.week-feed) .app-content {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.app-main:has(.chat-page) .app-content {
+  padding-top: 28px;
+  padding-bottom: 24px;
+}
+@media (width <= 700px) {
+  .app-main .app-content {
+    padding: var(--page-top-space) 20px 28px;
+  }
+  .app-main:has(.week-scrubber) .app-content {
+    padding-right: 36px;
+  }
+  .app-main:has(.week-feed) .app-content {
+    padding: 0 20px;
+  }
+  .app-main:has(.chat-page) .app-content {
+    padding: 20px 16px 12px;
+  }
+  .app-main:has(.chat-page) .chat-heading {
+    margin-bottom: 18px;
+  }
+}
+
+.content-placeholder[data-ready],
+.content-placeholder[data-ready] [data-placeholder],
+[data-placeholder][data-ready] {
+  animation: none;
+}

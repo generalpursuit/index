@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { QueryState } from "@/components/app/query-state";
 import { LinkList, scrollToTop } from "./link-list";
-import { LinkRow } from "./link-row";
+import { LinkRow, LinksPlaceholder } from "./link-row";
 import { QuickAdd } from "./quick-add";
 import { ownerOf, useWeekLinks } from "./hooks/use-links";
 import { weekLabel } from "@/lib/weeks";
@@ -54,7 +54,7 @@ export function WeekLinks({
             hasData={!!list.data}
             error={list.error}
             retry={() => void list.refetch()}
-            placeholder={placeholder}
+            placeholder={placeholder ?? <LinksPlaceholder />}
           >
             {links.map((link) => (
               <LinkRow

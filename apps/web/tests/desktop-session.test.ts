@@ -511,3 +511,43 @@ test("local sign-out erases and notifies before held auth network or response bo
     assert.equal(cleared, 1);
   }
 });
+
+test("sign-in can repair a failed native secure write without restarting the transport", async () => {
+  let token: string | null = "alice.signed",
+    revision = 1,
+    fail = true;
+  const transport = createNativeSessionFetch(
+    "https://api.example.com",
+    {
+      read: async () => ({ token, revision }),
+      revision: async () => revision,
+      write: async (next, expected) => {
+        assert.equal(expected, revision);
+        revision++;
+        if (fail) {
+          token = null;
+          throw new Error("Credential store locked");
+        }
+        token = next;
+        return revision;
+      },
+    },
+    (async () =>
+      Response.json(
+        { user: { id: "bob" } },
+        { headers: { "set-auth-token": "bob.signed" } },
+      )) as typeof fetch,
+  );
+  transport.acceptSession(1);
+  await assert.rejects(
+    transport("https://api.example.com/api/auth/sign-in/email", { method: "POST" }),
+  );
+  assert.equal(token, null);
+  fail = false;
+  const response = await transport("https://api.example.com/api/auth/sign-in/email", {
+    method: "POST",
+  });
+  assert.equal(response.ok, true);
+  assert.equal(token, "bob.signed");
+  assert.equal(transport.acceptedRevision(), revision);
+});

@@ -162,14 +162,14 @@ private struct PageLoadTrigger: View {
     Group {
       if failed {
         Button("Load more") { failed = false; Task { await load() } }.buttonStyle(PillStyle())
-      } else { ProgressView().controlSize(.small).padding(8) }
+      } else { Color.clear.frame(height: 32) }
     }.frame(maxWidth: .infinity).task { await load() }
   }
   private func load() async {
     guard !loading, !failed else { return }
     loading = true
     defer { loading = false }
-    do { try await action() } catch is CancellationError {} catch { failed = true }
+    do { try await action(); failed = true } catch is CancellationError {} catch { failed = true }
   }
 }
 

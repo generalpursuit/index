@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { connectionsOptions } from "@/features/profiles/queries";
 import { apiFor } from "@/utils/orpc";
+import { canPrefetch } from "@/data/client";
 
 const whenIdle = (task: () => void) =>
   "requestIdleCallback" in window
@@ -19,8 +20,7 @@ export function useWarmUp(viewer: { id: string; username?: string | null } | nul
   const id = viewer?.id,
     username = viewer?.username;
   useEffect(() => {
-    const saveData = (navigator as { connection?: { saveData?: boolean } }).connection?.saveData;
-    if (!id || !username || saveData) return;
+    if (!id || !username || !canPrefetch()) return;
     const warm = () => {
       for (const to of ["/", "/discover", "/activity", "/messages", "/settings"] as const)
         void router.preloadRoute({ to }).catch(() => {});

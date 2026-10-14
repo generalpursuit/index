@@ -45,6 +45,7 @@ export class DesktopHarness {
   pending: { id: number; path: string; recipientId: string | null } | null = null;
   private nextNavigation = 1;
   private queue: Promise<unknown> = Promise.resolve();
+  beforeWindow: (() => void) | undefined;
   async emit(event: string, payload: unknown, target?: string) {
     this.events.push({ event, payload });
     await Promise.all(
@@ -154,7 +155,11 @@ export class DesktopHarness {
           this.appIcon = args.icon;
           return { supported: true, icon: this.appIcon };
         }
-        if (command === "desktop_window") return label;
+        if (command === "desktop_window") {
+          this.beforeWindow?.();
+          this.beforeWindow = undefined;
+          return label;
+        }
         if (command === "desktop_changed") {
           check();
           await this.emit("index:desktop-data", { revision: this.revision, source: label });

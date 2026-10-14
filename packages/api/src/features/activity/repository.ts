@@ -8,11 +8,23 @@ import { linkVisible } from "../../data-access/visibility";
 import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import { publicUserSelection } from "../profiles/repository";
-const visible = (actorId: string) =>
+export const activityVisible = (actorId: string) =>
   and(
     eq(activities.recipientId, actorId),
     sql`(${activities.type} not in ('comment','mention') or exists(select 1 from links where links.id=${activities.linkId} and ${linkVisible(actorId)}))`,
   );
+export const activitySelection = {
+  id: activities.id,
+  type: activities.type,
+  actor: publicUserSelection,
+  createdAt: timestamp(activities.createdAt),
+  readAt: timestamp(activities.readAt),
+  linkId: activities.linkId,
+  linkShortId: sql<string | null>`(select short_id from links where links.id=${activities.linkId})`,
+  commentId: activities.commentId,
+  body: comments.body,
+  requestStatus: activities.requestStatus,
+};
 export function listActivity(
   db: QueryDatabase,
   actorId: string,
@@ -22,26 +34,13 @@ export function listActivity(
 ) {
   return ResultAsync.fromPromise(
     db
-      .select({
-        id: activities.id,
-        type: activities.type,
-        actor: publicUserSelection,
-        createdAt: timestamp(activities.createdAt),
-        readAt: timestamp(activities.readAt),
-        linkId: activities.linkId,
-        linkShortId: sql<
-          string | null
-        >`(select short_id from links where links.id=${activities.linkId})`,
-        commentId: activities.commentId,
-        body: comments.body,
-        requestStatus: activities.requestStatus,
-      })
+      .select(activitySelection)
       .from(activities)
       .innerJoin(user, eq(user.id, activities.actorId))
       .leftJoin(comments, eq(comments.id, activities.commentId))
       .where(
         and(
-          visible(actorId),
+          activityVisible(actorId),
           type ? eq(activities.type, type) : undefined,
           cursor
             ? sql`(${activities.createdAt},${activities.id}) < (${cursor.createdAt}::timestamptz,${cursor.id}::uuid)`
@@ -58,7 +57,7 @@ export function unreadCount(db: QueryDatabase, actorId: string) {
     db
       .select({ count: sql<number>`count(*)::int` })
       .from(activities)
-      .where(and(visible(actorId), isNull(activities.readAt)))
+      .where(and(activityVisible(actorId), isNull(activities.readAt)))
       .then((rows) => rows[0]!.count),
     databaseError,
   );

@@ -31,12 +31,12 @@ private final class HTTPStub: URLProtocol, @unchecked Sendable {
 }
 @Suite(.serialized)
 struct APIClientTests {
-  func make(_ credentials: any CredentialStore = MemoryCredentials()) throws -> APIClient {
+  func make(_ credentials: any CredentialStore = MemoryCredentials(), responses: ResponseCache = ResponseCache()) throws -> APIClient {
     let config = URLSessionConfiguration.ephemeral
     config.protocolClasses = [HTTPStub.self]
     return try APIClient(
       baseURL: URL(string: "https://api.example.com")!, credentials: credentials,
-      session: URLSession(configuration: config))
+      session: URLSession(configuration: config), responses: responses)
   }
   @Test func extensionRejectsAccountChangeAndNeverRotatesOrDeletesHostToken() async throws {
     let credentials = MemoryCredentials("alice.signed")
@@ -56,7 +56,7 @@ struct APIClientTests {
     await #expect(throws: APIError.self) { let _: Success = try await client.request("/test", method: "POST", body: [:]) }
     #expect(try credentials.read() == "bob.signed")
   }
-  @Test func snapshotsAreAccountScopedAndWritesInvalidateThem() async throws {
+  @Test func snapshotsAreAccountScopedAndWritesInvalidateAffectedResources() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
     let _: Success = try await client.request("/private", query: ["a": "1", "b": "2"])
@@ -64,12 +64,28 @@ struct APIClientTests {
     #expect(cached?.success == true)
     let _: Success = try await client.request("/links/test", method: "PATCH", body: [:])
     let afterWrite: Success? = await client.cached("/private", query: ["a": "1", "b": "2"])
-    #expect(afterWrite == nil)
+    #expect(afterWrite?.success == true)
     let _: Success = try await client.request("/private")
     HTTPStub.handler = { _ in throw URLError(.notConnectedToInternet) }
     await #expect(throws: URLError.self) { try await client.signOut() }
     let afterLogout: Success? = await client.cached("/private")
     #expect(afterLogout == nil)
+  }
+  @Test func housekeepingPreservesContentAndLinkWritesKeepMessages() async throws {
+    let client = try make(MemoryCredentials("alice.signed"))
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/links/a")
+    let _: Success = try await client.request("/conversations/a/messages")
+    for path in ["/me/notifications/active", "/conversations/a/read", "/me/activity/read"] {
+      let _: Success = try await client.request(path, method: "POST", body: [:])
+      let content: Success? = client.cached("/links/a")
+      #expect(content?.success == true)
+    }
+    let _: Success = try await client.request("/links/a/favorite", method: "POST", body: [:])
+    let post: Success? = client.cached("/links/a")
+    let messages: Success? = client.cached("/conversations/a/messages")
+    #expect(post == nil)
+    #expect(messages?.success == true)
   }
   @Test func revokedReadsEvictSnapshots() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
@@ -132,7 +148,7 @@ struct APIClientTests {
     config.protocolClasses = [HTTPStub.self]
     let client = try APIClient(
       baseURL: URL(string: "https://api.example.com")!, credentials: credentials,
-      session: URLSession(configuration: config), onUpdateRequired: { signal.fire() })
+      session: URLSession(configuration: config), onUpdateRequired: { signal.fire() }, responses: ResponseCache())
     HTTPStub.handler = { request in
       #expect(request.value(forHTTPHeaderField: "X-Index-Client")?.contains("/") == true)
       return (426, [:], Data(#"{"code":"CLIENT_UPDATE_REQUIRED","message":"Update Index to continue."}"#.utf8))
@@ -150,6 +166,31 @@ struct APIClientTests {
     HTTPStub.handler = { _ in (401, [:], Data(#"{"message":"expired"}"#.utf8)) }
     await #expect(throws: APIError.self) { let _: Success = try await client.request("/private") }
     #expect(try credentials.read() == nil)
+  }
+  @Test func logoutErasesLocallyBeforeSendingItsCapturedCredential() async throws {
+    let credentials = MemoryCredentials("signed.signature")
+    let client = try make(credentials)
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/links/a")
+    HTTPStub.handler = { request in
+      let stored = try credentials.read()
+      #expect(stored == nil)
+      #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer signed.signature")
+      let cached: Success? = client.cached("/links/a")
+      #expect(cached == nil)
+      return (200, [:], Data(#"{"success":true}"#.utf8))
+    }
+    try await client.signOut()
+  }
+  @Test func repeatedExpiredReadsStillReportSessionExpiryAfterCredentialErasure() async throws {
+    let client = try make(MemoryCredentials("expired.signature"))
+    HTTPStub.handler = { _ in (401, [:], Data(#"{"message":"Expired"}"#.utf8)) }
+    for _ in 0..<2 {
+      do {
+        let _: Success = try await client.request("/me/pulse")
+        Issue.record("Expired session unexpectedly succeeded")
+      } catch APIError.unauthenticated {}
+    }
   }
   @Test func offlineLogoutErasesCredentials() async throws {
     let credentials = MemoryCredentials("signed.signature")
@@ -311,6 +352,206 @@ struct APIClientTests {
     #expect(Week.monday(Week.date("2026-01-01")) == "2025-12-29")
     #expect(Week.label("2025-12-29") == "Week 1")
     #expect(Week.shift("2025-12-29", by: 1) == "2026-01-05")
+  }
+  private func coldCache(_ directory: URL) async throws -> ResponseCache {
+    let cache = ResponseCache(directory: directory)
+    await cache.accept(scope: "https://api.example.com", account: "alice")
+    _ = try await cache.load("/me/profile?") {
+      Data(#"{"id":"alice","name":"Alice","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#.utf8)
+    }
+    _ = try await cache.load("/conversations/chat/messages?limit=30") { Data(#"{"success":true}"#.utf8) }
+    return ResponseCache(directory: directory)
+  }
+  private func diskFiles(_ directory: URL) throws -> [String: Data] {
+    let files = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: [.isRegularFileKey])
+    var result: [String: Data] = [:]
+    for case let file as URL in files?.allObjects ?? [] {
+      if try file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile == true {
+        result[file.path] = try Data(contentsOf: file)
+      }
+    }
+    return result
+  }
+  @Test func provisionalLaunchReadsDiskWithoutRequestsOrWritesUntilVerification() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = try await coldCache(directory)
+    let before = try diskFiles(directory)
+    HTTPStub.handler = { _ in Issue.record("Provisional content must not send a request"); throw URLError(.notConnectedToInternet) }
+    let client = try make(MemoryCredentials("alice.signed"), responses: cache)
+    #expect(client.provisionalAccountID == "alice")
+    let profile: Profile? = client.cached("/me/profile")
+    #expect(profile?.name == "Alice")
+    let messages: Success? = client.cached("/conversations/chat/messages", query: ["limit": "30"])
+    #expect(messages?.success == true)
+    for method in ["GET", "POST"] {
+      do { let _: Success = try await client.request("/links/new", method: method); Issue.record("Provisional request unexpectedly succeeded") }
+      catch APIError.sessionNotVerified {}
+    }
+    do { _ = try await client.securityStatus(); Issue.record("Provisional security request unexpectedly succeeded") }
+    catch APIError.sessionNotVerified {}
+    do { _ = try await cache.load("/links/new") { Issue.record("Provisional load invoked transport"); return Data() }; Issue.record("Provisional cache load succeeded") }
+    catch APIError.sessionNotVerified {}
+    #expect(!cache.snapshots.store(Data(), key: "/links/new", version: cache.snapshots.ticket("/links/new")))
+    #expect(try diskFiles(directory) == before)
+    HTTPStub.handler = { request in
+      #expect(request.url?.path == "/api/auth/get-session")
+      return (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#.utf8))
+    }
+    #expect(try await client.restore()?.user.id == "alice")
+    #expect(client.provisionalAccountID == nil)
+    let preserved: Profile? = client.cached("/me/profile")
+    #expect(preserved?.name == "Alice")
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/links/new")
+    let new: Success? = client.cached("/links/new")
+    #expect(new?.success == true)
+  }
+  @Test func transientVerificationKeepsCachedContentAndRememberedAccountForRetry() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = try await coldCache(directory)
+    let client = try make(MemoryCredentials("alice.signed"), responses: cache)
+    let before = try diskFiles(directory)
+    for failure in [URLError(.notConnectedToInternet) as Error, APIError.server(503, "Unavailable")] {
+      HTTPStub.handler = { request in #expect(request.url?.path == "/api/auth/get-session"); throw failure }
+      await #expect(throws: (any Error).self) { try await client.restore() }
+      #expect(client.provisionalAccountID == "alice")
+      let profile: Profile? = client.cached("/me/profile")
+      #expect(profile?.name == "Alice")
+      #expect(try diskFiles(directory) == before)
+    }
+  }
+  @Test func mismatchedVerificationErasesOldContentAndRequiresSignIn() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = try await coldCache(directory)
+    let credentials = MemoryCredentials("bob.signed")
+    let client = try make(credentials, responses: cache)
+    #expect(client.provisionalAccountID == "alice")
+    HTTPStub.handler = { _ in
+      (200, [:], Data(#"{"user":{"id":"bob","name":"Bob","email":"bob@example.com","emailVerified":true}}"#.utf8))
+    }
+    do { _ = try await client.restore(); Issue.record("Mismatched account must sign in again") }
+    catch APIError.unauthenticated {}
+    #expect(try credentials.read() == nil)
+    let old: Profile? = client.cached("/me/profile")
+    #expect(old == nil)
+    #expect(cache.snapshots.provisionalAccount == nil)
+    let relaunched = ResponseCache(directory: directory)
+    #expect(relaunched.snapshots.provision(scope: "https://api.example.com") == nil)
+    #expect(relaunched.snapshot("/me/profile?") == nil)
+    await relaunched.clear()
+    #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://api.example.com") == nil)
+  }
+  @Test func restrictedExpiredAndNullVerificationEraseContentAndRememberedAccount() async throws {
+    for kind in ["restricted", "expired", "null", "forbidden"] {
+      let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let cache = try await coldCache(directory)
+      let credentials = MemoryCredentials("alice.signed")
+      let client = try make(credentials, responses: cache)
+      HTTPStub.handler = { _ in
+        switch kind {
+        case "restricted": (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":false}}"#.utf8))
+        case "expired": (401, [:], Data())
+        case "forbidden": (403, [:], Data(#"{"message":"Restricted session"}"#.utf8))
+        default: (200, [:], Data("null".utf8))
+        }
+      }
+      do {
+        let restored = try await client.restore()
+        #expect(kind == "restricted" ? restored?.user.emailVerified == false : restored == nil)
+      } catch APIError.unauthenticated { #expect(kind == "expired" || kind == "forbidden") }
+      #expect(cache.snapshot("/me/profile?") == nil)
+      #expect(cache.snapshot("/conversations/chat/messages?limit=30") == nil)
+      #expect(client.provisionalAccountID == nil)
+      #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://api.example.com") == nil)
+      #expect(try credentials.read() == (kind == "restricted" ? "alice.signed" : nil))
+    }
+  }
+  @Test func signOutAndInterruptedSignInNeverPairOldCacheWithNewToken() async throws {
+    for operation in ["sign-out", "sign-in"] {
+      let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      let cache = try await coldCache(directory)
+      let credentials = MemoryCredentials("alice.signed")
+      let client = try make(credentials, responses: cache)
+      HTTPStub.handler = { request in
+        #expect(cache.snapshot("/me/profile?") == nil)
+        #expect(try credentials.read() == nil)
+        #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://api.example.com") == nil)
+        if operation == "sign-out" {
+          #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer alice.signed")
+          throw URLError(.notConnectedToInternet)
+        }
+        #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
+        // A signed header can arrive before an invalid/interrupted body is accepted.
+        return (200, ["set-auth-token": "bob.signed"], Data(#"{"invalid":true}"#.utf8))
+      }
+      do {
+        if operation == "sign-out" { try await client.signOut() }
+        else { _ = try await client.signIn(identifier: "bob", password: "password") }
+        Issue.record("Expected interrupted authentication")
+      } catch {}
+      let relaunched = try make(credentials, responses: ResponseCache(directory: directory))
+      #expect(relaunched.provisionalAccountID == nil)
+      let old: Profile? = relaunched.cached("/me/profile")
+      #expect(old == nil)
+    }
+  }
+  @Test func tokenlessLaunchAndShareExtensionDoNotUseRememberedAccount() async throws {
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = try await coldCache(directory)
+    let tokenless = try make(MemoryCredentials(), responses: cache)
+    #expect(tokenless.provisionalAccountID == nil)
+    let profile: Profile? = tokenless.cached("/me/profile")
+    #expect(profile == nil)
+    let before = try diskFiles(directory)
+    let config = URLSessionConfiguration.ephemeral
+    config.protocolClasses = [HTTPStub.self]
+    let share = try APIClient(baseURL: URL(string: "https://api.example.com")!, credentials: MemoryCredentials("alice.signed"), session: URLSession(configuration: config), externallyManagedSession: true)
+    #expect(share.provisionalAccountID == nil)
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#.utf8)) }
+    _ = try await share.restore()
+    try await share.clearSession()
+    #expect(try diskFiles(directory) == before)
+    #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://api.example.com") == "alice")
+  }
+  @Test func lateVerificationCannotRestoreContentOrRotateTokenAfterSignOut() async throws {
+    final class Gate: @unchecked Sendable {
+      private let lock = NSLock()
+      private let finished = DispatchSemaphore(value: 0)
+      private var waiting = false
+      var started: Bool { lock.withLock { waiting } }
+      func pause() {
+        lock.withLock { waiting = true }
+        #expect(finished.wait(timeout: .now() + 10) == .success)
+      }
+      func resume() { finished.signal() }
+    }
+    let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    defer { try? FileManager.default.removeItem(at: directory) }
+    let cache = try await coldCache(directory)
+    let credentials = MemoryCredentials("alice.signed")
+    let client = try make(credentials, responses: cache)
+    let gate = Gate()
+    HTTPStub.handler = { _ in
+      gate.pause()
+      return (200, ["set-auth-token": "late.signed"], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#.utf8))
+    }
+    let verification = Task { try await client.restore() }
+    while !gate.started { await Task.yield() }
+    try await client.clearSession()
+    gate.resume()
+    do { _ = try await verification.value; Issue.record("Late verification unexpectedly restored the session") }
+    catch is CancellationError {}
+    #expect(try credentials.read() == nil)
+    #expect(client.provisionalAccountID == nil)
+    let profile: Profile? = client.cached("/me/profile")
+    #expect(profile == nil)
+    #expect(ResponseCache(directory: directory).snapshots.provision(scope: "https://api.example.com") == nil)
   }
   @Test func restrictedAttachmentHasOnlyAuthorIdentity() throws {
     let json =

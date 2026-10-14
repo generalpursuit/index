@@ -1,3 +1,4 @@
+import { placeholderLink, placeholderProfile } from "@/data/placeholders";
 import { createContext, Fragment, useContext, useRef, useState } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { Link } from "@tanstack/react-router";
@@ -28,7 +29,7 @@ import { useAPI, useViewer } from "@/hooks/use-api";
 import { useProfile } from "@/features/profiles/hooks/use-profiles";
 import { groupOptions } from "@/features/groups/queries";
 import { RecipientPicker, prefetchRecipients } from "@/features/messages/recipient-picker";
-import { useLink, useComments, useLibraryActions } from "./hooks/use-links";
+import { useLink, useComments, useKept, useLibraryActions } from "./hooks/use-links";
 import { categoryMarkClassName } from "./category-mark";
 import { domain } from "./url";
 import { QueryState, More } from "@/components/app/query-state";
@@ -43,6 +44,7 @@ export function LinkDetail({ id, standalone = false }: { id: string; standalone?
   const comments = useComments(id);
   return (
     <QueryState
+      placeholder={<PostPlaceholder />}
       pending={link.isPending}
       hasData={!!link.data}
       error={link.error}
@@ -54,11 +56,18 @@ export function LinkDetail({ id, standalone = false }: { id: string; standalone?
     </QueryState>
   );
 }
+export function PostPlaceholder({ standalone = false }: { standalone?: boolean }) {
+  return (
+    <Post link={placeholderLink} standalone={standalone} comments={useComments("")} placeholder />
+  );
+}
 function Post({
   link,
   standalone,
   comments,
+  placeholder = false,
 }: {
+  placeholder?: boolean;
   link: SavedLink;
   standalone: boolean;
   comments: ReturnType<typeof useComments>;
@@ -71,6 +80,7 @@ function Post({
     input = useRef<HTMLInputElement>(null);
   return (
     <article
+      data-placeholder={placeholder || undefined}
       className={
         "post-detail flex flex-col min-h-0 [&_.post-title]:select-text [&_.post-title]:font-serif [&_.post-title]:font-bold [&_.post-title]:[font-variation-settings:'opsz'_60] [&_.post-title]:tracking-[-0.015em] [&_.post-title]:leading-[1.1] [&_.post-title]:text-[40px] [&_.post-title]:m-[12px_0_0] [&_.post-title]:wrap-anywhere [@media(width<=700px)]:[&_.post-title]:text-[32px] [&_small]:text-subtle-foreground"
       }
@@ -86,16 +96,19 @@ function Post({
           "post-author flex items-center gap-2 min-h-6 mt-3.5 text-[13px] text-subtle-foreground [&_.user-avatar]:w-5.5 [&_.user-avatar]:h-5.5 [&_[data-slot='avatar-fallback']]:text-[10px]"
         }
       >
-        {author.data && (
+        {(author.data || author.isPending) && (
           <>
             <ProfileLink
-              person={author.data}
+              person={author.data ?? placeholderProfile}
+              data-placeholder={author.isPending || undefined}
               className={
-                "person-inline flex items-center gap-2 min-w-0 font-medium text-foreground"
+                "person-inline flex items-center gap-2 min-w-0 w-32 font-medium text-foreground"
               }
             >
-              <UserAvatar person={author.data} />
-              <span className="truncate">{author.data.username ?? author.data.name}</span>
+              <UserAvatar person={author.data ?? placeholderProfile} />
+              <span className="truncate">
+                {author.data?.username ?? author.data?.name ?? "Someone"}
+              </span>
             </ProfileLink>
             <span aria-hidden="true">·</span>
           </>
@@ -114,7 +127,7 @@ function Post({
       <PostActions link={link} group={group} />
       <div
         className={
-          "comments border-t border-t-border mt-7 pt-5 min-h-0 overflow-auto [&_h2]:text-[13px] [&_h2]:font-medium [&_h2]:mb-2"
+          "comments flex-1 border-t border-t-border mt-7 pt-5 min-h-0 overflow-auto [&_h2]:text-[13px] [&_h2]:font-medium [&_h2]:mb-2"
         }
       >
         <h2>Comments</h2>
@@ -217,8 +230,14 @@ function Post({
           }
           onSubmit={(e) => {
             e.preventDefault();
-            if (text.trim())
-              create.mutate({ linkId: link.id, body: text }, { onSuccess: () => setText("") });
+            if (text.trim()) {
+              const submitted = text;
+              setText("");
+              create.mutate(
+                { linkId: link.id, body: submitted },
+                { onError: () => setText((current) => current || submitted) },
+              );
+            }
           }}
         >
           <UserAvatar person={viewer} />
@@ -261,7 +280,7 @@ function PostLabel({ link, group }: { link: SavedLink; group?: Group }) {
   const viewer = useViewer(),
     own = viewer?.id === link.ownerId,
     { collect } = useLibraryActions();
-  const kept = own ? link.isFavorite : link.isStarred;
+  const { kept, changing } = useKept(link, own);
   const parts = [
     link.category !== "uncategorized" && (
       <span className={"inline-flex items-center gap-2"}>
@@ -286,7 +305,7 @@ function PostLabel({ link, group }: { link: SavedLink; group?: Group }) {
         }
         aria-pressed={kept}
         // One change at a time: the next one is decided from this one's result.
-        disabled={collect.isPending}
+        disabled={changing}
         onClick={() => collect.mutate({ link, own })}
       >
         {own ? (

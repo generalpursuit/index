@@ -1,5 +1,12 @@
 import { Button } from "@index/ui/components/button";
-import type { ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+
+const PendingPageContext = createContext(false);
+/** The router has already waited 300 ms before mounting a page's pending component. */
+export function PendingPage({ children }: { children: ReactNode }) {
+  return <PendingPageContext.Provider value>{children}</PendingPageContext.Provider>;
+}
+export const usePendingPage = () => useContext(PendingPageContext);
 
 export function QueryState({
   pending,
@@ -17,20 +24,38 @@ export function QueryState({
   placeholder?: ReactNode;
   children?: ReactNode;
 }) {
-  if (pending && !hasData && placeholder) return placeholder;
-  // Hidden for the first 300ms, so a quick load goes straight to its content.
-  if (pending && !hasData)
+  const alreadyWaited = usePendingPage();
+  const [held, setHeld] = useState(false);
+  const revealed = useRef(0);
+  const missing = !!pending && !hasData;
+  useEffect(() => {
+    if (missing) {
+      const timer = setTimeout(
+        () => {
+          revealed.current = Date.now();
+          setHeld(true);
+        },
+        alreadyWaited ? 0 : 300,
+      );
+      return () => clearTimeout(timer);
+    }
+    if (!revealed.current) return;
+    const timer = setTimeout(
+      () => setHeld(false),
+      Math.max(0, 400 - (Date.now() - revealed.current)),
+    );
+    return () => clearTimeout(timer);
+  }, [missing, alreadyWaited]);
+  if (missing || held)
     return (
       <div
-        className={
-          "loading-state grid gap-4 p-[24px_0] w-full [animation:loading-reveal_1ms_300ms_backwards] [&>div]:h-12 [&>div]:bg-surface [&>div]:rounded-[12px] [&>div]:[animation:loading-pulse_1.5s_ease-in-out_infinite]"
-        }
+        className="content-placeholder"
+        data-ready={alreadyWaited || held || undefined}
+        data-placeholder
         role="status"
         aria-label="Loading"
       >
-        <div />
-        <div />
-        <div />
+        {placeholder ?? children}
       </div>
     );
   if (error && hasData && !("status" in error && [401, 403, 404].includes(Number(error.status))))

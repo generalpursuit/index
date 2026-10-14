@@ -2,11 +2,75 @@ import { comments, groups, links, stars } from "@index/db/schema/app";
 import { eq } from "drizzle-orm";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import { encodeCursor } from "../../pagination";
 import { setupApiTests } from "../../testing/api";
 
 describe("groups and link organization", () => {
   const api = setupApiTests();
   const input = { url: "https://example.com/read", title: "Read" };
+
+  it("creates only missing system groups on the first owner read", async (t) => {
+    const alice = api.client("alice");
+    const starred = await alice.stars.group();
+    const statements = t.mock.method(api.postgres, "query");
+    const first = await alice.groups.list({});
+    assert.deepEqual(
+      first.items.map((group) => group.kind),
+      ["favorites", "starred"],
+    );
+    assert.equal(first.items[1]!.id, starred.id);
+    assert.equal(
+      statements.mock.calls.filter((call) => /^insert /i.test(String(call.arguments[0]))).length,
+      1,
+    );
+    const before = statements.mock.callCount();
+    assert.deepEqual(await alice.groups.list({}), first);
+    assert.equal(statements.mock.callCount() - before, 1);
+    await api.client("bob").groups.list({ ownerId: "carol" });
+    assert.equal((await api.db.select().from(groups)).length, 2);
+  });
+
+  it("never writes during existing system-group reads, including pages that omit them", async (t) => {
+    const alice = api.client("alice");
+    await alice.groups.list({});
+    await alice.groups.create({ name: "Newer" });
+    const statements = t.mock.method(api.postgres, "query");
+    const first = await alice.groups.list({ limit: 1 });
+    assert.equal(first.items[0]!.kind, "custom");
+    assert.equal(statements.mock.callCount(), 1);
+    let page = first;
+    while (page.nextCursor) {
+      const before = statements.mock.callCount();
+      page = await alice.groups.list({ limit: 1, cursor: page.nextCursor });
+      assert.equal(statements.mock.callCount() - before, 1);
+    }
+    const last = page.items.at(-1)!;
+    assert.deepEqual(await alice.groups.list({ cursor: encodeCursor(last) }), {
+      items: [],
+      nextCursor: null,
+    });
+    await alice.stars.group();
+    await alice.stars.list({});
+    await alice.favorites.group();
+    await alice.favorites.list({});
+    await alice.routes.resolve({ path: "/u/alice/starred" });
+    await alice.routes.resolve({ path: "/u/alice/favorites" });
+    for (const call of statements.mock.calls)
+      assert.match(String(call.arguments[0]), /^select|^with/i);
+  });
+
+  for (const kind of ["starred", "favorites"] as const) {
+    it(`creates missing ${kind} on the first route read and then preserves its identity without writes`, async (t) => {
+      const alice = api.client("alice");
+      const first = await alice.routes.resolve({ path: `/u/alice/${kind}` });
+      const statements = t.mock.method(api.postgres, "query");
+      assert.deepEqual(await alice.routes.resolve({ path: `/u/alice/${kind}` }), first);
+      const group = kind === "starred" ? await alice.stars.group() : await alice.favorites.group();
+      assert.equal(first.kind, "group");
+      if (first.kind === "group") assert.equal(first.groupId, group.id);
+      for (const call of statements.mock.calls) assert.match(String(call.arguments[0]), /^select/i);
+    });
+  }
 
   it("only lets the owner edit or delete a link, and cascades a direct deletion", async () => {
     const alice = api.client("alice");

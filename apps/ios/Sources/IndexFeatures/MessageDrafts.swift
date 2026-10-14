@@ -46,7 +46,7 @@ public struct MessageDraft: Sendable {
   }
   mutating func recover(from error: Error) {
     // Only definite validation rejection permits changing the attempted payload.
-    if case APIError.server(let status, _) = error, (400..<500).contains(status) { pending = nil }
+    if rejectsMessage(error) { pending = nil }
   }
 }
 public enum DraftError: LocalizedError {
@@ -83,21 +83,34 @@ public final class MessageDrafts {
     values = [:]
     sending = []
   }
-  public func send(in conversationID: String, api: any FeatureAPI) async throws {
+  public func send(in conversationID: String, api: any FeatureAPI,
+                   started: (PendingMessage, MessageDraft) -> Void = { _, _ in },
+                   completed: (Message) -> Void = { _ in },
+                   failed: (PendingMessage, Error) -> Void = { _, _ in }) async throws {
     guard !sending.contains(conversationID) else { return }
     let pending = try values[conversationID, default: MessageDraft()].prepare()
     let version = generation
     sending.insert(conversationID)
+    started(pending, draft(for: conversationID))
     defer { if version == generation { sending.remove(conversationID) } }
     do {
-      let _: Message = try await api.write("/conversations/\(conversationID)/messages", body: pending.payload)
+      let saved: Message = try await api.write("/conversations/\(conversationID)/messages", body: pending.payload)
       try Task.checkCancellation()
       guard version == generation else { throw CancellationError() }
+      completed(saved)
       values[conversationID] = nil
     } catch {
       guard version == generation else { throw CancellationError() }
+      failed(pending, error)
       values[conversationID]?.recover(from: error)
       throw error
     }
   }
+}
+
+func rejectsMessage(_ error: Error) -> Bool {
+  guard case APIError.server(let status, _) = error else { return false }
+  // Timeout and throttling responses do not prove that an intermediary or delayed
+  // operation did not commit. Keep the same identity for those uncertain outcomes.
+  return [400, 403, 404, 409, 422].contains(status)
 }

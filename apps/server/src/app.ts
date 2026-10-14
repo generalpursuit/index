@@ -23,7 +23,7 @@ export function createApp(options: AppOptions) {
     cors({
       origin: options.origins,
       allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization", clientHeader],
+      allowHeaders: ["Content-Type", "Authorization", clientHeader, "X-ORPC-Batch"],
       exposeHeaders: ["set-auth-token"],
       credentials: true,
     }),

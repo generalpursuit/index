@@ -184,6 +184,7 @@ function useFittedPanel(
       // The page's own height, whatever the window's. Measuring it in a window that is too short
       // reads the squeezed layout, which asks for the same short window again. It takes its own
       // height only within this task, so that layout is never drawn.
+      if (shown) shown.style.maxHeight = "";
       page.style.bottom = "auto";
       const natural = page.getBoundingClientRect().height,
         listed = shown?.getBoundingClientRect().height ?? 0;
@@ -192,7 +193,9 @@ function useFittedPanel(
       if (!shown || natural <= max) return natural;
       const row = parseFloat(getComputedStyle(shown).getPropertyValue("--row"));
       const around = natural - listed;
-      return around + Math.floor((max - around) / row) * row;
+      const listedHeight = Math.floor((max - around) / row) * row;
+      shown.style.maxHeight = listedHeight + "px";
+      return around + listedHeight;
     };
     const measure = () => {
       // Measured from its trigger: until the panel is tall enough, the menu may sit elsewhere.

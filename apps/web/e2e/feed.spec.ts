@@ -201,7 +201,8 @@ test("a long week loads as you reach its end and shows links you add", async ({ 
   expect(await page.evaluate(() => (window as any).listPositions)).toEqual([]);
   // The feed brings the first 20; the rest arrive when the end comes near, without a button.
   await page.reload();
-  await expect(rows).toHaveCount(20);
+  // Reload restores the loaded pages rather than reducing the list to its first page.
+  await expect(rows).toHaveCount(22);
   await list.evaluate((el) => (el.scrollTop = el.scrollHeight));
   await expect(rows).toHaveCount(22);
   await expect(list.getByRole("button", { name: "Load more" })).toHaveCount(0);

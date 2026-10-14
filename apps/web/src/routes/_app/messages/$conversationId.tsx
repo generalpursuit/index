@@ -1,7 +1,8 @@
+import { PendingPage } from "@/components/app/query-state";
 import { resolveLocation, linkReferencePath, routeHint } from "@/lib/routes";
 import { client } from "@/utils/orpc";
 import { conversationOptions, messagesOptions } from "@/features/messages/queries";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { z } from "zod";
 import { ConversationPage } from "@/features/messages/messages-page";
 import { requireSession } from "@/lib/session";
@@ -28,6 +29,7 @@ export const Route = createFileRoute("/_app/messages/$conversationId")({
     const [attached] = await Promise.all([attachment, load(result.conversationId)]);
     return { ...result, attach: attached?.kind === "link" ? attached.linkId : undefined };
   },
+  pendingComponent: PendingConversation,
   component: () => (
     <ConversationPage
       key={Route.useLoaderData().conversationId}
@@ -36,3 +38,11 @@ export const Route = createFileRoute("/_app/messages/$conversationId")({
     />
   ),
 });
+function PendingConversation() {
+  const id = useRouterState({ select: (state) => state.location.state.conversationId });
+  return (
+    <PendingPage>
+      <ConversationPage id={id ?? ""} />
+    </PendingPage>
+  );
+}

@@ -136,7 +136,7 @@ test("a held restricted-session response body cannot reset a newer browser accou
       void clearAccountState(client);
     },
   );
-  const old = transport("https://api.example.com/rpc/v1/profiles/me");
+  const old = transport("https://api.example.com/api/v1/profiles/me");
   await headers;
   // Yield until the response header check has passed and the JSON body is pending.
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -149,7 +149,7 @@ test("a held restricted-session response body cannot reset a newer browser accou
   client.clear();
 });
 
-test("both oRPC envelopes and REST errors signal current-session verification", async () => {
+test("auth and REST errors signal current-session verification", async () => {
   const { createSessionEventFetch } = await import("../src/lib/session-events");
   for (const body of [
     { data: { code: "EMAIL_NOT_VERIFIED" } },
@@ -162,7 +162,37 @@ test("both oRPC envelopes and REST errors signal current-session verification", 
         events.push(event);
       },
     );
-    await transport("https://api.example.com/rpc/v1/routes/resolve");
+    await transport("https://api.example.com/api/v1/routes/resolve");
     assert.deepEqual(events, ["index:verification-required"]);
   }
+});
+
+test("RPC auth failures leave notification to the decoded link result", async () => {
+  const { createSessionEventFetch } = await import("../src/lib/session-events");
+  for (const status of [401, 403]) {
+    const events: string[] = [];
+    const transport = createSessionEventFetch(
+      (async () =>
+        Response.json({ data: { code: "EMAIL_NOT_VERIFIED" } }, { status })) as typeof fetch,
+      (event) => {
+        events.push(event);
+      },
+    );
+    await transport("https://api.example.com/rpc/v1/profiles/me");
+    assert.deepEqual(events, []);
+  }
+});
+
+test("a failed disk-clear listener cannot prevent synchronous account isolation", async () => {
+  const { onAccountClear } = await import("../src/lib/account-boundary");
+  const cache = new QueryClient();
+  cache.setQueryData(["session"], alice);
+  cache.setQueryData(["private"], "secret");
+  const unsubscribe = onAccountClear(() => Promise.reject(new Error("storage disabled")));
+  const clearing = clearAccountState(cache);
+  assert.equal(cache.getQueryData(["private"]), undefined);
+  assert.equal(cache.getQueryData(["session"]), null);
+  await clearing;
+  unsubscribe();
+  cache.clear();
 });

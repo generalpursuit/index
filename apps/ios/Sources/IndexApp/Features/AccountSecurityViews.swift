@@ -183,7 +183,7 @@ struct AccountSecurityView: View {
             try await api.changePassword(currentPassword: password, newPassword: newPassword)
             password = ""; newPassword = ""; confirmation = ""
             message = "Password changed. Other sessions have been signed out."
-            try await refresh()
+            await app.securityChanged()
           } label: { Text("Save password") }
             .buttonStyle(PillStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
         }
@@ -195,7 +195,7 @@ struct AccountSecurityView: View {
             guard let api = app.api else { throw APIError.invalidServer }
             try await api.confirmEmailChange(code: code)
             code = ""; message = "Email changed. Other sessions have been signed out."
-            try await refresh()
+            await app.securityChanged()
           } label: { Text("Confirm new email") }.buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
         }
         if !message.isEmpty { Text(message).foregroundStyle(IndexPalette.mutedForeground).accessibilityAddTraits(.updatesFrequently) }

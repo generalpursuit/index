@@ -1,3 +1,4 @@
+import { PendingPage } from "@/components/app/query-state";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 import { ProfilePage } from "@/features/profiles/profile-page";
@@ -16,5 +17,10 @@ export const Route = createFileRoute("/_app/u/$username/")({
     await preloadProfile(context, result.userId);
     return result;
   },
+  pendingComponent: () => (
+    <PendingPage>
+      <ProfilePage userId="" />
+    </PendingPage>
+  ),
   component: () => <ProfilePage userId={Route.useLoaderData().userId} />,
 });

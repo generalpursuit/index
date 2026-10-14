@@ -28,37 +28,38 @@ export function weekFeed(
   actorId: string,
   input: { weekStart: string; after?: string; limit: number; linkLimit: number },
 ) {
-  return repository
-    .weekAuthors(db, actorId, input.weekStart, input.limit + 1, input.after)
-    .andThen((authors) => {
-      const shown = authors.slice(0, input.limit);
-      return ResultAsync.combine([
-        repository.neighborWeeks(db, actorId, input.weekStart),
-        repository.weekLinks(
-          db,
-          actorId,
-          [actorId, ...shown.map((author) => author.id)],
-          input.weekStart,
-          input.linkLimit,
-        ),
-      ]).map(([neighbors, rows]) => ({
-        weekStart: input.weekStart,
-        // Navigation skips empty weeks, but the current week is always reachable for adding.
-        olderWeek: neighbors.older,
-        newerWeek:
-          input.weekStart < currentWeekStart() ? (neighbors.newer ?? currentWeekStart()) : null,
-        own: toPage(
-          rows.filter((link) => link.ownerId === actorId),
-          input.linkLimit,
-        ),
-        people: shown.map((author) => ({
-          author,
-          links: toPage(
-            rows.filter((link) => link.ownerId === author.id),
+  return ResultAsync.combine([
+    repository.neighborWeeks(db, actorId, input.weekStart),
+    repository
+      .weekAuthors(db, actorId, input.weekStart, input.limit + 1, input.after)
+      .andThen((authors) =>
+        repository
+          .weekLinks(
+            db,
+            actorId,
+            [actorId, ...authors.slice(0, input.limit).map((author) => author.id)],
+            input.weekStart,
             input.linkLimit,
-          ),
-        })),
-        nextAfter: authors.length > input.limit ? shown.at(-1)!.id : null,
-      }));
-    });
+          )
+          .map((rows) => ({ authors, rows })),
+      ),
+  ]).map(([neighbors, { authors, rows }]) => ({
+    weekStart: input.weekStart,
+    // Navigation skips empty weeks, but the current week is always reachable for adding.
+    olderWeek: neighbors.older,
+    newerWeek:
+      input.weekStart < currentWeekStart() ? (neighbors.newer ?? currentWeekStart()) : null,
+    own: toPage(
+      rows.filter((link) => link.ownerId === actorId),
+      input.linkLimit,
+    ),
+    people: authors.slice(0, input.limit).map((author) => ({
+      author,
+      links: toPage(
+        rows.filter((link) => link.ownerId === author.id),
+        input.linkLimit,
+      ),
+    })),
+    nextAfter: authors.length > input.limit ? authors[input.limit - 1]!.id : null,
+  }));
 }

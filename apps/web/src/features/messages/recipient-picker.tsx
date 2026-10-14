@@ -1,5 +1,9 @@
+import { canPrefetch } from "@/data/client";
+import { placeholderProfile } from "@/data/placeholders";
+import { seedConversation } from "@/data/seeding";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChatAvatars, conversationName } from "./conversation-presentation";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
@@ -16,7 +20,7 @@ import { useViewer, useAPI } from "@/hooks/use-api";
 import { useDebounced } from "@/hooks/use-debounced";
 import { useConnections } from "@/features/profiles/hooks/use-profiles";
 import { useConversations, useMessageActions } from "./hooks/use-messages";
-import type { SavedLink } from "@/lib/types";
+import type { Person, SavedLink } from "@/lib/types";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const personLabelClassName =
@@ -30,6 +34,7 @@ export function prefetchRecipients(
   api: ReturnType<typeof useAPI>,
   viewerId: string,
 ) {
+  if (!canPrefetch()) return;
   void cache.prefetchInfiniteQuery(connectionsOptions(api, viewerId, "following"));
   void cache.prefetchInfiniteQuery(conversationsOptions(api));
 }
@@ -84,6 +89,7 @@ function Recipients({
   onOpen?: () => void;
   footer: (next: ReactNode) => ReactNode;
 }) {
+  const cache = useQueryClient();
   const viewer = useViewer()!,
     navigate = useNavigate(),
     api = useAPI();
@@ -100,7 +106,8 @@ function Recipients({
     { start } = useMessageActions();
   const recipients = people.data?.pages.flatMap((page) => page.items) ?? [];
   const singleRecipient = recipients.length === 1 && !people.hasNextPage && !selected.length;
-  const open = (chat: { id: string; shortId: string }) => {
+  const open = (chat: import("@/lib/types").Conversation) => {
+    seedConversation(cache, api, chat);
     onOpen?.();
     void navigate({
       to: "/messages/$conversationId",
@@ -129,54 +136,36 @@ function Recipients({
         }
       >
         <QueryState
+          placeholder={
+            <>
+              {[0, 1, 2, 3].map((key) => (
+                <RecipientRow key={key} disabled />
+              ))}
+            </>
+          }
           pending={people.isPending}
           hasData={!!people.data}
           error={people.error}
           retry={() => void people.refetch()}
         >
-          {recipients.map((person) => {
-            const identity = (
-              <>
-                <UserAvatar person={person} />
-                <span className={personLabelClassName}>
-                  <strong id={"recipient-" + person.id}>{person.name}</strong>
-                  <small>@{person.username ?? person.name}</small>
-                </span>
-              </>
-            );
-            if (singleRecipient)
-              return (
-                <Button
-                  variant="ghost"
-                  className={recipientRowClassName}
-                  key={person.id}
-                  disabled={start.isPending}
-                  onClick={() => start.mutate({ recipientIds: [person.id] }, { onSuccess: open })}
-                >
-                  {identity}
-                </Button>
-              );
-            return (
-              <label className={recipientRowClassName} key={person.id}>
-                {identity}
-                <Checkbox
-                  className={
-                    "recipient-select rounded-[50%] [@media(hover:_hover)_and_(pointer:_fine)]:opacity-[0] [@media(hover:_hover)_and_(pointer:_fine)]:[&[data-checked]]:opacity-[1]"
-                  }
-                  aria-labelledby={"recipient-" + person.id}
-                  disabled={
-                    start.isPending || (!selected.includes(person.id) && selected.length >= 19)
-                  }
-                  checked={selected.includes(person.id)}
-                  onCheckedChange={(checked) =>
-                    setSelected((old) =>
-                      checked ? [...old, person.id] : old.filter((id) => id !== person.id),
-                    )
-                  }
-                />
-              </label>
-            );
-          })}
+          {recipients.map((person) => (
+            <RecipientRow
+              key={person.id}
+              person={person}
+              disabled={start.isPending || (!selected.includes(person.id) && selected.length >= 19)}
+              checked={selected.includes(person.id)}
+              onOpen={
+                singleRecipient
+                  ? () => start.mutate({ recipientIds: [person.id] }, { onSuccess: open })
+                  : undefined
+              }
+              onSelect={(checked) =>
+                setSelected((old) =>
+                  checked ? [...old, person.id] : old.filter((id) => id !== person.id),
+                )
+              }
+            />
+          ))}
           {people.data?.pages[0]?.items.length === 0 && (
             <p
               className={
@@ -227,5 +216,55 @@ function Recipients({
         ),
       )}
     </>
+  );
+}
+
+/** The selectable row keeps the same avatar, label and control while its identity loads. */
+function RecipientRow({
+  person,
+  disabled,
+  checked = false,
+  onOpen,
+  onSelect,
+}: {
+  person?: Person;
+  disabled: boolean;
+  checked?: boolean;
+  onOpen?: () => void;
+  onSelect?: (checked: boolean) => void;
+}) {
+  const id = useId();
+  const shown = person ?? placeholderProfile;
+  const identity = (
+    <>
+      <UserAvatar person={shown} />
+      <span className={personLabelClassName}>
+        <strong id={id}>{shown.name}</strong>
+        <small>@{shown.username ?? shown.name}</small>
+      </span>
+    </>
+  );
+  if (onOpen)
+    return (
+      <Button
+        variant="ghost"
+        className={recipientRowClassName}
+        disabled={disabled}
+        onClick={onOpen}
+      >
+        {identity}
+      </Button>
+    );
+  return (
+    <label className={recipientRowClassName} data-placeholder={!person || undefined}>
+      {identity}
+      <Checkbox
+        className="recipient-select rounded-[50%] [@media(hover:_hover)_and_(pointer:_fine)]:opacity-[0] [@media(hover:_hover)_and_(pointer:_fine)]:[&[data-checked]]:opacity-[1]"
+        aria-labelledby={id}
+        disabled={disabled}
+        checked={checked}
+        onCheckedChange={onSelect}
+      />
+    </label>
   );
 }

@@ -6,24 +6,22 @@ import type { SendMessageInput } from "./schemas";
 import * as repository from "./repository";
 
 export function getConversation(db: QueryDatabase, actorId: string, id: string) {
-  return repository
-    .findConversation(db, actorId, id)
-    .andThen((row) => (row ? ok(row) : err(notFound("Conversation"))))
-    .andThen((row) =>
-      ResultAsync.combine([
-        repository.participants(db, actorId, id),
-        repository.listMessages(db, actorId, id, 1),
-      ]).map(([participants, messages]) => ({
-        id: row.id,
-        shortId: row.shortId,
-        updatedAt: row.createdAt,
-        canSend: row.canSend,
-        unreadCount: row.unreadCount,
-        readReceiptMessageId: row.readReceiptMessageId,
-        participants,
-        lastMessage: messages[0] ?? null,
-      })),
-    );
+  return ResultAsync.combine([
+    repository
+      .findConversation(db, actorId, id)
+      .andThen((row) => (row ? ok(row) : err(notFound("Conversation")))),
+    repository.participants(db, actorId, id),
+    repository.listMessages(db, actorId, id, 1),
+  ]).map(([row, participants, messages]) => ({
+    id: row.id,
+    shortId: row.shortId,
+    updatedAt: row.createdAt,
+    canSend: row.canSend,
+    unreadCount: row.unreadCount,
+    readReceiptMessageId: row.readReceiptMessageId,
+    participants,
+    lastMessage: messages[0] ?? null,
+  }));
 }
 export function createConversation(db: QueryDatabase, actorId: string, recipientIds: string[]) {
   if (recipientIds.includes(actorId))
@@ -72,13 +70,12 @@ export function listMessages(
   input: { conversationId: string; limit: number; cursor?: string },
 ) {
   return (input.cursor ? decodeCursor(input.cursor) : ok(undefined)).asyncAndThen((cursor) =>
-    repository
-      .findConversation(db, actorId, input.conversationId)
-      .andThen((row) => (row ? ok(row) : err(notFound("Conversation"))))
-      .andThen(() =>
-        repository.listMessages(db, actorId, input.conversationId, input.limit + 1, cursor),
-      )
-      .map((rows) => toPage(rows, input.limit)),
+    ResultAsync.combine([
+      repository
+        .findConversation(db, actorId, input.conversationId)
+        .andThen((row) => (row ? ok(row) : err(notFound("Conversation")))),
+      repository.listMessages(db, actorId, input.conversationId, input.limit + 1, cursor),
+    ]).map(([, rows]) => toPage(rows, input.limit)),
   );
 }
 export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessageInput) {

@@ -2,6 +2,7 @@ import { notificationsContract } from "./features/notifications/contract";
 import { routesContract } from "./features/routes/contract";
 import { activityContract } from "./features/activity/contract";
 import { messagesContract } from "./features/messages/contract";
+import { pulseContract } from "./features/pulse/contract";
 import { favoritesContract } from "./features/favorites/contract";
 import { oc, type ContractRouterClient } from "@orpc/contract";
 import { z } from "zod";
@@ -30,6 +31,7 @@ export const appContract = {
   stars: starsContract,
   activity: activityContract,
   messages: messagesContract,
+  pulse: pulseContract,
   favorites: favoritesContract,
   comments: commentsContract,
   feed: feedContract,

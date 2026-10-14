@@ -1,6 +1,6 @@
 import { err, ok, okAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
-import { notFound } from "../../errors";
+import { notFound, type ApplicationError } from "../../errors";
 import { decodeCursor, toPage } from "../../pagination";
 import * as repository from "./repository";
 import type { CreateGroupInput, UpdateGroupInput } from "./schemas";
@@ -39,15 +39,16 @@ export function listGroups(
   cursor?: string,
 ) {
   const decoded = cursor ? decodeCursor(cursor) : ok(undefined);
-  return decoded.asyncAndThen((value) => {
-    const ready =
-      viewerId === ownerId
-        ? repository
-            .ensureSystemGroup(db, ownerId, "starred")
-            .andThen(() => repository.ensureSystemGroup(db, ownerId, "favorites"))
-        : okAsync(undefined);
-    return ready
-      .andThen(() => repository.listGroups(db, viewerId, ownerId, limit + 1, value))
-      .map((rows) => toPage(rows, limit));
-  });
+  return decoded.asyncAndThen((value) =>
+    repository.listGroups(db, viewerId, ownerId, limit + 1, value).andThen((page) => {
+      if (!page.missingSystemGroups.length) return ok(toPage(page.items, limit));
+      let ready = okAsync<void, ApplicationError>(undefined);
+      for (const kind of page.missingSystemGroups) {
+        ready = ready.andThen(() => repository.ensureSystemGroup(db, ownerId, kind));
+      }
+      return ready
+        .andThen(() => repository.listGroups(db, viewerId, ownerId, limit + 1, value))
+        .map((page) => toPage(page.items, limit));
+    }),
+  );
 }
