@@ -489,6 +489,9 @@ public final class AccountStore {
     defer { if version == generation { pendingEdits.remove(key) } }
     let old = profiles[person.id + ":all"]?.profile?.followingStatus ?? person.followingStatus
     let next = old == nil ? (person.profileVisibility == .private ? "pending" : "accepted") : nil
+    let oldProfiles = profiles.values.compactMap { model in
+      model.profile.flatMap { $0.id == person.id ? (model, $0) : nil }
+    }
     let list = connectionLists["following"]
     let removedAt = old == nil ? nil : list?.remove(person.id)
     let removedPeople = old == nil ? [] : feeds.values.compactMap { model in
@@ -508,6 +511,7 @@ public final class AccountStore {
       try check(version)
       patchFollow(id: person.id, status: old, previous: next)
       if !removesDisplayedContent(error) {
+        for (model, profile) in oldProfiles { model.patchProfile(profile) }
         if let removedAt { list?.restore(person, at: removedAt) }
         for (model, index, person) in removedPeople { model.restorePerson(person, at: index) }
       }
@@ -526,13 +530,14 @@ public final class AccountStore {
     defer { if version == generation { pendingEdits.remove(key) } }
     let list = connectionLists["followers"]
     let index = list?.remove(person.id)
-    patchFollowerCount(-1)
+    let delta = profile.followerCount == 0 ? 0 : -1
+    patchFollowerCount(delta)
     do {
       let _: Success = try await api.write("/me/followers/\(person.id)", method: "DELETE")
       try check(version)
     } catch {
       try check(version)
-      patchFollowerCount(1)
+      patchFollowerCount(-delta)
       if !removesDisplayedContent(error), let index { list?.restore(person, at: index) }
       throw error
     }

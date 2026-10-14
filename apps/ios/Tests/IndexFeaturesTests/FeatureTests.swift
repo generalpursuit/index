@@ -932,6 +932,7 @@ final class ResourceRegressionTests: XCTestCase {
     XCTAssertEqual(list.people.map(\.id), ["them"])
     XCTAssertEqual(store.profile.followingCount, 2)
     XCTAssertEqual(other.profile?.followingStatus, "accepted")
+    XCTAssertEqual(other.profile?.linkCount, 5)
     await api.enqueue("/profiles/them/follow", #"{"success":true}"#)
     let privateLink: SavedLink = try decode(link("private").replacingOccurrences(of: #""ownerId":"me""#, with: #""ownerId":"them""#))
     let detail = store.link("private", opening: privateLink)

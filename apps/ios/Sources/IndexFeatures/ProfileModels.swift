@@ -175,12 +175,11 @@ public final class ConnectionsModel {
   public var after: String? { pages.cursor }
   public var error: String? { pages.error }
   public var hasLoaded: Bool { pages.hasLoaded }
-  private var generation = 0
   public init(api: any FeatureAPI, account: String, kind: String) {
     let page: PeoplePage? = api.snapshot("/profiles/\(account)/\(kind)", query: ["limit": "30"])
     pages.restore(key: kind, page: page.map { CursorPage(items: $0.items, next: $0.nextAfter) })
   }
-  public func clear() { generation += 1; pages.reset() }
+  public func clear() { pages.reset() }
   public func load(api: any FeatureAPI, account: String, kind: String, more: Bool = false) async throws {
     try await pages.load(key: kind, more: more, cached: { nil }, fetch: { after in
       var query = ["limit": "30"]
