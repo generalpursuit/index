@@ -36,12 +36,13 @@ public enum JSONValue: Encodable, Sendable {
 /// Session cookies are disabled; credentials never enter UserDefaults or URLs.
 public actor APIClient {
   public nonisolated let baseURL: URL
-  private let credentials: any CredentialStore
+  private nonisolated let credentials: any CredentialStore
   private let session: URLSession
   private var token: String?
-  private let externallyManagedSession: Bool
+  private nonisolated let externallyManagedSession: Bool
   private var generation = 0
-  private let responses = ResponseCache()
+  private nonisolated let responses: ResponseCache
+  private nonisolated let initialToken: String?
   private let onUpdateRequired: (@Sendable () -> Void)?
   /// Identifies this release so the API can ask unsupported clients to update. The macOS
   /// Share extension ships inside the desktop app and shares its version.
@@ -63,6 +64,9 @@ public actor APIClient {
     self.onUpdateRequired = onUpdateRequired
     self.credentials = credentials
     self.token = try credentials.read()
+    self.initialToken = self.token
+    let directory = externallyManagedSession ? nil : FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?.appendingPathComponent("Index/Responses", isDirectory: true)
+    self.responses = ResponseCache(directory: directory)
     let config = URLSessionConfiguration.ephemeral
     config.httpCookieStorage = nil
     config.httpShouldSetCookies = false
@@ -75,7 +79,7 @@ public actor APIClient {
     body: [String: JSONValue]? = nil
   ) async throws -> T {
     if method == "GET" {
-      let key = responseKey(path, query: query)
+      let key = Self.responseKey(path, query: query)
       let version = generation
       var data: Data
       while true {
@@ -105,19 +109,35 @@ public actor APIClient {
         throw APIError.invalidResponse
       }
     }
-    // Read receipts do not change post, profile or message content. Other writes may
-    // change access, so discard snapshots both before and after an uncertain outcome.
-    let receipt = path.hasSuffix("/read")
-    if !receipt { await responses.clear() }
+    let affected = Self.affectedResources(path)
+    await responses.invalidate(affected)
+    let version = generation
     do {
       let value: T = try await perform("/api/v1" + path, method: method, query: query, body: body)
-      if !receipt { await responses.clear() }
+      guard version == generation else { throw CancellationError() }
+      await responses.invalidate(affected)
       try checkExternalSession()
       return value
     } catch {
-      if !receipt { await responses.clear() }
+      if version == generation { await responses.invalidate(affected) }
       throw error
     }
+  }
+  /// Resource ownership is the single home for transport invalidation. Housekeeping
+  /// never invalidates content; mutations affecting membership invalidate those lists.
+  private static func affectedResources(_ path: String) -> [String] {
+    if path.hasPrefix("/me/notifications/") || path.hasSuffix("/read") { return [] }
+    if path.hasPrefix("/conversations") { return ["/conversations"] }
+    if path.hasPrefix("/links") || path.hasPrefix("/comments") {
+      return ["/links", "/feed", "/profiles", "/groups", "/me/activity"]
+    }
+    if path.hasPrefix("/groups") { return ["/groups", "/links", "/feed", "/profiles"] }
+    if path.hasPrefix("/profiles") || path.hasPrefix("/me/follow-requests") {
+      return ["/profiles", "/me/profile", "/feed", "/discovery", "/me/activity"]
+    }
+    if path == "/me/profile" { return ["/me/profile", "/profiles", "/feed", "/discovery"] }
+    if path.hasPrefix("/me/import") { return ["/links", "/feed", "/profiles", "/groups"] }
+    return [path]
   }
   public func signIn(identifier: String, password: String) async throws -> AuthSession {
     // Better Auth signs in by email and by username at separate endpoints.
@@ -143,6 +163,7 @@ public actor APIClient {
     let result: AuthSession = try await perform(path, method: "POST", body: body)
     guard generation == version else { throw CancellationError() }
     guard token != nil else { throw APIError.missingToken }
+    if result.user.emailVerified { await responses.accept(scope: baseURL.absoluteString, account: result.user.id) }
     return result
   }
   public func restore() async throws -> AuthSession? {
@@ -156,6 +177,10 @@ public actor APIClient {
       let restrictedVersion = generation
       await responses.clear()
       guard generation == restrictedVersion else { throw CancellationError() }
+    }
+    if let result, result.user.emailVerified {
+      await responses.accept(scope: baseURL.absoluteString, account: result.user.id)
+      guard generation == version else { throw CancellationError() }
     }
     return result
   }
@@ -212,19 +237,20 @@ public actor APIClient {
     guard generation == version else { throw CancellationError() }
     if !externallyManagedSession { try credentials.write(nil) }
   }
-  /// A bounded in-memory snapshot only; refresh still checks server permissions.
-  public func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) async
-    -> T?
-  {
-    let version = generation
-    if externallyManagedSession && (try? credentials.read()) != token { return nil }
-    guard let data = await responses.snapshot(responseKey(path, query: query)),
-      version == generation
-    else { return nil }
-    if externallyManagedSession && (try? credentials.read()) != token { return nil }
-    return try? JSONDecoder().decode(T.self, from: data)
+  /// A synchronous snapshot for first render; the network always rechecks permissions.
+  public nonisolated func cached<T: Decodable & Sendable>(_ path: String, query: [String: String] = [:]) -> T? {
+    if externallyManagedSession && (try? credentials.read()) != initialToken { return nil }
+    let version = responses.snapshots.version
+    guard let data = responses.snapshot(Self.responseKey(path, query: query)), version == responses.snapshots.version else { return nil }
+    if externallyManagedSession && (try? credentials.read()) != initialToken { return nil }
+    let value = try? JSONDecoder().decode(T.self, from: data)
+    guard version == responses.snapshots.version else { return nil }
+    return value
   }
-  private func responseKey(_ path: String, query: [String: String]) -> String {
+  public nonisolated func cachedAt(_ path: String, query: [String: String] = [:]) -> Date? {
+    responses.snapshots.snapshot(Self.responseKey(path, query: query))?.stored
+  }
+  private nonisolated static func responseKey(_ path: String, query: [String: String]) -> String {
     var components = URLComponents()
     components.path = path
     components.queryItems = query.sorted(by: { $0.key < $1.key }).map {

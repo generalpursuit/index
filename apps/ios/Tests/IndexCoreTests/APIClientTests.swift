@@ -56,7 +56,7 @@ struct APIClientTests {
     await #expect(throws: APIError.self) { let _: Success = try await client.request("/test", method: "POST", body: [:]) }
     #expect(try credentials.read() == "bob.signed")
   }
-  @Test func snapshotsAreAccountScopedAndWritesInvalidateThem() async throws {
+  @Test func snapshotsAreAccountScopedAndWritesInvalidateAffectedResources() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
     let _: Success = try await client.request("/private", query: ["a": "1", "b": "2"])
@@ -64,12 +64,28 @@ struct APIClientTests {
     #expect(cached?.success == true)
     let _: Success = try await client.request("/links/test", method: "PATCH", body: [:])
     let afterWrite: Success? = await client.cached("/private", query: ["a": "1", "b": "2"])
-    #expect(afterWrite == nil)
+    #expect(afterWrite?.success == true)
     let _: Success = try await client.request("/private")
     HTTPStub.handler = { _ in throw URLError(.notConnectedToInternet) }
     await #expect(throws: URLError.self) { try await client.signOut() }
     let afterLogout: Success? = await client.cached("/private")
     #expect(afterLogout == nil)
+  }
+  @Test func housekeepingPreservesContentAndLinkWritesKeepMessages() async throws {
+    let client = try make(MemoryCredentials("alice.signed"))
+    HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }
+    let _: Success = try await client.request("/links/a")
+    let _: Success = try await client.request("/conversations/a/messages")
+    for path in ["/me/notifications/active", "/conversations/a/read", "/me/activity/read"] {
+      let _: Success = try await client.request(path, method: "POST", body: [:])
+      let content: Success? = client.cached("/links/a")
+      #expect(content?.success == true)
+    }
+    let _: Success = try await client.request("/links/a/favorite", method: "POST", body: [:])
+    let post: Success? = client.cached("/links/a")
+    let messages: Success? = client.cached("/conversations/a/messages")
+    #expect(post == nil)
+    #expect(messages?.success == true)
   }
   @Test func revokedReadsEvictSnapshots() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
