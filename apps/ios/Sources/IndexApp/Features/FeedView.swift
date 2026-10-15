@@ -89,6 +89,7 @@ private struct FeedWeekView: View {
               }
             }.padding(.bottom, 24)
           }.scrollIndicators(.hidden).bottomFade()
+            .scrollDismissesKeyboard(.interactively)
         }.frame(height: ownHeight).accessibilityElement(children: .contain).accessibilityLabel("Yours")
         if let feed, !feed.people.isEmpty {
           ScrollView(.horizontal) {
@@ -118,6 +119,7 @@ private struct FeedWeekView: View {
             }.multilineTextAlignment(.center).padding(24)
               .frame(maxWidth: .infinity, minHeight: peopleHeight)
           }.scrollIndicators(.hidden).frame(height: peopleHeight)
+            .scrollDismissesKeyboard(.interactively)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(IndexPalette.border))
         } else { Spacer(minLength: 0) }
       }.frame(width: geometry.size.width, height: geometry.size.height, alignment: .topLeading)
@@ -138,6 +140,7 @@ private struct FeedWeekView: View {
           PageEnd(cursor: person.links.nextCursor) { try await morePerson(person) }
         }.padding(.bottom, 24)
       }.scrollIndicators(.hidden).bottomFade()
+        .scrollDismissesKeyboard(.interactively)
     }.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
   }
   private func load() async {

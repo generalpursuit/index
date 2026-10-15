@@ -80,6 +80,7 @@ struct ProfileView: View {
             }
           }.padding(.leading, 20).padding(.trailing, 36).padding(.bottom, 68)
         }.coordinateSpace(name: "profile-scroll").scrollIndicators(.hidden)
+          .scrollDismissesKeyboard(.interactively)
           .frame(width: geometry.size.width, height: height, alignment: .top).clipped()
           .refreshable { await load(force: true) }
           .onPreferenceChange(ProfileWeekPositions.self) { positions in

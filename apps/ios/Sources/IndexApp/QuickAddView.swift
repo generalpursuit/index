@@ -5,6 +5,7 @@ import SwiftUI
 struct QuickAddView: View {
   var groupID: String? = nil
   @Environment(AppModel.self) private var app
+  @Environment(\.screenVisible) private var visible
   @State private var text = ""
   @State private var draft = ShareDraft()
   private var groups: [LinkGroup] { app.store?.profileModel(app.userID).groups ?? [] }
@@ -70,6 +71,21 @@ struct QuickAddView: View {
       if let error {
         Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).padding(.vertical, 8)
       }
+    }
+    #if os(iOS)
+    .toolbar {
+      ToolbarItemGroup(placement: .keyboard) {
+        if visible && focused {
+          Spacer()
+          Button("Done") { focused = false }
+            .accessibilityHint("Dismisses the keyboard without saving the link")
+        }
+      }
+    }
+    #endif
+    .onChange(of: visible) { _, visible in
+      // Tab roots stay mounted, but their inputs must not keep the keyboard open.
+      if !visible { focused = false }
     }
     .task(id: app.userID) { await loadGroups() }
     .sheet(isPresented: $creatingGroup) {
