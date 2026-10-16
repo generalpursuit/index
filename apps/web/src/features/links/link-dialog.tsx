@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { Modal, ModalViews, type ModalView } from "@index/ui/components/modal";
 import { LinkReference } from "@/features/routes/link-reference";
+import { modalNavigation } from "@/lib/search";
 import { SendLink } from "@/features/messages/recipient-picker";
 import type { SavedLink } from "@/lib/types";
 import { ForwardInPlace, LinkDetail } from "./link-detail";
@@ -29,12 +30,7 @@ export function LinkDialog() {
     if (open) setSending(undefined);
   }
   const leave = (cleared: { post?: undefined; edit: undefined }) =>
-    void navigate({
-      to: ".",
-      search: (old) => ({ ...old, ...cleared }),
-      replace: true,
-      resetScroll: false,
-    });
+    void navigate({ ...modalNavigation(cleared), replace: true });
   const close = () => leave({ post: undefined, edit: undefined });
   // Back to where the editor was opened: its post, or the page.
   const closeEditor = () => leave({ edit: undefined });

@@ -14,6 +14,7 @@ import { useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { timeAgo } from "@/lib/weeks";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
+import { modalNavigation } from "@/lib/search";
 import { activityOptions } from "./queries";
 import { preparePostReference } from "@/features/links/queries";
 type Filter = "all" | "comment" | "request" | "mention" | "follow";
@@ -170,10 +171,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
                   onFocus={() => preparePostFor(a)}
                   onClick={() => {
                     preparePostFor(a);
-                    void navigate({
-                      to: ".",
-                      search: (old) => ({ ...old, post: a.linkShortId ?? undefined }),
-                    });
+                    void navigate(modalNavigation({ post: a.linkShortId ?? undefined }));
                   }}
                 >
                   <ChevronRight />

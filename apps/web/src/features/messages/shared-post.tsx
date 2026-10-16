@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link2, LockKeyhole } from "lucide-react";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useAPI } from "@/hooks/use-api";
+import { modalNavigation } from "@/lib/search";
 import { domain } from "@/features/links/url";
 import { preparePost } from "@/features/links/queries";
 import type { Message } from "@/lib/types";
@@ -29,10 +30,7 @@ export function SharedPost({ message }: { message: Message }) {
         onFocus={prepare}
         onClick={() => {
           prepare();
-          void navigate({
-            to: ".",
-            search: (old) => ({ ...old, post: message.attachment!.shortId }),
-          });
+          void navigate(modalNavigation({ post: message.attachment!.shortId }));
         }}
       >
         <Link2 />

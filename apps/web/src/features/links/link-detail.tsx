@@ -36,6 +36,7 @@ import { QueryState, More } from "@/components/app/query-state";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { Back } from "@/components/app/navigation";
 import { timeAgo } from "@/lib/weeks";
+import { modalNavigation } from "@/lib/search";
 import type { Group, SavedLink } from "@/lib/types";
 /** In the post's own dialog, Forward shows the recipients there instead of opening another. */
 export const ForwardInPlace = createContext<((link: SavedLink) => void) | undefined>(undefined);
@@ -370,8 +371,7 @@ function PostActions({ link, group }: { link: SavedLink; group?: Group }) {
       {own && (
         // The editor takes the post's place in its dialog, and goes back to it.
         <Link
-          to="."
-          search={(old) => ({ ...old, edit: link.shortId })}
+          {...modalNavigation({ edit: link.shortId })}
           className={cn(buttonVariants({ variant: "outline", size: "icon-lg" }), "ml-auto")}
           aria-label="Edit"
           title="Edit"

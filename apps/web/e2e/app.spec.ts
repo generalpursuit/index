@@ -277,6 +277,31 @@ test("the editor goes back to the post it was opened from; closing closes both",
   await expect(page.getByRole("dialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/$/);
 });
+test("the post and its editor open over the page without moving it", async ({ page }) => {
+  await login(page);
+  await page.setViewportSize({ width: 1440, height: 400 });
+  await page.goto("/u/alice");
+  const scroller = page.locator("#app-scroll"),
+    row = page
+      .locator(`.profile-week[data-week="${data.older}"]`)
+      .getByRole("button", { name: "Earlier notes", exact: true });
+  await row.scrollIntoViewIfNeeded();
+  const scrolled = await scroller.evaluate((el) => el.scrollTop);
+  expect(scrolled).toBeGreaterThan(0);
+  const post = page.getByRole("dialog", { name: "Post", exact: true }),
+    editor = page.getByRole("dialog", { name: "Edit link", exact: true });
+  await row.click();
+  await post.getByRole("link", { name: "Edit", exact: true }).click();
+  await editor.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBe(scrolled);
+  // Going back closes the post, and the page is still where it was.
+  await row.click();
+  await expect(post.getByRole("heading", { name: "Earlier notes" })).toBeVisible();
+  await page.goBack();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await scroller.evaluate((el) => el.scrollTop)).toBe(scrolled);
+});
 test("Send link takes the post's place in its dialog and goes back to it", async ({ page }) => {
   await login(page);
   const row = page

@@ -5,6 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { ArrowUpRight, LockKeyhole } from "lucide-react";
 import { useAPI } from "@/hooks/use-api";
+import { modalNavigation } from "@/lib/search";
 import type { SavedLink } from "@/lib/types";
 import { LinkMark } from "./link-mark";
 import { domain } from "./url";
@@ -48,7 +49,7 @@ export function LinkRow({
         onTouchStart={prepare}
         onClick={() => {
           prepare();
-          void navigate({ to: ".", search: (old) => ({ ...old, post: link.shortId }) });
+          void navigate(modalNavigation({ post: link.shortId }));
         }}
       >
         {link.title}
