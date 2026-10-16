@@ -35,6 +35,7 @@ import { GroupSettings } from "./groups";
 import { AppIconSettings } from "./app-icon";
 import { LaunchAtLoginSettings } from "./launch-at-login";
 import { CurateeImport } from "./curatee-import";
+import { MobileAppSettings } from "./mobile-app";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const settingsPhotoClassName =
@@ -147,6 +148,7 @@ function SettingsBoxes({
       <CurateeImport />
       <NotificationSettings />
       <AccountSecurity />
+      <MobileAppSettings />
       <DesktopUpdates />
       <button
         type="button"
