@@ -117,6 +117,10 @@ class MenuBarPackaging(unittest.TestCase):
         self.assertIn('NSViewWidthSizable | NSViewHeightSizable', surface)
         self.assertIn('NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification', native)
         self.assertEqual(native.count('static const CGFloat kPanelWhiteTint'), 1)
+        # The window's shape, and with it its shadow, stays rounded whatever the page draws.
+        prepare = native.split('void index_menu_prepare', 1)[1].split('\n}\n', 1)[0]
+        self.assertIn('content.layer.cornerRadius = kPanelCornerRadius;', prepare)
+        self.assertIn('content.layer.masksToBounds = YES;', prepare)
 
     def test_revision_guards_cover_native_notification_mutations(self):
         notifications = (TAURI / 'src/notifications.rs').read_text()

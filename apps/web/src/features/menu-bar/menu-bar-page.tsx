@@ -81,8 +81,8 @@ function MenuPanel() {
   return (
     <main
       ref={panel}
-      // The window's own size, never scrolling: only the link list scrolls.
-      className="fixed inset-0 flex flex-col overflow-clip rounded-[16px] p-2.5 text-[13px] text-foreground"
+      // The window's own size, never scrolling: only the link list scrolls. The window rounds it.
+      className="fixed inset-0 flex flex-col overflow-clip p-2.5 text-[13px] text-foreground"
       aria-label="Index menu bar"
     >
       {/* Takes its natural height. In a window that is too short the link list gives way, and past

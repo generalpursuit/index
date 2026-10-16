@@ -102,9 +102,15 @@ static NSColor *index_panel_color(NSColor *light, NSColor *dark) {
 @end
 static id transparencyChanged;
 // Once, when the panel is built: the surface goes behind the WebView and follows Reduce
-// transparency while Index runs.
+// transparency while Index runs. The content is clipped to the panel's shape: macOS traces the
+// window's shadow from what it draws, and a page that draws its opaque background (as it does
+// before the panel page mounts) would otherwise leave a square shadow and rim at the corners. The
+// circular corner encloses the glass's continuous one and matches the other surfaces.
 void index_menu_prepare(void *pointer) {
   NSView *content = ((__bridge NSWindow *)pointer).contentView;
+  content.wantsLayer = YES;
+  content.layer.cornerRadius = kPanelCornerRadius;
+  content.layer.masksToBounds = YES;
   IndexPanelSurface *surface = [[IndexPanelSurface alloc] initWithFrame:content.bounds];
   surface.autoresizingMask = NSViewWidthSizable | NSViewHeightSizable;
   [content addSubview:surface positioned:NSWindowBelow relativeTo:nil];
