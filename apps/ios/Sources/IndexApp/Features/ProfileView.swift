@@ -165,11 +165,16 @@ struct ProfileView: View {
       ScrollView(.horizontal) {
         HStack(spacing: 2) {
           listChip("All", id: "all")
-          ForEach(groups.filter { $0.kind != "starred" }.sorted { $0.kind == "favorites" && $1.kind != "favorites" }) { group in
+          ForEach(groups.filter { $0.kind == "favorites" }) { group in
             listChip(group.name, id: group.id, locked: group.visibility == .private)
           }
           if own {
             listChip("Starred", id: starredGroup?.id ?? "starred")
+          }
+          ForEach(groups.filter { $0.kind != "favorites" && $0.kind != "starred" }) { group in
+            listChip(group.name, id: group.id, locked: group.visibility == .private)
+          }
+          if own {
             Button { creatingGroup = true } label: {
               Image(systemName: "plus").font(.system(size: 16)).foregroundStyle(IndexPalette.subtleForeground)
                 .frame(width: 32, height: 32)

@@ -30,13 +30,12 @@ export function ListDock({
 }) {
   const groups = useAllGroups(userId),
     all = groups.data?.pages.flatMap((page) => page.items) ?? [];
-  // Favorites first, then the person's groups.
-  const lists = all
-      .filter((group) => group.kind !== "starred")
-      .sort((a, b) => Number(b.kind === "favorites") - Number(a.kind === "favorites")),
+  // Pin Favorites and your Starred links ahead of custom groups.
+  const lists = all.filter((group) => group.kind !== "starred" && group.kind !== "favorites"),
+    favorites = all.find((group) => group.kind === "favorites"),
     starred = all.find((group) => group.kind === "starred");
   const strip = useRef<HTMLDivElement>(null),
-    edges = useScrollEdges(strip, lists.length);
+    edges = useScrollEdges(strip, all.length);
   const path = useRouterState({ select: (state) => state.location.pathname });
   // Keeps the chosen list in sight, clear of the fades, without moving a strip that shows it.
   useLayoutEffect(() => {
@@ -47,8 +46,8 @@ export function ListDock({
       end = chip.offsetLeft + chip.offsetWidth + fade;
     if (start < element.scrollLeft || end > element.scrollLeft + element.clientWidth)
       element.scrollLeft = chip.offsetLeft - (element.clientWidth - chip.offsetWidth) / 2;
-  }, [path, lists.length]);
-  if (!lists.length && !own) return null;
+  }, [path, all.length]);
+  if (!lists.length && !favorites && !own) return null;
   return (
     <>
       {/* Room to scroll the last week clear of the dock. */}
@@ -67,6 +66,26 @@ export function ListDock({
           <ListChip to={profilePath(username)} userId={userId}>
             All
           </ListChip>
+          {favorites && (
+            <ListChip
+              to={groupPath(username, favorites.slug)}
+              userId={userId}
+              groupId={favorites.id}
+              label={groupLabel(favorites)}
+            >
+              {favorites.name}
+              {favorites.visibility === "private" && <LockKeyhole aria-hidden="true" />}
+            </ListChip>
+          )}
+          {own && (
+            <ListChip
+              to={groupPath(username, starred?.slug ?? "starred")}
+              userId={userId}
+              groupId={starred?.id}
+            >
+              Starred
+            </ListChip>
+          )}
           {lists.map((group) => (
             <ListChip
               key={group.id}
@@ -80,24 +99,15 @@ export function ListDock({
             </ListChip>
           ))}
           {own && (
-            <>
-              <ListChip
-                to={groupPath(username, starred?.slug ?? "starred")}
-                userId={userId}
-                groupId={starred?.id}
-              >
-                Starred
-              </ListChip>
-              <button
-                type="button"
-                aria-label="New group"
-                title="New group"
-                className={chipClassName + " w-8 justify-center [&_svg]:size-4"}
-                onClick={(event) => onNewGroup(event.currentTarget)}
-              >
-                <Plus aria-hidden="true" />
-              </button>
-            </>
+            <button
+              type="button"
+              aria-label="New group"
+              title="New group"
+              className={chipClassName + " w-8 justify-center [&_svg]:size-4"}
+              onClick={(event) => onNewGroup(event.currentTarget)}
+            >
+              <Plus aria-hidden="true" />
+            </button>
           )}
         </div>
       </nav>
