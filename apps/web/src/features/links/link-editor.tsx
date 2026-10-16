@@ -123,7 +123,7 @@ function LinkForm({
   };
   return (
     <form
-      className={"link-form flex flex-col"}
+      className={"link-form flex flex-1 flex-col"}
       onSubmit={(e) => {
         e.preventDefault();
         void form.handleSubmit();
@@ -273,7 +273,7 @@ function LinkForm({
           return (
             <p
               className={
-                "link-form-visibility flex items-center gap-2 mt-4 text-[13px] text-subtle-foreground [&_svg]:size-3.5 [&_svg]:flex-none"
+                "link-form-visibility flex items-center gap-2 mt-4 mb-6 text-[13px] text-subtle-foreground [&_svg]:size-3.5 [&_svg]:flex-none"
               }
             >
               {locked ? <LockKeyhole aria-hidden="true" /> : <Globe aria-hidden="true" />}
@@ -286,7 +286,7 @@ function LinkForm({
       </form.Subscribe>
       <div
         className={
-          "link-form-footer flex items-center gap-2 mt-6 pt-4.5 border-t border-border [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
+          "link-form-footer sticky bottom-0 z-10 mt-auto flex flex-none items-center gap-2 border-t border-border bg-surface pt-4.5 [&_[data-slot='button']]:min-h-9.5 [&_[data-slot='button']]:p-[0_18px] [&_[data-slot='button']]:rounded-full"
         }
       >
         {/* The footer turns into the question. */}
