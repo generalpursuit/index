@@ -3,6 +3,9 @@ import IndexCore
 import IndexFeatures
 import Observation
 import Network
+#if os(iOS)
+import UIKit
+#endif
 
 @MainActor @Observable
 final class AppModel {
@@ -47,6 +50,15 @@ final class AppModel {
     Task { await store.prefetch(link) }
   }
   func openProfile(_ person: Person) { store?.seed(person); navigate(.profile(person.id)) }
+  /// Hidden tab roots stay mounted without interaction, and UIKit refocuses a field that loses
+  /// interaction once it is shown again, so text input ends before the switch.
+  func select(_ tab: AppTab) {
+    #if os(iOS)
+    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+    #endif
+    navigation.path = []
+    navigation.tab = tab
+  }
   var showsTabs: Bool { navigation.showsTabs }
   var activeTab: AppTab? { navigation.activeTab(account: userID) }
   var userID: String { profile?.id ?? "" }

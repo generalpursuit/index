@@ -65,10 +65,7 @@ struct RootView: View {
           if app.showsTabs {
             HStack(spacing: 0) {
               ForEach(AppTab.allCases, id: \.self) { tab in
-                Button {
-                  app.navigation.path = []
-                  app.navigation.tab = tab
-                } label: {
+                Button { app.select(tab) } label: {
                   NavigationIcon(tab: tab).frame(width: 44, height: 44)
                     .foregroundStyle(app.activeTab == tab ? IndexPalette.foreground : IndexPalette.subtleForeground)
                     .overlay(alignment: .topTrailing) {

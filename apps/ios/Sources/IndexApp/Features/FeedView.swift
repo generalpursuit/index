@@ -112,7 +112,7 @@ private struct FeedWeekView: View {
                 ? "Nothing shared this week yet" : "Nothing shared this week")
                 .font(IndexFont.sans()).foregroundStyle(IndexPalette.subtleForeground)
               if followingCount == 0 {
-                Button { app.navigation.path = []; app.navigation.tab = .discover } label: {
+                Button { app.select(.discover) } label: {
                   Text("Discover").font(IndexFont.sans())
                 }.buttonStyle(.plain)
               }

@@ -124,7 +124,7 @@ The integration test resets **only the disposable fixture API** and checks real 
 
 Before distribution, verify at small and large iPhone sizes and iPad, with the software keyboard, landscape orientation, VoiceOver, and large Dynamic Type. Exercise Keychain restore after force quit, native back gestures, privacy changes, and private forwards between separate accounts.
 
-For quick-add on both the feed and your profile, focus an empty field, then type a partial URL. Tap blank space, a link, the destination menu, and the active tab; each outside tap should dismiss the keyboard while the tapped control still works. Reopen the field and confirm the draft remains, then check cursor placement, text selection, and paste. Drag down through a vertical scroll area into the keyboard to dismiss it, including with an empty list. Switching tabs must release focus. Dismissal alone must not send a save request or show an extra keyboard toolbar.
+For quick-add on both the feed and your profile, focus an empty field, then type a partial URL. Tap blank space, a link, the destination menu, and the active tab; each outside tap should dismiss the keyboard while the tapped control still works. Reopen the field and confirm the draft remains, then check cursor placement, text selection, and paste. Drag down through a vertical scroll area into the keyboard to dismiss it, including with an empty list. Switching tabs must release focus, and switching back must not restore it. Dismissal alone must not send a save request or show an extra keyboard toolbar.
 
 ## Distribution
 

@@ -69,7 +69,12 @@ struct QuickAddView: View {
             Text(selected?.name ?? "Your links").lineLimit(1)
           }.font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
             .frame(minHeight: 44)
-        }.disabled(busy).accessibilityLabel("Save destination: \(selected?.name ?? "Your links")")
+        }
+        #if os(iOS)
+          // The menu claims its tap before the app-wide dismissal sees it, so the press ends input.
+          .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in focused = false })
+        #endif
+        .disabled(busy).accessibilityLabel("Save destination: \(selected?.name ?? "Your links")")
       }.frame(minHeight: 48)
       if unavailable && groupsLoaded {
         Text("This group is unavailable. Choose a destination before saving.")
