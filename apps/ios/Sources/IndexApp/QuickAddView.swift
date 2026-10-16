@@ -18,6 +18,9 @@ struct QuickAddView: View {
   @State private var creatingGroup = false
   @State private var existingToOpen: SavedLink?
   @FocusState private var focused: Bool
+  #if os(iOS)
+  @State private var fieldFrame: CGRect?
+  #endif
   private var unavailable: Bool {
     (groupID != nil && !initialized) || (groupsLoaded && selected.map { chosen in
       !groups.contains { $0.id == chosen.id }
@@ -34,8 +37,12 @@ struct QuickAddView: View {
           TextField(busy ? "Fetching title…" : "Enter a link", text: Binding(get: { busy ? "" : text }, set: { text = $0 }))
             .textFieldStyle(.plain).font(IndexFont.sans(16)).focused($focused)
             .autocorrectionDisabled().submitLabel(.go).disabled(busy || unavailable)
+            .frame(minHeight: 44)
             #if os(iOS)
               .keyboardType(.URL).textInputAutocapitalization(.never)
+              .accessibilityAction(.escape) { focused = false }
+              .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { fieldFrame = $0 }
+              .focusedValue(\.quickAddKeyboardFocus, QuickAddKeyboardFocus(binding: $focused, frame: fieldFrame))
             #endif
             .accessibilityLabel("Enter a link to add it to \(Week.label(Week.monday()))")
             .onSubmit { Task { await save() } }
@@ -72,17 +79,6 @@ struct QuickAddView: View {
         Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).padding(.vertical, 8)
       }
     }
-    #if os(iOS)
-    .toolbar {
-      ToolbarItemGroup(placement: .keyboard) {
-        if visible && focused {
-          Spacer()
-          Button("Done") { focused = false }
-            .accessibilityHint("Dismisses the keyboard without saving the link")
-        }
-      }
-    }
-    #endif
     .onChange(of: visible) { _, visible in
       // Tab roots stay mounted, but their inputs must not keep the keyboard open.
       if !visible { focused = false }
@@ -152,6 +148,38 @@ struct QuickAddView: View {
     }
   }
 }
+
+#if os(iOS)
+private struct QuickAddKeyboardFocus {
+  let binding: FocusState<Bool>.Binding
+  let frame: CGRect?
+}
+private struct QuickAddKeyboardFocusKey: FocusedValueKey {
+  typealias Value = QuickAddKeyboardFocus
+}
+private extension FocusedValues {
+  var quickAddKeyboardFocus: QuickAddKeyboardFocus? {
+    get { self[QuickAddKeyboardFocusKey.self] }
+    set { self[QuickAddKeyboardFocusKey.self] = newValue }
+  }
+}
+
+/// Installed around the app content so padding and the tab bar also dismiss quick-add.
+struct QuickAddKeyboardDismissal: ViewModifier {
+  @FocusedValue(\.quickAddKeyboardFocus) private var focus
+
+  func body(content: Content) -> some View {
+    content.contentShape(Rectangle())
+      .simultaneousGesture(
+        SpatialTapGesture(coordinateSpace: .global).onEnded { tap in
+          // Keep field taps and text selection native. Other controls still receive the tap.
+          guard let focus, let frame = focus.frame, !frame.contains(tap.location) else { return }
+          focus.binding.wrappedValue = false
+        }, including: focus == nil ? .subviews : .all
+      )
+  }
+}
+#endif
 
 struct SavedLinkToast: View {
   @Environment(AppModel.self) private var app

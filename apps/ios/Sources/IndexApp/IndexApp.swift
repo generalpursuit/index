@@ -151,6 +151,9 @@ struct RootView: View {
       }
     }
     .modifier(AppErrorPresentation())
+    #if os(iOS)
+    .modifier(QuickAddKeyboardDismissal())
+    #endif
   }
   @ViewBuilder private func destinationView(_ destination: Destination) -> some View {
     switch destination {
