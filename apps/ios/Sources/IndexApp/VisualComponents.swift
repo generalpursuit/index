@@ -49,7 +49,7 @@ private struct IndexSheetStyle: ViewModifier {
   @State private var presentationID = UUID()
   func body(content: Content) -> some View {
     content.environment(\.indexSheet, true)
-      .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
+      .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground).toggleStyle(IndexSwitchStyle())
       .presentationBackground(IndexPalette.surface).presentationCornerRadius(22)
       .presentationDragIndicator(.visible)
       .accessibilityAction(.escape) { dismiss() }

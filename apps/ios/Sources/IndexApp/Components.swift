@@ -67,6 +67,29 @@ struct PillStyle: ButtonStyle {
       .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.6 : 1)
   }
 }
+/// The system switch always draws a white thumb, which vanishes on the app's light tint in dark
+/// mode. This switch pairs primary colors like a selected pill, in either scheme.
+struct IndexSwitchStyle: ToggleStyle {
+  @Environment(\.isEnabled) private var enabled
+  func makeBody(configuration: Configuration) -> some View {
+    HStack(spacing: 16) {
+      configuration.label.frame(maxWidth: .infinity, alignment: .leading)
+      Capsule().fill(configuration.isOn ? IndexPalette.primary : IndexPalette.input)
+        .frame(width: 62, height: 28)
+        .overlay(alignment: configuration.isOn ? .trailing : .leading) {
+          Capsule().fill(configuration.isOn ? IndexPalette.primaryForeground : .white)
+            .frame(width: 38, height: 24).padding(2)
+        }
+        .animation(.snappy(duration: 0.2), value: configuration.isOn)
+        .opacity(enabled ? 1 : 0.4)
+    }
+    .contentShape(Rectangle())
+    .onTapGesture { configuration.isOn.toggle() }
+    .accessibilityRepresentation {
+      Toggle(isOn: configuration.$isOn) { configuration.label }.toggleStyle(.switch)
+    }
+  }
+}
 struct AsyncButton<Label: View>: View {
   let action: () async throws -> Void
   @ViewBuilder let label: () -> Label
