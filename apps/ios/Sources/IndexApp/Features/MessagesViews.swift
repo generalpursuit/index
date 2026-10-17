@@ -214,6 +214,28 @@ struct ConversationView: View {
   private var text: Binding<String> {
     Binding(get: { draft.body }, set: { app.drafts.edit($0, in: conversationID) })
   }
+  /// As on the web, a 1:1 header's avatar and name open the other person's profile.
+  @ViewBuilder private func profileButton<Label: View>(_ person: Person?, @ViewBuilder label: () -> Label) -> some View {
+    if let person {
+      Button { app.openProfile(person) } label: { label() }.buttonStyle(.plain)
+    } else {
+      label()
+    }
+  }
+  /// Every other member's @username (or name), each a link that opens their profile.
+  private func handles(_ people: [Person]) -> AttributedString {
+    var line = AttributedString()
+    for (index, person) in people.enumerated() {
+      if index > 0 { line += AttributedString(", ") }
+      var handle = AttributedString("@" + (person.username ?? person.name))
+      handle.link = handleURL(person)
+      line += handle
+    }
+    return line
+  }
+  private func handleURL(_ person: Person) -> URL? {
+    URL(string: "index-person:" + (person.id.addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""))
+  }
   /// As in iMessage, a 1:1 receipt shows only while the viewer's message is the newest.
   private var readMessageID: String? {
     guard let conversation, conversation.participants.count <= 2, let newest = messages.first,
@@ -224,17 +246,23 @@ struct ConversationView: View {
   var body: some View {
     VStack(spacing: 0) {
       if let conversation {
+        let others = conversation.participants.filter { $0.id != app.userID }
+        let recipient = others.count == 1 ? others.first : nil
         HStack(spacing: 12) {
           BackButton()
           Group {
-            ParticipantAvatars(people: conversation.participants.filter { $0.id != app.userID })
+            profileButton(recipient) { ParticipantAvatars(people: others) }
             VStack(alignment: .leading, spacing: 3) {
-              Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
-              Menu("Participants") {
-                ForEach(conversation.participants.filter { $0.id != app.userID }) { person in
-                  Button(person.name) { app.openProfile(person) }
-                }
-              }.font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
+              profileButton(recipient) {
+                Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
+              }
+              Text(handles(others)).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
+                .tint(IndexPalette.subtleForeground).lineLimit(2)
+                .environment(\.openURL, OpenURLAction { url in
+                  guard let person = others.first(where: { handleURL($0) == url }) else { return .discarded }
+                  app.openProfile(person)
+                  return .handled
+                })
             }
           }.calmPlaceholder(active: model.conversation == nil && error == nil)
           Spacer()
