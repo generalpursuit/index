@@ -513,4 +513,211 @@ async function seedMore(
     )
       await api("alice").stars.add({ linkId: link.id });
   }
+  await polishSamples(database, api, userId);
+}
+// The exact test data uses placeholders. With extra samples, give it what a real account has:
+// full names, real addresses and notes, and conversations and comments spread over days.
+async function polishSamples(
+  database: Database,
+  api: (username: string) => AppRouterClient,
+  userId: (username: string) => string,
+) {
+  const sql = (text: string, values: unknown[] = []) => database.client.query(text, values);
+  const minutesAgo = "now() - $2::int * interval '1 minute'";
+  const linkOf = async (username: string, title: string) => {
+    const { rows } = await database.client.query<{ id: string }>(
+      "select id from links where owner_id = $1 and title = $2 order by saved_on desc limit 1",
+      [userId(username), title],
+    );
+    if (!rows[0]) throw new Error(`${username} has no sample link “${title}”.`);
+    return rows[0].id;
+  };
+  for (const [username, name] of [
+    ["alice", "Alice Moreau"],
+    ["bob", "Bob Chen"],
+    ["lena", "Lena Fischer"],
+    ["amir", "Amir Nasser"],
+    ["iris", "Iris Laurent"],
+    ["mia", "Mia Koch"],
+    ["noah", "Noah Weber"],
+  ] as const)
+    await api(username).profiles.update({ name });
+  await sql(
+    `update links set title = x.title, url = x.url, category = x.category, description = x.note,
+       created_at = now() - x.minutes * interval '1 minute',
+       updated_at = now() - x.minutes * interval '1 minute'
+     from jsonb_to_recordset($2::jsonb)
+       as x(placeholder text, title text, url text, category text, note text, minutes int)
+     where owner_id = $1 and links.title = x.placeholder`,
+    [
+      userId("alice"),
+      JSON.stringify([
+        {
+          placeholder: "Are.na",
+          title: "Are.na",
+          url: "https://www.are.na",
+          category: "tool",
+          minutes: 600,
+        },
+        {
+          placeholder: "In Rainbows",
+          title: "Radiohead – In Rainbows",
+          url: "https://open.spotify.com/album/5vkqYmiPBYLaalcmjujWxK",
+          category: "music",
+          note: "For slow Sunday cooking.",
+          minutes: 420,
+        },
+        {
+          placeholder: "Design Engineering",
+          title: "Design Engineering",
+          url: "https://designengineering.io",
+          category: "article",
+          minutes: 300,
+        },
+        {
+          placeholder: "The Shape of Design",
+          title: "The Shape of Design",
+          url: "https://shapeofdesignbook.com",
+          category: "book",
+          note: "Frank Chimero on why we make things. Short chapters, one per train ride.",
+          minutes: 180,
+        },
+        {
+          placeholder: "Working notes",
+          title: "Studio working notes",
+          url: "https://www.notion.so/Studio-working-notes-7f3a2c1e",
+          category: "note",
+          minutes: 40,
+        },
+        {
+          placeholder: "Earlier notes",
+          title: "Type workshop notes",
+          url: "https://www.notion.so/Type-workshop-notes-2b9d41a7",
+          category: "note",
+          minutes: 10080,
+        },
+      ]),
+    ],
+  );
+  // Others' placeholder links ("Lena · Ways of Seeing") make way for their sample ones.
+  await sql("delete from links where title like '% · %'");
+  // The test conversations move back four days, below the ones made here. Lena's comment
+  // follows Alice saving Are.na.
+  await sql("update messages set created_at = created_at - interval '4 days'");
+  await sql("update conversation_members set read_at = read_at - interval '4 days'");
+  await sql("update conversations set updated_at = updated_at - interval '4 days'");
+  await sql(
+    "update comments set created_at = now() - interval '500 minutes', updated_at = now() - interval '500 minutes'",
+  );
+  // [sender, minutes ago, body, the sender's link to attach, index of the message replied to]
+  type Line = [from: string, minutes: number, body: string, link?: string, replyTo?: number];
+  const converse = async (members: string[], lines: Line[], readBy: string[]) => {
+    const [creator, ...others] = members;
+    const { id } = await api(creator!).messages.createConversation({
+      recipientIds: others.map(userId),
+    });
+    const sent = [];
+    for (const [from, minutes, body, link, replyTo] of lines) {
+      const message = await api(from).messages.send({
+        conversationId: id,
+        clientId: crypto.randomUUID(),
+        body,
+        linkId: link && (await linkOf(from, link)),
+        replyToMessageId: replyTo === undefined ? undefined : sent[replyTo]!.id,
+      });
+      await sql(`update messages set created_at = ${minutesAgo} where id = $1`, [
+        message.id,
+        minutes,
+      ]);
+      sent.push(message);
+    }
+    await sql(
+      "update conversations set updated_at = (select max(created_at) from messages where conversation_id = $1) where id = $1",
+      [id],
+    );
+    for (const reader of readBy)
+      await api(reader).messages.markRead({ conversationId: id, messageId: sent.at(-1)!.id });
+  };
+  await converse(
+    ["alice", "kwatanabe", "priya_r"],
+    [
+      [
+        "kwatanabe",
+        2900,
+        "Found one for November. Sleeps six and has a sauna.",
+        "Cabin in the Black Forest",
+      ],
+      ["priya_r", 2890, "Booking my train tonight."],
+      ["alice", 2880, "I’m in. I’ll bring the board games."],
+    ],
+    ["alice", "kwatanabe", "priya_r"],
+  );
+  await converse(
+    ["alice", "theolindqvist"],
+    [
+      ["theolindqvist", 190, "For your flight tomorrow.", "Brian Eno – Music for Airports"],
+      ["alice", 180, "Perfect. Downloading it now."],
+      ["theolindqvist", 95, "Tell me if it beats the noise-cancelling."],
+    ],
+    ["theolindqvist"],
+  );
+  await converse(
+    ["alice", "sofia_marques"],
+    [
+      ["sofia_marques", 1450, "What are you reading on the train these days?"],
+      ["alice", 1440, "This one. Short chapters, perfect for the U8.", "The Shape of Design"],
+      ["sofia_marques", 1435, "Frank Chimero! I loved his essay on the grain of the web."],
+      ["alice", 50, "I’m halfway through. Want it after?"],
+      ["sofia_marques", 45, "Yes please. I’ll trade you Piranesi.", undefined, 1],
+      ["alice", 12, "Deal. Bring it to brunch?"],
+    ],
+    ["alice", "sofia_marques"],
+  );
+  // [author, link owner, link title, minutes ago, body]
+  for (const [author, owner, title, minutes, body] of [
+    [
+      "kwatanabe",
+      "kwatanabe",
+      "Ceramics studio Kreuzberg",
+      300,
+      "@alice this is the studio with the Thursday evening class.",
+    ],
+    [
+      "sofia_marques",
+      "alice",
+      "The Shape of Design",
+      130,
+      "Chapter four is the one. Tell me when you get there.",
+    ],
+    [
+      "theolindqvist",
+      "alice",
+      "Radiohead – In Rainbows",
+      35,
+      "Reckoner is still the best song to cook to.",
+    ],
+    ["kwatanabe", "alice", "Radiohead – In Rainbows", 80, "The vinyl pressing is worth it."],
+  ] as const) {
+    const comment = await api(author).comments.create({ linkId: await linkOf(owner, title), body });
+    await sql(
+      `update comments set created_at = ${minutesAgo}, updated_at = ${minutesAgo} where id = $1`,
+      [comment.id, minutes],
+    );
+  }
+  await sql(
+    "update activities a set created_at = c.created_at from comments c where a.comment_id = c.id",
+  );
+  // People followed each other over the past week; the two open requests arrived today.
+  await sql(
+    `update activities a set created_at = now() - interval '2 days' - o.n * interval '5 hours'
+     from (select id, row_number() over (order by created_at, id) as n from activities
+       where type in ('follow', 'accepted') or request_status in ('accepted', 'declined')) o
+     where a.id = o.id`,
+  );
+  await sql(
+    `update activities a set created_at = now() - interval '6 hours' - o.n * interval '3 hours'
+     from (select id, row_number() over (order by created_at, id) as n from activities
+       where request_status = 'pending') o
+     where a.id = o.id`,
+  );
 }
