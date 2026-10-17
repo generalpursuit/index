@@ -36,7 +36,7 @@ The Xcode project is checked in. After adding/removing app source files or chang
 - `Sources/IndexFeatures`: testable message drafts, messaging/activity/profile/feed loading, account lifetime, and navigation state. Feature models use the existing API transport through a small injectable contract. An internal cursor collection owns loaded-page extent, request generations and duplicate removal.
 - `Sources/IndexApp/Features`: SwiftUI feature layouts and presentation state; complex messaging/activity/profile/feed loading lives in `IndexFeatures`.
 - `Sources/IndexApp/Components.swift`: shared visual components and asynchronous actions.
-- `Sources/IndexUI/Theme.swift`: shared semantic `IndexPalette`; `Sources/IndexApp/Theme.swift` retains the Settings appearance control; `IndexCore.ThemePreference` stores System/Light/Dark under device-local `index.theme`. The app defaults to System and keeps this preference through sign-out.
+- `Sources/IndexUI/Theme.swift`: shared semantic `IndexPalette`; `Sources/IndexApp/Theme.swift` retains the Settings appearance control and applies the preference to the window, so open sheets follow a change; `IndexCore.ThemePreference` stores System/Light/Dark under device-local `index.theme`. The app defaults to System and keeps this preference through sign-out.
 - `Sources/IndexApp/IndexApp.swift`: authenticated SwiftUI root and destination rendering.
 - `Sources/IndexApp/AppModel.swift`: session/notification coordination and the verified account store. Private view identity, drafts, unread counts and presentation state reset together on account transitions.
 

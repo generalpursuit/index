@@ -12,7 +12,7 @@ struct IndexApp: App {
   @AppStorage(ThemePreference.storageKey) private var storedTheme = ThemePreference.system.rawValue
   var body: some Scene {
     WindowGroup {
-      RootView().environment(app).preferredColorScheme(ThemePreference(storedValue: storedTheme).colorScheme)
+      RootView().environment(app).windowAppearance(ThemePreference(storedValue: storedTheme))
         .scrollIndicators(.hidden)
         .tint(IndexPalette.foreground)
         .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)

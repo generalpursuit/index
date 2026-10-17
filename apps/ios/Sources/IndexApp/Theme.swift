@@ -32,6 +32,42 @@ struct AppearanceSettings: View {
   }
 }
 
+extension View {
+  /// Applies the appearance to the whole window. On iOS, `preferredColorScheme` overrides each
+  /// presentation's controller separately, so an open sheet keeps the scheme it was presented
+  /// with; everything presented in a window inherits that window's style as it changes.
+  func windowAppearance(_ theme: ThemePreference) -> some View {
+    #if os(iOS)
+      background(WindowAppearance(style: theme.colorScheme.map(UIUserInterfaceStyle.init) ?? .unspecified))
+    #else
+      preferredColorScheme(theme.colorScheme)
+    #endif
+  }
+}
+
+#if os(iOS)
+  private struct WindowAppearance: UIViewRepresentable {
+    let style: UIUserInterfaceStyle
+    func makeUIView(context: Context) -> WindowAppearanceView { WindowAppearanceView() }
+    func updateUIView(_ view: WindowAppearanceView, context: Context) { view.style = style }
+  }
+
+  private final class WindowAppearanceView: UIView {
+    var style = UIUserInterfaceStyle.unspecified { didSet { apply() } }
+    override init(frame: CGRect) {
+      super.init(frame: frame)
+      isUserInteractionEnabled = false
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
+    // The view is created before it joins its window, so the style is also applied on arrival.
+    override func didMoveToWindow() {
+      super.didMoveToWindow()
+      apply()
+    }
+    private func apply() { window?.overrideUserInterfaceStyle = style }
+  }
+#endif
+
 struct AppIconSettings: View {
   #if os(iOS)
     @Environment(\.scenePhase) private var scenePhase
