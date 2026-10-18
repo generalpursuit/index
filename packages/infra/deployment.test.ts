@@ -33,11 +33,29 @@ describe("release deployment configuration", () => {
       releaseDeployment("production", {
         WORKERS_SUBDOMAIN: "example",
         WEB_DOMAIN: "https://app.example.com",
+        API_DOMAIN: "api.example.com",
+      }),
+    );
+    // A custom web domain with a workers.dev API would lose the session cookie.
+    assert.throws(() =>
+      releaseDeployment("production", {
+        WORKERS_SUBDOMAIN: "example",
+        WEB_DOMAIN: "app.example.com",
+      }),
+    );
+    assert.throws(() =>
+      releaseDeployment("production", {
+        WORKERS_SUBDOMAIN: "example",
+        API_DOMAIN: "api.example.com",
       }),
     );
   });
   it("redirects extra hostnames only to a configured web domain", () => {
-    const env = { WORKERS_SUBDOMAIN: "example", WEB_DOMAIN: "app.example.com" };
+    const env = {
+      WORKERS_SUBDOMAIN: "example",
+      WEB_DOMAIN: "app.example.com",
+      API_DOMAIN: "api.example.com",
+    };
     assert.deepEqual(
       releaseDeployment("production", {
         ...env,

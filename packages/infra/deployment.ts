@@ -26,6 +26,10 @@ export function releaseDeployment(stage: string, env: Record<string, string | un
   };
   const webDomain = domain(env.WEB_DOMAIN);
   const apiDomain = domain(env.API_DOMAIN);
+  // workers.dev is a public suffix: a custom web domain calling a workers.dev API is
+  // cross-site, and browsers such as Safari then drop the API's session cookie.
+  if (!webDomain !== !apiDomain)
+    throw new Error("Set WEB_DOMAIN and API_DOMAIN together so web and API share a site.");
   // Extra hostnames that permanently redirect to the web domain.
   const webRedirects = (env.WEB_REDIRECT_DOMAINS ?? "")
     .split(",")
