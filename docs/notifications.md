@@ -6,7 +6,7 @@ Account preferences select message/comment/mention/follow events; each device op
 
 Database triggers atomically enqueue references with activity/message writes. Postgres owns the durable queue; Worker memory does not. The one-minute Alchemy Cron Trigger drains a bounded batch using leases and retries; macOS has one process-owned poller. Delivery is **at least once**: provider acceptance and local acknowledgement cannot commit together. Collapse IDs and client deduplication reduce duplicates.
 
-Each delivery and Web Push resolution rechecks the owning session, verified account, current preferences, source existence, membership/visibility, read state and active conversation. The outbox stores references and fixed status codes, not private text. Forwarded-link content is never included in alerts. An OS-accepted alert cannot reliably be recalled after a later privacy change.
+Each delivery and Web Push resolution rechecks the owning session, verified account, current preferences, source existence, membership/visibility, read state and active conversation. The outbox stores references and fixed status codes, not private text. Forwarded-link content and file names are never included in alerts; with previews on, a message without text says only what it carries, such as "Sent a photo." An OS-accepted alert cannot reliably be recalled after a later privacy change.
 
 Web Push carries only an encrypted job ID. The service worker resolves current content with the session cookie, installation proof and expected session ID; it has no offline content cache. APNs sends only currently permitted content; previews off means generic text throughout the payload. Zero APNs expiration avoids queueing private alerts for offline devices.
 

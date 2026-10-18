@@ -205,6 +205,45 @@ describe("durable notifications", () => {
     });
     assert.equal(sent, 0);
   });
+  it("previews a message without text by what it carries, never by file names", async () => {
+    // Following first, so the follow alert is queued before Bob has a device to receive it.
+    await api("alice").follows.follow({ userId: "bob" });
+    await enroll();
+    await api("bob").notifications.updatePreferences({ previews: true });
+    const c = await api("alice").messages.createConversation({ recipientIds: ["bob"] });
+    const png = () =>
+      new File([Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])], "secret.png");
+    const pdf = () => new File(["%PDF-1.4"], "secret.pdf");
+    async function sendFiles(body: string, ...files: File[]) {
+      const fileIds = [];
+      for (const file of files)
+        fileIds.push((await api("alice").messages.upload({ conversationId: c.id, file })).id);
+      await api("alice").messages.send({
+        conversationId: c.id,
+        clientId: crypto.randomUUID(),
+        body,
+        fileIds,
+      });
+    }
+    async function previews() {
+      const bodies: string[] = [];
+      await deliverBatch(fixture.db, async (_d, alert) => {
+        bodies.push(alert.body);
+        return { status: "sent" };
+      });
+      return bodies;
+    }
+    await sendFiles("", png());
+    assert.deepEqual(await previews(), ["Sent a photo."]);
+    await sendFiles("", png(), png(), png());
+    assert.deepEqual(await previews(), ["Sent 3 photos."]);
+    await sendFiles("", pdf());
+    assert.deepEqual(await previews(), ["Sent a file."]);
+    await sendFiles("", png(), pdf());
+    assert.deepEqual(await previews(), ["Sent 2 files."]);
+    await sendFiles("Dinner at eight", png());
+    assert.deepEqual(await previews(), ["Dinner at eight"]);
+  });
   it("does not disclose comments after locking links or revoking profile access", async () => {
     await enroll("alice", secret("a"));
     const group = await api("alice").groups.create({ name: "Notes" });
