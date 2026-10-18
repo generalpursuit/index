@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { MessageDraft } from "../src/features/messages/draft";
 import { LinkDrafts } from "../src/features/links/draft";
-import type { MessageReply, SavedLink } from "../src/lib/types";
+import type { MessageFile, MessageReply, SavedLink } from "../src/lib/types";
 
 const attachment = { id: "link", title: "Next link" } as SavedLink;
 const quote = (id: string): MessageReply => ({
@@ -10,6 +10,16 @@ const quote = (id: string): MessageReply => ({
   senderId: "bob",
   excerpt: "Quoted",
   hasAttachment: false,
+  files: [],
+});
+const file = (name: string) => new File(["bytes"], name);
+const uploaded = (id: string): MessageFile => ({
+  id,
+  name: id,
+  type: "image/png",
+  size: 5,
+  width: 1,
+  height: 1,
 });
 test("a lost successful send retries the exact payload and identity after edits or attachment navigation", () => {
   const draft = new MessageDraft("conversation");
@@ -104,7 +114,7 @@ test("discarded account drafts ignore all late operations and cannot be resent",
   draft.fail(sent, new Error("late"));
   draft.attach(attachment);
   draft.editBody("Late edit");
-  assert.deepEqual(draft.getSnapshot(), { body: "", status: "editing" });
+  assert.deepEqual(draft.getSnapshot(), { body: "", files: [], status: "editing" });
   assert.equal(draft.prepare(), undefined);
   assert.equal(new MessageDraft("conversation").getSnapshot().body, "");
 });
@@ -144,4 +154,73 @@ test("link save removes only the submitted draft; failures and later edits retai
   drafts.clear();
   drafts.complete("link", newer);
   assert.equal(drafts.read("link", initial), initial);
+});
+
+test("files join a send in the order they were added, once all have uploaded", () => {
+  const draft = new MessageDraft("conversation");
+  const [first, second] = draft.addFiles([file("a.png"), file("b.png")]);
+  assert.equal(draft.prepare(), undefined);
+  draft.fileUploaded(second!.localId, uploaded("b"));
+  draft.fileUploaded(first!.localId, uploaded("a"));
+  const sent = draft.prepare()!;
+  assert.deepEqual(
+    sent.files.map((f) => f.id),
+    ["a", "b"],
+  );
+  draft.complete(sent);
+  assert.deepEqual(draft.getSnapshot().files, []);
+});
+
+test("a failed upload blocks sending until it is removed", () => {
+  const draft = new MessageDraft("conversation");
+  const [broken] = draft.addFiles([file("a.png")]);
+  draft.editBody("Look");
+  draft.fileFailed(broken!.localId);
+  assert.equal(draft.prepare(), undefined);
+  draft.removeFile(broken!.localId);
+  assert.deepEqual(draft.prepare()!.files, []);
+});
+
+test("an unconfirmed send keeps its files fixed", () => {
+  const draft = new MessageDraft("conversation");
+  const [added] = draft.addFiles([file("a.png")]);
+  draft.fileUploaded(added!.localId, uploaded("a"));
+  const sent = draft.prepare()!;
+  draft.fail(sent, new Error("response lost"));
+  draft.removeFile(added!.localId);
+  assert.deepEqual(draft.addFiles([file("b.png")]), []);
+  assert.equal(draft.prepare(), sent);
+});
+
+test("a message carries at most ten files", () => {
+  const draft = new MessageDraft("conversation");
+  assert.equal(draft.addFiles(Array.from({ length: 12 }, (_, i) => file(`${i}.png`))).length, 10);
+  assert.equal(draft.addFiles([file("more.png")]).length, 0);
+});
+
+test("an upload that finishes after its file left the draft changes nothing", () => {
+  const draft = new MessageDraft("conversation");
+  const [removed, kept] = draft.addFiles([file("a.png"), file("b.png")]);
+  draft.removeFile(removed!.localId);
+  const snapshot = draft.getSnapshot();
+  draft.fileUploaded(removed!.localId, uploaded("a"));
+  draft.fileFailed(removed!.localId);
+  assert.equal(draft.getSnapshot(), snapshot);
+  draft.discard();
+  const discarded = draft.getSnapshot();
+  draft.fileUploaded(kept!.localId, uploaded("b"));
+  draft.fileFailed(kept!.localId);
+  assert.equal(draft.getSnapshot(), discarded);
+  assert.deepEqual(draft.addFiles([file("c.png")]), []);
+});
+
+test("a rejected send keeps its files for a new attempt", () => {
+  const draft = new MessageDraft("conversation");
+  const [added] = draft.addFiles([file("a.png")]);
+  draft.fileUploaded(added!.localId, uploaded("a"));
+  const rejected = draft.prepare()!;
+  draft.fail(rejected, { status: 400 });
+  const next = draft.prepare()!;
+  assert.notEqual(next.clientId, rejected.clientId);
+  assert.deepEqual(next.files, rejected.files);
 });

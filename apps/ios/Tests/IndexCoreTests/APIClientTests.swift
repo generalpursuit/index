@@ -29,6 +29,19 @@ private final class HTTPStub: URLProtocol, @unchecked Sendable {
   }
   override func stopLoading() {}
 }
+/// URLProtocol receives upload bodies as a stream.
+private func body(of request: URLRequest) -> Data {
+  if let data = request.httpBody { return data }
+  guard let stream = request.httpBodyStream else { return Data() }
+  stream.open(); defer { stream.close() }
+  var data = Data(), buffer = [UInt8](repeating: 0, count: 4096)
+  while stream.hasBytesAvailable {
+    let read = stream.read(&buffer, maxLength: buffer.count)
+    if read <= 0 { break }
+    data.append(buffer, count: read)
+  }
+  return data
+}
 @Suite(.serialized)
 struct APIClientTests {
   func make(_ credentials: any CredentialStore = MemoryCredentials(), responses: ResponseCache = ResponseCache()) throws -> APIClient {
@@ -159,6 +172,46 @@ struct APIClientTests {
     } catch APIError.updateRequired {}
     #expect(signal.fired == 1)
     #expect(try credentials.read() == "alice.signed")
+  }
+  @Test func uploadsAFileAsSignedMultipartAndDownloadsBytes() async throws {
+    HTTPStub.handler = { request in
+      if request.httpMethod == "POST" {
+        #expect(request.url?.path == "/api/v1/conversations/c/files")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer signed-token.signature")
+        #expect(request.value(forHTTPHeaderField: "X-Index-Client")?.isEmpty == false)
+        let type = request.value(forHTTPHeaderField: "Content-Type") ?? ""
+        #expect(type.hasPrefix("multipart/form-data; boundary="))
+        let text = String(decoding: body(of: request), as: UTF8.self)
+        #expect(text.contains(#"name="file"; filename="beach.jpg""#))
+        #expect(text.contains("Content-Type: image/jpeg"))
+        #expect(text.contains("Content-Disposition: form-data; name=\"width\"\r\n\r\n1200\r\n"))
+        // The server stores the whole file before it answers.
+        #expect(request.timeoutInterval == 120)
+        let json = #"{"id":"f","name":"beach.jpg","type":"image/jpeg","size":3,"width":1200,"height":800}"#
+        return (200, [:], Data(json.utf8))
+      }
+      #expect(request.url?.path == "/api/v1/conversations/c/files/f")
+      return (200, ["Content-Type": "image/jpeg"], Data([1, 2, 3]))
+    }
+    let api = try make(MemoryCredentials("signed-token.signature"))
+    let file: MessageFile = try await api.upload(
+      "/conversations/c/files", file: UploadFile(name: "beach.jpg", type: "image/jpeg", data: Data([1, 2, 3])),
+      fields: ["width": "1200", "height": "800"])
+    #expect(file.id == "f")
+    #expect(try await api.download("/conversations/c/files/f") == Data([1, 2, 3]))
+  }
+  @Test func multipartNamesCannotBreakTheirHeaders() {
+    let body = Multipart.body(
+      file: UploadFile(name: "a\"b\\c\r\n.pdf", type: "application/pdf\r\nX-Injected: 1", data: Data([1])),
+      fields: [:], boundary: "b")
+    let lines = String(decoding: body, as: UTF8.self).components(separatedBy: "\r\n")
+    #expect(lines.contains(#"Content-Disposition: form-data; name="file"; filename="a'b-c.pdf""#))
+    #expect(lines.contains("Content-Type: application/pdfX-Injected: 1"))
+    #expect(!lines.contains("X-Injected: 1"))
+    let accented = Multipart.body(
+      file: UploadFile(name: "Menü für Sonntag 日曜.pdf", type: "application/pdf", data: Data()), fields: [:], boundary: "b")
+    #expect(String(decoding: accented, as: UTF8.self).components(separatedBy: "\r\n")
+      .contains(#"Content-Disposition: form-data; name="file"; filename="Menü für Sonntag 日曜.pdf""#))
   }
   @Test func expiresAndClearsCredentials() async throws {
     let credentials = MemoryCredentials("expired.signature")
@@ -555,15 +608,30 @@ struct APIClientTests {
   }
   @Test func restrictedAttachmentHasOnlyAuthorIdentity() throws {
     let json =
-      #"{"id":"message","conversationId":"conversation","senderId":"alice","clientId":"client","body":"A find","createdAt":"2026-01-01T00:00:00.000Z","attachment":null,"hasAttachment":true,"restrictedAuthor":{"id":"iris","name":"Iris","username":"iris","image":null,"profileVisibility":"private"}}"#
+      #"{"id":"message","conversationId":"conversation","senderId":"alice","clientId":"client","body":"A find","createdAt":"2026-01-01T00:00:00.000Z","attachment":null,"hasAttachment":true,"files":[],"restrictedAuthor":{"id":"iris","name":"Iris","username":"iris","image":null,"profileVisibility":"private"}}"#
     let message = try JSONDecoder().decode(Message.self, from: Data(json.utf8))
     #expect(message.attachment == nil)
     #expect(message.hasAttachment)
     #expect(message.restrictedAuthor?.id == "iris")
   }
+  @Test func messageFilesDecodeInOrderAndNameThemselves() throws {
+    let json = #"""
+      {"id":"m","conversationId":"c","senderId":"alice","clientId":"m","body":"","createdAt":"2026-10-17T10:00:00.000Z",
+       "attachment":null,"hasAttachment":false,"restrictedAuthor":null,"replyTo":null,
+       "files":[{"id":"a","name":"beach.png","type":"image/png","size":2048,"width":1200,"height":800},
+                {"id":"b","name":"Sunday menu.pdf","type":"application/octet-stream","size":245760,"width":null,"height":null}]}
+      """#
+    let message = try JSONDecoder().decode(Message.self, from: Data(json.utf8))
+    #expect(message.files.map(\.id) == ["a", "b"])
+    #expect(message.files[0].isPhoto && !message.files[1].isPhoto)
+    #expect(message.files.summary == "2 files")
+    #expect([message.files[0]].summary == "Photo")
+    #expect([message.files[1]].summary == "Sunday menu.pdf")
+    #expect(message.files[1].details.hasPrefix("PDF · "))
+  }
   @Test func replyCarriesOnlyItsQuoteAndConversationItsReadReceipt() throws {
     let json =
-      #"{"id":"conversation","shortId":"AbCdEfGhIjKlMnOp","participants":[],"canSend":true,"unreadCount":0,"readReceiptMessageId":"reply","lastMessage":{"id":"reply","conversationId":"conversation","senderId":"alice","clientId":"client","body":"Yes","createdAt":"2026-10-13T09:00:00.000Z","attachment":null,"hasAttachment":false,"restrictedAuthor":null,"replyTo":{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true}},"updatedAt":"2026-10-13T09:00:00.000Z"}"#
+      #"{"id":"conversation","shortId":"AbCdEfGhIjKlMnOp","participants":[],"canSend":true,"unreadCount":0,"readReceiptMessageId":"reply","lastMessage":{"id":"reply","conversationId":"conversation","senderId":"alice","clientId":"client","body":"Yes","createdAt":"2026-10-13T09:00:00.000Z","attachment":null,"hasAttachment":false,"files":[],"restrictedAuthor":null,"replyTo":{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true,"files":[]}},"updatedAt":"2026-10-13T09:00:00.000Z"}"#
     let conversation = try JSONDecoder().decode(Conversation.self, from: Data(json.utf8))
     #expect(conversation.readReceiptMessageId == "reply")
     let quote = try #require(conversation.lastMessage?.replyTo)
@@ -573,7 +641,7 @@ struct APIClientTests {
     #expect(quote.hasAttachment)
     // A deleted original is no longer quoted, and nothing has been read yet.
     let unquoted = json.replacingOccurrences(
-      of: #"{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true}"#, with: "null"
+      of: #"{"id":"original","senderId":"bob","excerpt":"","hasAttachment":true,"files":[]}"#, with: "null"
     ).replacingOccurrences(of: #""readReceiptMessageId":"reply""#, with: #""readReceiptMessageId":null"#)
     let unread = try JSONDecoder().decode(Conversation.self, from: Data(unquoted.utf8))
     #expect(unread.lastMessage?.replyTo == nil)
@@ -588,7 +656,7 @@ struct APIClientTests {
     #expect(conversation.replyLabel(viewerId: "alice", from: "alice", to: "alice") == "Replying to yourself")
     #expect(conversation.replyLabel(viewerId: "alice", from: "bob", to: "gone") == "Replying to a former participant")
     let post = try JSONDecoder().decode(
-      MessageReply.self, from: Data(#"{"id":"m","senderId":"bob","excerpt":"","hasAttachment":true}"#.utf8))
+      MessageReply.self, from: Data(#"{"id":"m","senderId":"bob","excerpt":"","hasAttachment":true,"files":[]}"#.utf8))
     #expect(post.preview == "Shared post")
   }
 }

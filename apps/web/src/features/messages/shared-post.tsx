@@ -8,10 +8,13 @@ import { domain } from "@/features/links/url";
 import { preparePost } from "@/features/links/queries";
 import type { Message } from "@/lib/types";
 
-// A card is its own surface beside the bubbles, so it never inherits a bubble's colours.
-const cardClassName =
-  "shared-post flex items-center gap-3 w-70 max-w-full p-[10px_14px] border border-border rounded-[16px] bg-surface text-left leading-[1.3] [&>svg]:flex-none [&>svg]:size-4 [&>svg]:text-subtle-foreground [&>span]:flex [&>span]:flex-col [&>span]:gap-0.5 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_small]:wrap-anywhere";
-const actionClassName =
+// A card is its own surface beside the bubbles, so it never inherits a bubble's colours. File
+// cards share the look but not the `shared-post` marker, which Enter in the thread looks for.
+// `message-surface` is the thread's marker for what its focus and highlight rings outline.
+export const cardStyle =
+  "flex items-center gap-3 w-70 max-w-full p-[10px_14px] border border-border rounded-[16px] bg-surface text-left leading-[1.3] [&>svg]:flex-none [&>svg]:size-4 [&>svg]:text-subtle-foreground [&>span]:flex [&>span]:flex-col [&>span]:gap-0.5 [&>span]:min-w-0 [&_strong]:font-medium [&_strong]:wrap-anywhere [&_small]:text-[12px] [&_small]:text-subtle-foreground [&_small]:wrap-anywhere";
+const cardClassName = "shared-post message-surface " + cardStyle;
+export const actionClassName =
   "text-foreground cursor-pointer [transition:background_150ms_ease] hover:bg-muted outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring";
 
 /** A message's post. Its message is the tab stop and opens it with Enter. */

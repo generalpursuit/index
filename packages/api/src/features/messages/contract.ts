@@ -11,6 +11,9 @@ import {
   sendMessageSchema,
   messageSchema,
   readMessageSchema,
+  uploadFileSchema,
+  messageFileSchema,
+  fileTargetSchema,
 } from "./schemas";
 export const messagesContract = {
   unread: baseContract
@@ -41,4 +44,22 @@ export const messagesContract = {
     .route({ method: "POST", path: "/conversations/{conversationId}/read", tags: ["Messages"] })
     .input(readMessageSchema)
     .output(successSchema),
+  upload: baseContract
+    .route({
+      method: "POST",
+      path: "/conversations/{conversationId}/files",
+      summary: "Upload a file (at most 25 MB) to send in this conversation",
+      tags: ["Messages"],
+    })
+    .input(uploadFileSchema)
+    .output(messageFileSchema),
+  file: baseContract
+    .route({
+      method: "GET",
+      path: "/conversations/{conversationId}/files/{fileId}",
+      summary: "Read a sent file",
+      tags: ["Messages"],
+    })
+    .input(fileTargetSchema)
+    .output(z.file()),
 };

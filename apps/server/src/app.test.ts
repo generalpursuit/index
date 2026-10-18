@@ -133,6 +133,7 @@ describe("mounted server application", () => {
     assert.equal(preflight.status, 204);
     assert.equal(preflight.headers.get("access-control-allow-origin"), web);
     assert.match(preflight.headers.get("access-control-allow-headers")!, /Authorization/);
+    assert.equal(preflight.headers.get("x-content-type-options"), "nosniff");
     const photo = await request("/media/avatars/photo.png");
     assert.equal(photo.status, 200);
     assert.equal(await photo.text(), "photo bytes");
@@ -142,6 +143,59 @@ describe("mounted server application", () => {
     assert.equal((await request("/media/missing")).status, 404);
     assert.equal(contexts, 0);
     assert.equal(authRequests, 0);
+  });
+
+  it("tells browsers never to sniff a response into another type", async () => {
+    for (const path of ["/", "/media/missing", "/api/v1/openapi.json"])
+      assert.equal((await request(path)).headers.get("x-content-type-options"), "nosniff");
+  });
+
+  it("refuses oversized uploads before reading them or creating API context", async () => {
+    const tooLarge = 27 * 1024 * 1024;
+    const bytes = new Uint8Array(tooLarge);
+    const conversation = `/api/v1/conversations/${crypto.randomUUID()}`;
+    // The matchers accept more than the documented routes: any method for RPC, an empty
+    // conversation for REST and trailing slashes for both. Each reaches the upload procedure.
+    const uploads = [
+      ["POST", "/rpc/v1/messages/upload"],
+      ["POST", "/rpc/v1/messages/upload/"],
+      ["POST", "/rpc/messages/upload"],
+      ["PUT", "/rpc/messages/upload"],
+      ["POST", `${conversation}/files`],
+      ["POST", `${conversation}/files//`],
+      ["POST", "/api/v1/conversations//files"],
+    ] as const;
+    for (const [method, path] of uploads) {
+      // Declared length, as browsers and native clients send it.
+      const declared = await request(path, {
+        method,
+        headers: { Origin: web, "Content-Length": String(tooLarge) },
+        body: "x",
+      });
+      // Chunked bodies declare nothing, so the bytes themselves are counted.
+      const chunked = await request(path, { method, headers: { Origin: web }, body: bytes });
+      for (const response of [declared, chunked]) {
+        const label = `${method} ${path}`;
+        assert.equal(response.status, 413, label);
+        assert.equal(response.headers.get("access-control-allow-origin"), web, label);
+        assert.equal(response.headers.get("x-content-type-options"), "nosniff", label);
+        assert.deepEqual(await response.json(), {
+          code: "PAYLOAD_TOO_LARGE",
+          message: "Files can be at most 25 MB.",
+        });
+      }
+    }
+    assert.equal(contexts, 0);
+    // Small uploads reach the API, and the cap does not apply to other requests.
+    const small = await request(`${conversation}/files`, { method: "POST", body: new FormData() });
+    assert.notEqual(small.status, 413);
+    assert.equal(contexts, 1);
+    const elsewhere = await request("/api/v1/links", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": String(tooLarge) },
+      body: "{}",
+    });
+    assert.notEqual(elsewhere.status, 413);
   });
 
   it("mounts real auth, fresh cookie/bearer sessions, REST and both RPC aliases", async () => {

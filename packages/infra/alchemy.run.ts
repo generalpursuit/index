@@ -38,6 +38,13 @@ export const media = Cloudflare.R2.Bucket("media").pipe(
   ),
 );
 
+/** Files shared in conversations. Private: members read them through the API. */
+export const messageFiles = Cloudflare.R2.Bucket("message-files").pipe(
+  Alchemy.RemovalPolicy.retain(
+    Alchemy.Stack.pipe(Effect.map(({ stage }) => stage === "production")),
+  ),
+);
+
 // Each release gets a persistent secret; redeploying must not log everyone out.
 const authSecret = Effect.gen(function* () {
   const { stage } = yield* Alchemy.Stack;
@@ -83,6 +90,7 @@ export const server = Cloudflare.Worker(
         ),
         BETTER_AUTH_URL: Cloudflare.Worker.URL,
         MEDIA: media,
+        MESSAGE_FILES: messageFiles,
       },
       dev: {
         port: 8080,

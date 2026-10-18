@@ -8,11 +8,9 @@ import { weeksOptions, weekLinksOptions } from "@/features/links/queries";
 import { groupsOptions } from "@/features/groups/queries";
 import { profileOptions } from "@/features/profiles/queries";
 import { linkPath } from "@index/api/routes";
+import { isUUID, linkReferencePath } from "./route-paths";
 export { profilePath, groupPath, linkPath, conversationPath } from "@index/api/routes";
-export const isUUID = (value: string) =>
-  /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(value);
-export const linkReferencePath = (value: string) =>
-  `${isUUID(value) ? "/links/" : "/l/"}${encodeURIComponent(value)}`;
+export { isUUID, linkReferencePath };
 type RouteContext = {
   session: { user: { id: string; emailVerified?: boolean } } | null;
   queryClient: QueryClient;

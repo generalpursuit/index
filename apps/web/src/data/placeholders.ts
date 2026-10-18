@@ -50,4 +50,5 @@ export const placeholderMessages: Message[] = [0, 1, 2].map((index) => ({
   hasAttachment: false,
   restrictedAuthor: null,
   replyTo: null,
+  files: [],
 }));

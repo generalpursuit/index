@@ -84,7 +84,7 @@ const config = {
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
         "connect-src": `'self' ipc: http://ipc.localhost ${new URL(process.env.VITE_SERVER_URL).origin}`,
-        "img-src": "'self' data: https:",
+        "img-src": "'self' data: blob: https:",
         "font-src": "'self' data:",
         "object-src": "'none'",
         "base-uri": "'self'",

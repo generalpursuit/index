@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { MutationObserver, QueryClient } from "@tanstack/react-query";
 import { createContentPersistence } from "../src/data/persistence";
 import { cacheMaxAge } from "../src/data/client";
-import { editRevision, hasEdits, instantEdit, viewerPath } from "../src/data/edits";
+import { editRevision, hasEdits, instantEdit, mapItems, viewerPath } from "../src/data/edits";
 import { clearAccountState } from "../src/lib/account-boundary";
 
 function memory() {
@@ -476,4 +476,26 @@ test("message refresh guards include link edits and detect an edit that settled 
   assert.equal(hasEdits(cache, messages), false);
   assert.ok(editRevision(cache) > during);
   cache.clear();
+});
+
+test("item edits leave binary data alone", () => {
+  const file = new File(["bytes"], "photo.png");
+  assert.equal(
+    mapItems(
+      file,
+      () => false,
+      (item) => item,
+    ),
+    file,
+  );
+  assert.equal(
+    (
+      mapItems(
+        { data: file },
+        () => false,
+        (item) => item,
+      ) as { data: File }
+    ).data,
+    file,
+  );
 });

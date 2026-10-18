@@ -36,9 +36,14 @@ struct RootView: View {
     @Bindable var navigation = app.navigation
     Group {
       if app.updateRequired {
-        ContentUnavailableView(
-          "Update Index", systemImage: "arrow.down.app",
-          description: Text("This version of Index is no longer supported. Update it from the App Store to continue."))
+        // Index ships through TestFlight, not the App Store.
+        ContentUnavailableView {
+          Label("Update Index", systemImage: "arrow.down.app")
+        } description: {
+          Text("This version of Index is no longer supported. Install the latest build from TestFlight to continue.")
+        } actions: {
+          Link("Open TestFlight", destination: URL(string: "https://testflight.apple.com/join/kqYCvuq7")!)
+        }
       } else if let message = app.configurationError {
         ContentUnavailableView(
           "Configuration needed", systemImage: "gear", description: Text(message))

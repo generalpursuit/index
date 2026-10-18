@@ -231,6 +231,13 @@ const generic = {
   accepted: "Your follow request was accepted.",
 };
 
+/** Says what a message without text carries, never which files. */
+function filesPreview(types: string[]) {
+  if (!types.length) return null;
+  const noun = types.every((type) => type.startsWith("image/")) ? "photo" : "file";
+  return types.length === 1 ? `Sent a ${noun}.` : `Sent ${types.length} ${noun}s.`;
+}
+
 /** Build content only at delivery / notification opening time, never in the outbox. */
 export async function prepare(
   db: QueryDatabase,
@@ -267,9 +274,13 @@ export async function prepare(
     preview: string | null = null,
     conversationId: string | null = null;
   if (event.messageId) {
+    const fileTypes = sql<
+      string[]
+    >`(select coalesce(array_agg(f.type), '{}') from message_files f where f.message_id=${messages.id})`;
     const [message] = await db
       .select({
         body: messages.body,
+        fileTypes,
         id: conversations.id,
         shortId: conversations.shortId,
         createdAt: messages.createdAt,
@@ -296,7 +307,7 @@ export async function prepare(
     )
       return null;
     path = `/messages/${message.shortId}`;
-    preview = message.body;
+    preview = message.body.trim() || filesPreview(message.fileTypes);
     // Deliberately never include forwarded-link title, URL, image or description.
   } else {
     const [activity] = await db

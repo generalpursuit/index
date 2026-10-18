@@ -105,6 +105,10 @@ html.menu-bar-surface
   padding-top: 28px;
   padding-bottom: 24px;
 }
+/* The conversation's drop overlay covers this pane. */
+.app-main.chat-main {
+  position: relative;
+}
 @media (width <= 700px) {
   .app-main .app-content {
     padding: var(--page-top-space) 20px 28px;

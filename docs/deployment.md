@@ -1,6 +1,6 @@
 # Deployment
 
-[Alchemy](../packages/infra/alchemy.run.ts) owns the API Worker, Vite web Worker, Neon database and private R2 photo bucket. `staging` and `production` have independent resources and state. Both release from `main`; [deployment.ts](../packages/infra/deployment.ts) names the stages, and the release workflow's input picks one. Worker names are `index-<stage>-web` and `index-<stage>-api` under the configured `WORKERS_SUBDOMAIN`.
+[Alchemy](../packages/infra/alchemy.run.ts) owns the API Worker, Vite web Worker, Neon database and private R2 buckets for profile photos and message files. `staging` and `production` have independent resources and state. Both release from `main`; [deployment.ts](../packages/infra/deployment.ts) names the stages, and the release workflow's input picks one. Worker names are `index-<stage>-web` and `index-<stage>-api` under the configured `WORKERS_SUBDOMAIN`.
 
 ## Local development
 
@@ -24,9 +24,9 @@ console.log(`VAPID_PUBLIC_KEY=${raw.toString("base64url")}\nVAPID_PRIVATE_KEY=${
 '
 ```
 
-Browsers treat `http://localhost` as secure, and development runs the one-minute delivery cron locally. Leave the `APNS_*` inputs unset: Apple push needs a real Apple key and a signed app with the push entitlement, so a local stage reports it unavailable.
+Browsers treat `http://localhost` as secure, and development runs the one-minute cron locally; it delivers notifications and sweeps unsent message files. Leave the `APNS_*` inputs unset: Apple push needs a real Apple key and a signed app with the push entitlement, so a local stage reports it unavailable.
 
-From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, supplying database, auth URL, media and frontend API bindings. Use a personal stage for development; never run Alchemy development against a release stage. [Browser fixtures](../apps/web/README.md#checks) provide a disposable backend for tests without these cloud credentials.
+From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, supplying database, auth URL, media, message-file and frontend API bindings. Use a personal stage for development; never run Alchemy development against a release stage. [Browser fixtures](../apps/web/README.md#checks) provide a disposable backend for tests without these cloud credentials.
 
 ## Release deployment
 

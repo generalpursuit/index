@@ -16,7 +16,11 @@ private actor FeatureStub: FeatureAPI {
   private var paused: Set<String> = []
   private var continuations: [String: CheckedContinuation<Void, Never>] = [:]
   private var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
+  private var responders: [String: @Sendable ([String: JSONValue]?) -> String] = [:]
   func enqueue(_ path: String, _ json: String) { replies[path, default: []].append(.success(Data(json.utf8))) }
+  /// Answers requests to `path` that have no queued reply from their body, as a server
+  /// echoing what it stored would.
+  func respond(_ path: String, _ reply: @escaping @Sendable ([String: JSONValue]?) -> String) { responders[path] = reply }
   func fail(_ path: String, _ error: Error) { replies[path, default: []].append(.failure(error)) }
   func pause(_ path: String) { paused.insert(path) }
   func started(_ path: String) async {
@@ -40,6 +44,9 @@ private actor FeatureStub: FeatureAPI {
   func request<T: Decodable & Sendable>(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) async throws -> T {
     calls.append(Call(path: path, method: method, query: query, body: body))
     let key = path + (query["query"].map { "?" + $0 } ?? "")
+    if replies[key]?.first == nil, let responder = responders[key] {
+      return try JSONDecoder().decode(T.self, from: Data(responder(body).utf8))
+    }
     guard let result = replies[key]?.first else { throw APIError.invalidResponse }
     replies[key]?.removeFirst()
     if paused.remove(key) != nil {
@@ -50,6 +57,16 @@ private actor FeatureStub: FeatureAPI {
     }
     return try JSONDecoder().decode(T.self, from: result.get())
   }
+  private(set) var uploads: [(path: String, name: String, fields: [String: String])] = []
+  func upload<T: Decodable & Sendable>(_ path: String, file: UploadFile, fields: [String: String]) async throws -> T {
+    uploads.append((path, file.name, fields))
+    return try await request(path, method: "POST", query: [:], body: nil)
+  }
+  private(set) var downloads: [String] = []
+  func download(_ path: String) async throws -> Data {
+    downloads.append(path)
+    return Data()
+  }
 }
 
 private func conversation(_ id: String) -> String {
@@ -59,8 +76,11 @@ private func conversation(_ id: String) -> String {
 }
 private func message(_ id: String) -> String {
   """
-{"id":"\(id)","conversationId":"chat","senderId":"me","clientId":"client","body":"hello","createdAt":"2026-01-01","hasAttachment":false}
+{"id":"\(id)","conversationId":"chat","senderId":"me","clientId":"client","body":"hello","createdAt":"2026-01-01","hasAttachment":false,"files":[]}
 """
+}
+private func uploadedFile(_ id: String, name: String? = nil) -> String {
+  #"{"id":"\#(id)","name":"\#(name ?? id + ".pdf")","type":"application/octet-stream","size":1,"width":null,"height":null}"#
 }
 private func link(_ id: String) -> String {
   """
@@ -278,6 +298,130 @@ final class MessagingTests: XCTestCase {
     XCTAssertTrue(model.messages.isEmpty)
     XCTAssertNil(model.conversation)
     XCTAssertNil(model.cursor)
+  }
+
+  func testFilesUploadFirstAndJoinTheSendInOrder() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    for id in ["a", "b"] {
+      await api.enqueue("/conversations/c/files", #"{"id":"\#(id)","name":"\#(id)","type":"image/jpeg","size":1,"width":4,"height":3}"#)
+    }
+    drafts.edit("Look", in: "c")
+    try drafts.add(
+      [DraftFile(name: "a.jpg", type: "image/jpeg", data: Data([1]), width: 4, height: 3),
+       DraftFile(name: "b.pdf", type: "application/pdf", data: Data([2]))], to: "c", api: api)
+    XCTAssertFalse(drafts.draft(for: "c").isReady)
+    await drafts.idle()
+    let uploaded = drafts.draft(for: "c").files.compactMap(\.uploaded?.id)
+    XCTAssertEqual(uploaded.count, 2)
+    let uploads = await api.uploads
+    XCTAssertEqual(uploads.first { $0.name == "a.jpg" }?.fields, ["width": "4", "height": "3"])
+    XCTAssertEqual(uploads.first { $0.name == "b.pdf" }?.fields, [:])
+    await api.enqueue("/conversations/c/messages", message("m"))
+    var sent: PendingMessage?
+    try await drafts.send(in: "c", api: api, started: { pending, _ in sent = pending })
+    XCTAssertEqual(sent?.files.map(\.id), uploaded)
+    guard case .strings(let ids)? = sent?.payload["fileIds"] else { return XCTFail("no fileIds") }
+    XCTAssertEqual(ids, uploaded)
+  }
+
+  func testAFailedUploadBlocksSendingUntilRemoved() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    await api.fail("/conversations/c/files", APIError.server(500, "Down"))
+    drafts.edit("Look", in: "c")
+    try drafts.add([DraftFile(name: "a.jpg", type: "image/jpeg", data: Data([1]))], to: "c", api: api)
+    await drafts.idle()
+    let file = try XCTUnwrap(drafts.draft(for: "c").files.first)
+    XCTAssertTrue(file.failed)
+    do { try await drafts.send(in: "c", api: api); XCTFail("sent with a failed upload") } catch DraftError.failedUpload {}
+    try drafts.removeFile(file.id, in: "c")
+    XCTAssertTrue(drafts.draft(for: "c").isReady)
+  }
+
+  func testAMessageCarriesAtMostTenFiles() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    let files = (0..<12).map { DraftFile(name: "\($0).pdf", type: "application/pdf", data: Data([1])) }
+    try drafts.add(files, to: "c", api: api)
+    XCTAssertEqual(drafts.draft(for: "c").files.count, MessageLimits.files)
+    await drafts.idle()
+    let uploads = await api.uploads.count
+    XCTAssertEqual(uploads, MessageLimits.files)
+  }
+
+  /// Adds one file to each conversation and waits until the first `paused` uploads are held.
+  private func addFiles(to conversations: [String], pausing paused: Int, api: FeatureStub, drafts: MessageDrafts) async throws {
+    for (index, id) in conversations.enumerated() {
+      await api.enqueue("/conversations/\(id)/files", uploadedFile(id))
+      if index < paused { await api.pause("/conversations/\(id)/files") }
+    }
+    for id in conversations {
+      try drafts.add([DraftFile(name: "\(id).pdf", type: "application/pdf", data: Data([1]))], to: id, api: api)
+    }
+    for id in conversations.prefix(paused) { await api.started("/conversations/\(id)/files") }
+  }
+
+  func testAtMostTwoFilesUploadAtOnceAcrossConversations() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    await api.pause("/conversations/c/files")
+    try await addFiles(to: ["a", "b", "c"], pausing: 2, api: api, drafts: drafts)
+    let running = await api.uploads.map(\.path)
+    XCTAssertEqual(Set(running), ["/conversations/a/files", "/conversations/b/files"])
+    await api.resume("/conversations/a/files")
+    await api.started("/conversations/c/files")
+    await api.resume("/conversations/b/files")
+    await api.resume("/conversations/c/files")
+    await drafts.idle()
+    for id in ["a", "b", "c"] { XCTAssertEqual(drafts.draft(for: id).files.first?.uploaded?.id, id) }
+  }
+
+  func testClearingDraftsStopsTheirUploads() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    try await addFiles(to: ["a", "b", "c"], pausing: 2, api: api, drafts: drafts)
+    drafts.clear()
+    await api.resume("/conversations/a/files")
+    await api.resume("/conversations/b/files")
+    await drafts.idle()
+    // Let the cancelled uploads finish; neither may start the queued file.
+    for _ in 0..<20 { await Task.yield() }
+    let uploads = await api.uploads.map(\.path)
+    XCTAssertEqual(Set(uploads), ["/conversations/a/files", "/conversations/b/files"])
+    for id in ["a", "b", "c"] { XCTAssertTrue(drafts.draft(for: id).files.isEmpty) }
+  }
+
+  func testRemovingAFileStopsItsUploadAndFreesItsSlot() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    await api.pause("/conversations/c/files")
+    try await addFiles(to: ["a", "b", "c"], pausing: 2, api: api, drafts: drafts)
+    let removed = try XCTUnwrap(drafts.draft(for: "a").files.first)
+    try drafts.removeFile(removed.id, in: "a")
+    // The queued file takes the slot while the other upload still runs.
+    await api.started("/conversations/c/files")
+    for id in ["a", "b", "c"] { await api.resume("/conversations/\(id)/files") }
+    await drafts.idle()
+    for _ in 0..<20 { await Task.yield() }
+    XCTAssertTrue(drafts.draft(for: "a").files.isEmpty)
+    XCTAssertEqual(drafts.draft(for: "b").files.first?.uploaded?.id, "b")
+    XCTAssertEqual(drafts.draft(for: "c").files.first?.uploaded?.id, "c")
+  }
+
+  func testFilesCannotChangeWhileASendIsPending() async throws {
+    let api = FeatureStub(), drafts = MessageDrafts()
+    await api.enqueue("/conversations/c/files", uploadedFile("a"))
+    try drafts.add([DraftFile(name: "a.pdf", type: "application/pdf", data: Data([1]))], to: "c", api: api)
+    await drafts.idle()
+    let file = try XCTUnwrap(drafts.draft(for: "c").files.first)
+    await api.enqueue("/conversations/c/messages", message("m"))
+    await api.pause("/conversations/c/messages")
+    let send = Task { try await drafts.send(in: "c", api: api) }
+    await api.started("/conversations/c/messages")
+    XCTAssertThrowsError(try drafts.add([DraftFile(name: "b.pdf", type: "application/pdf", data: Data([2]))], to: "c", api: api)) {
+      XCTAssertEqual($0 as? DraftError, .pendingMessage)
+    }
+    XCTAssertThrowsError(try drafts.removeFile(file.id, in: "c")) { XCTAssertEqual($0 as? DraftError, .pendingMessage) }
+    XCTAssertEqual(drafts.draft(for: "c").files.map(\.id), [file.id])
+    await api.resume("/conversations/c/messages")
+    try await send.value
+    let uploads = await api.uploads.count
+    XCTAssertEqual(uploads, 1)
   }
 }
 
@@ -542,6 +686,90 @@ final class ConcurrentFeedbackTests: XCTestCase {
   }
 }
 
+/// A download that runs until the test lets it finish.
+@MainActor
+private final class HeldDownload {
+  private(set) var count = 0
+  private var finished = false
+  private var starts: [CheckedContinuation<Void, Never>] = []
+  private var finishes: [CheckedContinuation<Void, Never>] = []
+  func send(_ data: Data) async -> Data {
+    count += 1
+    starts.forEach { $0.resume() }; starts = []
+    if !finished { await withCheckedContinuation { finishes.append($0) } }
+    return data
+  }
+  func started() async { if count == 0 { await withCheckedContinuation { starts.append($0) } } }
+  func finish() { finished = true; finishes.forEach { $0.resume() }; finishes = [] }
+}
+
+@MainActor
+final class MessageFileCacheTests: XCTestCase {
+  func testClearForgetsKeptBytes() async throws {
+    let cache = MessageFileCache()
+    cache.keep(Data([1]), for: "f")
+    let kept = try await cache.data(for: "f") { XCTFail("Downloaded kept bytes"); return Data() }
+    XCTAssertEqual(kept, Data([1]))
+    cache.clear()
+    var downloads = 0
+    let fetched = try await cache.data(for: "f") { downloads += 1; return Data([2]) }
+    XCTAssertEqual(fetched, Data([2]))
+    XCTAssertEqual(downloads, 1)
+  }
+
+  func testCallersShareARunningDownload() async throws {
+    let cache = MessageFileCache()
+    let server = HeldDownload()
+    let thumbnail = Task { try await cache.data(for: "f") { await server.send(Data([1])) } }
+    let preview = Task { try await cache.data(for: "f") { await server.send(Data([2])) } }
+    await server.started()
+    server.finish()
+    let results = try await [thumbnail.value, preview.value]
+    XCTAssertEqual(results, [Data([1]), Data([1])])
+    XCTAssertEqual(server.count, 1)
+  }
+
+  func testClearDropsRunningDownloads() async throws {
+    let cache = MessageFileCache()
+    let server = HeldDownload()
+    let loading = Task { try await cache.data(for: "f") { await server.send(Data([1])) } }
+    await server.started()
+    cache.clear()
+    server.finish()
+    do { _ = try await loading.value; XCTFail("Finished a download clear() dropped") } catch is CancellationError {}
+    let fetched = try await cache.data(for: "f") { Data([2]) }
+    XCTAssertEqual(fetched, Data([2]))
+  }
+
+  func testCopiesKeepTheirExtensionWithinDiskNameLimits() async throws {
+    let cache = MessageFileCache()
+    defer { cache.clear() }
+    // Three bytes each and without a decomposed form, so URLs report the same length.
+    let name = String(repeating: "日", count: 100) + ".pdf"
+    let file = MessageFile(id: UUID().uuidString, name: name, type: "application/octet-stream", size: 1, width: nil, height: nil)
+    let url = try await cache.previewURL(for: file) { Data([1]) }
+    XCTAssertLessThanOrEqual(url.lastPathComponent.utf8.count, 200)
+    XCTAssertTrue(url.lastPathComponent.hasPrefix("日日"))
+    XCTAssertEqual(url.pathExtension, "pdf")
+    XCTAssertEqual(try Data(contentsOf: url), Data([1]))
+    let hidden = MessageFile(id: UUID().uuidString, name: ".env", type: "application/octet-stream", size: 1, width: nil, height: nil)
+    let copy = try await cache.previewURL(for: hidden) { Data([2]) }
+    XCTAssertEqual(copy.lastPathComponent, "File")
+  }
+
+  func testCopiesStayInsideTheirFolder() async throws {
+    let cache = MessageFileCache()
+    let escape = FileManager.default.temporaryDirectory.appending(path: "escape", directoryHint: .isDirectory)
+    try? FileManager.default.removeItem(at: escape)
+    let file = MessageFile(id: "../escape", name: "x.pdf", type: "application/octet-stream", size: 1, width: nil, height: nil)
+    do {
+      _ = try await cache.previewURL(for: file) { XCTFail("Loaded a file with an invalid ID"); return Data([1]) }
+      XCTFail("Accepted an ID that is not a UUID")
+    } catch APIError.invalidResponse {}
+    XCTAssertFalse(FileManager.default.fileExists(atPath: escape.path))
+  }
+}
+
 final class MessageTimelineTests: XCTestCase {
   // A fixed zone and locale, so the expectations hold on any machine.
   private let calendar: Calendar = {
@@ -556,7 +784,7 @@ final class MessageTimelineTests: XCTestCase {
   private func sent(_ id: String, by sender: String, at date: Date) throws -> Message {
     let createdAt = date.formatted(Date.ISO8601FormatStyle(includingFractionalSeconds: true))
     return try decode(
-      #"{"id":"\#(id)","conversationId":"chat","senderId":"\#(sender)","clientId":"\#(id)","body":"hello","createdAt":"\#(createdAt)","hasAttachment":false}"#)
+      #"{"id":"\#(id)","conversationId":"chat","senderId":"\#(sender)","clientId":"\#(id)","body":"hello","createdAt":"\#(createdAt)","hasAttachment":false,"files":[]}"#)
   }
 
   func testGroupsSendersIntoRunsAndStampsAfterAnHourPause() throws {
@@ -602,6 +830,33 @@ private final class SnapshotStub: @unchecked Sendable {
 final class AccountStoreTests: XCTestCase {
   private func owner() throws -> Profile {
     try decode(#"{"id":"me","name":"Me","profileVisibility":"public","canViewContent":true,"followedBy":{"users":[],"total":0}}"#)
+  }
+  func testMessageFilesStayWithTheirAccount() async throws {
+    // A copy left by a killed app never reaches the next session.
+    let folder = FileManager.default.temporaryDirectory.appending(path: "message-files", directoryHint: .isDirectory)
+    let leftover = folder.appending(path: "old/Left.pdf")
+    try FileManager.default.createDirectory(at: leftover.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data([1]).write(to: leftover)
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    XCTAssertFalse(FileManager.default.fileExists(atPath: leftover.path))
+    await api.enqueue("/conversations/chat/files", uploadedFile(UUID().uuidString, name: "menu.pdf"))
+    try store.addFiles([DraftFile(name: "menu.pdf", type: "application/pdf", data: Data([7]))], to: "chat")
+    await store.drafts.idle()
+    let sent = try XCTUnwrap(store.drafts.draft(for: "chat").files.first?.uploaded)
+    await api.enqueue("/conversations/chat/messages", message("m"))
+    try await store.send(in: "chat")
+    // The sender's own bytes open without a download.
+    let data = try await store.data(for: sent, in: "chat")
+    XCTAssertEqual(data, Data([7]))
+    let preview = try await store.previewURL(for: sent, in: "chat")
+    XCTAssertEqual(preview.lastPathComponent, "menu.pdf")
+    XCTAssertEqual(try Data(contentsOf: preview), Data([7]))
+    store.clear()
+    XCTAssertFalse(FileManager.default.fileExists(atPath: folder.path))
+    do { _ = try await store.data(for: sent, in: "chat"); XCTFail("Read a file after the account left") } catch is CancellationError {}
+    let downloads = await api.downloads
+    XCTAssertTrue(downloads.isEmpty)
   }
   func testResourcesRestoreSynchronouslyAndReuseAcrossNavigation() async throws {
     let api = FeatureStub()
@@ -753,6 +1008,20 @@ final class OptimisticStoreTests: XCTestCase {
     let firstPayload = try JSONSerialization.jsonObject(with: payload(calls[0])) as? NSDictionary
     let retryPayload = try JSONSerialization.jsonObject(with: payload(calls[1])) as? NSDictionary
     XCTAssertEqual(firstPayload, retryPayload)
+  }
+  func testConfirmationReplacesThePendingBubbleWhenTheServerLowercasesTheID() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    let model = store.conversation("chat", opening: try decode(conversation("chat")))
+    // The server stores client IDs as UUIDs and returns them in lowercase.
+    await api.respond("/conversations/chat/messages") { body in
+      guard case .string(let id)? = body?["clientId"] else { return "{}" }
+      return message("server-id").replacingOccurrences(of: #""clientId":"client""#, with: #""clientId":"\#(id.lowercased())""#)
+    }
+    store.drafts.edit("hello", in: "chat")
+    try await store.send(in: "chat")
+    XCTAssertEqual(model.messages.map(\.id), ["server-id"])
+    XCTAssertTrue(model.sendStates.isEmpty)
   }
   func testDeleteRestoresListPositionAndLinkEditsUseCanonicalResponse() async throws {
     let api = FeatureStub()

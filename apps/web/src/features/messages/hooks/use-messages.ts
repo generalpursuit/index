@@ -1,4 +1,5 @@
 import { acknowledgeConversation } from "../edits";
+import type { MessageAttempt } from "../draft";
 import { instantEdit, mapItems, viewerPath } from "@/data/edits";
 import { seedConversation } from "@/data/seeding";
 import { useViewer } from "@/hooks/use-api";
@@ -29,7 +30,6 @@ export function useMessageActions() {
   const api = useAPI(),
     cache = useQueryClient(),
     viewer = useViewer();
-  type Send = Parameters<typeof api.messages.send.call>[0];
   const patchMessage =
     (message: Message & { delivery?: "pending" | "sent" }) =>
     (data: unknown, key: import("@tanstack/react-query").QueryKey) => {
@@ -88,8 +88,9 @@ export function useMessageActions() {
       ...instantEdit(cache, {
         key: ["message-edits", viewer?.id],
         affects: (key) => viewerPath(key, viewer?.id ?? null, "messages"),
-        mutationFn: api.messages.send.call,
-        optimistic: (input: Send) => {
+        mutationFn: ({ files, ...input }: MessageAttempt) =>
+          api.messages.send.call({ ...input, fileIds: files.map((file) => file.id) }),
+        optimistic: (input: MessageAttempt) => {
           const reply = input.replyToMessageId
             ? cache
                 .getQueryData(messagesOptions(api, input.conversationId).queryKey)
@@ -117,8 +118,10 @@ export function useMessageActions() {
                   senderId: reply.senderId,
                   excerpt: reply.body,
                   hasAttachment: reply.hasAttachment,
+                  files: reply.files,
                 }
               : null,
+            files: [...input.files],
           };
           return patchMessage(message);
         },

@@ -1,6 +1,6 @@
 import { seedConversation } from "@/data/seeding";
 import { placeholderConversation, placeholderMessages } from "@/data/placeholders";
-import { ChatAvatars, conversationName } from "./conversation-presentation";
+import { ChatAvatars, conversationName, filesSummary } from "./conversation-presentation";
 import { ProfileLink } from "@/components/app/profile-link";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -20,6 +20,8 @@ import { useMessageDraft } from "./drafts";
 import type { MessageDraft } from "./draft";
 import { MessageThread } from "./message-thread";
 import { Composer } from "./composer";
+import { ConversationDrop, receiveDroppedText } from "./conversation-drop";
+import { addDraftFiles, removeDraftFile } from "./uploads";
 import { timeAgo } from "@/lib/weeks";
 import type { Message, SavedLink } from "@/lib/types";
 
@@ -117,6 +119,7 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
   const { detail, list } = useConversation(id),
     actions = useMessageActions(),
     api = useAPI(),
+    cache = useQueryClient(),
     viewer = useViewer()!,
     navigate = useNavigate();
   const { draft, owner: draftOwner } = useMessageDraft(id);
@@ -198,7 +201,16 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
       senderId: message.senderId,
       excerpt: message.body,
       hasAttachment: message.hasAttachment,
+      files: message.files,
     });
+    input.current?.focus();
+  }
+  function addFiles(files: File[]) {
+    addDraftFiles(draftOwner, files, api, cache);
+    input.current?.focus();
+  }
+  async function receiveText(text: string) {
+    await receiveDroppedText(draftOwner, text, api, cache);
     input.current?.focus();
   }
   async function send() {
@@ -225,6 +237,14 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
           className={"chat-page h-full flex flex-col min-h-0"}
           data-placeholder={!detail.data || undefined}
         >
+          {/* Drops wait for the conversation, which the overlay names. */}
+          {detail.data && (
+            <ConversationDrop
+              name={conversationName(detail.data, viewer.id)}
+              onFiles={addFiles}
+              onText={(text) => void receiveText(text)}
+            />
+          )}
           <header
             className={
               "chat-heading flex gap-2.5 items-center mb-5.5 flex-none [&_.avatar-stack]:w-10 [&_.avatar-stack]:h-10 [&_.user-avatar]:w-8.5 [&_.user-avatar]:h-8.5 [&_.person-label]:flex-1 [&_.person-label_small]:whitespace-normal [&_.person-label_small]:max-h-10 [&_.person-label_small]:overflow-y-auto [@media(width<=700px)]:[&_.person-label_strong]:text-[14px] [@media(width<=700px)]:[&_.person-label_small]:text-[11px]"
@@ -320,6 +340,11 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
                   : "Message was rejected. Your draft is safe. Check it and try again."}
               </p>
             )}
+            {draft.files.some((file) => file.failed) && (
+              <p className={"field-error select-text text-[12px] text-destructive"}>
+                A file couldn’t upload. Remove it to send.
+              </p>
+            )}
             {draft.queuedAttachment && (
               <div className="flex items-center gap-3 py-2 text-sm" role="status">
                 <span className="min-w-0 flex-1">
@@ -358,6 +383,8 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               owner={draftOwner}
               input={input}
               onSend={() => void send()}
+              onAddFiles={addFiles}
+              onRemoveFile={(localId) => removeDraftFile(draftOwner, localId)}
             />
           </div>
         </div>
@@ -398,6 +425,7 @@ function ConversationRow({
         <strong>{conversationName(chat, viewerId)}</strong>
         <small>
           {chat.lastMessage?.body ||
+            filesSummary(chat.lastMessage?.files ?? []) ||
             (chat.lastMessage?.restrictedAuthor
               ? "Private post"
               : chat.lastMessage?.attachment?.title) ||

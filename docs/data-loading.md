@@ -34,7 +34,7 @@ A cold screen needs at most one round trip per dependency level. Requests that d
 
 The disk cache belongs to one API server and one verified account, and carries a format version; a cache from another server, account or version is discarded unread. It is written only for the accepted account and erased on sign-out, session expiry, account change or a restricted session, before another account's data can be shown. A forbidden or not-found response removes the affected entries. On desktop the cache is also bound to the [native session revision](../apps/web/README.md#desktop-session-boundary), so a window never shows data for a revision it has not accepted. On iOS it lives in Application Support with file protection and is excluded from backups.
 
-The cache holds content responses, including message contents, for at most seven days. Credentials stay in the platform's secure storage, and drafts, search results, security status and device notification state are not persisted.
+The cache holds content responses, including message contents, for at most seven days. Credentials stay in the platform's secure storage, message file bytes stay in memory apart from iOS's temporary Quick Look copies, and drafts, search results, security status and device notification state are not persisted.
 
 ## Ownership and checks
 

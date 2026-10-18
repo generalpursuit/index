@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@index/ui/components/dropdown-menu";
 import { updateProfileSchema } from "@index/api/features/profiles/schemas";
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { useRef, useState, type RefObject } from "react";
 import { Confirmation } from "@index/ui/components/confirmation";
 import { IconButton } from "@index/ui/components/icon-button";
 import { Modal, ModalFooter } from "@index/ui/components/modal";
@@ -27,6 +27,7 @@ import { Back } from "@/components/app/navigation";
 import { profilePath } from "@/lib/routes";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { useViewer } from "@/hooks/use-api";
+import { useObjectURL } from "@/hooks/use-object-url";
 import { useProfile, useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { squarePhoto } from "@/lib/photo";
 import type { Profile } from "@/lib/types";
@@ -216,7 +217,7 @@ function EditProfile({
   const { update, uploadImage } = useProfileActions();
   // `undefined` keeps the current photo, `null` removes it, a File replaces it.
   const [photo, setPhoto] = useState<File | null | undefined>(picked);
-  const preview = usePreview(photo);
+  const preview = useObjectURL(photo);
   const picker = useRef<HTMLInputElement>(null);
   const saving = update.isPending || uploadImage.isPending;
   const form = useForm({
@@ -335,21 +336,6 @@ function EditProfile({
       </form>
     </Modal>
   );
-}
-
-/** A temporary address for a picked photo, released when it changes. */
-function usePreview(photo: File | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!photo) {
-      setUrl(null);
-      return;
-    }
-    const address = URL.createObjectURL(photo);
-    setUrl(address);
-    return () => URL.revokeObjectURL(address);
-  }, [photo]);
-  return url;
 }
 
 // Visibility decides who sees every link outside a locked group, so changes need confirming.

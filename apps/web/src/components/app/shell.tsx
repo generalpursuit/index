@@ -69,7 +69,9 @@ export function AppShell({
   return (
     <MessageDraftProvider key={viewer?.id ?? "guest"}>
       <LinkDraftProvider>
+        {/* Marks the app's own tree: layers portalled outside it, such as dialogs, are over it. */}
         <div
+          data-app-root
           className={
             "index-app select-none bg-background text-foreground text-[14px] leading-[1.5] h-dvh pt-[var(--titlebar-inset)] overflow-hidden [&_h1]:font-semibold [&_h1]:tracking-[-0.035em] [&_h1]:leading-[1.1] [&_h1]:text-[clamp(34px,_4vw,_56px)] [@media(width<=700px)]:text-[13px] [@media(width<=700px)]:[&_h1]:text-[40px]"
           }

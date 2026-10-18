@@ -1,11 +1,14 @@
-import { useLayoutEffect, type RefObject } from "react";
-import { ArrowUp, Link2, Reply, X } from "lucide-react";
+import { useLayoutEffect, useRef, type RefObject } from "react";
+import { ArrowUp, Link2, Paperclip, Reply, X } from "lucide-react";
+import { maxBodyLength } from "@index/api/features/messages/schemas";
 import { Button } from "@index/ui/components/button";
 import { IconButton } from "@index/ui/components/icon-button";
 import { domain } from "@/features/links/url";
 import type { Conversation } from "@/lib/types";
+import { ComposerFiles } from "./composer-files";
 import { replyExcerpt, replyLabel } from "./conversation-presentation";
-import type { MessageDraft } from "./draft";
+import { ready, type MessageDraft } from "./draft";
+import { pastedFiles } from "./transfers";
 
 type Snapshot = ReturnType<MessageDraft["getSnapshot"]>;
 
@@ -20,6 +23,8 @@ export function Composer({
   owner,
   input,
   onSend,
+  onAddFiles,
+  onRemoveFile,
 }: {
   chat: Conversation;
   viewerId: string;
@@ -27,9 +32,12 @@ export function Composer({
   owner: MessageDraft;
   input: RefObject<HTMLTextAreaElement | null>;
   onSend: () => void;
+  onAddFiles: (files: File[]) => void;
+  onRemoveFile: (localId: string) => void;
 }) {
   const sending = draft.status === "sending",
     locked = sending || draft.status === "uncertain";
+  const picker = useRef<HTMLInputElement>(null);
   // Grow with the text up to the field's maximum height, then scroll.
   useLayoutEffect(() => {
     const field = input.current;
@@ -77,19 +85,46 @@ export function Composer({
           </IconButton>
         </div>
       )}
+      <ComposerFiles files={draft.files} locked={locked} onRemove={onRemoveFile} />
       <div className="flex items-end gap-1.5">
+        <IconButton
+          label="Attach files"
+          className="flex-none text-subtle-foreground"
+          disabled={locked}
+          onClick={() => picker.current?.click()}
+        >
+          <Paperclip />
+        </IconButton>
+        <input
+          ref={picker}
+          type="file"
+          multiple
+          hidden
+          onChange={(event) => {
+            onAddFiles([...(event.target.files ?? [])]);
+            // Picking the same file again is a new change.
+            event.target.value = "";
+          }}
+        />
         <textarea
           ref={input}
           rows={1}
           disabled={locked}
           aria-label="Message"
           placeholder="Message"
-          maxLength={10000}
+          maxLength={maxBodyLength}
           className={
-            "flex-1 min-w-0 max-h-40 p-[6px_4px_6px_10px] bg-transparent leading-5 resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50"
+            "flex-1 min-w-0 max-h-40 p-[6px_4px_6px_2px] bg-transparent leading-5 resize-none outline-none placeholder:text-muted-foreground disabled:opacity-50"
           }
           value={draft.body}
           onChange={(e) => owner.editBody(e.target.value)}
+          onPaste={(event) => {
+            // Pasted files are attached; text pastes as usual, even with a picture of itself.
+            const files = pastedFiles(event.clipboardData);
+            if (!files.length) return;
+            event.preventDefault();
+            onAddFiles(files);
+          }}
           onKeyDown={(e) => {
             // With a keyboard and pointer, Enter sends and Shift+Enter breaks the line. On touch
             // screens Return breaks the line, as in iMessage, and only the button sends.
@@ -106,7 +141,7 @@ export function Composer({
           size="icon"
           className="flex-none"
           aria-label="Send message"
-          disabled={sending || (!draft.body.trim() && !draft.attachment)}
+          disabled={sending || !ready(draft)}
         >
           <ArrowUp />
         </Button>

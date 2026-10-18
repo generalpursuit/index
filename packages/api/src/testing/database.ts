@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { memoryFileStore } from "../features/messages/files";
 import { memoryMediaStore } from "../features/profiles/media";
 import type { Session } from "@index/auth";
 import { user } from "@index/db/schema/auth";
@@ -46,6 +47,7 @@ export async function createTestDatabase() {
       fetchPage: offline,
       fetchImport: offline,
       media,
+      files,
     };
   }
 
@@ -80,3 +82,6 @@ function sessionFor(userId: string): Session {
 const offline: Context["fetchPage"] = () => Promise.reject(new TypeError("Offline in tests."));
 /** Photos uploaded in tests stay in memory. */
 export const media = memoryMediaStore("https://api.example.test");
+
+/** Files uploaded in tests stay in memory. */
+export const files = memoryFileStore();

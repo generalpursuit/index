@@ -141,6 +141,26 @@ public actor APIClient {
       throw error
     }
   }
+  /// Uploads one file with form fields and decodes the JSON answer. Uploads change no cached
+  /// resource, so nothing is invalidated.
+  public func upload<T: Decodable & Sendable>(
+    _ path: String, file: UploadFile, fields: [String: String] = [:]
+  ) async throws -> T {
+    guard !provisional else { throw APIError.sessionNotVerified }
+    let boundary = "index-\(UUID().uuidString)"
+    let data = try await performData(
+      "/api/v1" + path, method: "POST",
+      multipart: (Multipart.body(file: file, fields: fields, boundary: boundary), boundary))
+    try checkExternalSession()
+    do { return try JSONDecoder().decode(T.self, from: data) } catch { throw APIError.invalidResponse }
+  }
+  /// Reads a file's bytes. They are binary and private, so they bypass the response cache.
+  public func download(_ path: String) async throws -> Data {
+    guard !provisional else { throw APIError.sessionNotVerified }
+    let data = try await performData("/api/v1" + path)
+    try checkExternalSession()
+    return data
+  }
   /// Resource ownership is the single home for transport invalidation. Housekeeping
   /// never invalidates content; mutations affecting membership invalidate those lists.
   private static func affectedResources(_ path: String) -> [String] {
@@ -320,7 +340,10 @@ public actor APIClient {
       guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
     }
   }
-  private func makeRequest(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) throws -> URLRequest {
+  private func makeRequest(
+    _ path: String, method: String, query: [String: String], body: [String: JSONValue]?,
+    multipart: (body: Data, boundary: String)? = nil
+  ) throws -> URLRequest {
     var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
     components.path =
       components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")).isEmpty
@@ -335,7 +358,12 @@ public actor APIClient {
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     request.setValue(Self.clientIdentity, forHTTPHeaderField: "X-Index-Client")
     if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
-    if let body {
+    if let multipart {
+      request.httpBody = multipart.body
+      request.setValue("multipart/form-data; boundary=\(multipart.boundary)", forHTTPHeaderField: "Content-Type")
+      // The server parses and stores the whole file before it answers.
+      request.timeoutInterval = 120
+    } else if let body {
       request.httpBody = try JSONEncoder().encode(body)
       request.setValue("application/json", forHTTPHeaderField: "Content-Type")
     }
@@ -343,7 +371,7 @@ public actor APIClient {
   }
   private func performData(
     _ path: String, method: String = "GET", query: [String: String] = [:],
-    body: [String: JSONValue]? = nil, accepting: Int? = nil
+    body: [String: JSONValue]? = nil, multipart: (body: Data, boundary: String)? = nil, accepting: Int? = nil
   ) async throws -> Data {
     if provisional, path != "/api/auth/get-session" { throw APIError.sessionNotVerified }
     if let accepting, accepting != generation { throw CancellationError() }
@@ -353,7 +381,7 @@ public actor APIClient {
     if externallyManagedSession {
       guard token != nil, try credentials.read() == token else { throw APIError.unauthenticated }
     }
-    let request = try makeRequest(path, method: method, query: query, body: body)
+    let request = try makeRequest(path, method: method, query: query, body: body, multipart: multipart)
     let (data, response) = try await session.data(for: request)
     try Task.checkCancellation()
     if externallyManagedSession {

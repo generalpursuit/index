@@ -1,4 +1,5 @@
-import type { MessageReply, SavedLink } from "@/lib/types";
+import { maxFilesPerMessage } from "@index/api/features/messages/files";
+import type { MessageFile, MessageReply, SavedLink } from "@/lib/types";
 
 export type MessageAttempt = Readonly<{
   conversationId: string;
@@ -6,23 +7,41 @@ export type MessageAttempt = Readonly<{
   body: string;
   linkId?: string;
   replyToMessageId?: string;
+  /** Uploaded files in their sent order; the request names them by ID. */
+  files: readonly MessageFile[];
+}>;
+/** A file added to the draft, uploading until it has either uploaded or failed. */
+export type DraftFile = Readonly<{
+  localId: string;
+  file: File;
+  uploaded?: MessageFile;
+  failed?: boolean;
 }>;
 type Draft = Readonly<{
   body: string;
   attachment?: SavedLink;
   queuedAttachment?: SavedLink;
+  files: readonly DraftFile[];
   replyTo?: MessageReply;
   status: "editing" | "sending" | "uncertain" | "rejected";
 }>;
 
+/** Whether a draft can be sent: it carries something, and every file has uploaded. */
+export function ready(draft: Draft) {
+  return (
+    (!!draft.body.trim() || !!draft.attachment || draft.files.length > 0) &&
+    draft.files.every((file) => file.uploaded)
+  );
+}
+
 /** A send owns its payload until its outcome is known, including across route changes. */
 export class MessageDraft {
-  private value: Draft = { body: "", status: "editing" };
+  private value: Draft = { body: "", files: [], status: "editing" };
   private attempt?: MessageAttempt;
   private active = true;
   private listeners = new Set<() => void>();
 
-  constructor(private conversationId: string) {}
+  constructor(readonly conversationId: string) {}
   getSnapshot = () => this.value;
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -57,12 +76,43 @@ export class MessageDraft {
   removeReply() {
     if (!this.attempt) this.change({ ...this.value, replyTo: undefined, status: "editing" });
   }
+  /** Adds files up to the per-message limit and returns those added, for uploading. */
+  addFiles(files: File[]): DraftFile[] {
+    if (this.attempt || !this.active) return [];
+    const added = files
+      .slice(0, Math.max(0, maxFilesPerMessage - this.value.files.length))
+      .map((file) => ({ localId: crypto.randomUUID(), file }));
+    if (added.length)
+      this.change({ ...this.value, files: [...this.value.files, ...added], status: "editing" });
+    return added;
+  }
+  fileUploaded(localId: string, uploaded: MessageFile) {
+    this.updateFile(localId, { uploaded });
+  }
+  fileFailed(localId: string) {
+    this.updateFile(localId, { failed: true });
+  }
+  removeFile(localId: string) {
+    if (!this.attempt)
+      this.change({
+        ...this.value,
+        files: this.value.files.filter((file) => file.localId !== localId),
+        status: "editing",
+      });
+  }
+  // An upload may finish after its file was removed; it then changes nothing.
+  private updateFile(localId: string, change: Partial<DraftFile>) {
+    if (!this.value.files.some((file) => file.localId === localId)) return;
+    this.change({
+      ...this.value,
+      files: this.value.files.map((file) =>
+        file.localId === localId ? { ...file, ...change } : file,
+      ),
+    });
+  }
   prepare(): MessageAttempt | undefined {
-    if (
-      !this.active ||
-      this.value.status === "sending" ||
-      (!this.value.body.trim() && !this.value.attachment)
-    )
+    // An existing attempt is retried as it was frozen; only a new one needs a ready draft.
+    if (!this.active || this.value.status === "sending" || (!this.attempt && !ready(this.value)))
       return;
     this.attempt ??= Object.freeze({
       conversationId: this.conversationId,
@@ -70,6 +120,7 @@ export class MessageDraft {
       body: this.value.body,
       linkId: this.value.attachment?.id,
       replyToMessageId: this.value.replyTo?.id,
+      files: Object.freeze(this.value.files.map((file) => file.uploaded!)),
     });
     this.change({ ...this.value, status: "sending" });
     return this.attempt;
@@ -77,7 +128,12 @@ export class MessageDraft {
   complete(attempt: MessageAttempt) {
     if (attempt !== this.attempt) return;
     this.attempt = undefined;
-    this.change({ body: "", attachment: this.value.queuedAttachment, status: "editing" });
+    this.change({
+      body: "",
+      files: [],
+      attachment: this.value.queuedAttachment,
+      status: "editing",
+    });
   }
   fail(attempt: MessageAttempt, error: unknown) {
     if (attempt !== this.attempt) return;
@@ -96,11 +152,16 @@ export class MessageDraft {
   abandonUnconfirmed() {
     if (this.value.status !== "uncertain") return;
     this.attempt = undefined;
-    this.change({ body: "", attachment: this.value.queuedAttachment, status: "editing" });
+    this.change({
+      body: "",
+      files: [],
+      attachment: this.value.queuedAttachment,
+      status: "editing",
+    });
   }
   discard() {
     this.attempt = undefined;
-    this.change({ body: "", status: "editing" });
+    this.change({ body: "", files: [], status: "editing" });
     this.active = false;
   }
 }

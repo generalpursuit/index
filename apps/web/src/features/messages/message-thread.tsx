@@ -7,7 +7,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Copy, Reply } from "lucide-react";
+import { Copy, Download, ImageIcon, Reply } from "lucide-react";
 import { toast } from "sonner";
 import {
   ContextMenu,
@@ -16,8 +16,9 @@ import {
   ContextMenuTrigger,
 } from "@index/ui/components/context-menu";
 import { UserAvatar } from "@/components/app/user-avatar";
-import type { Conversation, Message } from "@/lib/types";
+import type { Conversation, Message, MessageFile } from "@/lib/types";
 import { replyExcerpt, replyLabel } from "./conversation-presentation";
+import { MessageFiles, PhotoViewer, isPhoto, useSaveFile } from "./message-files";
 import { SharedPost } from "./shared-post";
 import { exactTime, messageTimeline, stampLabel, type MessageRun } from "./timeline";
 import { useSwipeReply } from "./use-swipe-reply";
@@ -241,110 +242,160 @@ function MessageItem({
   const swipe = useSwipeReply(() => {
     if (canReply) onReply();
   });
-  // The menu keeps focus while open, so replying hands it to the composer as it closes.
-  const replying = useRef(false);
+  // The menu keeps focus while open, so what it opens takes focus as it closes: replying hands
+  // it to the composer, and a photo's viewer takes it itself.
+  const handoff = useRef<"composer" | "viewer">(undefined);
+  const item = useRef<HTMLDivElement>(null);
+  const [viewer, setViewer] = useState<{ file: MessageFile; open: boolean }>();
+  const save = useSaveFile();
   const label = useId();
+  const photos = message.files.filter(isPhoto),
+    others = message.files.filter((file) => !isPhoto(file));
   // A run's tail belongs to its final bubble; a card below it is its own surface.
   const card = !!message.attachment || !!message.restrictedAuthor || message.hasAttachment;
   return (
-    <ContextMenu
-      onOpenChange={(open) => {
-        if (open) replying.current = false;
-      }}
-    >
-      <ContextMenuTrigger
-        id={"message-" + message.id}
-        role="listitem"
-        tabIndex={current ? 0 : -1}
-        aria-labelledby={`${label}sender ${label}content ${label}time`}
-        // Focus rings the bubble and card as a highlight does, which fits the thread's edges.
-        className="relative min-w-0 touch-pan-y outline-hidden [&:focus-visible_.message-bubble]:[box-shadow:0_0_0_2px_var(--ring)] [&:focus-visible_.shared-post]:[box-shadow:0_0_0_2px_var(--ring)]"
-        onFocus={onFocus}
-        onKeyDown={(event) => {
-          if (event.key !== "Enter" || event.target !== event.currentTarget) return;
-          // Enter opens the post a message carries, or else the original a reply quotes. The
-          // arrow keys reach that original too, but nothing else reaches the post.
-          const action =
-            event.currentTarget.querySelector<HTMLElement>(".shared-post:is(button, a)") ??
-            event.currentTarget.querySelector<HTMLElement>("button.message-quote");
-          if (!action) return;
-          event.preventDefault();
-          action.click();
+    <>
+      <ContextMenu
+        onOpenChange={(open) => {
+          if (open) handoff.current = undefined;
         }}
-        {...swipe.handlers}
       >
-        <span
-          ref={swipe.icon}
-          aria-hidden="true"
-          className={
-            "absolute left-0 top-1/2 -mt-3.5 grid place-items-center size-7 rounded-full bg-muted text-subtle-foreground opacity-0 [transition:transform_150ms_ease,_color_150ms_ease] data-[armed=true]:scale-110 data-[armed=true]:text-foreground [&>svg]:size-3.5"
-          }
-        >
-          <Reply />
-        </span>
-        <div
-          ref={swipe.content}
-          id={label + "content"}
-          className={
-            "message relative flex flex-col gap-0.5 min-w-0 [&[data-highlighted]_.message-bubble]:[box-shadow:0_0_0_2px_var(--ring)] [&[data-highlighted]_.shared-post]:[box-shadow:0_0_0_2px_var(--ring)] " +
-            (outgoing ? "outgoing items-end" : "incoming items-start")
-          }
-          data-highlighted={highlighted || undefined}
-          data-delivery={"delivery" in message ? String(message.delivery) : undefined}
-          title={exactTime(message.createdAt)}
-        >
-          {quote}
-          {message.body && (
-            <p
-              className={
-                // Touch screens copy from the menu, since a long press opens it.
-                "message-bubble max-w-full p-[8px_13px] rounded-[18px] leading-[1.35] [@media(pointer:fine)]:select-text whitespace-pre-wrap wrap-anywhere " +
-                (outgoing ? "bg-primary text-primary-foreground" : "bg-muted text-foreground") +
-                (tail && !card ? (outgoing ? " rounded-br-[5px]" : " rounded-bl-[5px]") : "")
-              }
-            >
-              {message.body}
-            </p>
-          )}
-          <SharedPost message={message} />
-          {"delivery" in message && message.delivery === "pending" && (
-            <span className="text-[11px] text-subtle-foreground" role="status">
-              Sending…
-            </span>
-          )}
-        </div>
-        <span id={label + "sender"} hidden>
-          {sender}
-        </span>
-        <span id={label + "time"} hidden>
-          {exactTime(message.createdAt)}
-        </span>
-      </ContextMenuTrigger>
-      <ContextMenuContent finalFocus={() => (replying.current ? composer.current : true)}>
-        <ContextMenuItem
-          disabled={!canReply}
-          onClick={() => {
-            replying.current = true;
-            onReply();
+        <ContextMenuTrigger
+          ref={item}
+          id={"message-" + message.id}
+          role="listitem"
+          tabIndex={current ? 0 : -1}
+          aria-labelledby={`${label}sender ${label}content ${label}time`}
+          // Focus rings each of the message's surfaces (`message-surface`: its bubble, photos and
+          // cards) as a highlight does, which fits the thread's edges.
+          className="relative min-w-0 touch-pan-y outline-hidden [&:focus-visible_.message-surface]:[box-shadow:0_0_0_2px_var(--ring)]"
+          onFocus={onFocus}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.target !== event.currentTarget) return;
+            // Enter opens the post a message carries, or else the original a reply quotes. The
+            // arrow keys reach that original too, but nothing else reaches the post.
+            const action =
+              event.currentTarget.querySelector<HTMLElement>(".shared-post:is(button, a)") ??
+              event.currentTarget.querySelector<HTMLElement>("button.message-quote");
+            if (!action) return;
+            event.preventDefault();
+            action.click();
           }}
+          {...swipe.handlers}
         >
-          <Reply />
-          Reply
-        </ContextMenuItem>
-        {message.body && (
-          <ContextMenuItem
-            onClick={() =>
-              void navigator.clipboard
-                .writeText(message.body)
-                .catch(() => toast.error("Could not copy this message. Try again."))
+          <span
+            ref={swipe.icon}
+            aria-hidden="true"
+            className={
+              "absolute left-0 top-1/2 -mt-3.5 grid place-items-center size-7 rounded-full bg-muted text-subtle-foreground opacity-0 [transition:transform_150ms_ease,_color_150ms_ease] data-[armed=true]:scale-110 data-[armed=true]:text-foreground [&>svg]:size-3.5"
             }
           >
-            <Copy />
-            Copy
+            <Reply />
+          </span>
+          <div
+            ref={swipe.content}
+            id={label + "content"}
+            className={
+              "message relative flex flex-col gap-0.5 min-w-0 [&[data-highlighted]_.message-surface]:[box-shadow:0_0_0_2px_var(--ring)] " +
+              (outgoing ? "outgoing items-end" : "incoming items-start")
+            }
+            data-highlighted={highlighted || undefined}
+            data-delivery={"delivery" in message ? String(message.delivery) : undefined}
+            title={exactTime(message.createdAt)}
+          >
+            {quote}
+            {/* Files sit above the text, as in iMessage, so the bubble keeps its tail. */}
+            <MessageFiles
+              message={message}
+              onOpenPhoto={(file) => setViewer({ file, open: true })}
+            />
+            {message.body && (
+              <p
+                className={
+                  // Touch screens copy from the menu, since a long press opens it.
+                  "message-bubble message-surface max-w-full p-[8px_13px] rounded-[18px] leading-[1.35] [@media(pointer:fine)]:select-text whitespace-pre-wrap wrap-anywhere " +
+                  (outgoing ? "bg-primary text-primary-foreground" : "bg-muted text-foreground") +
+                  (tail && !card ? (outgoing ? " rounded-br-[5px]" : " rounded-bl-[5px]") : "")
+                }
+              >
+                {message.body}
+              </p>
+            )}
+            <SharedPost message={message} />
+            {"delivery" in message && message.delivery === "pending" && (
+              <span className="text-[11px] text-subtle-foreground" role="status">
+                Sending…
+              </span>
+            )}
+          </div>
+          <span id={label + "sender"} hidden>
+            {sender}
+          </span>
+          <span id={label + "time"} hidden>
+            {exactTime(message.createdAt)}
+          </span>
+        </ContextMenuTrigger>
+        <ContextMenuContent
+          finalFocus={() =>
+            handoff.current === "composer" ? composer.current : handoff.current !== "viewer"
+          }
+        >
+          <ContextMenuItem
+            disabled={!canReply}
+            onClick={() => {
+              handoff.current = "composer";
+              onReply();
+            }}
+          >
+            <Reply />
+            Reply
           </ContextMenuItem>
-        )}
-      </ContextMenuContent>
-    </ContextMenu>
+          {message.body && (
+            <ContextMenuItem
+              onClick={() =>
+                void navigator.clipboard
+                  .writeText(message.body)
+                  .catch(() => toast.error("Could not copy this message. Try again."))
+              }
+            >
+              <Copy />
+              Copy
+            </ContextMenuItem>
+          )}
+          {/* The keyboard's way to the message's files, which aren't tab stops. */}
+          {photos.map((file, index) => (
+            <ContextMenuItem
+              key={file.id}
+              onClick={() => {
+                handoff.current = "viewer";
+                setViewer({ file, open: true });
+              }}
+            >
+              <ImageIcon />
+              {photos.length > 1 ? `Open photo ${index + 1}` : "Open photo"}
+            </ContextMenuItem>
+          ))}
+          {others.map((file) => (
+            <ContextMenuItem key={file.id} onClick={() => void save(message.conversationId, file)}>
+              <Download />
+              <span className="truncate">Download {file.name}</span>
+            </ContextMenuItem>
+          ))}
+        </ContextMenuContent>
+      </ContextMenu>
+      {/* Beside the menu rather than in it: React passes a portal's events through its parents,
+          so inside, the viewer's right clicks and swipes would reach the message's handlers. */}
+      {viewer && (
+        <PhotoViewer
+          conversationId={message.conversationId}
+          file={viewer.file}
+          open={viewer.open}
+          onOpenChange={(open) => setViewer({ ...viewer, open })}
+          onClosed={() => setViewer(undefined)}
+          finalFocus={item}
+        />
+      )}
+    </>
   );
 }
 

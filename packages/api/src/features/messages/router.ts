@@ -28,4 +28,16 @@ export const messagesRouter = api.router({
       await service.markRead(context.db, context.actorId, input.conversationId, input.messageId),
     ),
   ),
+  upload: api.upload.handler(async ({ context, input }) =>
+    unwrapResult(
+      // zod types files minimally; what arrives is a real File (a Blob).
+      await service.uploadFile(context.db, context.files, context.actorId, {
+        ...input,
+        file: input.file as unknown as File,
+      }),
+    ),
+  ),
+  file: api.file.handler(async ({ context, input }) =>
+    unwrapResult(await service.readFile(context.db, context.files, context.actorId, input)),
+  ),
 });
