@@ -16,7 +16,11 @@ private actor FeatureStub: FeatureAPI {
   private var paused: Set<String> = []
   private var continuations: [String: CheckedContinuation<Void, Never>] = [:]
   private var waiting: [String: [CheckedContinuation<Void, Never>]] = [:]
+  private var responders: [String: @Sendable ([String: JSONValue]?) -> String] = [:]
   func enqueue(_ path: String, _ json: String) { replies[path, default: []].append(.success(Data(json.utf8))) }
+  /// Answers requests to `path` that have no queued reply from their body, as a server
+  /// echoing what it stored would.
+  func respond(_ path: String, _ reply: @escaping @Sendable ([String: JSONValue]?) -> String) { responders[path] = reply }
   func fail(_ path: String, _ error: Error) { replies[path, default: []].append(.failure(error)) }
   func pause(_ path: String) { paused.insert(path) }
   func started(_ path: String) async {
@@ -40,6 +44,9 @@ private actor FeatureStub: FeatureAPI {
   func request<T: Decodable & Sendable>(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) async throws -> T {
     calls.append(Call(path: path, method: method, query: query, body: body))
     let key = path + (query["query"].map { "?" + $0 } ?? "")
+    if replies[key]?.first == nil, let responder = responders[key] {
+      return try JSONDecoder().decode(T.self, from: Data(responder(body).utf8))
+    }
     guard let result = replies[key]?.first else { throw APIError.invalidResponse }
     replies[key]?.removeFirst()
     if paused.remove(key) != nil {
@@ -753,6 +760,20 @@ final class OptimisticStoreTests: XCTestCase {
     let firstPayload = try JSONSerialization.jsonObject(with: payload(calls[0])) as? NSDictionary
     let retryPayload = try JSONSerialization.jsonObject(with: payload(calls[1])) as? NSDictionary
     XCTAssertEqual(firstPayload, retryPayload)
+  }
+  func testConfirmationReplacesThePendingBubbleWhenTheServerLowercasesTheID() async throws {
+    let api = FeatureStub()
+    let store = AccountStore(api: api, profile: try owner())
+    let model = store.conversation("chat", opening: try decode(conversation("chat")))
+    // The server stores client IDs as UUIDs and returns them in lowercase.
+    await api.respond("/conversations/chat/messages") { body in
+      guard case .string(let id)? = body?["clientId"] else { return "{}" }
+      return message("server-id").replacingOccurrences(of: #""clientId":"client""#, with: #""clientId":"\#(id.lowercased())""#)
+    }
+    store.drafts.edit("hello", in: "chat")
+    try await store.send(in: "chat")
+    XCTAssertEqual(model.messages.map(\.id), ["server-id"])
+    XCTAssertTrue(model.sendStates.isEmpty)
   }
   func testDeleteRestoresListPositionAndLinkEditsUseCanonicalResponse() async throws {
     let api = FeatureStub()

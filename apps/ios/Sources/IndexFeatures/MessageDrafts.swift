@@ -38,8 +38,9 @@ public struct MessageDraft: Sendable {
   mutating func prepare() throws -> PendingMessage {
     if let pending { return pending }
     guard !isEmpty else { throw DraftError.emptyMessage }
+    // Lowercase, as the server returns UUIDs: the confirmed message must match its pending bubble.
     let value = PendingMessage(
-      clientID: UUID().uuidString, body: body.trimmingCharacters(in: .whitespacesAndNewlines),
+      clientID: UUID().uuidString.lowercased(), body: body.trimmingCharacters(in: .whitespacesAndNewlines),
       linkID: attachment?.id, replyToMessageID: replyTo?.id)
     pending = value
     return value
