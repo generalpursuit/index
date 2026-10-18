@@ -1,5 +1,6 @@
 mod notifications;
 mod menu_bar;
+mod downloads;
 mod session_revision;
 mod appearance;
 mod app_icon;
@@ -38,12 +39,22 @@ fn internal_navigation(url: &Url, development: Option<&Url>) -> bool {
         || (matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost"))
 }
 
+/// A `blob:` address made by the app's own page, such as a conversation file being saved.
+fn app_blob(url: &Url, development: Option<&Url>) -> bool {
+    url.scheme() == "blob"
+        && Url::parse(url.path()).is_ok_and(|inner| internal_navigation(&inner, development))
+}
+
 fn restrict_navigation<'a>(builder: WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle>, app: &tauri::AppHandle) -> WebviewWindowBuilder<'a, tauri::Wry, tauri::AppHandle> {
     let navigation_app = app.clone();
     let popup_app = app.clone();
     let development = app.config().build.dev_url.clone();
     builder.on_navigation(move |url| {
         if internal_navigation(url, development.as_ref()) { return true; }
+        // WebKitGTK asks here before it downloads, so the app's own files must pass on to the
+        // download handler. WebKit on macOS and WebView2 start downloads without asking, so
+        // elsewhere this would only let such an address replace the app's page.
+        if cfg!(target_os = "linux") && app_blob(url, development.as_ref()) { return true; }
         if is_website(url) { let _ = navigation_app.opener().open_url(url.as_str(), None::<&str>); }
         false
     }).on_new_window(move |url, _| {
@@ -188,5 +199,13 @@ mod tests {
             &Url::parse("https://tauri.localhost.evil.example").unwrap(),
             None
         ));
+    }
+    #[test]
+    fn only_the_apps_own_blobs_pass_to_downloads() {
+        assert!(app_blob(&Url::parse("blob:tauri://localhost/5f0c").unwrap(), None));
+        assert!(app_blob(&Url::parse("blob:http://tauri.localhost/5f0c").unwrap(), None));
+        assert!(!app_blob(&Url::parse("blob:https://evil.example/5f0c").unwrap(), None));
+        assert!(!app_blob(&Url::parse("blob:null/5f0c").unwrap(), None));
+        assert!(!app_blob(&Url::parse("tauri://localhost/5f0c").unwrap(), None));
     }
 }

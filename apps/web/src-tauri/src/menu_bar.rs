@@ -99,7 +99,9 @@ pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let builder = WebviewWindowBuilder::from_config(app, config)?
         .theme(crate::appearance::stored_theme(app))
         .visible(false);
-    let window = crate::restrict_navigation(crate::titlebar::prepare(builder), app).build()?;
+    let window = crate::restrict_navigation(crate::titlebar::prepare(builder), app)
+        .on_download(crate::downloads::handle)
+        .build()?;
     crate::titlebar::install(&window);
     crate::appearance::paint_background(&window);
     attach_lifecycle(&window);

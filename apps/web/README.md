@@ -61,7 +61,7 @@ For a local host-only build, from `apps/web`:
 VITE_SERVER_URL=http://localhost:3002 bun run desktop:build --local --without-share-extension --bundles app
 ```
 
-This uses the disposable fixture API and is not a distribution artifact. Normal macOS packaging includes the [Share extension](../../docs/sharing.md#native-packaging-and-checks) and requires signing/profile inputs. [Desktop releases](../../docs/desktop-releases.md) owns channel builds and updates. Native external navigation accepts HTTP(S) only and opens the default browser; remote WebView navigation/popups are blocked.
+This uses the disposable fixture API and is not a distribution artifact. Normal macOS packaging includes the [Share extension](../../docs/sharing.md#native-packaging-and-checks) and requires signing/profile inputs. [Desktop releases](../../docs/desktop-releases.md) owns channel builds and updates. Native external navigation accepts HTTP(S) only and opens the default browser; remote WebView navigation/popups are blocked. Desktop downloads accept only the page's own `blob:` addresses, save to Downloads under a free name and are revealed in the file manager; on Linux those addresses pass navigation so WebKitGTK can start them.
 
 ### Desktop session boundary
 
