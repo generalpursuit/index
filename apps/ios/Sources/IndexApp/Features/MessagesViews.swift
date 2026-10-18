@@ -1,6 +1,9 @@
 import IndexCore
 import IndexFeatures
+import PhotosUI
+import QuickLook
 import SwiftUI
+import UniformTypeIdentifiers
 #if os(iOS)
 import UIKit
 #else
@@ -68,14 +71,14 @@ struct MessagesView: View {
   }
   private func preview(_ conversation: Conversation) -> String {
     let draft = app.drafts.draft(for: conversation.id)
-    if !draft.body.isEmpty || draft.attachment != nil {
-      return "Draft: " + (draft.body.isEmpty ? "Link" : draft.body)
+    if !draft.body.isEmpty || draft.attachment != nil || !draft.files.isEmpty {
+      return "Draft: " + (draft.body.isEmpty ? (draft.files.isEmpty ? "Link" : "Attachment") : draft.body)
     }
     guard let message = conversation.lastMessage else { return "Start a conversation" }
     let text =
       !message.body.isEmpty
       ? message.body
-      : message.attachment?.title
+      : message.files.summary ?? message.attachment?.title
         ?? (message.restrictedAuthor != nil
           ? "Private post" : message.hasAttachment ? "Post unavailable" : "Message")
     return (message.senderId == app.userID ? "You: " : "") + text
@@ -208,6 +211,9 @@ struct ConversationView: View {
   @State private var scrollAfterSend = false
   /// The replied message just shown from a quote.
   @State private var highlighted: String?
+  @State private var choosingPhotos = false
+  @State private var choosingFiles = false
+  @State private var photos: [PhotosPickerItem] = []
   @FocusState private var focused: Bool
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   private var draft: MessageDraft { app.drafts.draft(for: conversationID) }
@@ -338,10 +344,39 @@ struct ConversationView: View {
             do { try app.drafts.attach(nil, to: conversationID) } catch { app.handle(error) }
           }.disabled(draft.pending != nil)
         }
+        if !draft.files.isEmpty {
+          let photoIDs = draft.files.filter(\.isPhoto).map(\.id)
+          ScrollView(.horizontal) {
+            HStack(spacing: 8) {
+              ForEach(draft.files) { file in
+                let number = photoIDs.firstIndex(of: file.id).map { $0 + 1 }
+                let spokenName = number.map { photoIDs.count > 1 ? "Photo \($0) of \(photoIDs.count)" : "Photo" } ?? file.name
+                DraftFileTile(file: file, spokenName: spokenName) {
+                  do { try app.drafts.removeFile(file.id, in: conversationID) } catch { app.handle(error) }
+                }
+                .disabled(draft.pending != nil)
+              }
+            }
+            .padding(2)
+          }
+          .scrollIndicators(.hidden)
+        }
         HStack(alignment: .bottom, spacing: 6) {
+          Menu {
+            Button("Photo Library", systemImage: "photo.on.rectangle") { choosingPhotos = true }
+            Button("Choose File", systemImage: "folder") { choosingFiles = true }
+            #if os(iOS)
+            Button("Paste", systemImage: "doc.on.clipboard") { Task { attach(await DraftFile.pasted(limit: freeSlots)) } }
+            #endif
+          } label: {
+            Image(systemName: "paperclip").font(.system(size: 17)).frame(width: 34, height: 34)
+              .foregroundStyle(IndexPalette.subtleForeground)
+          }
+          .accessibilityLabel("Attach")
+          .disabled(draft.pending != nil || freeSlots <= 0)
           // A vertical field breaks the line on Return, as in Messages; only the button sends.
           TextField("Message", text: text, axis: .vertical).lineLimit(1...6).focused($focused)
-            .font(IndexFont.sans(16)).padding(.leading, 10).padding(.vertical, 7)
+            .font(IndexFont.sans(16)).padding(.leading, 2).padding(.vertical, 7)
             .disabled(draft.pending != nil)
           AsyncButton(action: send) {
             Image(systemName: draft.pending == nil ? "arrow.up" : "arrow.clockwise")
@@ -357,8 +392,36 @@ struct ConversationView: View {
       .background(IndexPalette.background, in: RoundedRectangle(cornerRadius: 22))
       .overlay(RoundedRectangle(cornerRadius: 22).stroke(focused ? IndexPalette.input : IndexPalette.border))
     }.padding(.horizontal, 20).padding(.vertical, 10).background(IndexPalette.background)
+    .photosPicker(isPresented: $choosingPhotos, selection: $photos,
+      maxSelectionCount: max(1, freeSlots),
+      matching: .images, preferredItemEncoding: .compatible)
+    .onChange(of: photos) { _, items in
+      guard !items.isEmpty else { return }
+      photos = []
+      Task { attach(await DraftFile.photos(items, limit: freeSlots)) }
+    }
+    .fileImporter(isPresented: $choosingFiles, allowedContentTypes: [.data], allowsMultipleSelection: true) { result in
+      switch result {
+      case .success(let urls): Task { attach(await DraftFile.files(at: urls, limit: freeSlots)) }
+      case .failure(let error): app.handle(error)
+      }
+    }
   }
-  private var canSend: Bool { conversation?.canSend == true && !draft.isEmpty }
+  private var freeSlots: Int { MessageLimits.files - draft.files.count }
+  /// Adds what a picker or the pasteboard offered to the draft, with one alert for whatever
+  /// was left out.
+  private func attach(_ picked: PickedFiles) {
+    // The loader read only the free slots, and another pick may have taken some meanwhile.
+    let tooMany = picked.tooMany || picked.files.count > freeSlots
+    if picked.unreadable || picked.tooLarge {
+      app.handle(DraftError.couldNotAttach(tooLarge: picked.tooLarge, tooMany: tooMany))
+    } else if tooMany {
+      app.handle(DraftError.tooManyFiles)
+    }
+    do { try store.addFiles(picked.files, to: conversationID) } catch { app.handle(error) }
+    focused = true
+  }
+  private var canSend: Bool { conversation?.canSend == true && !draft.isEmpty && draft.isReady }
   /// Like the text, the replied message cannot change while a send is pending.
   private var canReply: Bool { conversation?.canSend == true && draft.pending == nil }
   private func reply(to message: Message) {
@@ -422,7 +485,9 @@ struct MessageRow: View {
   /// Shows the replied message; nil while it is not loaded.
   let showOriginal: (() -> Void)?
   @Environment(AppModel.self) private var app
+  @Environment(AccountStore.self) private var store
   @Environment(\.screenVisible) private var visible
+  @State private var previewing: URL?
   private var message: Message { row.message }
   private var own: Bool { message.senderId == app.userID }
   // In 1:1 chats the header already names and pictures the other person.
@@ -446,7 +511,7 @@ struct MessageRow: View {
             Color.clear.frame(width: 28, height: 0)
           }
         }
-        MessageContent(message: message, own: own, tail: row.endsRun, highlighted: highlighted) {
+        MessageContent(message: message, own: own, tail: row.endsRun, highlighted: highlighted, open: open) {
           if let original = message.replyTo, let quoteLabel {
             ReplyQuote(label: quoteLabel, excerpt: original.preview, own: own, show: showOriginal)
           }
@@ -466,14 +531,24 @@ struct MessageRow: View {
       .accessibilityElement(children: .ignore)
       .accessibilityLabel(spokenSummary)
       .accessibilityActions {
+        // SwiftUI offers these actions in reverse of their declaration, so they are declared
+        // last to first. VoiceOver reads them in the order shown: the replied message, photos,
+        // files and the post, then Copy and Reply.
         if canReply { Button("Reply", action: reply) }
         if !message.body.isEmpty { Button("Copy") { copy(message.body) } }
-        if let showOriginal { Button("Show replied message", action: showOriginal) }
         if let attachment = message.attachment {
           Button("Open post") { app.openLink(attachment) }
         } else if let author = message.restrictedAuthor {
           Button("View profile") { app.navigate(.profile(author.id)) }
         }
+        ForEach(message.files.filter { !$0.isPhoto }.reversed()) { file in
+          Button("Open \(file.name)") { open(file) }
+        }
+        let photos = message.files.filter(\.isPhoto)
+        ForEach(Array(photos.enumerated()).reversed(), id: \.element.id) { index, file in
+          Button(photos.count > 1 ? "Open photo \(index + 1) of \(photos.count)" : "Open photo") { open(file) }
+        }
+        if let showOriginal { Button("Show replied message", action: showOriginal) }
       }
       if read {
         Text("Read").font(IndexFont.sans(11, relativeTo: .caption)).foregroundStyle(IndexPalette.subtleForeground)
@@ -482,12 +557,16 @@ struct MessageRow: View {
     }
     .frame(maxWidth: .infinity, alignment: own ? .trailing : .leading)
     .padding(.top, row.stamp != nil ? 0 : row.startsRun ? 12 : 2)
+    .quickLookPreview($previewing)
   }
-  /// Sender, quote, text, post and time, read as one message.
+  /// Sender, quote, text, files, post and time, read as one message.
   private var spokenSummary: String {
     var parts = [own ? "You" : sender?.name ?? "Former participant"]
     if let original = message.replyTo, let quoteLabel { parts.append(quoteLabel + ": " + original.preview) }
     if !message.body.isEmpty { parts.append(message.body) }
+    let photos = message.files.filter(\.isPhoto).count
+    if photos > 0 { parts.append(photos == 1 ? "Photo" : "\(photos) photos") }
+    parts += message.files.filter { !$0.isPhoto }.map { "File, \($0.name)" }
     if let attachment = message.attachment {
       parts.append("Shared post, \(attachment.title), \(attachment.domain)")
     } else if let author = message.restrictedAuthor {
@@ -498,6 +577,12 @@ struct MessageRow: View {
     if let date = APITimestamp.date(message.createdAt) { parts.append(MessageTimeline.stamp(date).text) }
     if read { parts.append("Read") }
     return parts.joined(separator: ", ")
+  }
+  /// Shows a file in Quick Look, from a tap or a VoiceOver action.
+  private func open(_ file: MessageFile) {
+    Task {
+      do { previewing = try await store.previewURL(for: file, in: message.conversationId) } catch { app.handle(error) }
+    }
   }
   private func copy(_ text: String) {
     #if os(iOS)
@@ -541,18 +626,21 @@ struct MessageStampLabel: View {
       .multilineTextAlignment(.center).frame(maxWidth: .infinity).padding(.top, 18).padding(.bottom, 10)
   }
 }
-/// A message's quote, text bubble and shared post. Only the last bubble of a run has a tail,
-/// and only when no card follows it: a card is its own surface.
+/// A message's quote, files, text bubble and shared post. Only the last bubble of a run has a
+/// tail, and only when no card follows it: a card is its own surface. Files come before the
+/// bubble, so they never take its tail.
 struct MessageContent<Quote: View>: View {
   let message: Message
   let own: Bool
   let tail: Bool
   let highlighted: Bool
+  let open: (MessageFile) -> Void
   @ViewBuilder let quote: () -> Quote
   private var card: Bool { message.attachment != nil || message.restrictedAuthor != nil || message.hasAttachment }
   var body: some View {
     VStack(alignment: own ? .trailing : .leading, spacing: 2) {
       quote()
+      if !message.files.isEmpty { MessageFilesView(message: message, own: own, highlighted: highlighted, open: open) }
       if !message.body.isEmpty {
         Text(message.body).font(IndexFont.sans(15)).padding(.horizontal, 13).padding(.vertical, 8)
           .foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
@@ -569,8 +657,7 @@ struct MessageContent<Quote: View>: View {
       bottomTrailingRadius: tailed && own ? 5 : 18, topTrailingRadius: 18)
   }
 }
-/// A post shared in a message. It never takes a bubble's colours, so it reads in either
-/// appearance and beside either sender's bubbles.
+/// A post shared in a message, or why it can't be shown.
 struct SharedPostCard: View {
   let message: Message
   var highlighted = false
@@ -579,14 +666,14 @@ struct SharedPostCard: View {
   var body: some View {
     if let attachment = message.attachment {
       Button { app.openLink(attachment) } label: {
-        card(symbol: "link") {
+        MessageCard(symbol: "link", highlighted: highlighted) {
           Text(attachment.title).font(IndexFont.sans(14, weight: .medium))
           Text(attachment.domain).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
         }
       }.buttonStyle(.plain)
     } else if let author = message.restrictedAuthor {
       Button { app.navigate(.profile(author.id)) } label: {
-        card(symbol: "lock") {
+        MessageCard(symbol: "lock", highlighted: highlighted) {
           Text("Private post from @\(author.label)").font(IndexFont.sans(14, weight: .medium))
           Text("Only approved followers can view this post.").font(IndexFont.sans(12))
             .foregroundStyle(IndexPalette.subtleForeground)
@@ -594,12 +681,19 @@ struct SharedPostCard: View {
         }
       }.buttonStyle(.plain)
     } else if message.hasAttachment {
-      card(symbol: "lock") {
+      MessageCard(symbol: "lock", highlighted: highlighted) {
         Text("Post unavailable").font(IndexFont.sans(14)).foregroundStyle(IndexPalette.subtleForeground)
       }
     }
   }
-  private func card(symbol: String, @ViewBuilder content: () -> some View) -> some View {
+}
+/// A card in a message: a shared post or a file. It never takes a bubble's colours, so it reads
+/// in either appearance and beside either sender's bubbles.
+struct MessageCard<Content: View>: View {
+  let symbol: String
+  var highlighted = false
+  @ViewBuilder let content: () -> Content
+  var body: some View {
     HStack(spacing: 12) {
       Image(systemName: symbol).font(.system(size: 14)).foregroundStyle(IndexPalette.subtleForeground)
       VStack(alignment: .leading, spacing: 2) { content() }.frame(maxWidth: .infinity, alignment: .leading)

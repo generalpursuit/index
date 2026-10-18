@@ -133,22 +133,66 @@ public struct ActivityPage: Codable, Sendable {
   public let nextCursor: String?
   public var unreadCount: Int
 }
-/// The start of a replied message. Its attachment stays behind its own visibility rules,
-/// so a reply only learns that there was one.
+/// The server's limits on what one message may carry, and which of its files show as photos.
+public enum MessageLimits {
+  public static let files = 10
+  /// Counted as Finder and iOS show sizes, where a megabyte is a million bytes.
+  public static let fileBytes = 25_000_000
+  /// The image types the server serves as images. It serves anything else, HEIC too, as opaque
+  /// bytes, so only these show inline.
+  /// Mirrors `inlineImageTypes` in `packages/api/src/features/messages/files.ts`.
+  public static let photoTypes: Set<String> = ["image/jpeg", "image/png", "image/gif", "image/webp"]
+}
+
+/// A file sent in a conversation. Photos keep their image type; anything else arrives as
+/// opaque bytes and opens in Quick Look.
+public struct MessageFile: Codable, Identifiable, Hashable, Sendable {
+  public let id: String
+  public let name: String
+  public let type: String
+  public let size: Int
+  public let width: Int?
+  public let height: Int?
+  public init(id: String, name: String, type: String, size: Int, width: Int?, height: Int?) {
+    self.id = id; self.name = name; self.type = type; self.size = size; self.width = width; self.height = height
+  }
+  public var isPhoto: Bool { MessageLimits.photoTypes.contains(type) }
+  /// Kind and size, as in "PDF · 240 KB".
+  public var details: String {
+    let kind = (name as NSString).pathExtension.uppercased()
+    let amount = ByteCountFormatter.string(fromByteCount: Int64(size), countStyle: .file)
+    return kind.isEmpty ? amount : "\(kind) · \(amount)"
+  }
+}
+
+extension Array where Element == MessageFile {
+  /// What files a message without text carries: "Photo", "3 photos", a file's name or "2 files".
+  public var summary: String? {
+    guard let first else { return nil }
+    let photos = allSatisfy(\.isPhoto)
+    if count == 1 { return photos ? "Photo" : first.name }
+    return "\(count) \(photos ? "photos" : "files")"
+  }
+}
+
+/// The start of a replied message, with its files. A shared post stays behind its own
+/// visibility rules, so a reply only learns that there was one.
 public struct MessageReply: Codable, Hashable, Sendable {
   public let id: String
   public let senderId: String
   public let excerpt: String
   public let hasAttachment: Bool
+  public let files: [MessageFile]
   /// How a draft quotes `message` until the server returns the sent reply's own excerpt.
   public init(quoting message: Message) {
     id = message.id
     senderId = message.senderId
     excerpt = message.body
     hasAttachment = message.hasAttachment
+    files = message.files
   }
-  /// The quoted text. A replied message without text was a shared post.
-  public var preview: String { excerpt.isEmpty && hasAttachment ? "Shared post" : excerpt }
+  /// The quoted text. A replied message without text carried files or a shared post.
+  public var preview: String { excerpt.isEmpty ? (files.summary ?? (hasAttachment ? "Shared post" : "")) : excerpt }
 }
 public struct Message: Codable, Identifiable, Sendable {
   public let id: String
@@ -159,6 +203,7 @@ public struct Message: Codable, Identifiable, Sendable {
   public let createdAt: String
   public let attachment: SavedLink?
   public let hasAttachment: Bool
+  public let files: [MessageFile]
   public let restrictedAuthor: Person?
   /// Null once the replied message is deleted.
   public let replyTo: MessageReply?
@@ -271,9 +316,9 @@ public struct Pulse: Codable, Sendable {
 }
 
 extension Message {
-  public static func pending(clientID: String, conversationID: String, senderID: String, body: String, attachment: SavedLink?, reply: MessageReply?) -> Message {
+  public static func pending(clientID: String, conversationID: String, senderID: String, body: String, attachment: SavedLink?, files: [MessageFile], reply: MessageReply?) -> Message {
     Message(id: clientID, conversationId: conversationID, senderId: senderID, clientId: clientID, body: body,
-      createdAt: Date().formatted(.iso8601), attachment: attachment, hasAttachment: attachment != nil, restrictedAuthor: nil, replyTo: reply)
+      createdAt: Date().formatted(.iso8601), attachment: attachment, hasAttachment: attachment != nil, files: files, restrictedAuthor: nil, replyTo: reply)
   }
 }
 extension Comment {
@@ -326,7 +371,7 @@ public enum ContentPlaceholder {
   public static func message(_ index: Int = 0) -> Message {
     Message(id: "placeholder-\(index)", conversationId: "placeholder", senderId: "placeholder-0", clientId: "placeholder-\(index)",
       body: "A good find to share with you", createdAt: Date().formatted(.iso8601),
-      attachment: nil, hasAttachment: false, restrictedAuthor: nil, replyTo: nil)
+      attachment: nil, hasAttachment: false, files: [], restrictedAuthor: nil, replyTo: nil)
   }
   public static var notificationPreferences: NotificationPreferences {
     NotificationPreferences(message: false, comment: false, mention: false, request: false, follow: false, accepted: false, previews: false)

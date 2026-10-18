@@ -9,6 +9,8 @@ public protocol FeatureAPI: Sendable {
   func snapshot<T: Decodable & Sendable>(_ path: String, query: [String: String]) -> T?
   func snapshotDate(_ path: String, query: [String: String]) -> Date?
   func cached<T: Decodable & Sendable>(_ path: String, query: [String: String]) async -> T?
+  func upload<T: Decodable & Sendable>(_ path: String, file: UploadFile, fields: [String: String]) async throws -> T
+  func download(_ path: String) async throws -> Data
 }
 extension APIClient: FeatureAPI {
   public nonisolated func snapshot<T: Decodable & Sendable>(_ path: String, query: [String: String]) -> T? { cached(path, query: query) }
@@ -41,4 +43,6 @@ func unique<Item: Identifiable>(_ items: [Item]) -> [Item] {
 struct DiscardedAccountAPI: FeatureAPI {
   func request<T: Decodable & Sendable>(_ path: String, method: String, query: [String: String], body: [String: JSONValue]?) async throws -> T { throw CancellationError() }
   func cached<T: Decodable & Sendable>(_ path: String, query: [String: String]) async -> T? { nil }
+  func upload<T: Decodable & Sendable>(_ path: String, file: UploadFile, fields: [String: String]) async throws -> T { throw CancellationError() }
+  func download(_ path: String) async throws -> Data { throw CancellationError() }
 }

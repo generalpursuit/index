@@ -47,6 +47,7 @@ public final class AccountStore {
   @ObservationIgnored private var generation = 0
   @ObservationIgnored private var accepted = true
   @ObservationIgnored private var summaryOnly: Bool
+  @ObservationIgnored private let fileCache = MessageFileCache()
 
   public init(api: any FeatureAPI, profile: Profile, summaryOnly: Bool = false, sessionVerified: Bool = true) {
     self.api = api
@@ -99,6 +100,8 @@ public final class AccountStore {
     feeds = [:]; profiles = [:]; profileWeeks = [:]; inboxes = [:]
     conversations = [:]; activities = [:]; links = [:]; recipientLists = [:]; connectionLists = [:]
     shownAt = [:]; accessedAt = [:]; refreshing = []; pendingEdits = []; conversationVersions = [:]; inboxVersions = [:]; activityVersions = [:]
+    // Another account must never see these files.
+    fileCache.clear()
   }
   /// Bound retained models as a session visits new resources. Clear evicted models too:
   /// a suspended load or an old view reference must not keep publishing private content.
@@ -682,6 +685,29 @@ public final class AccountStore {
     for model in links.values where model.link?.groupId == group.id { model.patchGroup(group) }
     dirtyContent()
   }
+  /// Adds files to a conversation's draft and uploads them.
+  public func addFiles(_ files: [DraftFile], to id: String) throws {
+    guard accepted else { throw CancellationError() }
+    guard sessionVerified else { throw APIError.sessionNotVerified }
+    try drafts.add(files, to: id, api: api)
+  }
+  /// A sent file's bytes, kept in memory for the session while the cache has room.
+  public func data(for file: MessageFile, in conversationID: String) async throws -> Data {
+    // The client is shared, so a stale view would download with the next account's token.
+    guard accepted else { throw CancellationError() }
+    let version = generation
+    return try await fileCache.data(for: file.id) { [self] in
+      let data = try await api.download("/conversations/\(conversationID)/files/\(file.id)")
+      // An account change while downloading must not leave this account's bytes behind.
+      try check(version)
+      return data
+    }
+  }
+  /// A private local copy under the file's own name, for Quick Look.
+  public func previewURL(for file: MessageFile, in conversationID: String) async throws -> URL {
+    guard accepted else { throw CancellationError() }
+    return try await fileCache.previewURL(for: file) { try await data(for: file, in: conversationID) }
+  }
   public func send(in id: String) async throws {
     guard accepted else { throw CancellationError() }
     guard sessionVerified else { throw APIError.sessionNotVerified }
@@ -689,7 +715,9 @@ public final class AccountStore {
     let model = conversation(id)
     try await drafts.send(in: id, api: api, started: { pending, draft in
       model.patch(.pending(clientID: pending.clientID, conversationID: id, senderID: self.accountID,
-        body: pending.body, attachment: draft.attachment, reply: draft.replyTo))
+        body: pending.body, attachment: draft.attachment, files: pending.files, reply: draft.replyTo))
+      // The sender's own bytes are already here, so their sent files open without a download.
+      for file in draft.files { if let sent = file.uploaded { self.fileCache.keep(file.data, for: sent.id) } }
     }, completed: { saved in
       guard self.accepted, self.generation == version else { return }
       model.patch(saved)
