@@ -40,11 +40,17 @@ The verified viewer's pulse returns `messages` and `activity`, each with an `unr
 
 An exact participant set identifies a conversation. Its creator must have accepted outgoing follows to the other participants; existing members can keep reading and replying after unfollowing. Nonmembers cannot inspect, send or mark read. Read state is a monotonic message watermark; acknowledging an older message cannot clear newer arrivals. A conversation's read receipt is the viewer's newest message at or below every other member's watermark, so members learn read state only for their own messages.
 
-A send owns an immutable `clientId`, conversation and payload until its outcome is known. The payload is the text, the attached link and the replied message. Retry an uncertain write with that same identity and payload, including after navigation. A retry that matches a committed message returns it before anything is validated again, so deleting the attached link or the replied message meanwhile does not reject it. Reusing the ID with different contents is rejected. A deliberate abandonment does not retract a possibly committed send. [Link sharing](sharing.md) uses the corresponding `requestId` receipt contract.
+A send owns an immutable `clientId`, conversation and payload until its outcome is known. The payload is the text, the attached link, the replied message and the files in their order. Retry an uncertain write with that same identity and payload, including after navigation. A retry that matches a committed message returns it before anything is validated again, so deleting the attached link or the replied message meanwhile does not reject it. Reusing the ID with different contents is rejected. A deliberate abandonment does not retract a possibly committed send. [Link sharing](sharing.md) uses the corresponding `requestId` receipt contract.
 
-A reply can only quote a message in its own conversation. It carries an excerpt of that message and whether it had an attachment, never the attachment itself; once the replied message is deleted, the reply is no longer quoted.
+A reply can only quote a message in its own conversation. It carries an excerpt of that message, its files and whether it had a shared post, never the post itself; once the replied message is deleted, the reply is no longer quoted.
 
 Forwarding an original grants no access to it. Locked originals cannot be forwarded. A reader blocked by profile privacy receives only the author's public identity; locked/deleted originals expose neither content nor that fallback. A message keeps the attached link's ID as sent, so its attachment marker survives deletion and clients can show an unavailable post.
+
+A member uploads a file of at most 25 MB to a conversation before sending; the request body is capped at 26 MB to allow for multipart framing. Only the uploader can send an unsent file, and nobody can read it from the server. A send lists up to ten of the sender's unsent files from that conversation. The message stores their order, which is part of the retry identity, and a sent file cannot join another message.
+
+Files are typed by their bytes: JPEG, PNG, GIF and WebP keep their image type, and anything else is served as `application/octet-stream`. Every API response carries `X-Content-Type-Options: nosniff`, so no file renders on the API origin. Members read sent files through the API; objects live in a private bucket with no public address.
+
+Unsent files are swept after a day. Rows are deleted before objects, so a failed sweep leaves an orphaned object, never a file without its bytes. Deleting a user, conversation or message cascades to its file rows but not to their objects; whatever deletes those must delete the objects first.
 
 ## External data and photos
 
