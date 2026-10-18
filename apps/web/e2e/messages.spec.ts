@@ -5,6 +5,11 @@ let data: {
   directConversationId: string;
   links: { id: string; title: string }[];
 };
+// A 1×1 PNG; the server types images by their bytes.
+const pixel = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
 async function login(page: Page, name = "alice") {
   await page.goto("/login");
   await page.getByLabel("Email or username", { exact: true }).fill(name + "@test.example");
@@ -59,6 +64,20 @@ async function phone(browser: Browser, reducedMotion: "reduce" | "no-preference"
   const page = await context.newPage();
   await login(page);
   return page;
+}
+/** Dispatches drag events carrying one photo, as the operating system does for a real drop. */
+function drag(target: Locator, types: string[], name: string) {
+  return target.evaluate(
+    (element, { types, name, bytes }) => {
+      const transfer = new DataTransfer();
+      transfer.items.add(new File([new Uint8Array(bytes)], name, { type: "image/png" }));
+      for (const type of types)
+        element.dispatchEvent(
+          new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: transfer }),
+        );
+    },
+    { types, name, bytes: [...pixel] },
+  );
 }
 test.beforeEach(async ({ request }) => {
   data = await (await request.post(apiURL + "/_test/reset")).json();
@@ -136,6 +155,61 @@ test("the composer holds its attachment, grows with Shift+Enter and ignores IME 
   await expect(sent.locator(".shared-post")).toContainText(link.title);
 });
 
+test("files arrive from the picker, a paste or a drop anywhere, and both members see them", async ({
+  page,
+  browser,
+}) => {
+  await login(page);
+  await page.goto(`/messages/${data.directConversationId}`);
+  await expect(page.locator(".chat-page:not([data-placeholder])")).toBeVisible();
+  const composer = page.locator("form.composer"),
+    field = composer.getByRole("textbox", { name: "Message", exact: true });
+  await composer.locator('input[type="file"]').setInputFiles([
+    { name: "photo.png", mimeType: "image/png", buffer: pixel },
+    { name: "menu.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4 menu") },
+  ]);
+  // A file dropped anywhere over the conversation, here its heading, is attached.
+  await drag(page.locator(".chat-heading"), ["dragenter", "dragover"], "dropped.png");
+  await expect(page.locator(".drop-overlay")).toBeVisible();
+  await drag(page.locator(".chat-heading"), ["drop"], "dropped.png");
+  await expect(page.locator(".drop-overlay")).toBeHidden();
+  // A pasted image without text is attached rather than pasted.
+  await field.evaluate(
+    (element, bytes) => {
+      const clipboardData = new DataTransfer();
+      clipboardData.items.add(
+        new File([new Uint8Array(bytes)], "pasted.png", { type: "image/png" }),
+      );
+      element.dispatchEvent(
+        new ClipboardEvent("paste", { bubbles: true, cancelable: true, clipboardData }),
+      );
+    },
+    [...pixel],
+  );
+  await expect(composer.locator('.draft-file[data-state="uploaded"]')).toHaveCount(4);
+  await expect(field).toHaveValue("");
+  await field.fill("Here’s the place");
+  await field.press("Enter");
+  const sent = page.locator(".message.outgoing").last();
+  await expect(sent.locator(".message-photo img")).toHaveCount(3);
+  await expect(sent.locator(".message-file")).toContainText("menu.pdf");
+  // Reading and other cache edits after the send must leave the sender's photos intact.
+  await page.waitForLoadState("networkidle");
+  await expect(sent.locator(".message-photo img").first()).toHaveJSProperty("naturalWidth", 1);
+
+  const context = await browser.newContext(),
+    bob = await context.newPage();
+  await login(bob, "bob");
+  await bob.goto(`/messages/${data.directConversationId}`);
+  const received = bob.locator(".message.incoming").last();
+  await expect(received.locator(".message-photo img")).toHaveCount(3);
+  await expect(received.locator(".message-photo img").first()).toHaveJSProperty("naturalWidth", 1);
+  const download = bob.waitForEvent("download");
+  await received.locator(".message-file").click();
+  expect((await download).suggestedFilename()).toBe("menu.pdf");
+  await context.close();
+});
+
 test("on touch screens Return adds a line and only the button sends", async ({ browser }) => {
   const page = await phone(browser, "no-preference");
   expect(await page.evaluate(() => matchMedia("(pointer: coarse)").matches)).toBe(true);
@@ -200,6 +274,8 @@ test("the keyboard moves through messages as one tab stop and opens their menus 
   const link = data.links[2]!;
   await page.goto(`/messages/${data.conversationId}?attach=${link.id}`);
   const field = page.getByLabel("Message", { exact: true });
+  // The paperclip comes before the field, on screen and in tab order.
+  const attach = page.getByRole("button", { name: "Attach files", exact: true });
   await expect(page.locator(".draft-attachment")).toContainText(link.title);
   await field.fill("Look");
   await field.press("Enter");
@@ -210,6 +286,8 @@ test("the keyboard moves through messages as one tab stop and opens their menus 
     page.getByRole("listitem").filter({ has: page.locator(".message-bubble", { hasText: text }) });
   // The list is entered at its newest message, which names its sender, content and time.
   await field.press("Shift+Tab");
+  await expect(attach).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await expect(focused).toHaveAccessibleName(new RegExp(`^You Look ${link.title} .+${at}`));
   await page.keyboard.press("ArrowUp");
   await expect(focused).toHaveAccessibleName(new RegExp(`^Lena Same here\\.${at}`));
@@ -244,6 +322,8 @@ test("the keyboard moves through messages as one tab stop and opens their menus 
 
   // The list returns to the message focused last; Enter on a reply leads to its original.
   await field.press("Shift+Tab");
+  await expect(attach).toBeFocused();
+  await page.keyboard.press("Shift+Tab");
   await expect(message("Adding it to my list.")).toBeFocused();
   await page.keyboard.press("End");
   await expect(focused).toHaveAccessibleName(
@@ -261,7 +341,50 @@ test("the keyboard moves through messages as one tab stop and opens their menus 
   await expect(message("Adding it to my list.")).toBeFocused();
   // Tab leaves the list, past its quotes and posts, for the composer.
   await page.keyboard.press("Tab");
+  await expect(attach).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(field).toBeFocused();
+});
+
+test("a message's menu opens its photo, and closing the photo returns to the message", async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto("/messages/" + data.conversationId);
+  await page
+    .locator('form.composer input[type="file"]')
+    .setInputFiles({ name: "dot.png", mimeType: "image/png", buffer: pixel });
+  await expect(page.locator('.draft-file[data-state="uploaded"]')).toHaveCount(1);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const message = page.getByRole("listitem").filter({ has: page.locator(".message-photo img") });
+  await expect(message).toHaveCount(1);
+  await message.focus();
+  await page.keyboard.press("Shift+F10");
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: "Open photo", exact: true })).toBeVisible();
+  await page.keyboard.press("End");
+  await expect(menu.getByRole("menuitem", { name: "Open photo", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  // The viewer keeps focus as the menu closes, and Escape returns it to the message.
+  const viewer = page.getByRole("dialog", { name: "dot.png", exact: true });
+  await expect(viewer).toBeVisible();
+  await expect(menu).toHaveCount(0);
+  await expect
+    .poll(() => viewer.evaluate((dialog) => dialog.contains(document.activeElement)))
+    .toBe(true);
+  // The photo's own right click is the browser's, not the message's menu.
+  await viewer.locator("img").click({ button: "right" });
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  // The viewer saves the photo under its name.
+  const save = viewer.getByRole("button", { name: "Download", exact: true });
+  await expect(save).toBeEnabled();
+  await save.focus();
+  const download = page.waitForEvent("download");
+  await page.keyboard.press("Enter");
+  expect((await download).suggestedFilename()).toBe("dot.png");
+  await page.keyboard.press("Escape");
+  await expect(viewer).toHaveCount(0);
+  await expect(message).toBeFocused();
 });
 
 test("swiping a message right replies on touch screens, leaving the edge to back", async ({
