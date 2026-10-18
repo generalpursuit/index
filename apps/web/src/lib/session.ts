@@ -5,6 +5,7 @@ import { accountGeneration, assertCurrentAccount, clearAccountState } from "./ac
 import { acceptDesktopSession, checkedSessionRevision, revokeDesktopAccess } from "./desktop";
 import { authClient } from "./auth-client";
 import { queryClient } from "@/utils/orpc";
+import { isMessageFileQuery } from "@/features/messages/queries";
 
 export const sessionOptions = queryOptions({
   queryKey: ["session"],
@@ -77,5 +78,8 @@ export async function resetSession() {
 /** Refresh the same account after a security change without briefly signing the UI out. */
 export async function refreshSession() {
   await queryClient.fetchQuery({ ...sessionOptions, staleTime: 0 });
-  await queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "session" });
+  // File bytes never change, so photos on screen aren't downloaded again.
+  await queryClient.invalidateQueries({
+    predicate: (query) => query.queryKey[0] !== "session" && !isMessageFileQuery(query.queryKey),
+  });
 }

@@ -6,6 +6,7 @@ import { sessionOptions } from "../session";
 import { client } from "@/utils/orpc";
 import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./index";
 import { contentFeatures } from "@/data/content";
+import { isMessageFileQuery } from "@/features/messages/queries";
 
 type RevisionEvent = { revision: number; source: string | null };
 /** The host shows the panel at once when it already holds content for the current account. */
@@ -105,7 +106,10 @@ export async function installDesktopSync(
           await cache.fetchQuery({ ...sessionOptions, staleTime: 0 });
           if (isMenuBar) {
             await invalidateRouter();
-            await cache.invalidateQueries({ predicate: (q) => q.queryKey[0] !== "session" });
+            // File bytes never change, so photos on screen aren't downloaded again.
+            await cache.invalidateQueries({
+              predicate: (q) => q.queryKey[0] !== "session" && !isMessageFileQuery(q.queryKey),
+            });
           }
           await pendingNavigation();
         } catch {

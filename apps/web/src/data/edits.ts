@@ -204,6 +204,9 @@ export function mapItems(
   if (Array.isArray(data))
     return data.map((item) => mapItems(item, match, change)).filter((item) => item !== undefined);
   if (!data || typeof data !== "object") return data;
+  // Only plain data is walked; a Blob or Date has no items and would come back as `{}`.
+  const prototype = Object.getPrototypeOf(data);
+  if (prototype !== Object.prototype && prototype !== null) return data;
   const object = data as Record<string, unknown>;
   if (match(object)) return change(object);
   return Object.fromEntries(

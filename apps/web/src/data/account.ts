@@ -13,7 +13,7 @@ export type AccountSession = Pick<
 >;
 const persistence = createContentPersistence<
   AccountSession & { expiresAt: number; revision?: number }
->(queryClient, ENV.VITE_SERVER_URL.replace(/\/$/, ""), `${version}:content-1`, diskStorage);
+>(queryClient, ENV.VITE_SERVER_URL.replace(/\/$/, ""), `${version}:content-2`, diskStorage);
 const restoreBlock = `index.content.blocked.${ENV.VITE_SERVER_URL.replace(/\/$/, "")}`;
 const peers =
   typeof BroadcastChannel !== "undefined" && !isDesktop
