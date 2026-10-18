@@ -20,6 +20,27 @@ export default Alchemy.Stack(
     const repo = { owner: "generalpursuit", repository: "index" };
     for (const stage of releaseStages) {
       const environment = stage;
+      // Custom domains and their redirect rules; only production has them.
+      const zonePolicies: Cloudflare.ApiToken.Policy[] =
+        stage === "production"
+          ? [
+              {
+                effect: "allow",
+                permissionGroups: [
+                  "Zone Read",
+                  "DNS Write",
+                  "SSL and Certificates Write",
+                  "Workers Routes Write",
+                  "Dynamic URL Redirects Write",
+                ],
+                resources: {
+                  [`com.cloudflare.api.account.${accountId}`]: {
+                    "com.cloudflare.api.account.zone.*": "*",
+                  },
+                },
+              },
+            ]
+          : [];
       const token = yield* Cloudflare.ApiToken.AccountApiToken(`${stage}-deploy-token`, {
         name: `index-${stage}-github-actions`,
         accountId,
@@ -35,6 +56,7 @@ export default Alchemy.Stack(
             ],
             resources: { [`com.cloudflare.api.account.${accountId}`]: "*" },
           },
+          ...zonePolicies,
         ],
       });
       yield* GitHub.Secret(`${stage}-cloudflare-token`, {

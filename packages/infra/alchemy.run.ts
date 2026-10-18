@@ -113,7 +113,7 @@ export default Alchemy.Stack(
     const serverWorker = yield* server;
     const webWorker = yield* Cloudflare.Website.Vite("web", {
       name: release?.webName,
-      domain: release?.webDomain,
+      domain: release?.webDomain && { name: release.webDomain, redirects: release.webRedirects },
       rootDir: "../../apps/web",
       assets: {
         htmlHandling: "auto-trailing-slash",

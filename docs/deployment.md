@@ -53,9 +53,9 @@ bun run deploy --stage staging --yes
 bun run smoke -- staging
 ```
 
-Substitute `production` in **both** commands for production. Always spell out the stage: `prod` is a different environment. Smoke checks cover web assets, SPA routing, a database read, exact CORS origin and anonymous auth.
+Substitute `production` in **both** commands for production. Always spell out the stage: `prod` is a different environment. Smoke checks cover web assets, redirects, SPA routing, a database read, exact CORS origin and anonymous auth.
 
-Custom `WEB_DOMAIN` / `API_DOMAIN` values are hostnames, requiring configured zones and deployment permissions. Auth uses the API URL; the frontend build receives it from Alchemy. Never place credentials in public `VITE_` variables. Desktop channel URLs are separately owned by [desktop channel configuration](../apps/web/scripts/desktop/channels.ts); coordinate a domain change with desktop releases.
+Custom `WEB_DOMAIN` / `API_DOMAIN` values are hostnames in a zone of the deployment account; `WEB_REDIRECT_DOMAINS` lists hostnames that 301 to `WEB_DOMAIN`. Only production's deployment token can manage zones, so other stages keep `workers.dev`. After moving the web origin, list the previous one in `AUTH_TRUSTED_ORIGINS`: it still serves open tabs and older links. Auth uses the API URL; the frontend build receives it from Alchemy. Never place credentials in public `VITE_` variables. Desktop channel URLs are separately owned by [desktop channel configuration](../apps/web/scripts/desktop/channels.ts); coordinate a domain change with desktop releases.
 
 Verification email requires a server-only Resend key and a verified sender. Restricted accounts cannot use the app until email proof succeeds: test actual delivery before release. Configure canonical/alias origins explicitly; no proposed domain or sender is automatically provisioned. See [authentication](authentication.md) and [notification configuration](notifications.md#configuration).
 

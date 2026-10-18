@@ -61,6 +61,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          WEB_REDIRECT_DOMAINS: ${{ vars.WEB_REDIRECT_DOMAINS }}
           API_DOMAIN: ${{ vars.API_DOMAIN }}
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
@@ -71,6 +72,7 @@ jobs:
         env:
           WORKERS_SUBDOMAIN: ${{ vars.WORKERS_SUBDOMAIN }}
           WEB_DOMAIN: ${{ vars.WEB_DOMAIN }}
+          WEB_REDIRECT_DOMAINS: ${{ vars.WEB_REDIRECT_DOMAINS }}
           API_DOMAIN: ${{ vars.API_DOMAIN }}
         run: bun run smoke -- "$DEPLOY_STAGE"
 

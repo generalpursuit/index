@@ -28,10 +28,30 @@ describe("release deployment configuration", () => {
     });
     assert.equal(config?.webURL, "https://app.example.com");
     assert.equal(config?.apiURL, "https://api.example.com");
+    assert.deepEqual(config?.webRedirects, []);
     assert.throws(() =>
       releaseDeployment("production", {
         WORKERS_SUBDOMAIN: "example",
         WEB_DOMAIN: "https://app.example.com",
+      }),
+    );
+  });
+  it("redirects extra hostnames only to a configured web domain", () => {
+    const env = { WORKERS_SUBDOMAIN: "example", WEB_DOMAIN: "app.example.com" };
+    assert.deepEqual(
+      releaseDeployment("production", {
+        ...env,
+        WEB_REDIRECT_DOMAINS: "a.example.com, b.example.com",
+      })?.webRedirects,
+      ["a.example.com", "b.example.com"],
+    );
+    assert.throws(() =>
+      releaseDeployment("production", { ...env, WEB_REDIRECT_DOMAINS: "https://a.example.com" }),
+    );
+    assert.throws(() =>
+      releaseDeployment("production", {
+        WORKERS_SUBDOMAIN: "example",
+        WEB_REDIRECT_DOMAINS: "a.example.com",
       }),
     );
   });

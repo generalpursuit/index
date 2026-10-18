@@ -5,8 +5,16 @@ import { releaseDeployment } from "./deployment";
 
 const config = releaseDeployment(process.argv[2] ?? "", process.env);
 assert(config, "Pass staging or production.");
-const { webURL, apiURL } = config;
+const { webURL, webRedirects, apiURL } = config;
 async function check() {
+  for (const host of webRedirects) {
+    const redirect = await fetch(`https://${host}/settings?check=1`, {
+      redirect: "manual",
+      signal: AbortSignal.timeout(15_000),
+    });
+    assert.equal(redirect.status, 301, `${host} must redirect permanently`);
+    assert.equal(redirect.headers.get("location"), `${webURL}/settings?check=1`);
+  }
   const web = await fetch(webURL, { signal: AbortSignal.timeout(15_000) });
   assert.equal(web.status, 200, "Web must serve successfully");
   const html = await web.text();
@@ -47,7 +55,7 @@ for (let attempt = 1; ; attempt++) {
     await setTimeout(5_000);
   }
 }
-console.log(`Verified web, assets, routing, database, CORS, and auth: ${webURL}`);
+console.log(`Verified web, redirects, assets, routing, database, CORS, and auth: ${webURL}`);
 if (process.env.GITHUB_STEP_SUMMARY)
   await appendFile(
     process.env.GITHUB_STEP_SUMMARY,

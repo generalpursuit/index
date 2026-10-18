@@ -26,10 +26,18 @@ export function releaseDeployment(stage: string, env: Record<string, string | un
   };
   const webDomain = domain(env.WEB_DOMAIN);
   const apiDomain = domain(env.API_DOMAIN);
+  // Extra hostnames that permanently redirect to the web domain.
+  const webRedirects = (env.WEB_REDIRECT_DOMAINS ?? "")
+    .split(",")
+    .map((value) => domain(value.trim()))
+    .filter((value) => value !== undefined);
+  if (webRedirects.length && !webDomain)
+    throw new Error("WEB_REDIRECT_DOMAINS needs a WEB_DOMAIN to redirect to.");
   return {
     webName,
     serverName,
     webDomain,
+    webRedirects,
     apiDomain,
     webURL: `https://${webDomain ?? `${webName}.${subdomain}.workers.dev`}`,
     apiURL: `https://${apiDomain ?? `${serverName}.${subdomain}.workers.dev`}`,
