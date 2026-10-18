@@ -4,6 +4,7 @@ import {
   date,
   foreignKey,
   index,
+  integer,
   pgTable,
   primaryKey,
   text,
@@ -290,6 +291,12 @@ export const messages = pgTable(
     // The replied message as sent, and part of the retry identity. It is not a reference:
     // sending checks it, and reading quotes it only while it exists in the same conversation.
     replyToMessageId: uuid("reply_to_message_id"),
+    // The sent files in order, and part of the retry identity like the link and the reply.
+    // Kept on the row because a conflicting retry can only compare the row it conflicts with.
+    fileIds: uuid("file_ids")
+      .array()
+      .notNull()
+      .default(sql`'{}'`),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },
   (t) => [
@@ -303,6 +310,41 @@ export const messages = pgTable(
       t.createdAt.desc(),
       t.id.desc(),
     ),
+  ],
+);
+
+/**
+ * A file shared in a conversation. It is uploaded before its message exists ("staged", no
+ * message yet) and joins a message when that message is sent; staged files nobody sends are
+ * swept after a day. The bytes live in the private file bucket under `objectKey`.
+ */
+export const messageFiles = pgTable(
+  "message_files",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    uploaderId: text("uploader_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Null while staged. The message's `file_ids` holds the order.
+    messageId: uuid("message_id").references(() => messages.id, { onDelete: "cascade" }),
+    objectKey: text("object_key").notNull().unique(),
+    name: text("name").notNull(),
+    // What the file is served as: a sniffed image type, otherwise application/octet-stream.
+    type: text("type").notNull(),
+    size: integer("size").notNull(),
+    // Pixel size measured by the uploading client, for images only.
+    width: integer("width"),
+    height: integer("height"),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    index("message_files_message_idx").on(t.messageId),
+    index("message_files_staged_idx")
+      .on(t.createdAt)
+      .where(sql`${t.messageId} is null`),
   ],
 );
 export const appRelations = defineRelationsPart(
