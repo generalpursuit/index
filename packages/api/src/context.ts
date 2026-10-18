@@ -2,6 +2,7 @@ import type { NotificationCapabilities } from "./features/notifications/schemas"
 import type { Session } from "@index/auth";
 import type { QueryDatabase } from "./data-access/database";
 import type { FetchPage } from "./features/links/metadata";
+import type { FileStore } from "./features/messages/files";
 import type { MediaStore } from "./features/profiles/media";
 
 export type Context = {
@@ -14,4 +15,6 @@ export type Context = {
   fetchImport: FetchPage;
   /** Stores profile photos. */
   media: MediaStore;
+  /** Stores files shared in conversations. */
+  files: FileStore;
 };

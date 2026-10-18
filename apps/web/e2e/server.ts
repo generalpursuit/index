@@ -3,7 +3,7 @@ import { fetchImport, fetchPage, seedFixture, type Registration } from "./fixtur
 import type { SecurityEmail } from "../../../packages/auth/src/delivery.ts";
 import { deliverBatch } from "../../../packages/api/src/features/notifications/delivery.ts";
 import { apiURL, webURL } from "./urls.ts";
-import { createTestDatabase } from "../../../packages/api/src/testing/database.ts";
+import { createTestDatabase, files } from "../../../packages/api/src/testing/database.ts";
 import { createAuth } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
 import { appRouter } from "../../../packages/api/src/routers/index.ts";
@@ -132,16 +132,19 @@ Bun.serve({
     } else if (url.pathname.startsWith("/api/auth/")) response = await auth.handler(request);
     else {
       const session = await auth.api.getSession({ headers: request.headers });
-      const result = await rpcHandler.handle(request, {
-        prefix: "/rpc/v1",
-        context: { db: database.db, session, fetchPage, fetchImport, media, notifications },
-      });
+      const context = {
+        db: database.db,
+        session,
+        fetchPage,
+        fetchImport,
+        media,
+        files,
+        notifications,
+      };
+      const result = await rpcHandler.handle(request, { prefix: "/rpc/v1", context });
       const rest = result.matched
         ? result
-        : await apiHandler.handle(request, {
-            prefix: "/api/v1",
-            context: { db: database.db, session, fetchPage, fetchImport, media, notifications },
-          });
+        : await apiHandler.handle(request, { prefix: "/api/v1", context });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }
     const headers = new Headers(response.headers);

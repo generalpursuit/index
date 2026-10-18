@@ -2,6 +2,7 @@ import { notificationCapabilities } from "./notifications/config";
 import type { Context as ApiContext } from "@index/api/context";
 
 import { ENV } from "./env.server";
+import { r2FileStore } from "./files";
 import { r2MediaStore } from "./media";
 import { getDb } from "./services";
 import { createAuth } from "./services";
@@ -23,6 +24,7 @@ export async function createContext(
     fetchPage,
     fetchImport: (url, init) => fetch(url, init),
     media: r2MediaStore(ENV.MEDIA, ENV.BETTER_AUTH_URL),
+    files: r2FileStore(ENV.MESSAGE_FILES),
   };
 }
 

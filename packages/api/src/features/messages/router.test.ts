@@ -158,6 +158,7 @@ describe("messaging", () => {
       senderId: "carol",
       excerpt: "Q".repeat(200),
       hasAttachment: false,
+      files: [],
     });
     assert.equal(question.replyTo, null);
     const listed = (await alice.messages.list({ conversationId: group.id })).items[0]!;
@@ -183,6 +184,7 @@ describe("messaging", () => {
       senderId: "alice",
       excerpt: "",
       hasAttachment: true,
+      files: [],
     });
     assert.equal(JSON.stringify(linkReply.replyTo).includes("Shared title"), false);
     // Removing the original's sender removes the original; its replies remain unquoted.

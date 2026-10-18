@@ -11,7 +11,7 @@ import { databaseError } from "../../errors";
 import type { Cursor } from "../../pagination";
 import { linkSelection, collectionSelection } from "../links/repository";
 import { publicUserSelection } from "../profiles/repository";
-import type { messageReplySchema, SendMessageInput } from "./schemas";
+import type { messageFileSchema, messageReplySchema, SendMessageInput } from "./schemas";
 
 export function isMember(actorId: string, conversationId: SQLWrapper) {
   return sql<boolean>`exists(select 1 from conversation_members member where member.conversation_id=${conversationId} and member.user_id=${actorId})`;
@@ -114,6 +114,13 @@ export function participants(db: QueryDatabase, actorId: string, id: string) {
     databaseError,
   );
 }
+type MessageFile = z.output<typeof messageFileSchema>;
+/** A message's files in their sent order, as clients receive them. */
+const filesOf = (messageId: SQLWrapper, fileIds: SQLWrapper) => sql<MessageFile[]>`coalesce((
+  select jsonb_agg(jsonb_build_object('id',f.id,'name',f.name,'type',f.type,'size',f.size,
+    'width',f.width,'height',f.height) order by array_position(${fileIds}, f.id))
+  from message_files f where f.message_id=${messageId}
+), '[]'::jsonb)`;
 export const messageSelection = (actorId: string) => ({
   id: messages.id,
   conversationId: messages.conversationId,
@@ -136,10 +143,12 @@ export const messageSelection = (actorId: string) => ({
   // replied message exists.
   replyTo: sql<z.output<typeof messageReplySchema> | null>`(
     select jsonb_build_object('id',reply.id,'senderId',reply.sender_id,
-      'excerpt',left(reply.body,200),'hasAttachment',reply.link_id is not null)
+      'excerpt',left(reply.body,200),'hasAttachment',reply.link_id is not null,
+      'files',${filesOf(sql`reply.id`, sql`reply.file_ids`)})
     from messages reply
     where reply.id=${messages.replyToMessageId} and reply.conversation_id=${messages.conversationId}
   )`,
+  files: filesOf(messages.id, messages.fileIds),
 });
 
 export function listMessages(
@@ -184,25 +193,55 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
       and reply.conversation_id=${input.conversationId}::uuid
     )`
     : sql`true`;
-  // A retry must repeat the whole payload, including what it replies to.
+  const fileIds = sql`${JSON.stringify(input.fileIds)}::jsonb`;
+  // Every listed file is the sender's, uploaded to this conversation and not yet sent.
+  const filesAllowed = input.fileIds.length
+    ? sql`(select count(*) from message_files f
+   where f.id in (select value::uuid from jsonb_array_elements_text(${fileIds}))
+   and f.uploader_id=${actorId} and f.conversation_id=${input.conversationId}::uuid
+   and f.message_id is null) = jsonb_array_length(${fileIds})`
+    : sql`true`;
+  // Compared as uuid[], so the IDs' letter case never matters.
+  const requestedFiles = input.fileIds.length
+    ? sql`(select array_agg(value::uuid order by place)
+   from jsonb_array_elements_text(${fileIds}) with ordinality listed(value, place))`
+    : sql`'{}'::uuid[]`;
+  // A retry must repeat the whole payload: text, link, reply and files in their order. Each is
+  // a column of the row, because a conflicting retry sees only that row's latest version.
   const samePayload = (row: SQL) => sql`${row}.conversation_id=${input.conversationId}::uuid
    and ${row}.body=${input.body} and ${row}.link_id is not distinct from ${input.linkId ?? null}::uuid
-   and ${row}.reply_to_message_id is not distinct from ${input.replyToMessageId ?? null}::uuid`;
+   and ${row}.reply_to_message_id is not distinct from ${input.replyToMessageId ?? null}::uuid
+   and ${row}.file_ids=${requestedFiles}`;
   // A retry is answered by the message it committed before anything is checked again, so a
   // link or reply target deleted since cannot turn a delivered message into a rejection.
   const previous = db.$with("previous_send", {}).as(sql`
- select id,conversation_id,created_at,body,link_id,reply_to_message_id from messages
+ select id,conversation_id,created_at,body,link_id,reply_to_message_id,file_ids from messages
  where sender_id=${actorId} and client_id=${input.clientId}::uuid
  `);
   const inserted = db.$with("inserted_message", {}).as(sql`
- insert into messages(conversation_id,sender_id,client_id,body,link_id,reply_to_message_id)
- select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${input.replyToMessageId ?? null}::uuid
+ insert into messages(conversation_id,sender_id,client_id,body,link_id,reply_to_message_id,file_ids)
+ select ${input.conversationId}::uuid,${actorId},${input.clientId}::uuid,${input.body},${input.linkId ?? null}::uuid,${input.replyToMessageId ?? null}::uuid,${requestedFiles}
  where not exists (select 1 from previous_send)
    and ${canSend(actorId, sql`${input.conversationId}::uuid`)} and ${attachmentAllowed} and ${replyAllowed}
+   and ${filesAllowed}
  on conflict(sender_id,client_id) do update set client_id=excluded.client_id
  where ${samePayload(sql`messages`)}
  returning id,conversation_id,created_at
  `);
+  // Files join the new message. A conflicting retry returns a message whose files are already
+  // attached, so this updates nothing for it. When another send claims a file first, the
+  // re-checked `message_id is null` leaves it out of this message: the tolerated race of one
+  // file sent twice at once.
+  const attached = input.fileIds.length
+    ? [
+        db.$with("attached_files", {}).as(sql`
+ update message_files f set message_id=m.id
+ from inserted_message m
+ where f.id=any(${requestedFiles}::uuid[]) and f.uploader_id=${actorId} and f.message_id is null
+ returning f.id
+ `),
+      ]
+    : [];
   const sent = db.$with("sent_message", { id: sql<string>`id`.as("id") }).as(sql`
  select id,conversation_id,created_at from inserted_message
  union all
@@ -213,7 +252,7 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
  `);
   return ResultAsync.fromPromise(
     db
-      .with(previous, inserted, sent, touched)
+      .with(previous, inserted, ...attached, sent, touched)
       .select({ id: sql<string>`id` })
       .from(sent)
       .then((rows) => rows[0]),
@@ -247,6 +286,19 @@ export function markRead(
       )
       .limit(1)
       .then((rows) => rows[0]),
+    databaseError,
+  );
+}
+
+/** Whether the actor may send in the conversation, without loading its summary. */
+export function canSendTo(db: QueryDatabase, actorId: string, conversationId: string) {
+  return ResultAsync.fromPromise(
+    db
+      .select({ id: conversations.id })
+      .from(conversations)
+      .where(and(eq(conversations.id, conversationId), canSend(actorId, conversations.id)))
+      .limit(1)
+      .then((rows) => rows.length > 0),
     databaseError,
   );
 }
