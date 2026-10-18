@@ -10,7 +10,7 @@ RPC clients can add `BatchLinkPlugin` from `@orpc/client/plugins` to their `RPCL
 
 ## Client versions
 
-Clients send `X-Index-Client: <platform>/<version>` (`web`, `desktop` or `ios`) with the product version they were built from. [client-version.ts](../apps/server/src/client-version.ts) answers releases below their platform's minimum with `426` and `CLIENT_UPDATE_REQUIRED` before auth or API context runs; a staging build counts as its release, and unidentified clients are not gated. Clients then block until updated: web reloads, desktop restarts into its newest release and iOS asks for an App Store update.
+Clients send `X-Index-Client: <platform>/<version>` (`web`, `desktop` or `ios`) with the product version they were built from. [client-version.ts](../apps/server/src/client-version.ts) answers releases below their platform's minimum with `426` and `CLIENT_UPDATE_REQUIRED` before auth or API context runs; a staging build counts as its release, and unidentified clients are not gated. Clients then block until updated: web reloads, desktop restarts into its newest release and iOS links to the latest TestFlight build.
 
 Raise a minimum only after a release with compatible clients is published, or the gated clients have nothing to update to. iOS updates arrive on Apple's schedule, so keep its minimum lower for longer.
 
