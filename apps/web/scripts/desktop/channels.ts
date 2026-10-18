@@ -6,7 +6,7 @@ export const channels = {
     identifier: "com.generalpursuit.index",
     binary: "index",
     api: "https://index-production-api.generalpursuit.workers.dev",
-    web: "https://index-production-web.generalpursuit.workers.dev",
+    web: "https://index.generalpursuit.dev",
     keychainSuffix: "com.generalpursuit.index.shared",
   },
   staging: {

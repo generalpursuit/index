@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/generalpursuit/index/releases/latest">Mac, Windows and Linux</a> ·
   <a href="https://testflight.apple.com/join/kqYCvuq7">iPhone and iPad beta</a> ·
-  <a href="https://index-production-web.generalpursuit.workers.dev">Web</a>
+  <a href="https://index.generalpursuit.dev">Web</a>
 </p>
 
 <p align="center">
@@ -49,7 +49,7 @@ Your account, library and conversations are the same everywhere. Light and dark 
 | Windows         | 64-bit                           | [Installer](https://github.com/generalpursuit/index/releases/latest)            |
 | Linux           | 64-bit                           | [AppImage, DEB or RPM](https://github.com/generalpursuit/index/releases/latest) |
 | iPhone and iPad | iOS 17                           | [TestFlight beta](https://testflight.apple.com/join/kqYCvuq7)                   |
-| Web             | A modern browser                 | [Open Index](https://index-production-web.generalpursuit.workers.dev)           |
+| Web             | A modern browser                 | [Open Index](https://index.generalpursuit.dev)                                  |
 
 The Windows installer isn't signed yet, so Windows may warn about an unknown publisher.
 
