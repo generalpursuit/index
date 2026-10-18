@@ -1,5 +1,7 @@
 import type { Context as ApiContext } from "@index/api/context";
+import { maxFileBytes } from "@index/api/features/messages/files";
 import { Hono } from "hono";
+import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { mountAuthentication, type AuthFactory } from "./authentication";
@@ -14,10 +16,20 @@ export type AppOptions = {
   readMedia: (key: string) => Promise<Response | null>;
 };
 
+// Both transports' upload routes. The RPC matcher ignores the method, and the REST matcher
+// accepts an empty conversation segment and any number of trailing slashes, so the path alone
+// decides.
+const uploadPath = /^\/(?:rpc(?:\/v1)?\/messages\/upload|api\/v1\/conversations\/[^/]*\/files)\/*$/;
+
 /** Mount the HTTP application; the Worker entrypoint supplies runtime services. */
 export function createApp(options: AppOptions) {
   const app = new Hono();
   app.use(logger());
+  // Members share arbitrary files; a response is only ever the type it declares.
+  app.use("/*", async (c, next) => {
+    await next();
+    c.res.headers.set("X-Content-Type-Options", "nosniff");
+  });
   app.use(
     "/*",
     cors({
@@ -30,6 +42,20 @@ export function createApp(options: AppOptions) {
   );
   app.use("/*", clientVersionGate);
   mountAuthentication(app, options.auth);
+  // The schema's file limit applies only after a whole upload is in memory, so the body is
+  // capped first. The extra megabyte allows for multipart framing.
+  const capUpload = bodyLimit({
+    maxSize: maxFileBytes + 1_000_000,
+    onError: (c) =>
+      c.json(
+        {
+          code: "PAYLOAD_TOO_LARGE",
+          message: `Files can be at most ${maxFileBytes / 1_000_000} MB.`,
+        },
+        413,
+      ),
+  });
+  app.use("/*", (c, next) => (uploadPath.test(c.req.path) ? capUpload(c, next) : next()));
   app.get(
     "/media/*",
     async (c) => (await options.readMedia(c.req.path.slice("/media/".length))) ?? c.notFound(),
