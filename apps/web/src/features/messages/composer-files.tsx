@@ -26,11 +26,7 @@ export function ComposerFiles({
       </p>
       {files.length > 0 && (
         // Without list styles Safari drops the list's role, so it is given back.
-        <ul
-          role="list"
-          className="flex gap-2 overflow-x-auto p-0.5 [scrollbar-width:none]"
-          aria-label="Attachments"
-        >
+        <ul role="list" className="flex gap-2 overflow-x-auto p-0.5" aria-label="Attachments">
           {files.map((item) => (
             <FileTile
               key={item.localId}

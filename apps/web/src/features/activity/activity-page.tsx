@@ -73,7 +73,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
       <Heading>Activity</Heading>
       <div
         className={
-          "filter-strip flex gap-2 items-center overflow-x-auto whitespace-nowrap [scrollbar-width:none] mb-6 [&>*]:shrink-0 [&_button]:text-[12px] [&_button]:h-8.5 [&_button]:p-[0_14px]"
+          "filter-strip flex gap-2 items-center overflow-x-auto whitespace-nowrap mb-6 [&>*]:shrink-0 [&_button]:text-[12px] [&_button]:h-8.5 [&_button]:p-[0_14px]"
         }
       >
         {(

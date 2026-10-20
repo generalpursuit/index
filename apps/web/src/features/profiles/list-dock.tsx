@@ -59,7 +59,7 @@ export function ListDock({
       >
         <div
           ref={strip}
-          className="relative flex min-w-0 gap-0.5 overflow-x-auto rounded-full p-1.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(to_right,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [&[data-fade-start]]:[--fade-start:28px] [&[data-fade-end]]:[--fade-end:28px]"
+          className="relative flex min-w-0 gap-0.5 overflow-x-auto rounded-full p-1.5 [&:is([data-fade-start],_[data-fade-end])]:[mask-image:linear-gradient(to_right,_transparent,_#000_var(--fade-start,_0px),_#000_calc(100%_-_var(--fade-end,_0px)),_transparent)] [&[data-fade-start]]:[--fade-start:28px] [&[data-fade-end]]:[--fade-end:28px]"
           data-fade-start={edges.before || undefined}
           data-fade-end={edges.after || undefined}
         >

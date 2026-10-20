@@ -39,7 +39,7 @@ export function WeekPager({
       <div
         ref={viewport}
         className={
-          "week-pager relative h-full overflow-y-hidden overscroll-y-contain [scroll-snap-type:y_mandatory] [overflow-anchor:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          "week-pager relative h-full overflow-y-hidden overscroll-y-contain [scroll-snap-type:y_mandatory] [overflow-anchor:none]"
         }
         role="region"
         aria-label={label}

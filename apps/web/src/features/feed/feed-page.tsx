@@ -203,7 +203,7 @@ function WeekContent({ week, followingCount }: { week: string; followingCount?: 
         <div
           ref={carousel}
           className={
-            "friends-carousel [scrollbar-width:none] flex items-start overflow-x-auto overflow-y-hidden gap-4 [scroll-snap-type:x_mandatory] min-h-0 [overscroll-behavior-x:contain] [&::-webkit-scrollbar]:hidden [&:has(>_.friend-card:nth-child(3))>.friend-card]:basis-[calc((100%_-_32px)_/_2.2)] [@media(width<=700px)]:[&>.friend-card]:basis-[calc(100vw_-_74px)] [@media(width<=700px)]:[&:has(>_.friend-card:nth-child(3))>.friend-card]:basis-[calc(100vw_-_74px)] [@media(width<=700px)]:gap-4"
+            "friends-carousel flex items-start overflow-x-auto overflow-y-hidden gap-4 [scroll-snap-type:x_mandatory] min-h-0 [overscroll-behavior-x:contain] [&:has(>_.friend-card:nth-child(3))>.friend-card]:basis-[calc((100%_-_32px)_/_2.2)] [@media(width<=700px)]:[&>.friend-card]:basis-[calc(100vw_-_74px)] [@media(width<=700px)]:[&:has(>_.friend-card:nth-child(3))>.friend-card]:basis-[calc(100vw_-_74px)] [@media(width<=700px)]:gap-4"
           }
           aria-label="Friends’ links"
           tabIndex={friendsEmpty ? undefined : 0}
