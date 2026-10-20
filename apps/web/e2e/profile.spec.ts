@@ -1,4 +1,5 @@
 import { apiURL } from "./urls";
+import { routeRPC } from "./rpc";
 import { test, expect } from "@playwright/test";
 
 test("profile names fit on one line through phone and desktop resizes", async ({
@@ -173,4 +174,57 @@ test("the profile lists weeks under sticky headings, with a scrubber and a list 
   await expect(chip("All")).toHaveAttribute("aria-current", "page");
   await expect(chip("Starred")).toHaveCount(0);
   await expect(dock.getByRole("button", { name: "New group", exact: true })).toHaveCount(0);
+});
+
+test("a long profile renders only the weeks near the screen", async ({ page, request }) => {
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  const fixture = await (await request.post(apiURL + "/_test/reset")).json();
+  // Years of older weeks, each counting three links.
+  const older = Array.from({ length: 150 }, (_, i) => {
+    const day = new Date(fixture.older + "T00:00:00Z");
+    day.setUTCDate(day.getUTCDate() - 7 * (i + 1));
+    return { weekStart: day.toISOString().slice(0, 10), count: 3 };
+  });
+  await routeRPC(page, "**/rpc/v1/links/weeks**", async (route) => {
+    const response = await route.fetch();
+    const body = await response.json();
+    body.json.items.push(...older);
+    body.json.nextBefore = null;
+    await route.fulfill({ response, json: body });
+  });
+  await page.goto("/login");
+  await page.getByLabel("Email or username", { exact: true }).fill("alice");
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page.getByRole("link", { name: "Your profile", exact: true }).click();
+  const weeks = page.locator(".profile-week");
+  await expect(page.locator(".week-tick")).toHaveCount(older.length + 2);
+  await expect(weeks.first()).toBeVisible();
+  expect(await weeks.count()).toBeLessThan(20);
+  const field = page.getByRole("textbox", { name: /Enter a link to add it/ });
+  await field.fill("example.com/draft");
+  // The picker jumps to a week far down, which lands at the top under its heading.
+  await weeks
+    .first()
+    .getByRole("button", { name: /Jump to a week/ })
+    .click();
+  await page.getByRole("dialog", { name: "Weeks" }).getByRole("button").nth(102).click();
+  const far = page.locator(`.profile-week[data-week="${older[100]!.weekStart}"]`);
+  const scroller = page.locator("#app-scroll");
+  await expect
+    .poll(async () => {
+      const [heading, top] = await Promise.all([
+        far.locator(".profile-week-heading").boundingBox(),
+        scroller.boundingBox(),
+      ]);
+      return heading && Math.round(heading.y - top!.y);
+    })
+    .toBe(0);
+  expect(await weeks.count()).toBeLessThan(20);
+  // The week with the field stays rendered, so its draft is still there on the way back.
+  await page.locator(".week-tick").first().click();
+  await expect(field).toBeInViewport();
+  await expect(field).toHaveValue("example.com/draft");
+  expect(errors).toEqual([]);
 });

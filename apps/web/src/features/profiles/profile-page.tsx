@@ -3,10 +3,21 @@ import { placeholderProfile } from "@/data/placeholders";
 import { LinksPlaceholder } from "@/features/links/link-row";
 import { useRouterState } from "@tanstack/react-router";
 import { groupPath } from "@index/api/routes";
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { FollowedBy } from "./followed-by";
 import { Button } from "@index/ui/components/button";
+import { useMediaQuery } from "@index/ui/hooks/use-media-query";
 import { LockKeyhole, Earth, Settings } from "lucide-react";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
@@ -268,10 +279,14 @@ function ProfileContent({
     </div>
   );
 }
+// A week's heading is its `h-13`, and weeks are this far apart.
+const HEADING_PX = 52;
+const WEEK_GAP_PX = 20;
 /**
  * One person's links as one continuous list of weeks. Each week's heading sticks while you
  * read it, and the scrubber (or the week title) jumps to any week. Weeks with nothing in the
- * chosen list are skipped.
+ * chosen list are skipped. Only the weeks near the screen are rendered; the others hold the
+ * space their link counts take, so the list scrolls and jumps as if they were there.
  */
 function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; filter: string }) {
   const groups = useAllGroups(userId),
@@ -289,29 +304,67 @@ function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; f
   useEffect(() => {
     if (hasNextPage && !list.isFetching && !list.isError) void fetchNextPage();
   }, [hasNextPage, list.isFetching, list.isError, fetchNextPage]);
-  const loaded =
-    filter === "all" || selected ? (list.data?.pages.flatMap((p) => p.items) ?? []) : [];
-  const weeks: Week[] = missing
-    ? []
-    : canAdd && loaded[0]?.weekStart !== monday()
-      ? [{ weekStart: monday(), count: 0 }, ...loaded]
+  const pages = filter === "all" || selected ? list.data?.pages : undefined;
+  // The current week holds the field for adding links.
+  const field = canAdd ? monday() : undefined;
+  const weeks: Week[] = useMemo(() => {
+    const loaded = pages?.flatMap((p) => p.items) ?? [];
+    if (missing) return [];
+    return field && loaded[0]?.weekStart !== field
+      ? [{ weekStart: field, count: 0 }, ...loaded]
       : loaded;
+  }, [pages, missing, field]);
   const lockedGroups =
     own && filter === "all"
       ? new Set(allGroups.filter((g) => g.visibility === "private").map((g) => g.id))
       : undefined;
   const [picking, setPicking] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
-  const onScreen = useVisibleWeeks(listRef, weeks);
+  // Rows take this height, so a week's links take its count of them, loaded or not.
+  const row = useMediaQuery("(width <= 700px)") ? 46 : 48;
+  const margin = useScrollMargin(listRef);
+  // Weeks in use stay rendered off screen: the one with the field keeps its draft, and the one
+  // last focused keeps keyboard focus.
+  const [focused, setFocused] = useState<string>();
+  const kept = [field, focused]
+    .map((week) => weeks.findIndex((w) => w.weekStart === week))
+    .filter((index) => index >= 0);
+  // Measured sizes stay with their weeks. A new key function also estimates the unmeasured ones
+  // again, so they follow changed counts.
+  const getItemKey = useCallback((index: number) => weeks[index]!.weekStart, [weeks]);
+  const virtualizer = useVirtualizer<HTMLElement, HTMLDivElement>({
+    count: weeks.length,
+    getScrollElement: () => document.getElementById("app-scroll"),
+    getItemKey,
+    // The heading, then a row per link and one for the field.
+    estimateSize: (index) => {
+      const week = weeks[index]!;
+      return HEADING_PX + (week.count + (week.weekStart === field ? 1 : 0)) * row;
+    },
+    gap: WEEK_GAP_PX,
+    overscan: 3,
+    // Rendering the weeks a resize brings in from its own callback would leave resize
+    // notifications undelivered (an error); estimates match the rows, so a frame's delay is unseen.
+    useAnimationFrameWithResizeObserver: true,
+    scrollMargin: margin,
+    rangeExtractor: (range) =>
+      [...new Set([...defaultRangeExtractor(range), ...kept])].sort((a, b) => a - b),
+  });
+  const rendered = virtualizer.getVirtualItems();
+  const onScreen = useVisibleWeeks(
+    listRef,
+    rendered.map((item) => weeks[item.index]!),
+  );
   const jump = (week: string) =>
-    document.querySelector(`.profile-week[data-week="${week}"]`)?.scrollIntoView({
-      block: "start",
-      behavior: "instant",
-    });
+    virtualizer.scrollToIndex(
+      weeks.findIndex((w) => w.weekStart === week),
+      { align: "start", behavior: "instant" },
+    );
   return (
     <div
       ref={listRef}
-      className={"profile-links [--row:48px] relative [@media(width<=700px)]:[--row:46px]"}
+      className={"profile-links relative"}
+      style={{ "--row": row + "px" } as CSSProperties}
     >
       <QueryState
         placeholder={<LinksPlaceholder />}
@@ -328,18 +381,31 @@ function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; f
       >
         {weeks.length ? (
           <>
-            {weeks.map((w) => (
-              <ProfileWeek
-                key={w.weekStart}
-                userId={userId}
-                week={w}
-                groupId={selected?.id}
-                add={canAdd && w.weekStart === monday()}
-                showOwners={selected?.kind === "starred"}
-                lockedGroups={lockedGroups}
-                onPick={() => setPicking(true)}
-              />
-            ))}
+            <div className="relative" style={{ height: virtualizer.getTotalSize() }}>
+              {rendered.map((item) => {
+                const w = weeks[item.index]!;
+                return (
+                  <div
+                    key={item.key}
+                    ref={virtualizer.measureElement}
+                    data-index={item.index}
+                    className="absolute inset-x-0"
+                    style={{ top: item.start - margin }}
+                    onFocus={() => setFocused(w.weekStart)}
+                  >
+                    <ProfileWeek
+                      userId={userId}
+                      week={w}
+                      groupId={selected?.id}
+                      add={w.weekStart === field}
+                      showOwners={selected?.kind === "starred"}
+                      lockedGroups={lockedGroups}
+                      onPick={() => setPicking(true)}
+                    />
+                  </div>
+                );
+              })}
+            </div>
             <WeekScrubber weeks={weeks} active={onScreen} onJump={jump} />
           </>
         ) : (
@@ -367,10 +433,7 @@ function ProfileLinks({ userId, own, filter }: { userId: string; own: boolean; f
     </div>
   );
 }
-/**
- * A week of the list. Its links load once it comes near the screen; until then it holds
- * their space, so jumping to any week lands exactly.
- */
+/** A week of the list, rendered as it comes near the screen. Its links hold their space. */
 function ProfileWeek({
   userId,
   week,
@@ -388,25 +451,10 @@ function ProfileWeek({
   lockedGroups?: ReadonlySet<string>;
   onPick: () => void;
 }) {
-  const section = useRef<HTMLElement>(null);
-  const [near, setNear] = useState(false);
-  useEffect(() => {
-    const element = section.current;
-    if (!element || near) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry?.isIntersecting) setNear(true);
-      },
-      { root: document.getElementById("app-scroll"), rootMargin: "800px 0px" },
-    );
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [near]);
   return (
     <section
-      ref={section}
       className={
-        "profile-week [&+.profile-week]:mt-5 [&_h2_button]:flex [&_h2_button]:[align-items:baseline] [&_h2_button]:gap-3 [&_h2_button]:text-[24px] [&_h2_button]:whitespace-nowrap [&_h2_span]:font-mono [&_h2_span]:text-[12px] [&_h2_span]:font-normal [&_h2_span]:[font-variation-settings:normal] [&_h2_span]:tracking-[0.06em] [&_h2_span]:uppercase [&_h2_span]:text-subtle-foreground [&_h2]:font-serif [&_h2]:font-bold [&_h2]:[font-variation-settings:'opsz'_60] [&_h2]:tracking-[-0.015em] [&_h2]:leading-[1]"
+        "profile-week [&_h2_button]:flex [&_h2_button]:[align-items:baseline] [&_h2_button]:gap-3 [&_h2_button]:text-[24px] [&_h2_button]:whitespace-nowrap [&_h2_span]:font-mono [&_h2_span]:text-[12px] [&_h2_span]:font-normal [&_h2_span]:[font-variation-settings:normal] [&_h2_span]:tracking-[0.06em] [&_h2_span]:uppercase [&_h2_span]:text-subtle-foreground [&_h2]:font-serif [&_h2]:font-bold [&_h2]:[font-variation-settings:'opsz'_60] [&_h2]:tracking-[-0.015em] [&_h2]:leading-[1]"
       }
       data-week={week.weekStart}
       aria-label={weekLabel(week.weekStart)}
@@ -427,19 +475,15 @@ function ProfileWeek({
           </button>
         </h2>
       </div>
-      {near ? (
-        <WeekLinks
-          userId={userId}
-          week={week.weekStart}
-          groupId={groupId}
-          add={add}
-          showOwners={showOwners}
-          lockedGroups={lockedGroups}
-          placeholder={<WeekPlaceholder rows={week.count} />}
-        />
-      ) : (
-        <WeekPlaceholder rows={week.count + (add ? 1 : 0)} />
-      )}
+      <WeekLinks
+        userId={userId}
+        week={week.weekStart}
+        groupId={groupId}
+        add={add}
+        showOwners={showOwners}
+        lockedGroups={lockedGroups}
+        placeholder={<WeekPlaceholder rows={week.count} />}
+      />
     </section>
   );
 }
@@ -453,7 +497,27 @@ function WeekPlaceholder({ rows }: { rows: number }) {
     </div>
   );
 }
-/** The weeks with some of their section on screen, as you scroll. */
+/** How far `element` starts below the top of the page's scrolling content. */
+function useScrollMargin(element: RefObject<HTMLElement | null>) {
+  const [margin, setMargin] = useState(0);
+  useLayoutEffect(() => {
+    const target = element.current,
+      root = document.getElementById("app-scroll");
+    if (!target || !root) return;
+    const measure = () =>
+      setMargin(
+        target.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop,
+      );
+    measure();
+    // Content above it resizes its parent; the screen's size moves it through the page's padding.
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    if (target.parentElement) observer.observe(target.parentElement);
+    return () => observer.disconnect();
+  }, [element]);
+  return margin;
+}
+/** Which of the rendered weeks have some of their section on screen, as you scroll. */
 function useVisibleWeeks(list: RefObject<HTMLElement | null>, weeks: Week[]) {
   const [visible, setVisible] = useState<string[]>([]);
   // `weeks` is a new array on every render; watch the sections again only when they change.
