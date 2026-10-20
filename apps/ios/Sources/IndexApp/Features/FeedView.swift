@@ -88,7 +88,7 @@ private struct FeedWeekView: View {
                 }
               }
             }.padding(.bottom, 24)
-          }.scrollIndicators(.hidden).bottomFade()
+          }.bottomFade()
             .scrollDismissesKeyboard(.interactively)
         }.frame(height: ownHeight).accessibilityElement(children: .contain).accessibilityLabel("Yours")
         if let feed, !feed.people.isEmpty {
@@ -102,7 +102,7 @@ private struct FeedWeekView: View {
               }
               PageEnd(cursor: feed.nextAfter) { try await morePeople() }.frame(width: 44)
             }.scrollTargetLayout()
-          }.scrollTargetBehavior(.viewAligned).scrollIndicators(.hidden)
+          }.scrollTargetBehavior(.viewAligned)
             .frame(height: peopleHeight)
             .accessibilityLabel("Your people")
         } else if feed != nil {
@@ -118,7 +118,7 @@ private struct FeedWeekView: View {
               }
             }.multilineTextAlignment(.center).padding(24)
               .frame(maxWidth: .infinity, minHeight: peopleHeight)
-          }.scrollIndicators(.hidden).frame(height: peopleHeight)
+          }.frame(height: peopleHeight)
             .scrollDismissesKeyboard(.interactively)
             .overlay(RoundedRectangle(cornerRadius: 18).stroke(IndexPalette.border))
         } else { Spacer(minLength: 0) }
@@ -139,7 +139,7 @@ private struct FeedWeekView: View {
           ForEach(person.links.items) { LinkRow(link: $0, compact: compact) }
           PageEnd(cursor: person.links.nextCursor) { try await morePerson(person) }
         }.padding(.bottom, 24)
-      }.scrollIndicators(.hidden).bottomFade()
+      }.bottomFade()
         .scrollDismissesKeyboard(.interactively)
     }.padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 6)
   }

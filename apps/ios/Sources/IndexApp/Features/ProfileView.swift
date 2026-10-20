@@ -79,7 +79,7 @@ struct ProfileView: View {
               }
             }
           }.padding(.leading, 20).padding(.trailing, 36).padding(.bottom, 68)
-        }.coordinateSpace(name: "profile-scroll").scrollIndicators(.hidden)
+        }.coordinateSpace(name: "profile-scroll")
           .scrollDismissesKeyboard(.interactively)
           .frame(width: geometry.size.width, height: height, alignment: .top).clipped()
           .refreshable { await load(force: true) }
@@ -182,7 +182,7 @@ struct ProfileView: View {
             }.buttonStyle(.plain).accessibilityLabel("New group")
           }
         }.padding(6)
-      }.scrollIndicators(.hidden).fixedSize(horizontal: false, vertical: true)
+      }.fixedSize(horizontal: false, vertical: true)
         .background(IndexPalette.card, in: Capsule())
         .clipShape(Capsule())
         .overlay(Capsule().stroke(IndexPalette.foreground.opacity(0.08), lineWidth: 1))

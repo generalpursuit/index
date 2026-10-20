@@ -96,7 +96,7 @@ struct ActivityView: View {
               Button(item.1) { filter = item.0 }.buttonStyle(PillStyle(selected: filter == item.0, compact: true))
             }
           }
-        }.scrollIndicators(.hidden).padding(.bottom, 24)
+        }.padding(.bottom, 24)
         RequestError(error: error, retry: { await load() })
         Group {
           ForEach(items) { activity in

@@ -13,9 +13,7 @@ struct IndexApp: App {
   var body: some Scene {
     WindowGroup {
       RootView().environment(app).windowAppearance(ThemePreference(storedValue: storedTheme))
-        .scrollIndicators(.hidden)
-        .tint(IndexPalette.foreground).toggleStyle(IndexSwitchStyle())
-        .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
+        .indexAppStyle()
         .task(id: storedTheme) {
           if let group = Bundle.main.object(forInfoDictionaryKey: "IndexKeychainGroup") as? String {
             try? KeychainAppearance(accessGroup: group).write(ThemePreference(storedValue: storedTheme))

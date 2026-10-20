@@ -19,6 +19,12 @@ struct IndexPageStyle: ViewModifier {
 }
 
 extension View {
+  /// The app root's styles. Sheets don't inherit them, so each sheet applies them again.
+  func indexAppStyle() -> some View {
+    self.scrollIndicators(.hidden)
+      .tint(IndexPalette.foreground).toggleStyle(IndexSwitchStyle())
+      .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground)
+  }
   func indexSheetStyle() -> some View {
     modifier(IndexSheetStyle())
   }
@@ -48,8 +54,7 @@ private struct IndexSheetStyle: ViewModifier {
   @Environment(\.dismiss) private var dismiss
   @State private var presentationID = UUID()
   func body(content: Content) -> some View {
-    content.environment(\.indexSheet, true)
-      .font(IndexFont.sans()).foregroundStyle(IndexPalette.foreground).toggleStyle(IndexSwitchStyle())
+    content.environment(\.indexSheet, true).indexAppStyle()
       .presentationBackground(IndexPalette.surface).presentationCornerRadius(22)
       .presentationDragIndicator(.visible)
       .accessibilityAction(.escape) { dismiss() }

@@ -359,7 +359,6 @@ struct ConversationView: View {
             }
             .padding(2)
           }
-          .scrollIndicators(.hidden)
         }
         HStack(alignment: .bottom, spacing: 6) {
           Menu {
