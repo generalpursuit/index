@@ -24,9 +24,13 @@ export function WeekPager({
   children: (week: string) => ReactNode;
 }) {
   const { viewport, weeks: pages, move } = useWeekPager(week, neighbors, go);
-  const jump = (target: string) => {
-    if (target === week) return;
-    if (target === neighbors?.newerWeek) move(1);
+  // A pressed neighbor slides into place. While scrubbing every week lands at once, and
+  // returning to this one stops a slide still under way.
+  const jump = (target: string, scrubbing: boolean) => {
+    if (target === week) {
+      if (scrubbing) move(0, true);
+    } else if (scrubbing) go(target);
+    else if (target === neighbors?.newerWeek) move(1);
     else if (target === neighbors?.olderWeek) move(-1);
     else go(target);
   };

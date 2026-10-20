@@ -60,6 +60,27 @@ html.menu-bar-surface
   }
 }
 
+/* The week scrubber's focus ring opens out of the held week. */
+@keyframes week-focus-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.6);
+  }
+}
+/* The scrubber label's week number rolls in from the side the pointer is heading. */
+@keyframes week-roll-older {
+  from {
+    opacity: 0;
+    transform: translateY(70%);
+  }
+}
+@keyframes week-roll-newer {
+  from {
+    opacity: 0;
+    transform: translateY(-70%);
+  }
+}
+
 /* Placeholder components keep their real geometry; only their ink is provisional. */
 .content-placeholder {
   display: contents;

@@ -8,11 +8,30 @@ export function shiftWeek(value: string, direction: number) {
   date.setUTCDate(date.getUTCDate() + direction * 7);
   return date.toISOString().slice(0, 10);
 }
-export function weekLabel(value: string) {
+/** A week's Thursday, which decides its number and year. */
+function thursday(value: string) {
   const date = new Date(value + "T00:00:00Z");
   date.setUTCDate(date.getUTCDate() + 3);
+  return date;
+}
+export function weekNumber(value: string) {
+  const date = thursday(value);
   const start = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
-  return "Week " + Math.ceil(((date.getTime() - start.getTime()) / 86400000 + 1) / 7);
+  return Math.ceil(((date.getTime() - start.getTime()) / 86400000 + 1) / 7);
+}
+export function weekLabel(value: string) {
+  return "Week " + weekNumber(value);
+}
+/**
+ * For a newest-first list of weeks, the year where a new one starts: on the first listed week
+ * after weeks of an earlier year, null elsewhere.
+ */
+export function yearMarks(weeks: readonly string[]) {
+  const years = weeks.map((week) => thursday(week).getUTCFullYear());
+  return years.map((year, index) => {
+    const older = years[index + 1];
+    return older !== undefined && older !== year ? String(year) : null;
+  });
 }
 /** "5 – 11 Oct", with the year when the week falls outside the current one. */
 export function weekRange(value: string) {

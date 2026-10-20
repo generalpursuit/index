@@ -208,6 +208,34 @@ test("a long week loads as you reach its end and shows links you add", async ({ 
   await expect(list.getByRole("button", { name: "Load more" })).toHaveCount(0);
 });
 
+test("the scrubber follows a drag, and holding it opens a focus ring that steps by week", async ({
+  page,
+}) => {
+  await login(page, "alice");
+  const ticks = page.locator(".week-tick");
+  await expect(ticks).toHaveCount(2);
+  const newer = (await ticks.first().boundingBox())!;
+  const older = (await ticks.nth(1).boundingBox())!;
+  const x = newer.x + newer.width / 2,
+    start = newer.y + newer.height / 2;
+  // The week changes as the drag reaches it, before letting go.
+  await page.mouse.move(x, start);
+  await page.mouse.down();
+  await page.mouse.move(x, older.y + older.height / 2, { steps: 4 });
+  await expect(page).toHaveURL(new RegExp(fixture.older));
+  await page.mouse.up();
+  // Holding still spreads the weeks into rows; a row's travel is one week.
+  const ring = page.locator(".week-focus");
+  await page.mouse.move(x, start);
+  await page.mouse.down();
+  await expect(page).toHaveURL(new RegExp(fixture.week));
+  await expect(ring).toBeVisible();
+  await page.mouse.move(x, start + 30, { steps: 3 });
+  await expect(page).toHaveURL(new RegExp(fixture.older));
+  await page.mouse.up();
+  await expect(ring).toHaveCount(0);
+});
+
 test("reduced motion keeps explicit week navigation usable", async ({ page }) => {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await login(page, "alice");

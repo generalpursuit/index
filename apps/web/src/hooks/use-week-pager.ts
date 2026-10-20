@@ -68,15 +68,17 @@ export function useWeekPager(
     };
   }, [week, weeks]);
 
+  // `instant` skips the slide, so 0 can also stop one still under way.
   const move = useCallback(
-    (direction: number) => {
+    (direction: number, instant = false) => {
       const element = viewport.current;
       // Newer weeks sit above the current one, so moving forward means a lower index.
       const index = weeks.indexOf(week) - direction;
       if (!element || index < 0 || index >= weeks.length) return;
       element.scrollTo({
         top: index * element.clientHeight,
-        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+        behavior:
+          instant || matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
       });
     },
     [week, weeks],
