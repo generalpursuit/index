@@ -24,6 +24,14 @@ export async function desktopInvoke<T>(
   if (!window.__TAURI__) throw new Error("The desktop bridge is unavailable.");
   return window.__TAURI__.core.invoke<T>(command, args);
 }
+/**
+ * A detent felt on a Mac trackpad while a drag steps through something; a boundary, such as a
+ * new month, is stronger. Does nothing outside the desktop app.
+ */
+export function desktopHaptic(kind: "step" | "boundary") {
+  if (isDesktop)
+    desktopInvoke("desktop_haptic", { strong: kind === "boundary" }).catch(() => undefined);
+}
 let checkedRevision = -1;
 export const checkedSessionRevision = () => checkedRevision;
 const nativeSessionFetch = isDesktop

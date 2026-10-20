@@ -5,6 +5,7 @@ mod session_revision;
 mod appearance;
 mod app_icon;
 mod titlebar;
+mod haptics;
 mod session;
 mod updates;
 #[cfg(feature = "native-smoke")]
@@ -98,6 +99,7 @@ pub fn run() {
         appearance::set_appearance,
         app_icon::app_icon_status,
         app_icon::set_app_icon,
+        haptics::desktop_haptic,
         smoke::smoke_complete,
         smoke::smoke_resize,
         smoke::smoke_icon_matches,
@@ -133,7 +135,8 @@ pub fn run() {
         open_website,
         appearance::set_appearance,
         app_icon::app_icon_status,
-        app_icon::set_app_icon
+        app_icon::set_app_icon,
+        haptics::desktop_haptic
     ]);
     builder
         .plugin(tauri_plugin_opener::init())
