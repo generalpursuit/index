@@ -288,8 +288,18 @@ public enum Week {
   public static func shift(_ week: String, by count: Int) -> String {
     dateString(calendar.date(byAdding: .day, value: 7 * count, to: date(week))!)
   }
-  public static func label(_ week: String) -> String {
-    "Week \(calendar.component(.weekOfYear, from: date(week)))"
+  public static func number(_ week: String) -> Int {
+    calendar.component(.weekOfYear, from: date(week))
+  }
+  public static func label(_ week: String) -> String { "Week \(number(week))" }
+  /// For a newest-first list of weeks, the year where a new one starts: on the first listed week
+  /// after weeks of an earlier year, nil elsewhere. A week's year is the one its number counts in.
+  public static func yearMarks(_ weeks: [String]) -> [String?] {
+    let calendar = calendar
+    let years = weeks.map { calendar.component(.yearForWeekOfYear, from: date($0)) }
+    return years.indices.map { index in
+      index + 1 < years.count && years[index + 1] != years[index] ? String(years[index]) : nil
+    }
   }
 }
 

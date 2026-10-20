@@ -405,6 +405,13 @@ struct APIClientTests {
     #expect(Week.monday(Week.date("2026-01-01")) == "2025-12-29")
     #expect(Week.label("2025-12-29") == "Week 1")
     #expect(Week.shift("2025-12-29", by: 1) == "2026-01-05")
+    #expect(Week.number("2026-10-19") == 43)
+  }
+  @Test func yearMarksStartNewYears() {
+    // Newest first. A week belongs to its Thursday's year: 29 Dec 2025 is Week 1 of 2026.
+    let weeks = ["2026-02-09", "2026-01-12", "2025-12-29", "2025-12-22", "2024-12-30", "2024-12-23"]
+    #expect(Week.yearMarks(weeks) == [nil, nil, "2026", nil, "2025", nil])
+    #expect(Week.yearMarks([]).isEmpty)
   }
   private func coldCache(_ directory: URL) async throws -> ResponseCache {
     let cache = ResponseCache(directory: directory)

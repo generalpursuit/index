@@ -88,8 +88,9 @@ struct ProfileView: View {
           }
           .overlay(alignment: .trailing) {
             if profile?.canViewContent == true {
+              // Lands at once, so it keeps up with a scrub.
               WeekScrubber(weeks: weekIDs, selected: readingWeek) { week in
-                withAnimation { proxy.scrollTo(week, anchor: .top) }
+                proxy.scrollTo(week, anchor: .top)
               }.frame(height: min(height * 0.6, CGFloat(weekIDs.count) * 12))
                 .padding(.trailing, 4)
             }
