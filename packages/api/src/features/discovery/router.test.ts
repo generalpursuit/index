@@ -1,10 +1,80 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { user } from "@index/db/schema/auth";
+import { eq } from "drizzle-orm";
 import { setupApiTests } from "../../testing/api";
 
 describe("discovery", () => {
   const api = setupApiTests();
+
+  it("excludes undiscoverable accounts before search pagination while retaining unverified people", async () => {
+    await api.client("alice").profiles.update({ name: "Reader one", profileVisibility: "private" });
+    await api.client("bob").profiles.update({ name: "Reader two" });
+    await api.db.update(user).set({ emailVerified: false }).where(eq(user.id, "bob"));
+    await api.db.insert(user).values([
+      { id: "a-test", name: "Reader test", email: "test@example.com", isDiscoverable: false },
+      { id: "az-test", name: "Reader probe", email: "probe@example.com", isDiscoverable: false },
+    ]);
+    for (const viewer of [null, "alice"]) {
+      const discovery = api.client(viewer).discovery;
+      const first = await discovery.searchUsers({ query: "Reader", limit: 1 });
+      assert.deepEqual(
+        first.items.map((item) => item.id),
+        ["alice"],
+      );
+      assert.equal(first.nextAfter, "alice");
+      assert.equal("isDiscoverable" in first.items[0]!, false);
+      const second = await discovery.searchUsers({
+        query: "Reader",
+        limit: 1,
+        after: first.nextAfter!,
+      });
+      assert.deepEqual(
+        second.items.map((item) => item.id),
+        ["bob"],
+      );
+      assert.equal(second.nextAfter, null);
+      assert.deepEqual(await discovery.searchUsers({ query: "Reader test" }), {
+        items: [],
+        nextAfter: null,
+      });
+    }
+    // Hidden review accounts can still use their profiles and existing direct links.
+    assert.equal((await api.client("a-test").profiles.get({ userId: "a-test" })).id, "a-test");
+  });
+
+  it("excludes hidden suggestions and recommenders before ranking and mutual-follow counts", async () => {
+    await api.db.insert(user).values([
+      { id: "a-test", name: "Test target", email: "target@example.com", isDiscoverable: false },
+      { id: "b-test", name: "Test source", email: "source@example.com", isDiscoverable: false },
+    ]);
+    const alice = api.client("alice");
+    for (const id of ["bob", "b-test"]) {
+      await alice.follows.follow({ userId: id });
+      await api.client(id).follows.follow({ userId: "dana" });
+    }
+    await api.client("bob").follows.follow({ userId: "a-test" });
+    await api.client("b-test").follows.follow({ userId: "carol" });
+    const { items } = await alice.discovery.recommendations({ limit: 1 });
+    assert.deepEqual(
+      items.map((item) => item.id),
+      ["dana"],
+    );
+    assert.deepEqual(
+      items[0]?.followedBy.users.map((person) => person.id),
+      ["bob"],
+    );
+    assert.equal(items[0]?.followedBy.total, 1);
+    assert.deepEqual((await alice.discovery.recommendations({})).items, items);
+    assert.deepEqual(
+      (await alice.discovery.searchUsers({ query: "dana" })).items[0]?.followedBy,
+      items[0]?.followedBy,
+    );
+    assert.deepEqual(
+      (await alice.profiles.get({ userId: "dana" })).followedBy,
+      items[0]?.followedBy,
+    );
+  });
   it("includes the viewer's follow state without exposing another viewer's relationship", async () => {
     const alice = api.client("alice"),
       bob = api.client("bob");

@@ -65,4 +65,6 @@ Generate a new migration with `bun run db:generate` from the root and commit its
 
 Keep migrations compatible with an older API still running. To roll back application code, revert the change and redeploy through the regular workflow. Code rollback does not undo schema changes: use a forward migration or a deliberate database restore.
 
+Set the internal `"user".is_discoverable` flag to false for retained operational accounts, such as Apple's app-review account, that should stay out of people discovery and connection lists. New accounts default to true; account/profile APIs cannot change the flag. Set it by immutable user ID in the intended stage's database. This setting preserves sign-in and direct account access and is independent of email verification and profile privacy. Disposable production probes should be deleted after checking their dependent rows and stored files.
+
 Production Neon and R2 resources use `retain` on removal. Their data survives a removed declaration or destroyed stage, but Alchemy stops tracking them; recovery requires deliberate adoption. Preserve the shared Cloudflare state store as well. Neon history retention is currently six hours; establish and test the required recovery window/backups before depending on it.

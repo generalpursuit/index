@@ -39,6 +39,46 @@ describe("native and browser authentication", () => {
       body: JSON.stringify(body),
     });
 
+  it("keeps discovery visibility internal, ignores it at registration and preserves hidden account sign-in", async () => {
+    const authentication = auth();
+    const registered = await authentication.handler(
+      post("/sign-up/email", {
+        name: "Reader",
+        username: "reader",
+        email: "reader@example.com",
+        password: "secure-test-password-123",
+        isDiscoverable: false,
+        is_discoverable: false,
+      }),
+    );
+    assert.equal(registered.status, 200, await registered.clone().text());
+    const { user: person } = (await registered.json()) as { user: { id: string } };
+    assert.equal("isDiscoverable" in person, false);
+    assert.equal("is_discoverable" in person, false);
+    const { rows } = await fixture.client.query<{ is_discoverable: boolean }>(
+      'SELECT is_discoverable FROM "user" WHERE id = $1',
+      [person.id],
+    );
+    assert.equal(rows[0]?.is_discoverable, true);
+    await fixture.client.query('UPDATE "user" SET is_discoverable = false WHERE id = $1', [
+      person.id,
+    ]);
+    const restored = await authentication.handler(
+      new Request("https://api.example.com/api/auth/get-session", {
+        headers: { Authorization: `Bearer ${registered.headers.get("set-auth-token")}` },
+      }),
+    );
+    assert.equal(restored.status, 200);
+    const session = (await restored.json()) as { user: Record<string, unknown> };
+    assert.equal("isDiscoverable" in session.user, false);
+    assert.equal("is_discoverable" in session.user, false);
+    const signedIn = await authentication.handler(
+      post("/sign-in/username", { username: "reader", password: "secure-test-password-123" }),
+    );
+    assert.equal(signedIn.status, 200, await signedIn.clone().text());
+    assert.ok(signedIn.headers.get("set-auth-token"));
+  });
+
   it("registers, logs in, restores a signed bearer session, calls the API and revokes on logout", async () => {
     const authentication = auth();
     const credentials = { email: "native@example.com", password: "secure-test-password-123" };

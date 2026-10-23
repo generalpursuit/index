@@ -27,6 +27,7 @@ export function searchUsers(
       .from(user)
       .where(
         and(
+          eq(user.isDiscoverable, true),
           or(ilike(user.username, pattern), ilike(user.name, pattern)),
           after ? gt(user.id, after) : undefined,
         ),
@@ -40,6 +41,7 @@ export function searchUsers(
 export function recommendations(db: QueryDatabase, actorId: string, limit: number) {
   const mine = alias(follows, "my_follows");
   const theirs = alias(follows, "their_follows");
+  const recommender = alias(user, "recommender");
   const mutualCount = sql<number>`count(distinct ${mine.followedId})::integer`;
   return ResultAsync.fromPromise(
     db
@@ -49,12 +51,15 @@ export function recommendations(db: QueryDatabase, actorId: string, limit: numbe
       })
       .from(mine)
       .innerJoin(theirs, eq(theirs.followerId, mine.followedId))
+      .innerJoin(recommender, eq(recommender.id, mine.followedId))
       .innerJoin(user, eq(user.id, theirs.followedId))
       .where(
         and(
           eq(mine.followerId, actorId),
           eq(mine.status, "accepted"),
           eq(theirs.status, "accepted"),
+          eq(recommender.isDiscoverable, true),
+          eq(user.isDiscoverable, true),
           profileContentVisible(actorId, mine.followedId),
           ne(user.id, actorId),
           sql`not exists (select 1 from follows existing where existing.follower_id = ${actorId} and existing.followed_id = ${user.id})`,

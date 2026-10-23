@@ -156,6 +156,7 @@ export function listNetwork(
           eq(incoming ? follows.followedId : follows.followerId, userId),
           eq(follows.status, direction === "requests" ? "pending" : "accepted"),
           sql`${userId} = ${viewerId}`,
+          eq(user.isDiscoverable, true),
           after ? gt(user.id, after) : undefined,
           pattern ? or(ilike(user.name, pattern), ilike(user.username, pattern)) : undefined,
         ),

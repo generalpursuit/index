@@ -1,10 +1,43 @@
 import { follows } from "@index/db/schema/app";
+import { user } from "@index/db/schema/auth";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { setupApiTests } from "../../testing/api";
 
 describe("following and follow requests", () => {
   const api = setupApiTests();
+
+  it("omits hidden accounts from connection search, pagination, counts and pending requests", async () => {
+    await api.db.insert(user).values([
+      { id: "a-test", name: "Person Test", email: "test@example.com", isDiscoverable: false },
+      { id: "aa-test", name: "Other test", email: "other@example.com", isDiscoverable: false },
+    ]);
+    const alice = api.client("alice");
+    await api.client("bob").profiles.update({ name: "Person Bob" });
+    for (const id of ["a-test", "bob"]) {
+      await alice.follows.follow({ userId: id });
+      await api.client(id).follows.follow({ userId: "alice" });
+    }
+    for (const list of [alice.follows.followers, alice.follows.following]) {
+      const page = await list({ userId: "alice", query: "Person", limit: 1 });
+      assert.deepEqual(
+        page.items.map((person) => person.id),
+        ["bob"],
+      );
+      assert.equal(page.nextAfter, null);
+    }
+    const profile = await alice.profiles.get({ userId: "alice" });
+    assert.equal(profile.followerCount, 1);
+    assert.equal(profile.followingCount, 1);
+    await alice.profiles.update({ profileVisibility: "private" });
+    for (const id of ["aa-test", "carol"]) await api.client(id).follows.follow({ userId: "alice" });
+    const requests = await alice.follows.requests({ limit: 1 });
+    assert.deepEqual(
+      requests.items.map((person) => person.id),
+      ["carol"],
+    );
+    assert.equal(requests.nextAfter, null);
+  });
 
   it("records directed relationships independently and handles retries", async () => {
     const alice = api.client("alice"),

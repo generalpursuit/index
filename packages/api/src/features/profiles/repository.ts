@@ -22,10 +22,10 @@ export function findProfile(db: QueryDatabase, viewerId: string | null, filter: 
         ...publicUserSelection,
         followerCount: sql<
           number | null
-        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f where f.followed_id = "user".id and f.status = 'accepted') else null end`,
+        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f join "user" person on person.id = f.follower_id where f.followed_id = "user".id and f.status = 'accepted' and person.is_discoverable) else null end`,
         followingCount: sql<
           number | null
-        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f where f.follower_id = "user".id and f.status = 'accepted') else null end`,
+        >`case when "user".id = ${viewerId} then (select count(*)::int from follows f join "user" person on person.id = f.followed_id where f.follower_id = "user".id and f.status = 'accepted' and person.is_discoverable) else null end`,
         linkCount: sql<
           number | null
         >`case when "user".id = ${viewerId} or "user".profile_visibility = 'public'
@@ -153,7 +153,10 @@ export function followedByMany(db: QueryDatabase, viewerId: string | null, owner
       ),
     )
     .where(
-      sql`exists(select 1 from follows mine where mine.follower_id = ${viewerId} and mine.followed_id = ${user.id} and mine.status='accepted')`,
+      and(
+        eq(user.isDiscoverable, true),
+        sql`exists(select 1 from follows mine where mine.follower_id = ${viewerId} and mine.followed_id = ${user.id} and mine.status='accepted')`,
+      ),
     )
     .as("ranked");
   return ResultAsync.fromPromise(
