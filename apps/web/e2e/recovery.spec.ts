@@ -111,7 +111,7 @@ test("320px layout, edge swipe, and keyboard-accessible post dialog", async ({ p
   await expect(page.getByRole("heading", { name: "Discover", exact: true })).toBeVisible();
   await page.getByLabel("Search people").fill("Mia");
   await page.getByRole("link").filter({ hasText: "Mia" }).first().click();
-  await expect(page.getByText("Only Mia’s followers can view their posts.")).toBeVisible();
+  await expect(page.getByText("Only approved followers can see Mia’s links.")).toBeVisible();
   await page.locator(".app-main").evaluate((el) => {
     el.dispatchEvent(
       new TouchEvent("touchstart", {

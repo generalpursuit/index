@@ -219,7 +219,7 @@ function ProfileContent({
               <Settings />
             </Link>
           ) : (
-            !hidden && <FollowButton person={profile} />
+            <FollowButton person={profile} />
           )}
         </div>
       </header>
@@ -235,17 +235,17 @@ function ProfileContent({
       {placeholder ? (
         <ProfileLinks key={filter} userId={profile.id} own={own} filter={filter} />
       ) : hidden ? (
+        // Where the links would be, like an empty profile: the lock and Request are in the heading.
         <div
           className={
-            "private-profile text-center border-t border-t-border p-[65px_24px] flex flex-col items-center gap-4 [&_h2]:text-[18px] [&_p]:max-w-75 [&_button]:mt-2 [&_button]:min-w-40"
+            "private-profile flex flex-col justify-center items-center min-h-40 p-6 text-subtle-foreground text-center text-balance [&_p]:max-w-80"
           }
         >
-          <LockKeyhole size={32} />
-          <h2>Private profile</h2>
-          <p className={"muted text-subtle-foreground"}>
-            Only {profile.name}’s followers can view their posts.
+          <p>
+            {profile.followingStatus === "pending"
+              ? `Request sent. You’ll see ${profile.name}’s links once they accept.`
+              : `Only approved followers can see ${profile.name}’s links.`}
           </p>
-          <FollowButton person={profile} />
         </div>
       ) : (
         <>

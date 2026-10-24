@@ -277,7 +277,7 @@ test("unfollowing a private person hides a previously cached post on return", as
   });
   try {
     await page.getByRole("button", { name: "Following", exact: true }).click();
-    await expect(page.getByText("Only Iris’s followers can view their posts.")).toBeVisible();
+    await expect(page.getByText("Only approved followers can see Iris’s links.")).toBeVisible();
     expect(answered).toBe(false);
   } finally {
     release();

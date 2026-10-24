@@ -112,11 +112,14 @@ test("mobile navigation, private profiles, activity and privacy confirmation", a
   await page.getByRole("link", { name: "Discover", exact: true }).click();
   await page.getByLabel("Search people").fill("Mia");
   await page.getByRole("link").filter({ hasText: "Mia" }).first().click();
-  await expect(page.getByText("Only Mia’s followers can view their posts.")).toBeVisible();
+  await expect(page.getByText("Only approved followers can see Mia’s links.")).toBeVisible();
   await expect(page.getByText("— links")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Request", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Request", exact: true }).click();
   await expect(page.getByRole("button", { name: "Requested", exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Request sent. You’ll see Mia’s links once they accept."),
+  ).toBeVisible();
   // Profiles have no back button; the browser's back (or an edge swipe) returns.
   await page.goBack();
   await expect(page).toHaveURL(/discover/);
