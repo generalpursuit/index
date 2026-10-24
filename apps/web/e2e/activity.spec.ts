@@ -53,18 +53,30 @@ test("comment mentions appear in Activity and open the original thread", async (
       "aria-pressed",
       "true",
     );
-    await expect(bob.locator(".activity-row")).toHaveCount(1);
-    await expect(bob.locator(".activity-row")).toContainText("started following you.");
+    const follow = bob.locator(".activity-row");
+    await expect(follow).toHaveCount(1);
+    await expect(follow.locator("header")).toContainText("started following you");
+    const follower = await follow.locator("header a").textContent();
     await bob.getByRole("button", { name: "Mentions", exact: true }).click();
     await expect(bob).toHaveURL(/filter=mention/);
-    const mention = bob
-      .locator(".activity-row")
-      .filter({ hasText: "mentioned you: @bob take a look at this" });
-    await expect(mention).toBeVisible();
-    await mention.getByRole("button", { name: "Open post" }).click();
-    await expect(
-      bob.locator(".comment").filter({ hasText: "@bob take a look at this" }),
-    ).toBeVisible();
+    // Each row says what happened, and a comment's row shows the comment.
+    const mention = bob.locator(".activity-row").filter({ hasText: "mentioned you in a comment" });
+    await expect(mention.locator("p")).toHaveText("@bob take a look at this");
+    await expect(mention.getByRole("link", { name: "Open post", exact: true })).toBeVisible();
+    // The whole row opens the post, not only its chevron. Its middle is the comment's text.
+    const comment = bob.locator(".comment").filter({ hasText: "@bob take a look at this" });
+    await mention.click();
+    await expect(comment).toBeVisible();
+    await bob.keyboard.press("Escape");
+    await expect(comment).toBeHidden();
+    // The name stays a link of its own, above the row's.
+    const author = await mention.locator("header a").textContent();
+    await mention.locator("header a").click();
+    await expect(bob).toHaveURL(new RegExp(`/u/${author}$`));
+    // A row without a post opens the person who acted.
+    await bob.goto("/activity?filter=follow");
+    await follow.click();
+    await expect(bob).toHaveURL(new RegExp(`/u/${follower}$`));
   } finally {
     await recipient.close();
   }

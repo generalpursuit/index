@@ -2,13 +2,12 @@ import { canPrefetch } from "@/data/client";
 import { placeholderProfile } from "@/data/placeholders";
 import { useEffect } from "react";
 import { ProfileLink } from "@/components/app/profile-link";
-import { useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { ChevronRight } from "lucide-react";
 import { Heading } from "@/components/app/navigation";
 import { QueryState, More } from "@/components/app/query-state";
 import { UserAvatar } from "@/components/app/user-avatar";
-import { IconButton } from "@index/ui/components/icon-button";
 import { useActivity } from "./hooks/use-activity";
 import { useProfileActions } from "@/features/profiles/hooks/use-profiles";
 import { timeAgo } from "@/lib/weeks";
@@ -16,8 +15,38 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useAPI } from "@/hooks/use-api";
 import { modalNavigation } from "@/lib/search";
 import { activityOptions } from "./queries";
+import type { Activity } from "@/lib/types";
 import { preparePostReference } from "@/features/links/queries";
 type Filter = "all" | "comment" | "request" | "mention" | "follow";
+// Covers its row through ::after; the chevron shows where the row leads. Empty for a pending request,
+// whose buttons take that place.
+const rowTargetClassName =
+  "activity-target flex-none flex size-8 items-center justify-center rounded-full text-foreground empty:size-0 hover:bg-muted [&_svg]:size-4 after:absolute after:inset-0 after:content-['']";
+/** What happened, after the name of who did it. */
+function activitySummary(item: Pick<Activity, "type">) {
+  switch (item.type) {
+    case "comment":
+      return "commented on your post";
+    case "mention":
+      return "mentioned you in a comment";
+    case "follow":
+      return "started following you";
+    case "accepted":
+      return "accepted your follow request";
+    case "request":
+      return "requested to follow you";
+  }
+}
+/** Below it: the comment itself, or what became of a request. */
+function activityDetail(item: Pick<Activity, "type" | "body" | "requestStatus">) {
+  if (item.type === "comment" || item.type === "mention") return item.body;
+  if (item.type !== "request" || item.requestStatus === "pending") return null;
+  return item.requestStatus === "accepted"
+    ? "Follow request accepted."
+    : item.requestStatus === "declined"
+      ? "Follow request declined."
+      : "Follow request canceled.";
+}
 export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
   const navigate = useNavigate(),
     { list, read } = useActivity(filter === "all" ? undefined : filter),
@@ -107,10 +136,12 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
       >
         <div className="activity-list">
           {items.map((a) => (
+            // The whole row opens what it is about: the post with the comment, or the person.
+            // Its target is stretched over the row; the profile links and request buttons sit above.
             <article
               data-placeholder={list.isPending || undefined}
               className={
-                "activity-row [&_small]:text-subtle-foreground flex items-center gap-3 p-[14px_0] [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:p-[14px_0] [@media(width<=700px)]:[&_.user-avatar]:w-8.5 [@media(width<=700px)]:[&_.user-avatar]:h-8.5"
+                "activity-row relative flex items-center gap-3 p-[14px_0] [&>a:first-child]:relative [&>a:first-child]:z-1 [@media(width<=700px)]:gap-2.5 [@media(width<=700px)]:[&_.user-avatar]:w-8.5 [@media(width<=700px)]:[&_.user-avatar]:h-8.5"
               }
               key={a.id}
             >
@@ -119,35 +150,43 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
               </ProfileLink>
               <div
                 className={
-                  "activity-body flex-1 min-w-0 text-[13px] [&_header]:flex [&_header]:items-center [&_header]:gap-2 [&_header]:text-[13px] [&_small]:text-[11px] [&_p]:mt-0.5 [&_p]:text-foreground [&_p]:wrap-anywhere [@media(width<=700px)]:text-[12px] [@media(width<=700px)]:[&_header]:text-[12px] [@media(width<=700px)]:[&_header]:gap-1.5"
+                  "activity-body flex-1 min-w-0 text-[13px] leading-[18px] [&_header_a]:relative [&_header_a]:z-1 [&_header_a]:font-medium [&_small]:ml-1.5 [&_small]:text-[11px] [&_small]:text-subtle-foreground [&_p]:mt-0.5 [&_p]:text-foreground [&_p]:wrap-anywhere [@media(width<=700px)]:text-[12px]"
                 }
               >
                 <header>
-                  <ProfileLink person={a.actor}>{a.actor.username ?? a.actor.name}</ProfileLink>
+                  <ProfileLink person={a.actor}>{a.actor.username ?? a.actor.name}</ProfileLink>{" "}
+                  {activitySummary(a)}
                   <small>{timeAgo(a.createdAt)}</small>
                 </header>
-                <p>
-                  {a.type === "mention"
-                    ? `mentioned you: ${a.body ?? ""}`
-                    : a.type === "comment"
-                      ? a.body
-                      : a.type === "follow"
-                        ? "started following you."
-                        : a.type === "accepted"
-                          ? "accepted your follow request."
-                          : a.requestStatus === "pending"
-                            ? "requested to follow you."
-                            : a.requestStatus === "accepted"
-                              ? "Follow request accepted."
-                              : a.requestStatus === "declined"
-                                ? "Follow request declined."
-                                : "Follow request canceled."}
-                </p>
+                {activityDetail(a) && <p>{activityDetail(a)}</p>}
               </div>
-              {a.type === "request" && a.requestStatus === "pending" ? (
+              {a.linkId ? (
+                <Link
+                  {...modalNavigation({ post: a.linkShortId ?? undefined })}
+                  className={rowTargetClassName}
+                  aria-label="Open post"
+                  title="Open post"
+                  onPointerEnter={() => preparePostFor(a)}
+                  onFocus={() => preparePostFor(a)}
+                  onPointerDown={() => preparePostFor(a)}
+                >
+                  <ChevronRight />
+                </Link>
+              ) : (
+                // The name already links to the profile, so this target is for pointers only.
+                <ProfileLink
+                  person={a.actor}
+                  className={rowTargetClassName}
+                  tabIndex={-1}
+                  aria-hidden
+                >
+                  {a.type === "request" && a.requestStatus === "pending" ? null : <ChevronRight />}
+                </ProfileLink>
+              )}
+              {a.type === "request" && a.requestStatus === "pending" && (
                 <div
                   className={
-                    "request-actions flex gap-1.5 shrink-0 [&_button]:text-[11px] [&_button]:p-[0_11px] [&_button]:h-9 [@media(width<=700px)]:[&_button]:p-[0_9px] [@media(width<=700px)]:[&_button]:text-[10px] [@media(width<=700px)]:gap-1.25"
+                    "request-actions relative z-1 flex gap-1.5 shrink-0 [&_button]:text-[11px] [&_button]:p-[0_11px] [&_button]:h-9 [@media(width<=700px)]:[&_button]:p-[0_9px] [@media(width<=700px)]:[&_button]:text-[10px] [@media(width<=700px)]:gap-1.25"
                   }
                 >
                   <Button
@@ -164,19 +203,7 @@ export function ActivityPage({ filter = "all" }: { filter?: Filter }) {
                     Decline
                   </Button>
                 </div>
-              ) : a.linkId ? (
-                <IconButton
-                  label="Open post"
-                  onPointerEnter={() => preparePostFor(a)}
-                  onFocus={() => preparePostFor(a)}
-                  onClick={() => {
-                    preparePostFor(a);
-                    void navigate(modalNavigation({ post: a.linkShortId ?? undefined }));
-                  }}
-                >
-                  <ChevronRight />
-                </IconButton>
-              ) : null}
+              )}
             </article>
           ))}
         </div>

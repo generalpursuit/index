@@ -16,6 +16,7 @@ export function ProfileLink({
   children: ReactNode;
   onClick?: MouseEventHandler<HTMLAnchorElement>;
   "aria-label"?: string;
+  "aria-hidden"?: boolean;
 }) {
   const cache = useQueryClient(),
     api = useAPI();

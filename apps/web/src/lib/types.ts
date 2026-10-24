@@ -7,4 +7,5 @@ export type Conversation = Awaited<ReturnType<AppRouterClient["messages"]["conve
 export type Message = Awaited<ReturnType<AppRouterClient["messages"]["send"]>>;
 export type MessageReply = NonNullable<Message["replyTo"]>;
 export type MessageFile = Message["files"][number];
+export type Activity = Awaited<ReturnType<AppRouterClient["activity"]["list"]>>["items"][number];
 export type ResolvedRoute = Awaited<ReturnType<AppRouterClient["routes"]["resolve"]>>;
