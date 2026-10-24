@@ -34,6 +34,7 @@ import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
 import { AppIconSettings } from "./app-icon";
+import { DockSettings } from "./dock";
 import { LaunchAtLoginSettings } from "./launch-at-login";
 import { CurateeImport } from "./curatee-import";
 import { MobileAppSettings } from "./mobile-app";
@@ -143,6 +144,7 @@ function SettingsBoxes({
         <ThemeControl />
       </section>
       <AppIconSettings />
+      <DockSettings />
       <LaunchAtLoginSettings />
       <ProfileVisibility profile={profile} />
       <GroupSettings userId={profile.id} />

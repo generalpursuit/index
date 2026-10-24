@@ -25,6 +25,9 @@ export class DesktopHarness {
   appIcon = "ink";
   appIconSupported = true;
   appIconError = false;
+  dockVisible = true;
+  dockSupported = true;
+  dockError = false;
   releaseChannel = "development";
   releaseVersion = "0.2.0";
   updatesEnabled = false;
@@ -154,6 +157,14 @@ export class DesktopHarness {
             throw new Error("Unsupported icon");
           this.appIcon = args.icon;
           return { supported: true, icon: this.appIcon };
+        }
+        if (command === "dock_status")
+          return { supported: this.dockSupported, visible: this.dockVisible };
+        if (command === "set_dock_visible") {
+          if (this.dockError) throw new Error("AppKit refused the activation policy");
+          if (!this.dockSupported) throw new Error("Unsupported platform");
+          this.dockVisible = args.visible;
+          return { supported: true, visible: this.dockVisible };
         }
         if (command === "desktop_window") {
           this.beforeWindow?.();

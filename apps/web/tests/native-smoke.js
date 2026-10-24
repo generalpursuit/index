@@ -43,6 +43,14 @@
         );
         await invoke("set_app_icon", { icon: "ink" });
         assert(await invoke("smoke_icon_matches", { paper: false }), "Default icon did not return");
+        assert(
+          !(await invoke("dock_status")).visible,
+          "Hidden Dock icon was not restored at launch",
+        );
+        assert(
+          (await invoke("set_dock_visible", { visible: true })).visible,
+          "Dock icon did not return",
+        );
       } else {
         await invoke("set_app_icon", { icon: "ink" });
         assert(
@@ -64,6 +72,10 @@
         assert(
           await invoke("smoke_icon_matches", { paper: true }),
           "Paper was not applied to AppKit",
+        );
+        assert(
+          !(await invoke("set_dock_visible", { visible: false })).visible,
+          "Dock icon was not hidden",
         );
       }
       await invoke("smoke_complete", { error: null });

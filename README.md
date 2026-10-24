@@ -35,7 +35,7 @@ Index gives every week one page. Paste a link and it lands in this week, next to
 ## On every device
 
 - **iPhone and iPad:** a native app with a share extension, notifications and a choice of Ink or Paper app icon.
-- **Mac:** a menu bar panel to save a link without switching apps, the Share menu, notifications and launch at login.
+- **Mac:** a menu bar panel to save a link without switching apps, the Share menu, notifications, launch at login and an optional menu-bar-only mode without a Dock icon.
 - **Windows and Linux:** the same desktop app.
 - **Web:** any modern browser, with notifications.
 
