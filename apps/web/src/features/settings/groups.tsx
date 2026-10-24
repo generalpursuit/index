@@ -9,7 +9,6 @@ import {
 } from "@index/ui/components/dropdown-menu";
 import { Confirmation } from "@index/ui/components/confirmation";
 import { Modal } from "@index/ui/components/modal";
-import { IconButton } from "@index/ui/components/icon-button";
 import { QueryState, More } from "@/components/app/query-state";
 import { useGroupActions } from "@/features/groups/use-groups";
 import { useGroups } from "@/features/groups/use-groups";
@@ -17,11 +16,13 @@ import { CreateGroup } from "@/features/groups/create-group";
 import { GroupForm, groupSaveError } from "@/features/groups/group-form";
 import { GroupLockControl, groupPrivacyDescription } from "@/features/groups/group-lock-control";
 import type { Group } from "@/lib/types";
+import { SettingsGroup } from "./rows";
 
 /**
- * Your lists in one place. Favorites and Starred come first and are never locked here: Favorites
- * follows each link's own group, Starred is always private. Below them you create, lock, rename
- * and delete your own groups. The profile only shows and filters them.
+ * Your lists in one place, a row each. Favorites and Starred come first and are never locked
+ * here: Favorites follows each link's own group, Starred is always private. Your own groups
+ * follow, to lock, rename and delete; the last row creates one. The profile only shows and
+ * filters them.
  */
 export function GroupSettings({ userId }: { userId: string }) {
   const groups = useGroups(userId),
@@ -33,66 +34,45 @@ export function GroupSettings({ userId }: { userId: string }) {
   const [creating, setCreating] = useState(false);
   const createTrigger = useRef<HTMLButtonElement>(null);
   return (
-    <section
-      className={
-        "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-groups"
-      }
-      aria-labelledby="settings-groups"
+    <SettingsGroup
+      title="Groups"
+      className="settings-groups"
+      footer="Lock a group to keep its links to yourself. Favorites and Starred are always there."
     >
-      <div
-        className={
-          "settings-groups-heading flex items-start justify-between gap-4 mb-2.5 [&_[data-slot='button']]:flex-none [&_[data-slot='button']]:m-[-4px_-8px_0_0] [&_[data-slot='button']]:text-subtle-foreground [&_[data-slot='button']:hover]:text-foreground"
-        }
-      >
-        <div>
-          <h2 id="settings-groups">Groups</h2>
-          <p className={"muted text-subtle-foreground"}>
-            Lock a group to keep its links to yourself.
-          </p>
-        </div>
-        <IconButton ref={createTrigger} label="New group" onClick={() => setCreating(true)}>
-          <Plus />
-        </IconButton>
-      </div>
       <QueryState
         pending={groups.isPending}
         hasData={!!groups.data}
         error={groups.error}
         retry={() => void groups.refetch()}
       >
-        <ul className="settings-group-list">
+        <ul className="settings-group-list divide-y divide-border/70">
           {pinned.map((g) => (
             <GroupRow key={g.id} group={g}>
               {/* Keeps counts aligned with the lock and actions of your groups. */}
               <span className="settings-group-slot w-[78px] -mr-2" aria-hidden="true" />
             </GroupRow>
           ))}
+          {own.map((g) => (
+            <GroupRow key={g.id} group={g}>
+              <GroupActions group={g} />
+            </GroupRow>
+          ))}
         </ul>
-        {own.length > 0 && (
-          <>
-            <h3
-              id="settings-own-groups"
-              className={
-                "settings-group-divider flex items-center gap-2.5 mt-2 mb-1 font-mono text-[11px] font-normal uppercase tracking-[0.06em] text-subtle-foreground after:flex-1 after:h-px after:bg-border after:content-['']"
-              }
-            >
-              Your groups
-            </h3>
-            <ul className="settings-group-list" aria-labelledby="settings-own-groups">
-              {own.map((g) => (
-                <GroupRow key={g.id} group={g}>
-                  <GroupActions group={g} />
-                </GroupRow>
-              ))}
-            </ul>
-          </>
-        )}
         <More
           hasNext={groups.hasNextPage}
           isFetching={groups.isFetchingNextPage}
           fetch={groups.fetchNextPage}
         />
       </QueryState>
+      <button
+        ref={createTrigger}
+        type="button"
+        className="settings-new-group flex min-h-11.5 w-full items-center gap-2 rounded-b-2xl px-4 text-left text-[14px] text-foreground hover:bg-muted/50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring [&_svg]:size-4 [&_svg]:text-subtle-foreground"
+        onClick={() => setCreating(true)}
+      >
+        <Plus aria-hidden="true" />
+        New group
+      </button>
       {creating && (
         <CreateGroup
           returnFocus={createTrigger}
@@ -100,7 +80,7 @@ export function GroupSettings({ userId }: { userId: string }) {
           onCreated={() => setCreating(false)}
         />
       )}
-    </section>
+    </SettingsGroup>
   );
 }
 function GroupRow({
@@ -113,7 +93,7 @@ function GroupRow({
   return (
     <li
       className={
-        "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
+        "settings-group grid grid-cols-[minmax(0,_1fr)_auto_auto] items-center gap-3.5 min-h-11.5 px-4 [&:hover_.settings-group-actions_[data-slot='button']]:text-muted-foreground"
       }
     >
       <span

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { desktopInvoke, isDesktop } from "@/lib/desktop";
+import { SwitchRow } from "./rows";
 
 type LoginStatus = {
   supported: boolean;
@@ -41,45 +42,31 @@ function DesktopLaunchAtLogin() {
   if (status?.supported === false || (!status && !error)) return null;
   const enabled = status?.state === "enabled";
   return (
-    <section
-      className="settings-box rounded-[18px] border border-border p-[20px_22px]"
-      aria-label="Launch at login"
+    <SwitchRow
+      label="Launch at login"
+      description="Keep Index in your menu bar after you log in."
+      checked={enabled}
+      disabled={!status || status.state === "not-found" || pending}
+      onChange={async (event) => {
+        const next = event.target.checked;
+        setPending(true);
+        setError("");
+        try {
+          setStatus(await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: next }));
+        } catch {
+          setError("Could not update Launch at login. Check System Settings.");
+        } finally {
+          setPending(false);
+        }
+      }}
     >
-      <h2 className="text-[16px] font-medium">Launch at login</h2>
-      <p className="mt-1 text-[13px] text-subtle-foreground">
-        Keep Index in your menu bar after you log in to this Mac.
-      </p>
-      {status && (
-        <label className="mt-4 flex items-center gap-2 text-[14px] has-disabled:opacity-60">
-          <input
-            type="checkbox"
-            className="accent-primary"
-            checked={enabled}
-            disabled={status.state === "not-found" || pending}
-            onChange={async (event) => {
-              const next = event.target.checked;
-              setPending(true);
-              setError("");
-              try {
-                setStatus(
-                  await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: next }),
-                );
-              } catch {
-                setError("Could not update Launch at login. Check System Settings.");
-              } finally {
-                setPending(false);
-              }
-            }}
-          />
-          Launch at login
-        </label>
-      )}
+      {/* Links sit above the row's stretched label, so they don't toggle the switch. */}
       {status?.state === "requires-approval" && (
-        <p className="mt-2 text-[13px] text-subtle-foreground">
+        <span className="block">
           Approval needed in System Settings.{" "}
           <button
             type="button"
-            className="underline"
+            className="relative underline"
             onClick={() =>
               void desktopInvoke("launch_at_login_settings").catch(() =>
                 toast.error("Could not open System Settings. Try again."),
@@ -90,7 +77,7 @@ function DesktopLaunchAtLogin() {
           </button>
           <button
             type="button"
-            className="ml-2 underline"
+            className="relative ml-2 underline"
             disabled={pending}
             onClick={async () => {
               setPending(true);
@@ -107,18 +94,16 @@ function DesktopLaunchAtLogin() {
           >
             Cancel request
           </button>
-        </p>
+        </span>
       )}
       {status?.state === "not-found" && (
-        <p className="mt-2 text-[13px] text-subtle-foreground">
-          Install Index in Applications to use Launch at login.
-        </p>
+        <span className="block">Install Index in Applications to use Launch at login.</span>
       )}
       {error && (
-        <p role="alert" className="mt-2 text-[13px] text-destructive">
+        <span role="alert" className="block text-destructive">
           {error}
-        </p>
+        </span>
       )}
-    </section>
+    </SwitchRow>
   );
 }

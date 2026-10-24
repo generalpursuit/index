@@ -517,7 +517,7 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
-  await expect(panel.getByRole("checkbox", { name: "Launch at login" })).toHaveCount(0);
+  await expect(panel.getByRole("switch", { name: "Launch at login" })).toHaveCount(0);
   await panel.getByRole("button", { name: "Open Index", exact: true }).click();
   await expect.poll(() => desktop.commands.some((c) => c.command === "desktop_open")).toBe(true);
   await panel.keyboard.press("Escape");
@@ -534,8 +534,8 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   expect(desktop.commands.some((c) => c.command.startsWith("launch_at_login"))).toBe(false);
 
   await page.goto("/settings");
-  const box = page.getByRole("region", { name: "Launch at login" });
-  const checkbox = box.getByRole("checkbox", { name: "Launch at login" });
+  const checkbox = page.getByRole("switch", { name: "Launch at login" });
+  const box = page.locator(".settings-row").filter({ has: checkbox });
   await expect(checkbox).not.toBeChecked();
   expect(desktop.commands.some((c) => c.command === "launch_at_login_set")).toBe(false);
   await checkbox.click();
@@ -661,7 +661,7 @@ test("a held old notification command cannot stop a new account registration", a
     await expect(page).toHaveURL(/login/);
     await login(page, "bob@test.example");
     await page.goto("/settings");
-    await page.getByRole("button", { name: "Enable on this device", exact: true }).click();
+    await page.getByRole("button", { name: "Turn on alerts" }).click();
     await expect.poll(() => desktop.registeredAccount).toBe(fixture.people.Bob);
     const rejected = desktop.rejectedNotifications;
     release();

@@ -5,7 +5,7 @@ import { AccountSecurity } from "@/features/auth/security-forms";
 import { ThemeControl } from "@/features/settings/appearance";
 import { useForm } from "@tanstack/react-form";
 import { z } from "zod";
-import { ChevronDown, Pencil } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
@@ -20,7 +20,6 @@ import {
 import { updateProfileSchema } from "@index/api/features/profiles/schemas";
 import { useRef, useState, type RefObject } from "react";
 import { Confirmation } from "@index/ui/components/confirmation";
-import { IconButton } from "@index/ui/components/icon-button";
 import { Modal, ModalFooter } from "@index/ui/components/modal";
 import { QueryState } from "@/components/app/query-state";
 import { Back } from "@/components/app/navigation";
@@ -38,6 +37,7 @@ import { DockSettings } from "./dock";
 import { LaunchAtLoginSettings } from "./launch-at-login";
 import { CurateeImport } from "./curatee-import";
 import { MobileAppSettings } from "./mobile-app";
+import { rowButtonClassName, SettingsGroup, SettingsRow, thisDevice } from "./rows";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 const settingsPhotoClassName =
@@ -86,7 +86,10 @@ function SettingsContent({ userId }: { userId: string }) {
   );
 }
 
-/** One box per concern: who you are, who sees your links, your lists, imports, and signing out. */
+/**
+ * Settings in labelled groups, like iOS Settings: your account, alerts, what is saved on this
+ * device, your groups, and the app itself. Each setting is one row.
+ */
 function SettingsBoxes({
   profile,
   placeholder = false,
@@ -100,12 +103,12 @@ function SettingsBoxes({
   const picker = useRef<HTMLInputElement>(null);
   return (
     <div
-      className={"settings-content flex flex-col gap-3.5"}
+      className={"settings-content flex flex-col gap-6"}
       data-placeholder={placeholder || undefined}
     >
       <section
         className={
-          "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-profile grid grid-cols-[auto_minmax(0,_1fr)_auto] items-center gap-4.5"
+          "settings-profile grid grid-cols-[auto_minmax(0,_1fr)_auto] items-center gap-4 rounded-2xl border border-border p-4 [@media(width<=700px)]:[&_.user-avatar.large]:size-14"
         }
         aria-label="Profile"
       >
@@ -120,43 +123,46 @@ function SettingsBoxes({
         <PhotoPicker input={picker} onPick={(photo) => setEditing({ photo })} />
         <div
           className={
-            "settings-identity flex flex-col gap-0.5 min-w-0 [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:font-serif [&_strong]:text-[24px] [&_strong]:font-bold [&_strong]:leading-[1.2] [&_span]:text-[14px] [&_span]:text-subtle-foreground"
+            "settings-identity flex flex-col gap-0.5 min-w-0 [&_strong]:overflow-hidden [&_strong]:text-ellipsis [&_strong]:font-serif [&_strong]:text-[22px] [&_strong]:font-bold [&_strong]:leading-[1.2] [&_span]:text-[13px] [&_span]:text-subtle-foreground"
           }
         >
           <strong>{profile.name}</strong>
           {profile.username && <span>{profile.username}</span>}
         </div>
-        <IconButton
-          label="Edit profile"
-          className={
-            "settings-edit [align-self:start] text-subtle-foreground [&:hover]:text-foreground"
-          }
+        <Button
+          variant="outline"
+          className={"settings-edit " + rowButtonClassName}
           onClick={() => setEditing({})}
         >
-          <Pencil />
-        </IconButton>
+          Edit profile
+        </Button>
       </section>
-      <section
-        className={
-          "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px]"
-        }
+      <SettingsGroup title="Account">
+        <ProfileVisibility profile={profile} />
+        <AccountSecurity />
+      </SettingsGroup>
+      <NotificationSettings />
+      <SettingsGroup
+        title={thisDevice === "this Mac" ? "This Mac" : "This device"}
+        note={`Saved on ${thisDevice} only`}
       >
         <ThemeControl />
-      </section>
-      <AppIconSettings />
-      <DockSettings />
-      <LaunchAtLoginSettings />
-      <ProfileVisibility profile={profile} />
+        <AppIconSettings />
+        <DockSettings />
+        <LaunchAtLoginSettings />
+      </SettingsGroup>
       <GroupSettings userId={profile.id} />
-      <CurateeImport />
-      <NotificationSettings />
-      <AccountSecurity />
-      <MobileAppSettings />
-      <DesktopUpdates />
+      <SettingsGroup title="Import">
+        <CurateeImport />
+      </SettingsGroup>
+      <SettingsGroup title="About">
+        <MobileAppSettings />
+        <DesktopUpdates />
+      </SettingsGroup>
       <button
         type="button"
         className={
-          "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-sign-out w-full p-[15px_22px] text-[14px] font-medium text-foreground text-center [transition:background_120ms_ease] [&:hover]:bg-card [&:disabled]:opacity-[0.5]"
+          "settings-sign-out w-full min-h-11.5 rounded-2xl border border-border px-4 text-[14px] font-medium text-foreground text-center [transition:background_120ms_ease] [&:hover]:bg-card [&:disabled]:opacity-[0.5]"
         }
         disabled={signOut.isPending}
         onClick={() => signOut.mutate()}
@@ -167,7 +173,7 @@ function SettingsBoxes({
         <p
           role="alert"
           className={
-            "field-error select-text text-[12px] text-destructive settings-sign-out-error text-center"
+            "field-error select-text text-[12px] text-destructive settings-sign-out-error -mt-4 text-center"
           }
         >
           {signOut.error.message}
@@ -346,21 +352,15 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
   const [next, setNext] = useState<"public" | "private" | null>(null);
   const current = profile.profileVisibility;
   return (
-    <section
-      className={
-        "settings-box p-[20px_22px] border border-border rounded-[18px] [&_h2]:text-[16px] [&_h2]:font-medium [&_h2+p]:mt-1 [&_h2+p]:text-[13px] settings-visibility flex items-center justify-between gap-5 [&_.list-filter]:flex-none"
+    <SettingsRow
+      className="settings-visibility"
+      label="Profile visibility"
+      description={
+        (current === "private"
+          ? "Only approved followers see your links."
+          : "Anyone can see your links.") + " Locked groups are always only yours."
       }
-      aria-labelledby="settings-visibility"
     >
-      <div>
-        <h2 id="settings-visibility">Profile visibility</h2>
-        <p className={"muted text-subtle-foreground"}>
-          {current === "private"
-            ? "Only approved followers see your links."
-            : "Anyone can see your links."}{" "}
-          Locked groups are always only yours.
-        </p>
-      </div>
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -405,6 +405,6 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
           next && update.mutate({ profileVisibility: next }, { onSuccess: () => setNext(null) })
         }
       />
-    </section>
+    </SettingsRow>
   );
 }

@@ -1,34 +1,50 @@
+import { useRef, useState } from "react";
+import { Button } from "@index/ui/components/button";
+import { Modal } from "@index/ui/components/modal";
 import testFlightQR from "@/assets/testflight-qr.svg";
+import { rowButtonClassName, SettingsRow } from "./rows";
 
+const testFlight = "https://testflight.apple.com/join/kqYCvuq7";
+
+/** The beta's TestFlight link, with a code to scan from a phone. */
 export function MobileAppSettings() {
+  const [open, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
   return (
-    <section
-      className="settings-box flex flex-wrap items-center gap-5 rounded-[18px] border border-border p-[20px_22px]"
-      aria-labelledby="settings-mobile-app"
-    >
-      <div className="min-w-0 flex-1 basis-48">
-        <h2 id="settings-mobile-app" className="text-[16px] font-medium">
-          Index for iPhone &amp; iPad
-        </h2>
-        <p className="mt-1 text-[13px] text-subtle-foreground">
-          Scan with your phone’s camera to join the beta and install Index through TestFlight.
-        </p>
-        <a
-          href="https://testflight.apple.com/join/kqYCvuq7"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mt-3 inline-flex min-h-11 items-center text-[13px] font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring"
-        >
-          Open in TestFlight
-        </a>
-      </div>
-      <img
-        src={testFlightQR}
-        alt="Scan to join the Index beta on TestFlight"
-        width={164}
-        height={164}
-        className="size-41 flex-none rounded-lg"
-      />
-    </section>
+    <SettingsRow label="Index for iPhone & iPad" description="Join the beta through TestFlight.">
+      <Button
+        ref={trigger}
+        variant="outline"
+        className={rowButtonClassName}
+        onClick={() => setOpen(true)}
+      >
+        Get the app
+      </Button>
+      <Modal
+        open={open}
+        onOpenChange={setOpen}
+        title="Index for iPhone & iPad"
+        description="Scan with your phone’s camera to join the beta and install Index through TestFlight."
+        returnFocus={trigger}
+      >
+        <div className="flex flex-col items-center gap-4 pb-1">
+          <img
+            src={testFlightQR}
+            alt="Scan to join the Index beta on TestFlight"
+            width={184}
+            height={184}
+            className="size-46 rounded-lg"
+          />
+          <a
+            href={testFlight}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center text-[13px] font-medium underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-offset-3 focus-visible:outline-ring"
+          >
+            Open in TestFlight
+          </a>
+        </div>
+      </Modal>
+    </SettingsRow>
   );
 }

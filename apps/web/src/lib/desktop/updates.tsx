@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Button } from "@index/ui/components/button";
+import { rowButtonClassName, SettingsRow } from "@/features/settings/rows";
 import { desktopInvoke, isDesktop, isMenuBar } from ".";
 
 type ReleaseInfo = {
@@ -57,47 +58,48 @@ export function DesktopUpdates() {
     }
   }
   return (
-    <section
-      className="settings-box rounded-[18px] border border-border p-[20px_22px]"
+    <SettingsRow
+      role="group"
       aria-label="Desktop updates"
-    >
-      <h2 className="text-base font-medium">
-        {release.channel === "staging" ? "Index Staging" : "Index"}
-      </h2>
-      <p className="mt-1 text-sm text-subtle-foreground">Version {release.version}</p>
-      {release.updatesEnabled && (
-        <div className="mt-3 flex flex-col items-start gap-2">
+      label={release.channel === "staging" ? "Index Staging" : "Index"}
+      description={
+        <>
+          Version {release.version}
           {ready && (
-            <p className="text-sm text-subtle-foreground" role="status">
+            <span className="block" role="status">
               Index {ready} is ready. It applies the next time Index opens.
-            </p>
+            </span>
           )}
-          <Button
-            variant="outline"
-            disabled={state === "checking" || state === "restarting"}
-            onClick={() => void (ready ? restart() : check())}
-          >
-            {state === "checking"
-              ? "Checking…"
-              : state === "restarting"
-                ? "Restarting…"
-                : ready
-                  ? "Restart now"
-                  : "Check for updates"}
-          </Button>
           {state === "current" && (
-            <p className="text-sm text-subtle-foreground" role="status">
+            <span className="block" role="status">
               You’re up to date.
-            </p>
+            </span>
           )}
           {error && (
-            <p className="text-sm text-destructive" role="alert">
+            <span className="block text-destructive" role="alert">
               {error}
-            </p>
+            </span>
           )}
-        </div>
+        </>
+      }
+    >
+      {release.updatesEnabled && (
+        <Button
+          variant="outline"
+          className={rowButtonClassName}
+          disabled={state === "checking" || state === "restarting"}
+          onClick={() => void (ready ? restart() : check())}
+        >
+          {state === "checking"
+            ? "Checking…"
+            : state === "restarting"
+              ? "Restarting…"
+              : ready
+                ? "Restart now"
+                : "Check for updates"}
+        </Button>
       )}
-    </section>
+    </SettingsRow>
   );
 }
 

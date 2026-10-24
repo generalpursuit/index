@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { desktopInvoke, isDesktop } from "@/lib/desktop";
+import { SettingsRow } from "./rows";
 
 type Icon = "ink" | "paper";
 type IconStatus = { supported: boolean; icon: Icon };
@@ -50,62 +51,61 @@ function DesktopAppIconSettings() {
 
   if (status?.supported === false || (!status && !error)) return null;
   return (
-    <section
-      className="settings-box rounded-[18px] border border-border p-[20px_22px]"
-      aria-label="App icon"
+    <SettingsRow
+      label="App icon"
+      description={
+        (pending || error) && (
+          <>
+            {pending && <span role="status">Changing icon…</span>}
+            {error && (
+              <span className="block">
+                <span role="alert" className="text-destructive">
+                  {error}
+                </span>
+                {!status && (
+                  <button
+                    type="button"
+                    className="ml-2 underline"
+                    onClick={() => setAttempt((value) => value + 1)}
+                  >
+                    Try again
+                  </button>
+                )}
+              </span>
+            )}
+          </>
+        )
+      }
     >
-      <h2 className="text-[16px] font-medium">App icon</h2>
-      <p className="mt-1 text-[13px] text-subtle-foreground">
-        Choose the Index icon in the Dock. Saved on this Mac.
-      </p>
       {status && (
-        <fieldset disabled={pending} className="mt-4 flex gap-3" aria-busy={pending}>
+        <fieldset disabled={pending} className="flex gap-2" aria-busy={pending}>
           <legend className="sr-only">App icon</legend>
           {choices.map(({ id, name }) => (
-            <label key={id} className="relative cursor-pointer has-disabled:cursor-wait">
+            <label
+              key={id}
+              className="relative cursor-pointer has-disabled:cursor-wait"
+              title={name}
+            >
               <input
                 type="radio"
                 name="app-icon"
                 value={id}
+                aria-label={name}
                 checked={status.icon === id}
                 onChange={() => void choose(id)}
                 className="peer absolute inset-0 size-full cursor-pointer opacity-0 disabled:cursor-wait"
               />
-              <span className="flex min-w-24 flex-col items-center gap-2 rounded-xl border border-transparent p-3 text-[13px] peer-checked:border-foreground peer-checked:bg-muted peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-foreground peer-disabled:opacity-60">
-                <img
-                  src={`/app-icons/${id}.png`}
-                  alt=""
-                  width={64}
-                  height={64}
-                  className="rounded-[14px] border border-border"
-                />
-                {name}
-              </span>
+              <img
+                src={`/app-icons/${id}.png`}
+                alt=""
+                width={28}
+                height={28}
+                className="block rounded-[7px] border border-border outline-offset-2 peer-checked:outline-2 peer-checked:outline-foreground peer-focus-visible:outline-2 peer-focus-visible:outline-ring peer-disabled:opacity-60"
+              />
             </label>
           ))}
         </fieldset>
       )}
-      {pending && (
-        <p role="status" className="mt-2 text-[13px] text-subtle-foreground">
-          Changing icon…
-        </p>
-      )}
-      {error && (
-        <div className="mt-2 text-[13px]">
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-          {!status && (
-            <button
-              type="button"
-              className="mt-2 underline"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              Try again
-            </button>
-          )}
-        </div>
-      )}
-    </section>
+    </SettingsRow>
   );
 }

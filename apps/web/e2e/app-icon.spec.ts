@@ -27,7 +27,7 @@ test("app icon reflects native preference, survives reload, and preserves select
   await expect(page.getByRole("radio", { name: "Paper", exact: true })).toBeChecked();
   expect(desktop.appIcon).toBe("paper");
   await page
-    .getByRole("region", { name: "App icon", exact: true })
+    .getByRole("group", { name: "App icon", exact: true })
     .screenshot({ path: testInfo.outputPath("app-icon-light.png") });
   await page.reload();
   await expect(page.getByRole("radio", { name: "Paper", exact: true })).toBeChecked();
@@ -47,7 +47,7 @@ test("app icon reflects native preference, survives reload, and preserves select
   expect(desktop.appIcon).toBe("ink");
   await page.getByRole("radio", { name: "Dark", exact: true }).check();
   await page
-    .getByRole("region", { name: "App icon", exact: true })
+    .getByRole("group", { name: "App icon", exact: true })
     .screenshot({ path: testInfo.outputPath("app-icon-dark.png") });
 });
 
@@ -59,10 +59,10 @@ test("unsupported desktops hide the app icon picker", async ({ page }) => {
   await expect
     .poll(() => desktop.commands.some(({ command }) => command === "app_icon_status"))
     .toBe(true);
-  await expect(page.getByRole("region", { name: "App icon", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "App icon", exact: true })).toHaveCount(0);
 });
 
 test("browser settings do not offer a native app icon picker", async ({ page }) => {
   await openSettings(page);
-  await expect(page.getByRole("region", { name: "App icon", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "App icon", exact: true })).toHaveCount(0);
 });

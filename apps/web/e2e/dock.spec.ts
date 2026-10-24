@@ -22,8 +22,8 @@ test("Dock setting reflects the native state, survives reload, and stays put on 
   const desktop = new DesktopHarness();
   await desktop.attach(page, "main");
   await openSettings(page);
-  const dock = page.getByRole("region", { name: "Dock", exact: true });
-  const show = dock.getByRole("checkbox", { name: "Show in Dock", exact: true });
+  const show = page.getByRole("switch", { name: "Show in Dock", exact: true });
+  const dock = page.locator(".settings-row").filter({ has: show });
   await expect(show).toBeChecked();
   await show.click();
   await expect(show).not.toBeChecked();
@@ -53,10 +53,10 @@ test("unsupported desktops hide the Dock setting", async ({ page }) => {
   await expect
     .poll(() => desktop.commands.some(({ command }) => command === "dock_status"))
     .toBe(true);
-  await expect(page.getByRole("region", { name: "Dock", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Show in Dock", exact: true })).toHaveCount(0);
 });
 
 test("browser settings do not offer the Dock setting", async ({ page }) => {
   await openSettings(page);
-  await expect(page.getByRole("region", { name: "Dock", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("switch", { name: "Show in Dock", exact: true })).toHaveCount(0);
 });

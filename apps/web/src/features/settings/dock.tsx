@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { desktopInvoke, isDesktop } from "@/lib/desktop";
+import { SwitchRow } from "./rows";
 
 type DockStatus = { supported: boolean; visible: boolean };
 
@@ -28,44 +29,30 @@ function DesktopDockSettings() {
   }, []);
   if (status?.supported === false || (!status && !error)) return null;
   return (
-    <section
-      className="settings-box rounded-[18px] border border-border p-[20px_22px]"
-      aria-label="Dock"
+    <SwitchRow
+      label="Show in Dock"
+      description="Off keeps Index in the menu bar only, out of the Dock and the app switcher."
+      checked={status?.visible ?? true}
+      disabled={!status || pending}
+      onChange={async (event) => {
+        const visible = event.target.checked;
+        setPending(true);
+        setError("");
+        try {
+          // Native code applies and saves the choice; the switch shows what AppKit did.
+          setStatus(await desktopInvoke<DockStatus>("set_dock_visible", { visible }));
+        } catch {
+          setError("Could not change the Dock setting. Please try again.");
+        } finally {
+          setPending(false);
+        }
+      }}
     >
-      <h2 className="text-[16px] font-medium">Dock</h2>
-      <p className="mt-1 text-[13px] text-subtle-foreground">
-        Turn off to keep Index only in the menu bar, out of the Dock and the app switcher. Saved on
-        this Mac.
-      </p>
-      {status && (
-        <label className="mt-4 flex items-center gap-2 text-[14px] has-disabled:opacity-60">
-          <input
-            type="checkbox"
-            className="accent-primary"
-            checked={status.visible}
-            disabled={pending}
-            onChange={async (event) => {
-              const visible = event.target.checked;
-              setPending(true);
-              setError("");
-              try {
-                // Native code applies and saves the choice; the checkbox shows what AppKit did.
-                setStatus(await desktopInvoke<DockStatus>("set_dock_visible", { visible }));
-              } catch {
-                setError("Could not change the Dock setting. Please try again.");
-              } finally {
-                setPending(false);
-              }
-            }}
-          />
-          Show in Dock
-        </label>
-      )}
       {error && (
-        <p role="alert" className="mt-2 text-[13px] text-destructive">
+        <span role="alert" className="block text-destructive">
           {error}
-        </p>
+        </span>
       )}
-    </section>
+    </SwitchRow>
   );
 }

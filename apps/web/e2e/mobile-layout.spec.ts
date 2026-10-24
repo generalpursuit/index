@@ -238,9 +238,14 @@ for (const viewport of [
       await dialogLayout(page, "Edit group");
       await page.keyboard.press("Escape");
       await page.getByRole("button", { name: "Change password", exact: true }).click();
-      await layout(page, "Change password");
+      await dialogLayout(page, "Change password");
+      await page.keyboard.press("Escape");
       await page.getByRole("button", { name: "Change email", exact: true }).click();
-      await layout(page, "Change email");
+      await dialogLayout(page, "Change email");
+      await page.keyboard.press("Escape");
+      await page.getByRole("button", { name: "Import from curatee", exact: true }).click();
+      await dialogLayout(page, "Import from curatee");
+      await page.keyboard.press("Escape");
     });
   });
 }

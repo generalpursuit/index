@@ -220,9 +220,12 @@ test("settings imports a curatee profile into the weeks its links were saved", a
   await page.setViewportSize({ width: 1440, height: 960 });
   await login(page);
   await page.goto("/settings");
-  const box = page.getByRole("region", { name: "Import from curatee", exact: true });
+  // The import is a row; its form opens in a dialog that closes once links arrive.
+  const open = page.getByRole("button", { name: "Import from curatee", exact: true });
+  const box = page.getByRole("dialog", { name: "Import from curatee", exact: true });
   const field = box.getByRole("textbox", { name: "curatee username", exact: true });
   const submit = box.getByRole("button", { name: "Import", exact: true });
+  await open.click();
   await submit.click();
   await expect(box.getByRole("alert")).toHaveText("Enter a curatee username.");
   await field.fill("nobody");
@@ -233,9 +236,12 @@ test("settings imports a curatee profile into the weeks its links were saved", a
   await field.fill("mara");
   await submit.click();
   await expect(page.getByText("Imported 2 links", { exact: true })).toBeVisible();
+  await expect(box).toHaveCount(0);
+  await expect(open).toBeFocused();
+  // Importing again finds nothing new.
+  await open.click();
   await expect(field).toHaveValue("");
   await expect(box.getByRole("alert")).toHaveCount(0);
-  // Importing again finds nothing new.
   await field.fill("mara");
   await submit.click();
   await expect(page.getByText("No new links to import", { exact: true })).toBeVisible();

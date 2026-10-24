@@ -42,8 +42,8 @@ test("staging prepares updates silently and offers to restart into them", async 
   await desktop.attach(page, "main");
   await openSettings(page);
   await expect(page.getByLabel("Index Staging", { exact: true })).toHaveCount(0);
-  const updates = page.getByRole("region", { name: "Desktop updates" });
-  await expect(updates.getByRole("heading", { name: "Index Staging", exact: true })).toBeVisible();
+  const updates = page.getByRole("group", { name: "Desktop updates" });
+  await expect(updates.getByText("Index Staging", { exact: true })).toBeVisible();
   await expect(updates).toContainText("Version 0.2.0-staging.42");
   await updates.getByRole("button", { name: "Check for updates" }).click();
   await expect(updates.getByRole("status")).toHaveText(
@@ -66,7 +66,7 @@ test("an update prepared in the background appears without a prompt", async ({ p
   desktop.updatesEnabled = true;
   await desktop.attach(page, "main");
   await openSettings(page);
-  const updates = page.getByRole("region", { name: "Desktop updates" });
+  const updates = page.getByRole("group", { name: "Desktop updates" });
   await expect(updates.getByRole("button", { name: "Check for updates" })).toBeVisible();
   await desktop.emit("index:update-ready", "0.2.1");
   await expect(updates.getByRole("status")).toContainText("Index 0.2.1 is ready.");
@@ -83,8 +83,8 @@ test("production remains unbadged and recovers from an offline update check", as
   desktop.updateError = true;
   await desktop.attach(page, "main");
   await openSettings(page);
-  const updates = page.getByRole("region", { name: "Desktop updates" });
-  await expect(updates.getByRole("heading", { name: "Index", exact: true })).toBeVisible();
+  const updates = page.getByRole("group", { name: "Desktop updates" });
+  await expect(updates.getByText("Index", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Index Staging", { exact: true })).toHaveCount(0);
   await updates.getByRole("button", { name: "Check for updates" }).click();
   await expect(updates.getByRole("alert")).toContainText("Could not check for updates");
@@ -98,7 +98,7 @@ test("development and package-manager builds have no install action", async ({ p
   const desktop = new DesktopHarness();
   await desktop.attach(page, "main");
   await openSettings(page);
-  const updates = page.getByRole("region", { name: "Desktop updates" });
+  const updates = page.getByRole("group", { name: "Desktop updates" });
   await expect(updates).toContainText("Version 0.2.0");
   await expect(updates.getByRole("button")).toHaveCount(0);
   expect(desktop.commands.some(({ command }) => command === "desktop_check_update")).toBe(false);
@@ -106,7 +106,7 @@ test("development and package-manager builds have no install action", async ({ p
 
 test("web settings do not offer native updates", async ({ page }) => {
   await openSettings(page);
-  await expect(page.getByRole("region", { name: "Desktop updates" })).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Desktop updates" })).toHaveCount(0);
 });
 
 test("web identifies its release and reloads when the API requires an update", async ({ page }) => {

@@ -1,9 +1,13 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
 import { Field, FieldLabel } from "@index/ui/components/field";
+import { Modal } from "@index/ui/components/modal";
 import { authClient } from "@/lib/auth-client";
 import { refreshSession, resetSession } from "@/lib/session";
+import { useViewer } from "@/hooks/use-api";
+import { rowButtonClassName, SettingsRow } from "@/features/settings/rows";
 import {
   SecurityError,
   securityRequest,
@@ -340,16 +344,22 @@ export function RecoveryForm({ onBack }: { onBack: () => void }) {
     </div>
   );
 }
+/**
+ * Email and password as rows of Settings' Account group. Each change happens in a dialog; a new
+ * email stays pending, with its code form, until it is verified.
+ */
 export function AccountSecurity() {
-  const action = useAction();
-  const [mode, setMode] = useState<"password" | "email" | null>(null);
+  const action = useAction(),
+    viewer = useViewer();
+  const [mode, setMode] = useState<"password" | "email" | "verify" | null>(null);
   const [password, setPassword] = useState(""),
     [newPassword, setNewPassword] = useState(""),
     [confirm, setConfirm] = useState(""),
     [email, setEmail] = useState(""),
     [code, setCode] = useState("");
-  const [pendingEmail, setPendingEmail] = useState<ChallengeStatus>(),
-    [message, setMessage] = useState("");
+  const [pendingEmail, setPendingEmail] = useState<ChallengeStatus>();
+  const passwordTrigger = useRef<HTMLButtonElement>(null),
+    emailTrigger = useRef<HTMLButtonElement>(null);
   async function refresh() {
     const result = await securityRequest<SecurityStatus>("status");
     setPendingEmail(result.emailChange);
@@ -358,142 +368,182 @@ export function AccountSecurity() {
   useEffect(() => {
     void action.run(refresh);
   }, []);
+  const open = (next: "password" | "email" | "verify") => {
+    setMode(next);
+    setPassword("");
+  };
+  const close = () => {
+    if (!action.pending) setMode(null);
+  };
+  const pending = pendingEmail?.pending;
   return (
-    <section
-      className="settings-box form-stack flex flex-col gap-4.5 p-[20px_22px] border border-border rounded-[18px]"
-      aria-label="Account security"
-    >
-      <h2 className="text-lg font-medium">Account security</h2>
-      <div className="flex flex-wrap gap-2">
-        <Button
-          variant="outline"
-          onClick={() => {
-            setMode("password");
-            setPassword("");
-            setMessage("");
-          }}
-        >
-          Change password
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setMode("email");
-            setPassword("");
-            setMessage("");
-          }}
-        >
-          Change email
-        </Button>
-      </div>
-      {mode && (
-        <form
-          className="form-stack flex flex-col gap-4.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void action.run(async () => {
-              if (mode === "password") {
-                if (newPassword !== confirm) throw new Error("Passwords do not match.");
-                await securityRequest("change-password", {
-                  currentPassword: password,
-                  newPassword,
-                });
-                setNewPassword("");
-                setConfirm("");
-                setMode(null);
-                setMessage("Password changed. Other sessions have been signed out.");
-                await refreshSession();
-              } else {
-                await securityRequest("request-email-change", { email: email.trim(), password });
-                await refresh();
-                setCode("");
-              }
-              setPassword("");
-            });
-          }}
-        >
-          <SecurityField
-            label="Current password"
-            type="password"
-            value={password}
-            onChange={setPassword}
-            autoComplete="current-password"
-          />
-          {mode === "password" ? (
+    <>
+      <SettingsRow
+        label="Email"
+        description={
+          pending ? (
             <>
-              <SecurityField
-                label="New password"
-                type="password"
-                value={newPassword}
-                onChange={setNewPassword}
-                autoComplete="new-password"
-              />
-              <SecurityField
-                label="Confirm new password"
-                type="password"
-                value={confirm}
-                onChange={setConfirm}
-                autoComplete="new-password"
-              />
+              Verify <span className="break-all text-foreground">{pendingEmail.email}</span> to
+              finish changing it.
             </>
           ) : (
-            <>
-              <p className="text-sm text-muted-foreground">
-                Your current email stays active until you verify the new address.
-              </p>
-              <SecurityField
-                label="New email"
-                type="email"
-                value={email}
-                onChange={setEmail}
-                autoComplete="email"
-              />
-            </>
-          )}
-          <Button
-            type="submit"
-            disabled={action.pending || (mode === "email" && action.remaining > 0)}
-          >
-            {mode === "password"
-              ? "Save password"
-              : action.remaining
-                ? `Resend in ${action.remaining}s`
-                : "Send email change code"}
-          </Button>
-        </form>
-      )}
-      {pendingEmail?.pending && (
-        <form
-          className="form-stack flex flex-col gap-4.5"
-          onSubmit={(e) => {
-            e.preventDefault();
-            void action.run(async () => {
-              await securityRequest("confirm-email-change", { code });
-              setCode("");
-              setMode(null);
-              setMessage("Email changed. Other sessions have been signed out.");
-              await refresh();
-              await refreshSession();
-            });
-          }}
+            viewer?.email && <span className="break-all">{viewer.email}</span>
+          )
+        }
+      >
+        <Button
+          ref={emailTrigger}
+          variant="outline"
+          className={rowButtonClassName}
+          aria-label={pending ? "Verify new email" : "Change email"}
+          onClick={() => open(pending ? "verify" : "email")}
         >
-          <p>
-            Verify <strong className="break-all">{pendingEmail.email}</strong>
-          </p>
-          <DeliveryMessage status={pendingEmail} />
-          <SecurityField
-            label="Email change code"
-            value={code}
-            onChange={setCode}
-            autoComplete="one-time-code"
-            code
-          />
-          <Button type="submit" disabled={action.pending}>
-            Confirm new email
-          </Button>
-        </form>
-      )}
-      <Feedback error={action.error}>{message}</Feedback>
-    </section>
+          {pending ? "Verify" : "Change"}
+        </Button>
+      </SettingsRow>
+      <SettingsRow label="Password">
+        <Button
+          ref={passwordTrigger}
+          variant="outline"
+          className={rowButtonClassName}
+          aria-label="Change password"
+          onClick={() => open("password")}
+        >
+          Change
+        </Button>
+      </SettingsRow>
+      <Modal
+        open={mode !== null}
+        onOpenChange={(next) => {
+          if (!next) close();
+        }}
+        title={mode === "password" ? "Change password" : "Change email"}
+        returnFocus={mode === "password" ? passwordTrigger : emailTrigger}
+      >
+        <div className="form-stack flex flex-col gap-4.5">
+          {/* An expired change goes back to asking for the new address. */}
+          {(mode === "password" || mode === "email" || (mode === "verify" && !pending)) && (
+            <form
+              className="form-stack flex flex-col gap-4.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void action.run(async () => {
+                  if (mode === "password") {
+                    if (newPassword !== confirm) throw new Error("Passwords do not match.");
+                    await securityRequest("change-password", {
+                      currentPassword: password,
+                      newPassword,
+                    });
+                    setNewPassword("");
+                    setConfirm("");
+                    setMode(null);
+                    toast.success("Password changed. Other sessions have been signed out.");
+                    await refreshSession();
+                  } else {
+                    await securityRequest("request-email-change", {
+                      email: email.trim(),
+                      password,
+                    });
+                    await refresh();
+                    setCode("");
+                    setMode("verify");
+                  }
+                  setPassword("");
+                });
+              }}
+            >
+              <SecurityField
+                label="Current password"
+                type="password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+              />
+              {mode === "password" ? (
+                <>
+                  <SecurityField
+                    label="New password"
+                    type="password"
+                    value={newPassword}
+                    onChange={setNewPassword}
+                    autoComplete="new-password"
+                  />
+                  <SecurityField
+                    label="Confirm new password"
+                    type="password"
+                    value={confirm}
+                    onChange={setConfirm}
+                    autoComplete="new-password"
+                  />
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    Your current email stays active until you verify the new address.
+                  </p>
+                  <SecurityField
+                    label="New email"
+                    type="email"
+                    value={email}
+                    onChange={setEmail}
+                    autoComplete="email"
+                  />
+                </>
+              )}
+              <Button
+                type="submit"
+                disabled={action.pending || (mode !== "password" && action.remaining > 0)}
+              >
+                {mode === "password"
+                  ? "Save password"
+                  : action.remaining
+                    ? `Resend in ${action.remaining}s`
+                    : "Send email change code"}
+              </Button>
+            </form>
+          )}
+          {mode === "verify" && pending && (
+            <form
+              className="form-stack flex flex-col gap-4.5"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void action.run(async () => {
+                  await securityRequest("confirm-email-change", { code });
+                  setCode("");
+                  setMode(null);
+                  toast.success("Email changed. Other sessions have been signed out.");
+                  await refresh();
+                  await refreshSession();
+                });
+              }}
+            >
+              <p>
+                Verify <strong className="break-all">{pendingEmail.email}</strong>
+              </p>
+              <DeliveryMessage status={pendingEmail} />
+              <SecurityField
+                label="Email change code"
+                value={code}
+                onChange={setCode}
+                autoComplete="one-time-code"
+                code
+              />
+              <Button type="submit" disabled={action.pending}>
+                Confirm new email
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={action.pending}
+                onClick={() => setMode("email")}
+              >
+                Use a different email
+              </Button>
+            </form>
+          )}
+          <Feedback error={action.error} />
+        </div>
+      </Modal>
+    </>
   );
 }

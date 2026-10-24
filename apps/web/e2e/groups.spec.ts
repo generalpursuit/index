@@ -125,7 +125,7 @@ for (const scheme of ["light", "dark"] as const) {
       const names = page.locator(".settings-group-name");
       await expect(names.nth(0)).toHaveText("Favorites");
       await expect(names.nth(1)).toHaveText("Starred");
-      await expect(page.getByRole("heading", { name: "Your groups", exact: true })).toBeVisible();
+      await expect(names.filter({ hasText: "Weekend reading" })).toHaveCount(1);
       for (const name of ["Favorites", "Starred"]) {
         const pinned = page
           .locator(".settings-group")

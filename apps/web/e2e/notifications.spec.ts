@@ -81,9 +81,9 @@ test("permission is never requested on load and denial never appears enabled", a
     settings.getByText("Alerts are off. Permission has not been requested."),
   ).toBeVisible();
   expect(await page.evaluate(() => (window as any).permissionRequests)).toBe(0);
-  await settings.getByRole("button", { name: "Enable on this device" }).click();
+  await settings.getByRole("button", { name: "Turn on alerts" }).click();
   await expect(settings.getByText("Blocked in system or browser settings.")).toBeVisible();
-  await expect(settings.getByRole("button", { name: "Enable on this device" })).toBeDisabled();
+  await expect(settings.getByRole("button", { name: "Turn on alerts" })).toBeDisabled();
   expect(await page.evaluate(() => (window as any).permissionRequests)).toBe(1);
 });
 test("unsupported browsers show preferences without pretending delivery is available", async ({
@@ -97,7 +97,7 @@ test("unsupported browsers show preferences without pretending delivery is avail
   await expect(
     settings.getByText("Push notifications are not supported on this device or browser."),
   ).toBeVisible();
-  await expect(settings.getByRole("button", { name: "Enable on this device" })).toHaveCount(0);
+  await expect(settings.getByRole("button", { name: "Turn on alerts" })).toHaveCount(0);
   await expect(settings.getByLabel("Comments", { exact: true })).toBeChecked();
 });
 test("iPhone and iPad Safari tabs point to the Home Screen app", async ({ page }) => {
@@ -110,7 +110,7 @@ test("iPhone and iPad Safari tabs point to the Home Screen app", async ({ page }
   await expect(settings.getByRole("status")).toHaveText(
     "Add Index to your Home Screen to turn on notifications.",
   );
-  await expect(settings.getByRole("button", { name: "Enable on this device" })).toHaveCount(0);
+  await expect(settings.getByRole("button", { name: "Turn on alerts" })).toHaveCount(0);
 });
 test("device status waits for server capabilities and hides enabling when push is off", async ({
   page,
@@ -130,7 +130,7 @@ test("device status waits for server capabilities and hides enabling when push i
   await login(page);
   hold = true;
   const settings = page.getByRole("region", { name: "Notifications", exact: true });
-  const enable = settings.getByRole("button", { name: "Enable on this device" });
+  const enable = settings.getByRole("button", { name: "Turn on alerts" });
   // Let the device check finish while the server has not answered yet.
   await page.evaluate(() => navigator.serviceWorker.ready);
   await expect(settings.getByRole("status")).toHaveText("Checking device permission…");
@@ -179,7 +179,7 @@ test("opt-in registers the real worker, binds the current account, and unregiste
   await expect(
     settings.getByText("Permission allowed. Alerts are off on this device."),
   ).toBeVisible();
-  await settings.getByRole("button", { name: "Enable on this device" }).click();
+  await settings.getByRole("button", { name: "Turn on alerts" }).click();
   await expect(settings.getByText("Enabled on this device.")).toBeVisible();
   await page.reload();
   await expect(settings.getByText("Enabled on this device.")).toBeVisible();
