@@ -1,23 +1,23 @@
 {
-  "version": "0.5.1",
-  "notes": "Index production 0.5.1",
-  "pub_date": "2026-10-18T20:54:23.597Z",
+  "version": "0.6.0",
+  "notes": "Index production 0.6.0",
+  "pub_date": "2026-10-24T22:40:14.664Z",
   "platforms": {
     "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dCtUNmEvaks3dlJtSlU2TS82KzhGa2ZpbkZjYnd0NkFuakRocFExZXFyRGNsejhlaTFteWVDek9xMUkyMXhnckMzVS90M2x6TzZoQUtjUHdHcjgxSFFRPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU2MzgyCWZpbGU6SW5kZXhfMC41LjFfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjAuNS4xCm14OWVEVWNwd0VRNnd3aWsyUzhEMlN5SEMwU2ZrSU0xdmVkd3FibGMzQzZYUnRieGlnWFBhYXlGbzYwem11TWRMdGFvLzFzMEpTMWZmZW5NRGI5WkFRPT0K",
-      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.5.1/production-windows-x86_64-Index_0.5.1_x64-setup.exe"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dDQwWTVhUnVzN1lhRmhkbHJ4eFdzR21leDFxZHlYK0tWVUJ4YVFlZ2tHcVNGRDVKNVlDM0ZVVEM0YzBpTXBMNEhOdEVtbzJERkNGcEl2ekMwT0RyQkFZPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODgxMTQ2CWZpbGU6SW5kZXhfMC42LjBfeDY0LXNldHVwLmV4ZQl2ZXJzaW9uOjAuNi4wCkdLMHlWSm5DVGEzSldYSnFVbElLOGxzSHVZSnBmbG9XSDluNmsrYVpMOWFXZ1AyTHlPd24yZis1LzNTdzZVREJRSHU2bUVxR25FcGp0ckVJTkcyWERRPT0K",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.6.0/production-windows-x86_64-Index_0.6.0_x64-setup.exe"
     },
     "darwin-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dDY4YzRRL3ZPNncySWlaekJWS1hDNlhFdThNU09OamJpTnNKNm5pOG1lTVZXdFpIYm1wSHF1Q2NiejFSUE5XOTFmb0s1WGpLTW9YVzYzR0hhOVExWlEwPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU2ODEwCWZpbGU6SW5kZXguYXBwLnRhci5negl2ZXJzaW9uOjAuNS4xCmdGMjlFKzlSQ3V4RGRTclFUL3JrS0Fuc3M1SjBUWlB4Z0NJakxpMVlTWmdMSHNtUC8zSzFIdzN3UXljWURZWXQ0ZTNRU0FPK204d2NsNDF0cWJWM0NnPT0K",
-      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.5.1/production-darwin-x86_64-Index.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dHdRMmlZYWNIM0RPblQvZFRXL2tlNDF6VFNTVlhlRjJIbUE4MUdTNWN1QWhUWk1tNFVrd0xIek0waEtvT1NiNUdaL1dWeXhSaklad0R3Y0pSZkMxUXd3PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODgxMzA5CWZpbGU6SW5kZXguYXBwLnRhci5negl2ZXJzaW9uOjAuNi4wCitHSm5Wc1J4Vy9UVFd5UUs4K096TjV2M1RNa1ZLV2oxUEdZTk5SVDVZb3h0Z1l5Tm5Ya3ZxdEpsQ0VPOTN5RjFQaWUxa0U0bzVZVkkra2xJZjk5Z0JnPT0K",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.6.0/production-darwin-x86_64-Index.app.tar.gz"
     },
     "linux-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dHdPd09iSzZtRVdyQk1GTG40eEZRUkhibUdJOENhRCtsM0thYTZHdVFIQkR5N1F6dmhhM1FiM2pnbWFYRVpwRjNFOFpXcENRazNSV3pDVmcwbCtrNmdnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU2MzA4CWZpbGU6SW5kZXhfMC41LjFfYW1kNjQuQXBwSW1hZ2UJdmVyc2lvbjowLjUuMQpCMXZVbWFyOGdOYWlNZ292RUlqNjArVW9jRWFJbDVCY3lFakZuMkx6alJBN3lNSmdVQ1JTRGU3ditna3IrWXFkNzVvVzBCbG9MdXM0a0JJVDRoS3lBUT09Cg==",
-      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.5.1/production-linux-x86_64-Index_0.5.1_amd64.AppImage"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dDFrQTRlWE9OOTUyUFVZM29RUGx2ZnBzZlFlTFFJWWVVWDRvaWlFc3dnbFVTYmFCd0kyU3BuN2EvRk05bFAxR2dBcnlZUWFmV1ZpUzA0cEl2UkRPaVE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODgxMDc1CWZpbGU6SW5kZXhfMC42LjBfYW1kNjQuQXBwSW1hZ2UJdmVyc2lvbjowLjYuMApWNlRzcHMxSDE5SVVzUDAyNDFJVTM1U291a0JhSGRGc29zSDU5K2M4Zm1ka1g5NEdpeW1wMkFjTVBSU2pBRTIyWDI0V01EM0RORDNpNUFLc0U0OWJCQT09Cg==",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.6.0/production-linux-x86_64-Index_0.6.0_amd64.AppImage"
     },
     "darwin-aarch64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dDlMcURHMnBLOU5UZUo2emdmQXpVcGJQM3lxV21MbUhlR0ozb1JzQXpKTElYckdpLzEvWDZJTy9neitNRXN0UDd4bjVvZGgzNFduaUh5Zjc2OGFSOUE4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMzU2MzY1CWZpbGU6SW5kZXguYXBwLnRhci5negl2ZXJzaW9uOjAuNS4xCi9uQ2UrQWxQOStWRWx6ZkI0ZmFmQ1dSWHUwRkxvYXVyTSs0WWUwcFd6UHZ1REZCNVhYalBVRUxVcU82bDJLbTQxRlZ5by96TWthbFJ4aERhNEtObUJnPT0K",
-      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.5.1/production-darwin-aarch64-Index.app.tar.gz"
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRdGtQczU1a3R3dDJENEdrY1YrZlBqbFVtSlh2dkZmK2tGSUdKa3hsclJ0VVBBc3lNNHB1ajR6YnVwMjdxazVndjVDL25DK1VlWjArMGNtWjloT3dVaUhUL3JUOFBxdkFnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyODgxMTI5CWZpbGU6SW5kZXguYXBwLnRhci5negl2ZXJzaW9uOjAuNi4wCm9DNjUwYy83N3B1OU80cG50djk4OWRJUytyUDdkaVJYZDJNRE9wUFFWa0lLMmpvK3hxNkVMK1RLUmFMVnQ2a2M4OTZSakh3VUlBd3M5UU1yVGZnWkJ3PT0K",
+      "url": "https://github.com/generalpursuit/index/releases/download/desktop-production-v0.6.0/production-darwin-aarch64-Index.app.tar.gz"
     }
   }
 }
