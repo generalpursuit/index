@@ -201,6 +201,13 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   expect(await list.evaluate((el) => getComputedStyle(el).scrollbarWidth)).toBe("none");
   await expect(list).toHaveAttribute("data-fade-end", "true");
   await expect(list).not.toHaveAttribute("data-fade-start");
+  // The field is a row like the links: the first link follows it as each link follows another.
+  const [fieldRow, first, second] = await Promise.all(
+    [panel.locator(".quick-add"), rows.nth(0), rows.nth(1)].map(
+      async (row) => (await row.boundingBox())!.y,
+    ),
+  );
+  expect(first - fieldRow).toBe(second - first);
   const field = panel.getByRole("textbox", { name: "Add a link to this week" });
   const footer = panel.locator("footer");
   const heading = panel.getByRole("heading", { level: 1 });

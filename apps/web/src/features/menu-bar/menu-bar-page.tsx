@@ -260,10 +260,11 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
     <section
       hidden={hidden}
       aria-label="This week's links"
-      className="flex min-h-0 flex-col gap-2 [--row:34px]"
+      className="flex min-h-0 flex-col [--row:34px]"
     >
-      {/* Every opening already refreshes it, and changes elsewhere arrive as they happen. */}
-      <div className="pt-1.5 pb-1 pl-2">
+      {/* Every opening already refreshes it, and changes elsewhere arrive as they happen. The
+          field and the links below are rows of one height, without gaps, as in the main app. */}
+      <div className="pt-1.5 pb-3 pl-2">
         <h1 className="font-serif text-[23px] leading-[1.05] font-bold tracking-[-0.015em] [font-variation-settings:'opsz'_60]">
           {weekLabel(week)}
         </h1>
