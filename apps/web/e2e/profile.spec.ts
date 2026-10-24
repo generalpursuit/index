@@ -38,17 +38,26 @@ test("profile names fit on one line through phone and desktop resizes", async ({
           heading.evaluate((element) => {
             const range = document.createRange();
             range.selectNodeContents(element);
+            // The visibility mark follows the name itself, within the row.
+            const text = element.firstElementChild!.getBoundingClientRect(),
+              mark = element.nextElementSibling!.getBoundingClientRect();
             return (
               range.getClientRects().length > 0 &&
               element.scrollWidth <= element.clientWidth + 1 &&
               element.getBoundingClientRect().height <=
-                parseFloat(getComputedStyle(element).fontSize) + 1
+                parseFloat(getComputedStyle(element).fontSize) + 1 &&
+              mark.left >= text.right &&
+              mark.left - text.right <= 16 &&
+              mark.right <= element.parentElement!.getBoundingClientRect().right + 1
             );
           }),
         )
         .toBe(true);
       await expect(heading).toHaveText(name);
     }
+    // Back at full width, a name that fits returns to its full size.
+    if (name === "Jona Schwarz")
+      await expect.poll(() => heading.evaluate((element) => element.style.fontSize)).toBe("");
   }
   expect(errors).toEqual([]);
 });

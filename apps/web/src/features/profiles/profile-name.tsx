@@ -1,6 +1,10 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** Keep the complete name on one line, shrinking only when the available width needs it. */
+/**
+ * Keep the complete name on one line, shrinking only when the available width needs it. The
+ * heading is only as wide as the name, so what follows in its row (the visibility mark) sits
+ * beside the name; the row's width is the space the name may take.
+ */
 export function ProfileName({ name }: { name: string }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useLayoutEffect(() => {
@@ -20,15 +24,17 @@ export function ProfileName({ name }: { name: string }) {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(fit);
     };
-    // Observe width rather than height: fitting the type changes the heading's height.
-    let width = element.clientWidth;
+    // Observe the row's width rather than the heading's: a shrunken name keeps its heading
+    // narrow, so only the row shows that there is room again.
+    const row = element.parentElement!;
+    let width = row.clientWidth;
     const observer = new ResizeObserver(() => {
-      if (element.clientWidth !== width) {
-        width = element.clientWidth;
+      if (row.clientWidth !== width) {
+        width = row.clientWidth;
         scheduleFit();
       }
     });
-    observer.observe(element);
+    observer.observe(row);
     window.addEventListener("resize", scheduleFit);
     document.fonts.addEventListener("loadingdone", scheduleFit);
     return () => {
@@ -39,7 +45,7 @@ export function ProfileName({ name }: { name: string }) {
     };
   }, [name]);
   return (
-    <h1 ref={heading} className="flex-1 whitespace-nowrap">
+    <h1 ref={heading} className="whitespace-nowrap">
       <span className="inline-block">{name}</span>
     </h1>
   );
