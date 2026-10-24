@@ -15,8 +15,10 @@ export function ProfileName({ name }: { name: string }) {
       element.style.removeProperty("font-size");
       const size = parseFloat(getComputedStyle(element).fontSize);
       const natural = text.getBoundingClientRect().width;
-      if (natural > element.clientWidth)
-        element.style.fontSize = `${(size * element.clientWidth) / natural}px`;
+      // Exact widths: clientWidth rounds to whole pixels, so a heading as wide as its name
+      // could seem a fraction too narrow and shrink a name that fits.
+      const available = element.getBoundingClientRect().width;
+      if (natural > available) element.style.fontSize = `${(size * available) / natural}px`;
     };
     fit();
     let frame = 0;
