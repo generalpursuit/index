@@ -107,11 +107,12 @@ struct ActivityView: View {
                 PersonAvatar(person: activity.actor, size: 34)
               }.buttonStyle(.plain)
               VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 6) {
-                  Text(activity.actor.label).font(IndexFont.sans(12)).bold()
-                  Text(relativeTime(activity.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground)
+                // Who did what, then when, as on the web.
+                Text("\(Text(activity.actor.label).font(IndexFont.sans(12, weight: .medium))) \(activitySummary(activity))  \(Text(relativeTime(activity.createdAt)).font(IndexFont.sans(11)).foregroundStyle(IndexPalette.subtleForeground))")
+                  .font(IndexFont.sans(12))
+                if let detail = activityDetail(activity) {
+                  Text(detail).font(IndexFont.sans(12))
                 }
-                Text(activityText(activity)).font(IndexFont.sans(12))
               }.frame(maxWidth: .infinity, alignment: .leading)
               if activity.type == "request" && activity.requestStatus == "pending" {
                 HStack(spacing: 5) {
@@ -127,14 +128,18 @@ struct ActivityView: View {
                   }.buttonStyle(PillStyle()).accessibilityLabel(
                     "Decline \(activity.actor.name)’s request")
                 }
-              } else if let id = activity.linkId {
+              } else {
                 Button {
-                  app.present(.link(id))
+                  open(activity)
                 } label: {
                   Image(systemName: "chevron.right").frame(width: 32, height: 44)
-                }.accessibilityLabel("Open post")
+                }.accessibilityLabel(
+                  activity.linkId == nil ? "View \(activity.actor.name)’s profile" : "Open post")
               }
             }.padding(.vertical, 14)
+              // The whole row opens what it is about; its buttons keep their own actions.
+              .contentShape(Rectangle())
+              .onTapGesture { open(activity) }
           }
         }.calmPlaceholder(active: !model.hasLoaded && error == nil)
         if model.hasLoaded && !loading && items.isEmpty && error == nil {
@@ -151,6 +156,10 @@ struct ActivityView: View {
         await load()
       }
   }
+  /// The post a comment is on, or the person who acted.
+  private func open(_ activity: Activity) {
+    if let id = activity.linkId { app.present(.link(id)) } else { app.openProfile(activity.actor) }
+  }
   private func resolve(_ activity: Activity, accept: Bool) async throws {
     try await store.resolve(activity, accept: accept)
   }
@@ -160,14 +169,22 @@ struct ActivityView: View {
     } catch { app.handleSessionError(error) }
   }
 }
-func activityText(_ activity: Activity) -> String {
+/// What happened, after the name of who did it.
+func activitySummary(_ activity: Activity) -> String {
   switch activity.type {
-  case "mention": "mentioned you: \(activity.body ?? "")"
-  case "comment": activity.body ?? "commented on your link."
-  case "follow": "started following you."
-  case "accepted": "accepted your follow request."
-  default:
-    activity.requestStatus == "pending"
-      ? "requested to follow you." : "Follow request \(activity.requestStatus ?? "updated")."
+  case "comment": "commented on your post"
+  case "mention": "mentioned you in a comment"
+  case "follow": "started following you"
+  case "accepted": "accepted your follow request"
+  default: "requested to follow you"
+  }
+}
+/// Below it: the comment itself, or what became of a request.
+func activityDetail(_ activity: Activity) -> String? {
+  switch activity.type {
+  case "comment", "mention": activity.body
+  case "request" where activity.requestStatus != "pending":
+    "Follow request \(activity.requestStatus ?? "updated")."
+  default: nil
   }
 }
