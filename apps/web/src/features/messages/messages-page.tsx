@@ -29,6 +29,9 @@ import type { Message, SavedLink } from "@/lib/types";
 const personLabelClassName =
   "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle";
 
+const chatTitleClassName =
+  "chat-title flex flex-col items-center gap-1.5 min-w-0 max-w-full text-center [&_strong]:max-w-full [&_strong]:truncate [&_strong]:text-[15px] [&_strong]:font-medium [&_strong]:leading-5 [&_small]:text-[12px] [&_small]:leading-4 [&_small]:text-subtle-foreground [&_small]:max-h-8 [&_small]:overflow-y-auto [@media(width<=700px)]:[&_strong]:text-[14px] [@media(width<=700px)]:[&_small]:text-[11px]";
+
 export function MessagesPage() {
   const [query, setQuery] = useState(""),
     [picker, setPicker] = useState(false),
@@ -245,38 +248,42 @@ export function ConversationPage({ id, attach }: { id: string; attach?: string }
               onText={(text) => void receiveText(text)}
             />
           )}
+          {/* Like Messages: who the conversation is with, centered on the page. The empty third
+              column balances Back. */}
           <header
             className={
-              "chat-heading flex gap-2.5 items-center mb-5.5 flex-none [&_.avatar-stack]:w-10 [&_.avatar-stack]:h-10 [&_.user-avatar]:w-8.5 [&_.user-avatar]:h-8.5 [&_.person-label]:flex-1 [&_.person-label_small]:whitespace-normal [&_.person-label_small]:max-h-10 [&_.person-label_small]:overflow-y-auto [@media(width<=700px)]:[&_.person-label_strong]:text-[14px] [@media(width<=700px)]:[&_.person-label_small]:text-[11px]"
+              "chat-heading grid grid-cols-[minmax(32px,_1fr)_minmax(0,_max-content)_minmax(32px,_1fr)] items-start mb-5.5 flex-none [&>[data-slot='button']]:mt-1.5 [&_.avatar-stack]:w-11 [&_.avatar-stack]:h-11 [&_.user-avatar]:w-11 [&_.user-avatar]:h-11 [@media(width<=700px)]:[&>[data-slot='button']]:mt-1 [@media(width<=700px)]:[&_.avatar-stack]:w-10 [@media(width<=700px)]:[&_.avatar-stack]:h-10 [@media(width<=700px)]:[&_.user-avatar]:w-10 [@media(width<=700px)]:[&_.user-avatar]:h-10"
             }
           >
             <Back fallback="/messages" />
             {recipient ? (
-              <ProfileLink person={recipient} aria-label={"View " + recipient.name + "’s profile"}>
+              <ProfileLink
+                person={recipient}
+                className={chatTitleClassName}
+                aria-label={"View " + recipient.name + "’s profile"}
+              >
                 <ChatAvatars chat={chat} viewerId={viewer.id} />
+                <strong>{recipient.name}</strong>
               </ProfileLink>
             ) : (
-              <ChatAvatars chat={chat} viewerId={viewer.id} />
-            )}
-            <div className={personLabelClassName}>
-              <strong>
-                {recipient ? (
-                  <ProfileLink person={recipient}>{recipient.name}</ProfileLink>
-                ) : (
-                  conversationName(chat, viewer.id)
+              <div className={chatTitleClassName}>
+                <ChatAvatars chat={chat} viewerId={viewer.id} />
+                <strong>{conversationName(chat, viewer.id)}</strong>
+                {/* A group names each member, and each name opens that member's profile. */}
+                {chat.participants.length > 2 && (
+                  <small>
+                    {chat.participants
+                      .filter((p) => p.id !== viewer.id)
+                      .map((p, i) => (
+                        <span key={p.id}>
+                          {i > 0 ? ", " : ""}
+                          <ProfileLink person={p}>@{p.username ?? p.name}</ProfileLink>
+                        </span>
+                      ))}
+                  </small>
                 )}
-              </strong>
-              <small>
-                {chat.participants
-                  .filter((p) => p.id !== viewer.id)
-                  .map((p, i) => (
-                    <span key={p.id}>
-                      {i > 0 ? ", " : ""}
-                      <ProfileLink person={p}>@{p.username ?? p.name}</ProfileLink>
-                    </span>
-                  ))}
-              </small>
-            </div>
+              </div>
+            )}
           </header>
           <div
             className={

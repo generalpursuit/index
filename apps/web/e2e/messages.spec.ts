@@ -112,6 +112,33 @@ test("runs sit under date stamps, groups name their senders and 1:1 chats show R
   await expect(thread.locator(".message-receipt")).toHaveCount(0);
 });
 
+test("a conversation's heading centers who it is with, and a 1:1 heading opens their profile", async ({
+  page,
+}) => {
+  await login(page);
+  const heading = page.locator(".chat-heading"),
+    profile = heading.getByRole("link", { name: "View Bob’s profile", exact: true });
+  for (const width of [1440, 402]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto("/messages/" + data.conversationId);
+    await expect(heading.locator("strong")).toHaveText(/^(Bob, Lena|Lena, Bob)$/);
+    await expect(heading.getByRole("link", { name: "@lena", exact: true })).toBeVisible();
+    await page.goto("/messages/" + data.directConversationId);
+    await expect(profile.locator("strong")).toHaveText("Bob");
+    // Centered on the page, whatever Back takes on its left.
+    const [middle, title] = await Promise.all(
+      [heading, profile].map(async (part) => {
+        const box = (await part.boundingBox())!;
+        return box.x + box.width / 2;
+      }),
+    );
+    expect(Math.abs(middle! - title!)).toBeLessThanOrEqual(1);
+  }
+  await profile.click();
+  await expect(page).toHaveURL(/\/u\/bob$/);
+  await expect(page.getByRole("heading", { name: "Bob", exact: true })).toBeVisible();
+});
+
 test("sent link cards keep a readable surface in light and dark mode", async ({ page }) => {
   await login(page);
   const link = data.links[2]!;
