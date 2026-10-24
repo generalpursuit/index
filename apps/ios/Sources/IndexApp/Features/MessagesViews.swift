@@ -92,9 +92,11 @@ struct MessagesView: View {
 }
 struct ParticipantAvatars: View {
   let people: [Person]
+  /// A single person's avatar; a group keeps its overlapping stack.
+  var size: CGFloat = 36
   var body: some View {
     if people.count == 1, let person = people.first {
-      PersonAvatar(person: person, size: 36)
+      PersonAvatar(person: person, size: size)
     } else {
       ZStack {
         ForEach(Array(people.prefix(3).enumerated()), id: \.element.id) { index, person in
@@ -224,6 +226,7 @@ struct ConversationView: View {
   @ViewBuilder private func profileButton<Label: View>(_ person: Person?, @ViewBuilder label: () -> Label) -> some View {
     if let person {
       Button { app.openProfile(person) } label: { label() }.buttonStyle(.plain)
+        .accessibilityLabel("View \(person.name)’s profile")
     } else {
       label()
     }
@@ -254,16 +257,20 @@ struct ConversationView: View {
       if let conversation {
         let others = conversation.participants.filter { $0.id != app.userID }
         let recipient = others.count == 1 ? others.first : nil
-        HStack(spacing: 12) {
-          BackButton()
-          Group {
-            profileButton(recipient) { ParticipantAvatars(people: others) }
-            VStack(alignment: .leading, spacing: 3) {
-              profileButton(recipient) {
-                Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(16, weight: .medium)).lineLimit(2)
+        // Like Messages: who the conversation is with, centered on the screen. The title keeps
+        // Back's width clear on both sides, so it stays centered.
+        ZStack(alignment: .topLeading) {
+          VStack(spacing: 6) {
+            profileButton(recipient) {
+              VStack(spacing: 6) {
+                ParticipantAvatars(people: others, size: 44)
+                Text(conversation.title(viewerId: app.userID)).font(IndexFont.sans(15, weight: .medium)).lineLimit(1)
               }
+            }
+            // A group names each member, and each name opens that member's profile.
+            if recipient == nil {
               Text(handles(others)).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
-                .tint(IndexPalette.subtleForeground).lineLimit(2)
+                .tint(IndexPalette.subtleForeground).lineLimit(2).multilineTextAlignment(.center)
                 .environment(\.openURL, OpenURLAction { url in
                   guard let person = others.first(where: { handleURL($0) == url }) else { return .discarded }
                   app.openProfile(person)
@@ -271,7 +278,8 @@ struct ConversationView: View {
                 })
             }
           }.calmPlaceholder(active: model.conversation == nil && error == nil)
-          Spacer()
+            .frame(maxWidth: .infinity).padding(.horizontal, 44)
+          BackButton()
         }.padding(.vertical, 8).padding(.bottom, 20)
       } else {
         HStack { BackButton(); Spacer() }.padding(.bottom, 20)
