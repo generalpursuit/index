@@ -2,59 +2,7 @@ import IndexCore
 import IndexFeatures
 import SwiftUI
 
-struct SettingsView: View {
-  @Environment(AppModel.self) private var app
-  @State private var editingProfile = false
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 14) {
-        PageHeading(title: "Settings").padding(.bottom, 6)
-        if let profile = app.profile {
-          HStack(spacing: 18) {
-            PersonAvatar(person: profile.person, size: 64)
-            VStack(alignment: .leading, spacing: 2) {
-              Text(profile.name).font(IndexFont.serif(24))
-              if let username = profile.username {
-                Text(username).font(IndexFont.sans(14)).foregroundStyle(IndexPalette.subtleForeground)
-              }
-            }.frame(maxWidth: .infinity, alignment: .leading)
-            Button { editingProfile = true } label: {
-              Image(systemName: "pencil").font(.system(size: 18)).frame(width: 44, height: 44)
-            }.buttonStyle(.plain).accessibilityLabel("Edit profile")
-          }.settingsBox()
-          AppearanceSettings().settingsBox()
-          #if os(iOS)
-            AppIconSettings().settingsBox()
-          #endif
-          ProfileVisibilitySettings(profile: profile).settingsBox()
-        }
-        GroupSettingsView().settingsBox()
-        NotificationSettings().settingsBox()
-        AccountSecurityView().settingsBox()
-        AsyncButton { await app.signOut() } label: {
-          Text("Sign out").font(IndexFont.sans(14, weight: .medium)).frame(maxWidth: .infinity)
-        }.buttonStyle(.plain).settingsBox()
-      }.padding(.bottom, 20)
-    }.indexPage()
-      .task {
-        guard let store = app.store, let api = app.api else { return }
-        let generation = app.session.generation
-        do {
-          try await store.show("settings-profile", path: "/me/profile", stable: true) {
-            let profile: Profile = try await api.request("/me/profile")
-            try Task.checkCancellation()
-            guard generation == app.session.generation else { throw CancellationError() }
-            app.profile = profile
-          }
-        } catch { app.handleSessionError(error) }
-      }
-      .sheet(isPresented: $editingProfile) {
-        if let profile = app.profile { EditProfileView(profile: profile).indexSheetStyle().presentationDetents([.medium, .large]) }
-      }
-  }
-}
-
-private struct EditProfileView: View {
+struct EditProfileView: View {
   init(profile: Profile) {
     _name = State(initialValue: profile.name)
     _username = State(initialValue: profile.username ?? "")
@@ -98,28 +46,22 @@ private struct EditProfileView: View {
   }
 }
 
-private struct ProfileVisibilitySettings: View {
+struct ProfileVisibilitySettings: View {
   let profile: Profile
   @Environment(AppModel.self) private var app
   @State private var selection: IndexCore.Visibility?
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack {
-        Text("Profile visibility").font(IndexFont.sans(16, weight: .medium))
-        Spacer()
-        Menu {
-          Button("Public") { if profile.profileVisibility != .public { selection = .public } }
-          Button("Private") { if profile.profileVisibility != .private { selection = .private } }
-        } label: {
-          HStack(spacing: 6) {
-            Text(profile.profileVisibility.rawValue.capitalized)
-            Image(systemName: "chevron.down").font(.system(size: 12))
-          }.font(IndexFont.sans(13)).frame(minHeight: 44)
-        }
+    SettingsRow("Profile visibility", description: profile.profileVisibility == .private
+      ? "Only approved followers can see your links." : "Anyone can see your profile and links.") {
+      Menu {
+        Button("Public") { if profile.profileVisibility != .public { selection = .public } }
+        Button("Private") { if profile.profileVisibility != .private { selection = .private } }
+      } label: {
+        HStack(spacing: 6) {
+          Text(profile.profileVisibility.rawValue.capitalized)
+          Image(systemName: "chevron.down").font(.system(size: 12))
+        }.font(IndexFont.sans(13)).frame(minHeight: 44)
       }
-      Text(profile.profileVisibility == .private ? "Only approved followers can see your links." : "Anyone can see your profile and links.")
-        .foregroundStyle(IndexPalette.subtleForeground)
-      Text("Locked groups stay only yours.").foregroundStyle(IndexPalette.subtleForeground)
     }
     .alert(selection == .private ? "Make profile private?" : "Make profile public?",
       isPresented: Binding(get: { selection != nil }, set: { if !$0 { selection = nil } })) {

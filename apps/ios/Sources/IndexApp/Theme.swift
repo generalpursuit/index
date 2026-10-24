@@ -13,22 +13,33 @@ typealias IndexSymbol = IndexUI.IndexSymbol
 struct AppearanceSettings: View {
   @AppStorage(ThemePreference.storageKey) private var storedTheme = ThemePreference.system.rawValue
   var body: some View {
-    // Pass the selection into the rows as a value. Rows that read the storage themselves, inside
-    // the ForEach closure, kept their first selection when the preference changed.
+    // Pass the selection into the options as a value. Options that read the storage themselves,
+    // inside the ForEach closure, kept their first selection when the preference changed.
     let selection = ThemePreference(storedValue: storedTheme)
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Appearance").font(IndexFont.sans(16, weight: .medium))
-      Text("Choose how Index looks on this device.")
-        .font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
-      HStack(spacing: 8) {
+    SettingsRow("Appearance") {
+      HStack(spacing: 0) {
         ForEach([ThemePreference.system, .light, .dark], id: \.rawValue) { theme in
           Button(theme.rawValue.capitalized) { storedTheme = theme.rawValue }
-            .buttonStyle(PillStyle(selected: selection == theme))
+            .buttonStyle(SegmentStyle(selected: selection == theme))
             .accessibilityAddTraits(selection == theme ? .isSelected : [])
         }
-      }.padding(.top, 4)
+      }.padding(2).overlay(Capsule().strokeBorder(IndexPalette.border, lineWidth: 1))
         .accessibilityHint("Saved on this device for all accounts. System follows your device appearance.")
     }
+  }
+}
+
+/// An option of a compact segmented control, selected like a pill.
+private struct SegmentStyle: ButtonStyle {
+  let selected: Bool
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label.font(IndexFont.sans(12, weight: .medium))
+      .padding(.horizontal, 10).padding(.vertical, 5)
+      .foregroundStyle(selected ? IndexPalette.primaryForeground : IndexPalette.subtleForeground)
+      .background(selected ? IndexPalette.primary : Color.clear, in: Capsule())
+      .opacity(configuration.isPressed ? 0.6 : 1)
+      // A full touch target that doesn't make the control taller.
+      .frame(minHeight: 44).contentShape(Rectangle()).padding(.vertical, -9)
   }
 }
 
@@ -77,19 +88,20 @@ struct AppIconSettings: View {
 
     var body: some View {
       if UIApplication.shared.supportsAlternateIcons {
-        VStack(alignment: .leading, spacing: 12) {
-          Text("App icon").font(.headline)
-          Text("Choose the Index icon on this device.")
-            .font(.caption).foregroundStyle(IndexPalette.mutedForeground)
-          HStack(spacing: 16) {
+        SettingsRow {
+          VStack(alignment: .leading, spacing: 2) {
+            Text("App icon").font(IndexFont.sans(14))
+            if let errorMessage {
+              Text(errorMessage).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive)
+                .accessibilityLabel("Could not change app icon. \(errorMessage)")
+            }
+          }
+        } control: {
+          HStack(spacing: 4) {
+            if changing { ProgressView().controlSize(.small).accessibilityLabel("Changing icon") }
             choice("Ink", name: nil, image: IndexBrand.inkIcon)
             choice("Paper", name: "AppIconPaper", image: IndexBrand.paperIcon)
           }.disabled(changing)
-          if changing { ProgressView("Changing icon…").font(.caption) }
-          if let errorMessage {
-            Text(errorMessage).font(.caption).foregroundStyle(IndexPalette.destructive)
-              .accessibilityLabel("Could not change app icon. \(errorMessage)")
-          }
         }
         .onAppear { selectedName = UIApplication.shared.alternateIconName }
         .onChange(of: scenePhase) { _, phase in
@@ -113,17 +125,13 @@ struct AppIconSettings: View {
           catch { errorMessage = error.localizedDescription }
         }
       } label: {
-        VStack(spacing: 8) {
-          image.resizable().scaledToFit().frame(width: 64, height: 64)
-            .clipShape(RoundedRectangle(cornerRadius: 14))
-            .overlay(RoundedRectangle(cornerRadius: 14).stroke(IndexPalette.border, lineWidth: 1))
-          HStack(spacing: 4) {
-            Text(title)
-            Image(systemName: "checkmark.circle.fill").opacity(selected ? 1 : 0)
-          }.font(.subheadline)
-        }.padding(10)
-          .background(selected ? IndexPalette.surface : Color.clear,
-            in: RoundedRectangle(cornerRadius: 18))
+        image.resizable().scaledToFit().frame(width: 30, height: 30)
+          .clipShape(RoundedRectangle(cornerRadius: 7))
+          .overlay(RoundedRectangle(cornerRadius: 7).strokeBorder(IndexPalette.border, lineWidth: 1))
+          .padding(3)
+          .overlay(RoundedRectangle(cornerRadius: 10)
+            .strokeBorder(selected ? IndexPalette.foreground : Color.clear, lineWidth: 2))
+          .frame(width: 44, height: 44).contentShape(Rectangle())
       }.buttonStyle(.plain)
         .accessibilityLabel(title)
         .accessibilityAddTraits(selected ? .isSelected : [])

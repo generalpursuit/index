@@ -204,55 +204,58 @@ struct NotificationSettings: View {
   @State private var failure: String?
   // A profile gets a follow request while private and a follow while public, never both for
   // the same follow, so one row controls both keys and shows on only when both are on.
-  private let rows: [(label: String, description: String, keys: [String])] = [
-    ("Messages", "New messages in your conversations", ["message"]),
-    ("Comments", "When someone comments on your links", ["comment"]),
-    ("Mentions", "When someone mentions you in a comment", ["mention"]),
+  private let rows: [(label: String, description: String?, keys: [String])] = [
+    ("Messages", nil, ["message"]),
+    ("Comments", nil, ["comment"]),
+    ("Mentions", nil, ["mention"]),
     ("Followers", "New followers, or follow requests while your profile is private", ["follow", "request"]),
-    ("Accepted follow requests", "When someone approves your request to follow them", ["accepted"]),
-    ("Show message and comment previews", "Previews are hidden by default. Enabling them may show private text on your lock screen.", ["previews"]),
+    ("Accepted follow requests", nil, ["accepted"]),
+    ("Show previews", "Message and comment previews may show private text on your lock screen.", ["previews"]),
   ]
   var body: some View {
     let notifications = NotificationController.shared
-    VStack(alignment: .leading, spacing: 12) {
-      Text("Notifications").font(.headline)
-      Text("Your in-app activity is always kept. No notification emails are sent.").font(.footnote).foregroundStyle(IndexPalette.mutedForeground)
-      // Capabilities only decide whether a device can be enabled; a registered device can always
-      // turn off. Only an explicit answer means push is off; after a failed check, enabling reports why.
-      let checking = !notifications.registered && notifications.checkedAccount != app.userID
-      let serverOff = notifications.configured == false && !notifications.registered
-      Text(
+    // Capabilities only decide whether a device can be enabled; a registered device can always
+    // turn off. Only an explicit answer means push is off; after a failed check, enabling reports why.
+    let checking = !notifications.registered && notifications.checkedAccount != app.userID
+    let serverOff = notifications.configured == false && !notifications.registered
+    let blocked = notifications.permission == .denied
+    VStack(spacing: 0) {
+      SettingsRow("Alerts on this \(thisDeviceName)", description:
         checking ? "Checking…"
           : serverOff ? "Notifications aren't available on this server yet."
-          : notifications.permission == .denied ? "Blocked in system settings."
+          : blocked ? "Blocked in system settings."
           : notifications.registered ? "Enabled on this device." : "Alerts are off on this device."
-      ).font(.subheadline)
-      if !checking && !serverOff {
-        AsyncButton {
-          if notifications.registered { await notifications.disable() } else { await notifications.enable(app) }
-        } label: { Text(notifications.registered ? "Turn off on this device" : "Enable on this device") }
-        .buttonStyle(PillStyle()).disabled(!notifications.registered && notifications.permission == .denied)
-        #if os(iOS)
-        if notifications.permission == .denied {
-          Button("Open system settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }.buttonStyle(PillStyle())
-        }
-        #endif
-      }
-      Group {
-        let preferences = self.preferences ?? ContentPlaceholder.notificationPreferences
-        ForEach(rows, id: \.label) { row in
-          Toggle(isOn: Binding(get: { row.keys.allSatisfy { value(preferences, $0) } }, set: { newValue in
-            Task { await update(row.keys, newValue) }
-          })) {
-            VStack(alignment: .leading, spacing: 2) {
-              Text(row.label)
-              Text(row.description).font(.footnote).foregroundStyle(IndexPalette.mutedForeground)
+      ) {
+        if !checking && !serverOff {
+          HStack(spacing: 8) {
+            #if os(iOS)
+            if blocked {
+              Button("Open Settings") { if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) } }
+                .buttonStyle(PillStyle(compact: true))
             }
-          }.disabled(saving)
+            #endif
+            if notifications.registered || !blocked {
+              AsyncButton {
+                if notifications.registered { await notifications.disable() } else { await notifications.enable(app) }
+              } label: { Text(notifications.registered ? "Turn off" : "Turn on") }
+                .buttonStyle(PillStyle(compact: true))
+                .accessibilityLabel(notifications.registered ? "Turn off alerts" : "Turn on alerts")
+            }
+          }
         }
       }
-      .calmPlaceholder(active: preferences == nil && failure == nil)
-      if let message = failure ?? notifications.error { Text(message).font(.footnote).foregroundStyle(IndexPalette.destructive) }
+      let loading = self.preferences == nil && failure == nil
+      let preferences = self.preferences ?? ContentPlaceholder.notificationPreferences
+      ForEach(rows, id: \.label) { row in
+        Toggle(isOn: Binding(get: { row.keys.allSatisfy { value(preferences, $0) } }, set: { newValue in
+          Task { await update(row.keys, newValue) }
+        })) {
+          SettingsLabel(title: row.label, description: row.description)
+        }.disabled(saving).calmPlaceholder(active: loading).settingsRow()
+      }
+      if let message = failure ?? notifications.error {
+        Text(message).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).settingsRow()
+      }
     }.task {
       await notifications.synchronize(app)
       do { try await app.store?.refreshPreferences() } catch { failure = "Could not load notification preferences." }

@@ -11,65 +11,25 @@ struct GroupSettingsView: View {
   @State private var creating = false
   @State private var editing: LinkGroup?
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
-      HStack {
-        Text("Groups").font(IndexFont.sans(16, weight: .medium))
-        Spacer()
-        Button { creating = true } label: {
-          Image(systemName: "plus").frame(width: 44, height: 44)
-        }.accessibilityLabel("New group")
+    let loading = app.store?.profileModel(app.userID).groupsLoaded == false && error == nil
+    VStack(spacing: 0) {
+      if let error { RequestError(error: error, retry: { await load() }).settingsRow() }
+      ForEach(groups.filter { $0.kind != "custom" } + groups.filter { $0.kind == "custom" }) { group in
+        GroupRow(group: group) { editing = group }.calmPlaceholder(active: loading)
       }
-      Text("Lock a group to keep its links to yourself.")
-        .font(IndexFont.sans(12)).foregroundStyle(IndexPalette.mutedForeground)
-      RequestError(error: error, retry: { await load() })
-      Group {
-        // Favorites and Starred are never locked here: Favorites follows each link's own group,
-        // Starred is always private.
-        ForEach(groups.filter { $0.kind != "custom" }) { group in
-          HStack { name(group); Spacer() }.frame(minHeight: 44)
-        }
-        if groups.contains(where: { $0.kind == "custom" }) {
-          HStack(spacing: 10) {
-            Text("YOUR GROUPS").font(IndexFont.mono(11)).tracking(0.66)
-              .foregroundStyle(IndexPalette.subtleForeground)
-            Rectangle().fill(IndexPalette.border).frame(height: 1)
-          }.padding(.top, 4).accessibilityElement(children: .ignore)
-            .accessibilityLabel("Your groups").accessibilityAddTraits(.isHeader)
-          ForEach(groups.filter { $0.kind == "custom" }) { group in
-            HStack {
-              name(group)
-              Spacer()
-              ManagedGroupLock(group: group)
-              Button { editing = group } label: {
-                Image(systemName: "pencil").frame(width: 44, height: 44)
-              }.accessibilityLabel("Edit \(group.name)")
-            }
-          }
-        }
-      }.calmPlaceholder(active: app.store?.profileModel(app.userID).groupsLoaded == false && error == nil)
+      Button { creating = true } label: {
+        HStack(spacing: 8) {
+          Image(systemName: "plus").font(.system(size: 13)).accessibilityHidden(true)
+          Text("New group")
+        }.font(IndexFont.sans(14)).settingsRow().contentShape(Rectangle())
+      }.buttonStyle(.plain)
     }
-    .foregroundStyle(IndexPalette.foreground)
     .task(id: app.userID) { await load() }
     .sheet(isPresented: $creating) {
       GroupEditorView().indexSheetStyle().presentationDetents([.height(360), .large])
     }
     .sheet(item: $editing) { group in
       GroupEditorView(group: group).indexSheetStyle().presentationDetents([.height(360), .large])
-    }
-  }
-  private func name(_ group: LinkGroup) -> some View {
-    VStack(alignment: .leading, spacing: 3) {
-      HStack(spacing: 8) {
-        if group.kind != "custom" {
-          Image(systemName: group.kind == "favorites" ? "heart" : "star").font(.system(size: 13))
-            .accessibilityHidden(true)
-        }
-        Text(group.name)
-      }
-      if let count = group.linkCount {
-        Text(count == 1 ? "1 link" : "\(count) links").font(IndexFont.sans(12))
-          .foregroundStyle(IndexPalette.mutedForeground)
-      }
     }
   }
   private func load() async {
@@ -85,8 +45,11 @@ struct GroupSettingsView: View {
   }
 }
 
-private struct ManagedGroupLock: View {
+/// Custom groups can be locked and edited. Favorites and Starred are never locked here:
+/// Favorites follows each link's own group, Starred is always private.
+private struct GroupRow: View {
   let group: LinkGroup
+  let edit: () -> Void
   @Environment(AppModel.self) private var app
   @State private var confirming = false
   @State private var pending = false
@@ -94,12 +57,36 @@ private struct ManagedGroupLock: View {
   @AccessibilityFocusState private var errorFocused: Bool
   private var locked: Bool { group.visibility == .private }
   var body: some View {
-    VStack(alignment: .trailing, spacing: 4) {
-      GroupLockControl(locked: locked, name: group.name, disabled: pending) { _ in
-        error = nil
-        confirming = true
+    SettingsRow {
+      VStack(alignment: .leading, spacing: 2) {
+        HStack(spacing: 8) {
+          if group.kind != "custom" {
+            Image(systemName: group.kind == "favorites" ? "heart" : "star").font(.system(size: 13))
+              .accessibilityHidden(true)
+          }
+          Text(group.name).font(IndexFont.sans(14))
+        }
+        if let error { Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
       }
-      if let error { Text(error).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.destructive).accessibilityFocused($errorFocused) }
+    } control: {
+      HStack(spacing: 0) {
+        if let count = group.linkCount {
+          Text(count == 1 ? "1 link" : "\(count) links").font(IndexFont.sans(12))
+            .foregroundStyle(IndexPalette.subtleForeground).padding(.trailing, 4)
+        }
+        if group.kind == "custom" {
+          GroupLockControl(locked: locked, name: group.name, disabled: pending) { _ in
+            error = nil
+            confirming = true
+          }
+          Button(action: edit) {
+            Image(systemName: "pencil").frame(width: 44, height: 44)
+          }.accessibilityLabel("Edit \(group.name)")
+        } else {
+          // Keeps link counts in line with those of groups that have the two buttons.
+          Color.clear.frame(width: 88, height: 44)
+        }
+      }
     }
     .alert(locked ? "Unlock group?" : "Lock group?", isPresented: $confirming) {
       Button("Cancel", role: .cancel) {}

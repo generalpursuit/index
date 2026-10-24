@@ -28,10 +28,6 @@ extension View {
   func indexSheetStyle() -> some View {
     modifier(IndexSheetStyle())
   }
-  func settingsBox() -> some View {
-    self.padding(20).frame(maxWidth: .infinity, alignment: .leading)
-      .overlay(RoundedRectangle(cornerRadius: 18).stroke(IndexPalette.border, lineWidth: 1))
-  }
   func hideNativeNavigation() -> some View {
     #if os(iOS)
       self.toolbar(.hidden, for: .navigationBar)

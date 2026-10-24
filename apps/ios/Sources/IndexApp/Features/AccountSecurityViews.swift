@@ -145,51 +145,88 @@ struct PasswordRecoveryView: View {
       .onDisappear { password = ""; confirmation = ""; code = "" }
   }
 }
+/// The Email and Password rows of Settings; each change happens in a sheet.
 struct AccountSecurityView: View {
+  private enum Change: Identifiable {
+    case email, password
+    var id: Self { self }
+  }
   @Environment(AppModel.self) private var app
-  @State private var changingEmail = false
+  @State private var change: Change?
+  @State private var emailChange: AuthChallengeStatus?
+  var body: some View {
+    let pending = emailChange?.pending == true
+    VStack(spacing: 0) {
+      // While no change is pending, the status names the current address.
+      SettingsRow("Email", description: emailChange.map { pending ? "Enter the code sent to \($0.email)." : $0.email }) {
+        Button(pending ? "Enter code" : "Change") { change = .email }.buttonStyle(PillStyle(compact: true))
+          .accessibilityLabel(pending ? "Enter email change code" : "Change email")
+      }
+      SettingsRow("Password") {
+        Button("Change") { change = .password }.buttonStyle(PillStyle(compact: true))
+          .accessibilityLabel("Change password")
+      }
+    }
+    .task {
+      do {
+        guard let api = app.api else { throw APIError.invalidServer }
+        emailChange = try await api.securityStatus().emailChange
+      } catch { app.handle(error) }
+    }
+    .sheet(item: $change) { change in
+      Group {
+        switch change {
+        case .email: ChangeEmailView(status: $emailChange)
+        case .password: ChangePasswordView()
+        }
+      }.indexSheetStyle().presentationDetents([.medium, .large])
+    }
+  }
+}
+private struct ChangePasswordView: View {
+  @Environment(AppModel.self) private var app
   @State private var password = ""
   @State private var newPassword = ""
   @State private var confirmation = ""
-  @State private var email = ""
-  @State private var code = ""
-  @State private var pending: AuthChallengeStatus?
-  @State private var retryAt = Date.distantPast
   @State private var message = ""
   var body: some View {
-    DisclosureGroup("Account security") {
+    ScrollView {
       VStack(alignment: .leading, spacing: 16) {
-        Picker("Change", selection: $changingEmail) {
-          Text("Password").tag(false)
-          Text("Email").tag(true)
-        }.pickerStyle(.segmented)
+        PageHeading(title: "Change password")
         SecureField("Current password", text: $password).textContentType(.password).ghostInput()
-        if changingEmail {
-          Text("Your current email stays active until you verify the new address.").font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
-          EmailInput(title: "New email", value: $email)
-          CooldownAction(title: "Send email change code", retryAt: retryAt) {
-            guard let api = app.api else { throw APIError.invalidServer }
-            let result = try await api.requestEmailChange(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
-            retryAt = Date().addingTimeInterval(Double(result.retryAfter))
-            password = ""; code = ""
-            try await refresh()
-          }
-        } else {
-          SecureField("New password", text: $newPassword).textContentType(.newPassword).ghostInput()
-          SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword).ghostInput()
-          AsyncButton {
-            guard let api = app.api else { throw APIError.invalidServer }
-            guard newPassword == confirmation else { throw APIError.server(400, "Passwords do not match.") }
-            try await api.changePassword(currentPassword: password, newPassword: newPassword)
-            password = ""; newPassword = ""; confirmation = ""
-            message = "Password changed. Other sessions have been signed out."
-            await app.securityChanged()
-          } label: { Text("Save password") }
-            .buttonStyle(PillStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
-        }
-        if let pending, pending.pending {
-          Text("Verify \(pending.email)")
-          CodeDelivery(status: pending)
+        SecureField("New password", text: $newPassword).textContentType(.newPassword).ghostInput()
+        SecureField("Confirm new password", text: $confirmation).textContentType(.newPassword).ghostInput()
+        AsyncButton {
+          guard let api = app.api else { throw APIError.invalidServer }
+          guard newPassword == confirmation else { throw APIError.server(400, "Passwords do not match.") }
+          try await api.changePassword(currentPassword: password, newPassword: newPassword)
+          password = ""; newPassword = ""; confirmation = ""
+          message = "Password changed. Other sessions have been signed out."
+          await app.securityChanged()
+        } label: { Text("Save password") }
+          .buttonStyle(PillStyle(selected: true)).disabled(password.isEmpty || newPassword.count < 8 || newPassword.count > 128)
+        if !message.isEmpty { Text(message).foregroundStyle(IndexPalette.mutedForeground).accessibilityAddTraits(.updatesFrequently) }
+      }.padding(.bottom, 20)
+    }.indexPage().scrollDismissesKeyboard(.interactively)
+  }
+}
+/// Asks for the code while a change is pending, otherwise for the new address.
+private struct ChangeEmailView: View {
+  @Binding var status: AuthChallengeStatus?
+  @Environment(AppModel.self) private var app
+  @State private var password = ""
+  @State private var email = ""
+  @State private var code = ""
+  @State private var retryAt = Date.distantPast
+  @State private var sendingNewCode = false
+  @State private var message = ""
+  var body: some View {
+    ScrollView {
+      VStack(alignment: .leading, spacing: 16) {
+        PageHeading(title: "Change email")
+        if let status, status.pending, !sendingNewCode {
+          Text("Enter the code sent to \(status.email).")
+          CodeDelivery(status: status)
           CodeInput(value: $code)
           AsyncButton {
             guard let api = app.api else { throw APIError.invalidServer }
@@ -197,15 +234,28 @@ struct AccountSecurityView: View {
             code = ""; message = "Email changed. Other sessions have been signed out."
             await app.securityChanged()
           } label: { Text("Confirm new email") }.buttonStyle(PillStyle(selected: true)).disabled(code.count != 6)
+          Button("Send a new code") { email = status.email; sendingNewCode = true }.buttonStyle(PillStyle())
+        } else {
+          Text("Your current email stays active until you verify the new address.").font(IndexFont.sans(14)).foregroundStyle(IndexPalette.mutedForeground)
+          SecureField("Current password", text: $password).textContentType(.password).ghostInput()
+          EmailInput(title: "New email", value: $email)
+          CooldownAction(title: "Send email change code", retryAt: retryAt) {
+            guard let api = app.api else { throw APIError.invalidServer }
+            let result = try await api.requestEmailChange(email: email.trimmingCharacters(in: .whitespacesAndNewlines), password: password)
+            retryAt = Date().addingTimeInterval(Double(result.retryAfter))
+            password = ""; code = ""
+            try await refresh()
+            sendingNewCode = false
+          }
         }
         if !message.isEmpty { Text(message).foregroundStyle(IndexPalette.mutedForeground).accessibilityAddTraits(.updatesFrequently) }
-      }.padding(.top)
-    }.task { do { try await refresh() } catch { app.handle(error) } }
-      .onDisappear { password = ""; newPassword = ""; confirmation = ""; code = "" }
+      }.padding(.bottom, 20)
+    }.indexPage().scrollDismissesKeyboard(.interactively)
+      .task { do { try await refresh() } catch { app.handle(error) } }
   }
   private func refresh() async throws {
     guard let api = app.api else { throw APIError.invalidServer }
-    pending = try await api.securityStatus().emailChange
-    retryAt = Date().addingTimeInterval(Double(pending?.retryAfter ?? 0))
+    status = try await api.securityStatus().emailChange
+    retryAt = Date().addingTimeInterval(Double(status?.retryAfter ?? 0))
   }
 }
