@@ -41,14 +41,12 @@ struct ProfileView: View {
                   .padding(.bottom, 28)
               }
               if !profile.canViewContent && !model.summaryOnly {
-                VStack(spacing: 16) {
-                  Divider()
-                  Image(systemName: "lock").font(.system(size: 32)).padding(.top, 48)
-                  Text("Private profile").font(IndexFont.sans(18, weight: .medium))
-                  Text("Only \(profile.name)’s followers can view their posts.")
-                    .foregroundStyle(IndexPalette.subtleForeground).multilineTextAlignment(.center)
-                  FollowButton(profile: profile)
-                }.frame(maxWidth: .infinity)
+                // Where the links would be, like an empty profile: the lock and Request are in the header.
+                Text(profile.followingStatus == "pending"
+                  ? "Request sent. You’ll see \(profile.name)’s links once they accept."
+                  : "Only approved followers can see \(profile.name)’s links.")
+                  .foregroundStyle(IndexPalette.subtleForeground).multilineTextAlignment(.center)
+                  .frame(maxWidth: .infinity).padding(.vertical, 60)
               } else {
                 ForEach(weekIDs, id: \.self) { week in
                   Section {
@@ -144,7 +142,7 @@ struct ProfileView: View {
           Button { app.present(.settings) } label: {
             IndexSymbol("NavSettings").frame(width: 25, height: 25).frame(width: 44, height: 44)
           }.buttonStyle(.plain).accessibilityLabel("Settings")
-        } else if profile.canViewContent { FollowButton(profile: profile) }
+        } else { FollowButton(profile: profile) }
       }.calmPlaceholder(active: model.profile == nil && error == nil)
     }
   }
