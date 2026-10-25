@@ -111,14 +111,6 @@ struct NavigationIcon: View {
   }
 }
 
-struct CategoryMark: View {
-  let category: IndexCore.Category
-  var body: some View {
-    RoundedRectangle(cornerRadius: 2).fill(IndexPalette.category(category))
-      .frame(width: 8, height: 8).accessibilityHidden(true)
-  }
-}
-
 /// CSS's minmax(0, 1fr) / auto columns: a short domain only takes its actual width;
 /// a long domain is capped at 120 points and the title receives the remaining space.
 /// Columns share a vertical center even when a text field and menu have different heights.
@@ -171,26 +163,6 @@ private struct PageLoadTrigger: View {
     loading = true
     defer { loading = false }
     do { try await action(); failed = true } catch is CancellationError {} catch { failed = true }
-  }
-}
-
-struct SearchField: View {
-  let placeholder: String
-  @Binding var text: String
-  var body: some View {
-    HStack(spacing: 10) {
-      Image(systemName: "magnifyingglass").font(.system(size: 18)).foregroundStyle(IndexPalette.subtleForeground)
-      TextField(placeholder, text: $text).textFieldStyle(.plain).font(IndexFont.sans(16))
-        .autocorrectionDisabled()
-        #if os(iOS)
-          .textInputAutocapitalization(.never)
-        #endif
-      if !text.isEmpty {
-        Button { text = "" } label: { Image(systemName: "xmark").frame(width: 28, height: 28) }
-          .buttonStyle(.plain).accessibilityLabel("Clear search")
-      }
-    }.padding(.horizontal, 14).frame(minHeight: 44)
-      .overlay(RoundedRectangle(cornerRadius: 10).stroke(IndexPalette.border, lineWidth: 1))
   }
 }
 

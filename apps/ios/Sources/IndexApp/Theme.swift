@@ -9,6 +9,10 @@ typealias IndexPalette = IndexUI.IndexPalette
 typealias IndexFont = IndexUI.IndexTypography
 typealias IndexWordmark = IndexUI.IndexWordmark
 typealias IndexSymbol = IndexUI.IndexSymbol
+typealias PillStyle = IndexUI.PillStyle
+typealias SettingsGroup<Content: View> = IndexUI.SettingsGroup<Content>
+typealias SearchField = IndexUI.SearchField
+typealias CategoryMark = IndexUI.CategoryMark
 
 struct AppearanceSettings: View {
   @AppStorage(ThemePreference.storageKey) private var storedTheme = ThemePreference.system.rawValue

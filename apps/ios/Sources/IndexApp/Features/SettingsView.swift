@@ -77,40 +77,6 @@ struct SettingsView: View {
   #endif
 }
 
-/// A titled container of rows. Each row is laid out with `settingsRow()`.
-struct SettingsGroup<Content: View>: View {
-  var title: String? = nil
-  /// Follows the title, for example where the settings are saved.
-  var note: String? = nil
-  var footer: String? = nil
-  @ViewBuilder var content: Content
-  var body: some View {
-    let shape = RoundedRectangle(cornerRadius: 16)
-    VStack(alignment: .leading, spacing: 7) {
-      if let title {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-          Text(title).font(IndexFont.mono(11)).tracking(0.77).textCase(.uppercase)
-            .foregroundStyle(IndexPalette.subtleForeground)
-          if let note {
-            Text(note).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground.opacity(0.75))
-          }
-        }.padding(.horizontal, 4)
-          .accessibilityElement(children: .combine).accessibilityAddTraits(.isHeader)
-      }
-      VStack(spacing: 0) { content }
-        // Every row draws a hairline above itself. The first one lies outside the clip, so only
-        // rows that follow another row are separated; iOS 17 can't enumerate the rows instead.
-        .padding(.top, -1)
-        .clipShape(shape)
-        .overlay(shape.strokeBorder(IndexPalette.border, lineWidth: 1))
-      if let footer {
-        Text(footer).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
-          .padding(.horizontal, 4)
-      }
-    }
-  }
-}
-
 /// A setting's label on the left and its control on the right.
 struct SettingsRow<Label: View, Control: View>: View {
   @ViewBuilder var label: Label
@@ -141,14 +107,5 @@ struct SettingsLabel: View {
         Text(description).font(IndexFont.sans(12)).foregroundStyle(IndexPalette.subtleForeground)
       }
     }
-  }
-}
-
-extension View {
-  /// Lays out content as a row of a `SettingsGroup`, below a hairline.
-  func settingsRow() -> some View {
-    padding(.horizontal, 16).padding(.vertical, 9)
-      .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
-      .overlay(alignment: .top) { Rectangle().fill(IndexPalette.border).frame(height: 1) }
   }
 }

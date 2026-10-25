@@ -53,20 +53,6 @@ struct PersonRow: View {
     }.contentShape(Rectangle()).padding(.vertical, 8)
   }
 }
-struct PillStyle: ButtonStyle {
-  var selected = false
-  var compact = false
-  @Environment(\.isEnabled) private var enabled
-  func makeBody(configuration: Configuration) -> some View {
-    configuration.label.font(IndexFont.sans(compact ? 12 : 13, weight: .medium))
-      .padding(.horizontal, compact ? 14 : 16).padding(.vertical, compact ? 8 : 11)
-      .background(selected ? IndexPalette.primary : Color.clear, in: Capsule())
-      .foregroundStyle(selected ? IndexPalette.primaryForeground : IndexPalette.foreground)
-      .tint(selected ? IndexPalette.primaryForeground : IndexPalette.foreground)
-      .overlay(Capsule().stroke(IndexPalette.input.opacity(selected ? 0 : 1)))
-      .opacity(!enabled ? 0.4 : configuration.isPressed ? 0.6 : 1)
-  }
-}
 /// The system switch always draws a white thumb, which vanishes on the app's light tint in dark
 /// mode. This switch pairs primary colors like a selected pill, in either scheme.
 struct IndexSwitchStyle: ToggleStyle {
