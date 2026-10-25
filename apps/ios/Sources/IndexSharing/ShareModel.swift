@@ -16,7 +16,7 @@ public final class ShareModel {
   public var extracting = false
   public var result: ShareResult?
   public var existing: SavedLink?
-  public var api: APIClient?
+  private var api: APIClient?
   private let server: URL
   private let credentials: ReadOnlyCredentials
   private var operation: Task<Void, Never>?
@@ -52,18 +52,13 @@ public final class ShareModel {
     } catch is CancellationError {} catch { handle(error) }
   }
   public func select(_ group: LinkGroup?) { destinationUnavailable = false; selected = group; draft.groupID = group?.id }
-  public func created(_ group: LinkGroup) {
-    guard active, group.ownerId == profile?.id else { return }
-    groups.insert(group, at: 0); select(group)
-  }
   public func save(again: Bool = false) {
     guard !busy, !extracting, !destinationUnavailable, let api, let account = profile?.id else { return }
     busy = true; error = nil
     operation = Task { @MainActor in
       defer { busy = false }
       do {
-        guard let session = try await api.restore(), session.user.id == account else { throw APIError.unauthenticated }
-        guard session.user.emailVerified else { throw APIError.emailNotVerified }
+        try await verify(api, account: account)
         let body = try draft.body(accountID: account, saveAgain: again)
         let response: ShareResult = try await api.request("/links/share", method: "POST", body: body)
         try Task.checkCancellation()
@@ -71,6 +66,17 @@ public final class ShareModel {
         result = response
       } catch is CancellationError {} catch { handle(error) }
     }
+  }
+  /// Deletes the link this panel just saved. Returns whether it is gone, so the panel can close.
+  public func undo() async -> Bool {
+    guard !busy, let api, let account = profile?.id, let result, result.status == "saved" else { return false }
+    busy = true; error = nil
+    defer { busy = false }
+    do {
+      try await verify(api, account: account)
+      let _: Success = try await api.request("/links/\(result.link.id)", method: "DELETE")
+      return active
+    } catch { handle(error); return false }
   }
   public func viewExisting() {
     guard !busy, let api, let result else { return }
@@ -96,6 +102,11 @@ public final class ShareModel {
       profile = nil; groups = []; selected = nil; draft.groupID = nil; result = nil; existing = nil; api = nil
     default: self.error = error.localizedDescription
     }
+  }
+  /// Writes go out only while the pinned credential still belongs to the verified account shown.
+  private func verify(_ api: APIClient, account: String) async throws {
+    guard let session = try await api.restore(), session.user.id == account else { throw APIError.unauthenticated }
+    guard session.user.emailVerified else { throw APIError.emailNotVerified }
   }
   public func cancel() { active = false; operation?.cancel(); operation = nil }
 }

@@ -2,7 +2,7 @@
 
 Web/Tauri quick-add and the iOS/macOS Share extensions save one HTTP(S) URL into the current UTC week. Destinations are Your links (`groupId: null`) or an owned custom group; Starred, Favorites and conversations are not destinations.
 
-Web quick-add starts at the profile group being viewed, otherwise at Your links, and its confirmation names the destination, which may lie outside the list on screen. A selected group follows its current name/visibility. Only a complete successful list can establish deletion; a missing destination blocks saving until explicitly replaced, never silently falling back to Your links. Group creation selects the returned group immediately. The macOS menu-bar panel does not offer it; groups are created in the main app. The server rechecks ownership and eligibility on every save and replay.
+Web quick-add starts at the profile group being viewed, otherwise at Your links, and its confirmation names the destination, which may lie outside the list on screen. A selected group follows its current name/visibility. Only a complete successful list can establish deletion; a missing destination blocks saving until explicitly replaced, never silently falling back to Your links. Group creation selects the returned group immediately. The Share extensions and the macOS menu-bar panel do not offer it; groups are created in the main app. The server rechecks ownership and eligibility on every save and replay.
 
 ## Duplicate saves and retries
 
@@ -10,7 +10,7 @@ Web quick-add starts at the profile group being viewed, otherwise at Your links,
 
 The database commits the link and an immutable account/request/payload receipt together. **An uncertain result retains the original ID and payload for retry.** Reusing an ID with different contents conflicts. Receipts survive link deletion and cannot resurrect it; replay rechecks current access and destination eligibility. Do not prune receipts without defining a retry-expiration contract.
 
-Cancellation cannot retract a write that already committed. Ordinary resubmission after extension termination finds the existing link; another original requires Save again. Viewing the existing save resolves current route access. The iOS extension displays it within its panel rather than forcing the host app to open.
+Cancellation cannot retract a write that already committed. After a save, the Share extensions offer Undo, which deletes the new link and closes the panel. Ordinary resubmission after extension termination finds the existing link; another original requires Save again. Viewing the existing save resolves current route access. The iOS extension displays it within its panel rather than forcing the host app to open.
 
 ## Secure host/extension session boundary
 

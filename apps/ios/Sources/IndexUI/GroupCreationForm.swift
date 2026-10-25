@@ -1,23 +1,22 @@
 import SwiftUI
 import IndexCore
 
-/// Shared by GroupEditorView and both extensions. The returned server group selects directly.
+/// Creates a group for GroupEditorView. The returned server group selects directly.
 public struct GroupCreationForm: View {
   let api: APIClient
   let onCancel: () -> Void
   let showsCloseButton: Bool
   let onCreated: (LinkGroup) -> Void
   let onAuthError: (Error) -> Void
-  let onPendingChange: (Bool) -> Void
   @State private var draft = GroupDraft()
   @State private var pending = false
   @State private var error: String?
   @State private var operation: Task<Void, Never>?
   @FocusState private var focused: Bool
   public init(api: APIClient, showsCloseButton: Bool = true, onCancel: @escaping () -> Void, onCreated: @escaping (LinkGroup) -> Void,
-              onAuthError: @escaping (Error) -> Void = { _ in }, onPendingChange: @escaping (Bool) -> Void = { _ in }) {
+              onAuthError: @escaping (Error) -> Void = { _ in }) {
     self.api = api; self.showsCloseButton = showsCloseButton; self.onCancel = onCancel; self.onCreated = onCreated
-    self.onAuthError = onAuthError; self.onPendingChange = onPendingChange
+    self.onAuthError = onAuthError
   }
   public var body: some View {
     ScrollView {
@@ -55,9 +54,9 @@ public struct GroupCreationForm: View {
   private func save() {
     guard !pending else { return }
     if let invalid = draft.validationError { error = invalid; focused = true; return }
-    pending = true; error = nil; onPendingChange(true)
+    pending = true; error = nil
     operation = Task { @MainActor in
-      defer { pending = false; onPendingChange(false) }
+      defer { pending = false }
       do {
         let group: LinkGroup = try await api.request("/groups", method: "POST", body: draft.body)
         try Task.checkCancellation()

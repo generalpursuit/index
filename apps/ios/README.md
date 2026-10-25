@@ -151,4 +151,4 @@ Settings manages personal link collections using the same compact lock control a
 
 ## Share extension
 
-`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. Shared picker/group creation lives in `IndexSharing`/`IndexUI`. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).
+`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. The shared picker lives in `IndexSharing` and only chooses among existing groups; groups are created in the app. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).

@@ -3,94 +3,202 @@ import IndexCore
 import IndexUI
 
 /// Real platform extension UI. Destinations stay inside Index, never OS suggested recipients.
+/// Groups are created in the app; the panel only chooses one, using the app's Settings-style rows.
 public struct SharePanel: View {
   @Bindable var model: ShareModel
   let finish: () -> Void
   let cancel: () -> Void
   @State private var search = ""
-  @State private var creating = false
-  @State private var creatingPending = false
+  /// Below this many groups the whole list fits without searching.
+  private static let searchThreshold = 8
   public init(model: ShareModel, finish: @escaping () -> Void, cancel: @escaping () -> Void) {
     self.model = model; self.finish = finish; self.cancel = cancel
   }
-  public var body: some View {
-    ScrollView {
-    VStack(alignment: .leading, spacing: 16) {
-      HStack { Text("Save to Index").font(.title2.bold()); Spacer(); Button("Cancel", action: cancel).disabled(creatingPending) }
-      if creating, let api = model.api {
-        GroupCreationForm(api: api, onCancel: { creating = false }, onCreated: { group in
-          model.created(group); creating = false; search = ""
-        }, onAuthError: { model.handle($0) }, onPendingChange: { creatingPending = $0 })
-      } else if model.result?.status == "saved" {
-        Label("Saved to this week", systemImage: "checkmark.circle").font(.headline)
-        Text(model.result?.link.title ?? "").lineLimit(3)
-        Button("Done", action: finish).buttonStyle(.borderedProminent).foregroundStyle(IndexPalette.primaryForeground)
-      } else if let existing = model.existing {
-        Text(existing.title).font(.headline)
-        Text(existing.url).textSelection(.enabled).lineLimit(4)
-        Text("Saved \(existing.savedOn)").foregroundStyle(IndexPalette.mutedForeground)
-        if let description = existing.description { ScrollView { Text(description) } }
-        Button("Back to save") { model.existing = nil }
-      } else {
-        TextField("https://…", text: $model.draft.url).textFieldStyle(.roundedBorder)
-          .accessibilityLabel("Shared link").disabled(model.busy || model.extracting || model.result != nil)
-        if let restricted = model.restricted {
-          Text(restricted).foregroundStyle(IndexPalette.mutedForeground)
-          Text("Open Index to sign in or verify your email, then return here and retry. Your link stays here while this panel is open.").font(.subheadline)
-          Button("Retry session") { Task { await model.connect() } }.disabled(model.busy)
-        } else if model.profile != nil {
-          Text("Save into the current week").font(.subheadline).foregroundStyle(IndexPalette.mutedForeground)
-          if model.destinationUnavailable { Text("Selected group unavailable. Choose another destination.").foregroundStyle(IndexPalette.destructive) }
-          TextField("Search destinations", text: $search).textFieldStyle(.roundedBorder)
-          ScrollView {
-            VStack(spacing: 4) {
-              if search.isEmpty || "your links".contains(search.lowercased()) {
-                row(name: "Your links", locked: model.profile?.profileVisibility == .private, selected: model.selected == nil) { model.select(nil) }
-              }
-              ForEach(model.groups.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }) { group in
-                row(name: group.name, locked: group.visibility == .private, selected: model.selected?.id == group.id) { model.select(group) }
-              }
-            }
-          }.frame(maxHeight: 260)
-          Button("Refresh destinations") { Task { await model.connect() } }.disabled(model.busy)
-          Button { creating = true } label: { Label("Create group", systemImage: "plus") }.disabled(model.busy)
-          Text(model.selected?.visibility == .private ? "Only you can see this link." : "Visible to anyone who can see your profile.")
-            .font(.caption).foregroundStyle(IndexPalette.mutedForeground)
-          if model.result?.status == "existing" {
-            Text("You already saved this link.")
-            HStack {
-              Button("View existing") { model.viewExisting() }
-              Spacer()
-              Button("Save again") { model.save(again: true) }.buttonStyle(.borderedProminent).foregroundStyle(IndexPalette.primaryForeground)
-            }.disabled(model.busy || model.destinationUnavailable)
-          } else {
-            Button(model.busy ? "Saving…" : "Save") { model.save() }.buttonStyle(.borderedProminent).foregroundStyle(IndexPalette.primaryForeground)
-              .disabled(model.busy || model.extracting || model.destinationUnavailable || ShareDraft.validURL(model.draft.url) == nil)
-          }
-        } else if !model.busy {
-          Button("Retry connection") { Task { await model.connect() } }
-        }
-      }
-      if let issue = model.inputIssue, model.draft.url.isEmpty { Text(issue).font(.subheadline).foregroundStyle(IndexPalette.mutedForeground) }
-      if model.busy || model.extracting { ProgressView().accessibilityLabel("Loading") }
-      if let error = model.error { Text(error).font(.subheadline).foregroundStyle(IndexPalette.destructive).textSelection(.enabled) }
-    }.padding(20).frame(minWidth: 280, idealWidth: 380)
-    }
-      .scrollIndicators(.hidden)
-      .foregroundStyle(IndexPalette.foreground).background(IndexPalette.background).tint(IndexPalette.primary)
-      .task { await model.connect() }.onDisappear { model.cancel() }
-      .interactiveDismissDisabled(creatingPending)
+
+  /// What the panel shows, in order of precedence.
+  private enum Stage {
+    case saved(SavedLink), existing(SavedLink), restricted(String), duplicate(SavedLink), choosing, connecting
   }
-  private func row(name: String, locked: Bool, selected: Bool, action: @escaping () -> Void) -> some View {
+  private var stage: Stage {
+    if let result = model.result, result.status == "saved" { return .saved(result.link) }
+    if let existing = model.existing { return .existing(existing) }
+    if let restricted = model.restricted { return .restricted(restricted) }
+    if let result = model.result, result.status == "existing" { return .duplicate(result.link) }
+    return model.profile == nil ? .connecting : .choosing
+  }
+
+  public var body: some View {
+    let stage = stage
+    ScrollView {
+      VStack(alignment: .leading, spacing: 24) {
+        heading(stage)
+        content(stage)
+      }.padding(20)
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      VStack(alignment: .leading, spacing: 12) {
+        if let error = model.error {
+          Text(error).font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.destructive).textSelection(.enabled)
+        }
+        actions(stage)
+      }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.surface)
+    }
+    .frame(minWidth: 280, idealWidth: 380)
+    .scrollIndicators(.hidden)
+    .font(IndexTypography.sans()).foregroundStyle(IndexPalette.foreground)
+    .background(IndexPalette.surface).tint(IndexPalette.foreground)
+    .task { await model.connect() }.onDisappear { model.cancel() }
+  }
+
+  private func heading(_ stage: Stage) -> some View {
+    let title = switch stage {
+    case .saved: "Saved"
+    case .existing(let link): link.title
+    case .duplicate: "Already saved"
+    case .restricted, .choosing, .connecting: "Save to Index"
+    }
+    return HStack(spacing: 4) {
+      Text(title).font(IndexTypography.serif(26)).tracking(-0.39)
+        .frame(maxWidth: .infinity, alignment: .leading).accessibilityAddTraits(.isHeader)
+      Button {
+        // Once saved, closing completes the request instead of cancelling it.
+        if case .saved = stage { finish() } else { cancel() }
+      } label: {
+        Image(systemName: "xmark").font(.system(size: 18)).frame(width: 44, height: 44).contentShape(Rectangle())
+      }.buttonStyle(.plain).accessibilityLabel("Close")
+    }.frame(minHeight: 44)
+  }
+
+  @ViewBuilder private func content(_ stage: Stage) -> some View {
+    switch stage {
+    case .saved(let link):
+      SettingsGroup(footer: "Added to \(destinationName(of: link)) in \(savedWeek(link)).") { linkRow(link) }
+    case .existing(let link):
+      VStack(alignment: .leading, spacing: 8) {
+        Text(link.url).font(IndexTypography.mono(12)).foregroundStyle(IndexPalette.subtleForeground)
+          .textSelection(.enabled).lineLimit(4)
+        Text("Saved in \(savedWeek(link))").font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.subtleForeground)
+        if let description = link.description { Text(description).font(IndexTypography.sans(15)).padding(.top, 8) }
+      }
+    case .duplicate(let link):
+      Text("You saved this in \(savedWeek(link)). Save again to add another copy to this week.")
+        .font(IndexTypography.sans(15)).foregroundStyle(IndexPalette.mutedForeground)
+      SettingsGroup { linkRow(link) }
+    case .restricted(let message):
+      linkField
+      VStack(alignment: .leading, spacing: 6) {
+        Text(message).font(IndexTypography.sans(14))
+        Text("Open Index to sign in or verify your email, then return here and retry. Your link stays here while this panel is open.")
+          .font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.subtleForeground)
+      }
+    case .choosing:
+      linkField
+      destinations
+    case .connecting:
+      linkField
+      if model.busy { ProgressView().frame(maxWidth: .infinity).accessibilityLabel("Loading") }
+    }
+  }
+
+  @ViewBuilder private func actions(_ stage: Stage) -> some View {
+    switch stage {
+    case .saved:
+      HStack(spacing: 10) {
+        pill(model.busy ? "Undoing…" : "Undo") { Task { if await model.undo() { cancel() } } }
+        pill("Done", primary: true, action: finish)
+      }.disabled(model.busy)
+    case .existing:
+      pill("Back") { model.existing = nil }
+    case .duplicate:
+      HStack(spacing: 10) {
+        pill("View existing") { model.viewExisting() }
+        pill(model.busy ? "Saving…" : "Save again", primary: true) { model.save(again: true) }
+      }.disabled(model.busy || model.destinationUnavailable)
+    case .restricted:
+      pill("Retry", primary: true) { Task { await model.connect() } }.disabled(model.busy)
+    case .choosing:
+      pill(model.busy ? "Saving…" : "Save", primary: true) { model.save() }
+        .disabled(model.busy || model.extracting || model.destinationUnavailable || ShareDraft.validURL(model.draft.url) == nil)
+    case .connecting:
+      if !model.busy { pill("Retry", primary: true) { Task { await model.connect() } } }
+    }
+  }
+
+  /// The shared link as an editable quick-add row: a hollow marker until it is saved.
+  private var linkField: some View {
+    SettingsGroup(footer: model.draft.url.isEmpty ? model.inputIssue : nil) {
+      HStack(spacing: 12) {
+        Group {
+          if model.extracting { ProgressView().controlSize(.mini) }
+          else { RoundedRectangle(cornerRadius: 2).stroke(IndexPalette.subtleForeground, lineWidth: 1).frame(width: 7, height: 7) }
+        }.frame(width: 16)
+        TextField("Enter a link", text: $model.draft.url).textFieldStyle(.plain).font(IndexTypography.sans(15))
+          .autocorrectionDisabled()
+          #if os(iOS)
+            .keyboardType(.URL).textInputAutocapitalization(.never).submitLabel(.go)
+          #endif
+          .onSubmit { model.save() }
+          .accessibilityLabel("Shared link").disabled(model.busy || model.extracting)
+      }.settingsRow()
+    }
+  }
+
+  @ViewBuilder private var destinations: some View {
+    let showsYourLinks = matches("Your links")
+    let groups = model.groups.filter { matches($0.name) }
+    if model.groups.count >= Self.searchThreshold {
+      SearchField(placeholder: "Search groups", text: $search)
+    }
+    SettingsGroup(title: "Save to", note: Week.label(Week.monday()),
+                  footer: model.selected?.visibility == .private ? "Only you can see this link." : "Visible to anyone who can see your profile.") {
+      if showsYourLinks {
+        destination("Your links", locked: model.profile?.profileVisibility == .private, selected: model.selected == nil) { model.select(nil) }
+      }
+      ForEach(groups) { group in
+        destination(group.name, locked: group.visibility == .private, selected: model.selected?.id == group.id) { model.select(group) }
+      }
+      if !showsYourLinks && groups.isEmpty {
+        Text("No matching groups").foregroundStyle(IndexPalette.subtleForeground).font(IndexTypography.sans(14)).settingsRow()
+      }
+    }
+  }
+
+  private func matches(_ name: String) -> Bool { search.isEmpty || name.localizedCaseInsensitiveContains(search) }
+
+  private func destination(_ name: String, locked: Bool, selected: Bool, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       HStack(spacing: 12) {
-        Image(systemName: locked ? "lock" : "folder").frame(width: 32, height: 36)
-        Text(name).lineLimit(2).multilineTextAlignment(.leading)
-        Spacer()
-        if selected { Image(systemName: "checkmark") }
-      }.padding(8).contentShape(Rectangle())
-    }.buttonStyle(.plain).background(selected ? IndexPalette.muted : IndexPalette.background, in: RoundedRectangle(cornerRadius: 10))
+        Image(systemName: locked ? "lock" : "globe").font(.system(size: 14))
+          .foregroundStyle(IndexPalette.subtleForeground).frame(width: 20)
+        Text(name).font(IndexTypography.sans(14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+        if selected { Image(systemName: "checkmark").font(.system(size: 14, weight: .medium)) }
+      }.settingsRow().contentShape(Rectangle())
+    }.buttonStyle(.plain)
       .accessibilityLabel(name + (locked ? ", Locked" : ", Unlocked"))
       .accessibilityAddTraits(selected ? .isSelected : []).disabled(model.busy)
+  }
+
+  private func linkRow(_ link: SavedLink) -> some View {
+    HStack(spacing: 12) {
+      CategoryMark(category: link.category)
+      Text(link.title).font(IndexTypography.sans(15)).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+      Text(link.domain).font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.subtleForeground)
+        .lineLimit(1).frame(maxWidth: 120, alignment: .trailing).fixedSize(horizontal: true, vertical: false)
+    }.settingsRow()
+  }
+
+  private func pill(_ title: String, primary: Bool = false, action: @escaping () -> Void) -> some View {
+    Button(action: action) { Text(title).frame(maxWidth: .infinity) }.buttonStyle(PillStyle(selected: primary))
+  }
+
+  private func destinationName(of link: SavedLink) -> String {
+    link.groupId.flatMap { id in model.groups.first { $0.id == id }?.name } ?? "Your links"
+  }
+
+  /// "Week 41", with the year when it isn't this one.
+  private func savedWeek(_ link: SavedLink) -> String {
+    let year = Week.calendar.component(.yearForWeekOfYear, from: Week.date(link.savedOn))
+    let current = Week.calendar.component(.yearForWeekOfYear, from: Date())
+    return Week.label(link.savedOn) + (year == current ? "" : " of \(year)")
   }
 }
