@@ -22,7 +22,6 @@ public final class AccountStore {
   public var conversationFocused = true
   public var openConversationID: String?
   public var active = false
-  public var pulseInterval: Duration { openConversationID == nil || !conversationFocused ? .seconds(15) : .seconds(4) }
   @ObservationIgnored private let api: any FeatureAPI
   @ObservationIgnored private var feeds: [String: FeedWeekModel] = [:]
   @ObservationIgnored private var profiles: [String: ProfileModel] = [:]
@@ -44,6 +43,7 @@ public final class AccountStore {
   @ObservationIgnored private var activityVersion: String?
   @ObservationIgnored private var legacyPulse = false
   @ObservationIgnored private var pulsing = false
+  @ObservationIgnored private var pulseQueued = false
   @ObservationIgnored private var generation = 0
   @ObservationIgnored private var accepted = true
   @ObservationIgnored private var summaryOnly: Bool
@@ -326,10 +326,19 @@ public final class AccountStore {
     try? await refreshDiscovery("")
   }
   public func pulse() async throws {
-    guard active, accepted, sessionVerified, !pulsing else { return }
+    guard active, accepted, sessionVerified else { return }
+    if pulsing { pulseQueued = true; return }
     pulsing = true
     let version = generation
-    defer { if version == generation { pulsing = false } }
+    defer {
+      if version == generation {
+        pulsing = false
+        if pulseQueued {
+          pulseQueued = false
+          Task { try? await self.pulse() }
+        }
+      }
+    }
     do {
       let messagesChanged: Bool
       let activityChanged: Bool

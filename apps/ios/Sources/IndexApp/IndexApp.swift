@@ -99,21 +99,15 @@ struct RootView: View {
         .task(id: "\(store.openConversationID ?? "")-\(app.navigation.sheet == nil)-\(app.sessionReady)") {
           store.conversationFocused = app.navigation.sheet == nil
           await NotificationController.shared.setActive(app: app, foreground: scenePhase == .active)
+          await app.publishLivePresence()
           guard app.sessionReady, scenePhase == .active, store.conversationFocused, let id = store.openConversationID else { return }
           do { try await store.refreshConversation(id) } catch { app.handleSessionError(error) }
         }
-        .task(id: "\(scenePhase)-\(app.sessionReady)") {
+        .task(id: "\(scenePhase)-\(app.sessionReady)-\(app.session.generation)") {
           store.active = scenePhase == .active
           guard store.active, app.sessionReady else { return }
           await app.refreshPulse()
-          var lastPulse = ContinuousClock.now
-          while !Task.isCancelled {
-            do { try await Task.sleep(for: .seconds(1)) } catch { return }
-            if ContinuousClock.now - lastPulse >= store.pulseInterval {
-              await app.refreshPulse()
-              lastPulse = .now
-            }
-          }
+          await app.followLiveUpdates()
         }
       }
     }

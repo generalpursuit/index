@@ -69,6 +69,23 @@ struct APIClientTests {
     await #expect(throws: APIError.self) { let _: Success = try await client.request("/test", method: "POST", body: [:]) }
     #expect(try credentials.read() == "bob.signed")
   }
+  @Test func liveTicketsStayInTheVerifiedAccountAndNeverExposeBearerCredentialsInURLs() async throws {
+    let client = try make(MemoryCredentials("alice.signed"))
+    HTTPStub.handler = { _ in
+      (200, [:], Data(#"{"user":{"id":"alice","name":"Alice","email":"alice@example.com","emailVerified":true}}"#.utf8))
+    }
+    #expect(try await client.restore()?.user.id == "alice")
+    for address in ["wss://elsewhere.example/live/alice?ticket=one", "ws://api.example.com/live/alice?ticket=one", "wss://api.example.com/live/bob?ticket=one", "wss://user:secret@api.example.com/live/alice?ticket=one"] {
+      HTTPStub.handler = { request in
+        #expect(request.url?.path == "/api/v1/me/live/ticket")
+        #expect(request.httpMethod == "POST")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer alice.signed")
+        #expect(request.url?.query == nil)
+        return (200, [:], try JSONSerialization.data(withJSONObject: ["url": address]))
+      }
+      await #expect(throws: APIError.self) { try await client.liveConnection() }
+    }
+  }
   @Test func snapshotsAreAccountScopedAndWritesInvalidateAffectedResources() async throws {
     let client = try make(MemoryCredentials("alice.signed"))
     HTTPStub.handler = { _ in (200, [:], Data(#"{"success":true}"#.utf8)) }

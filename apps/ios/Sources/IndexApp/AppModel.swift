@@ -31,6 +31,7 @@ final class AppModel {
   var restoring = true
   var sessionError: String?
   private var checkingSession = false
+  @ObservationIgnored private var liveSocket: URLSessionWebSocketTask?
   var sessionReady: Bool { store?.sessionVerified == true && !session.provisional }
   /// Set once the API rejects this release; the app cannot continue until it is updated.
   var updateRequired = false
@@ -220,6 +221,8 @@ final class AppModel {
     clearPrivateFeatures()
   }
   private func clearPrivateFeatures() {
+    liveSocket?.cancel(with: .normalClosure, reason: nil)
+    liveSocket = nil
     store?.clear()
     store = nil
     sessionError = nil
@@ -253,6 +256,66 @@ final class AppModel {
     let generation = session.generation
     do { try await store.pulse() }
     catch { if generation == session.generation { handleSessionError(error) } }
+  }
+  func publishLivePresence() async {
+    guard let socket = liveSocket else { return }
+    let conversation = store?.active == true && store?.conversationFocused == true ? store?.openConversationID : nil
+    let body: [String: Any] = ["type": "presence", "conversationId": conversation as Any? ?? NSNull()]
+    if let data = try? JSONSerialization.data(withJSONObject: body), let message = String(data: data, encoding: .utf8) {
+      try? await socket.send(.string(message))
+    }
+  }
+  /// Handles one hint; false once the account changed.
+  private func receiveLive(_ socket: URLSessionWebSocketTask, generation: Int) async throws -> Bool {
+    let message = try await socket.receive()
+    guard generation == session.generation else { return false }
+    if case .string(let text) = message, text == "{\"type\":\"change\"}" { await refreshPulse() }
+    return true
+  }
+  private func keepLive(_ socket: URLSessionWebSocketTask, generation: Int) async throws {
+    while !Task.isCancelled {
+      try await Task.sleep(for: .seconds(30))
+      guard generation == session.generation else { return }
+      if store?.openConversationID != nil, store?.conversationFocused == true { await publishLivePresence() }
+      else { try await socket.send(.string("ping")) }
+    }
+  }
+  /// Runs only while foregrounded. Idle keepalives touch the connection hub, never Postgres.
+  func followLiveUpdates() async {
+    guard let api else { return }
+    let generation = session.generation
+    var delay: Double = 2
+    while !Task.isCancelled, generation == session.generation, sessionReady {
+      do {
+        let socket = try await api.liveConnection()
+        guard !Task.isCancelled, generation == session.generation else { socket.cancel(with: .normalClosure, reason: nil); return }
+        liveSocket = socket
+        await publishLivePresence()
+        defer {
+          socket.cancel(with: .normalClosure, reason: nil)
+          if liveSocket === socket { liveSocket = nil }
+        }
+        try await withTaskCancellationHandler {
+          // The hub greets every accepted connection. Until then the upgrade can still fail,
+          // so only a greeted connection resets the backoff.
+          guard try await receiveLive(socket, generation: generation) else { return }
+          delay = 2
+          try await withThrowingTaskGroup(of: Void.self) { group in
+            group.addTask { while !Task.isCancelled, try await self.receiveLive(socket, generation: generation) {} }
+            group.addTask { try await self.keepLive(socket, generation: generation) }
+            defer { group.cancelAll(); socket.cancel(with: .normalClosure, reason: nil) }
+            try await group.next()
+          }
+        } onCancel: { socket.cancel(with: .normalClosure, reason: nil) }
+      } catch {
+        guard !Task.isCancelled, generation == session.generation else { return }
+        if case APIError.server(let status, _) = error, [404, 501].contains(status) { return }
+        if case APIError.unauthenticated = error { handleSessionError(error); return }
+        if case APIError.emailNotVerified = error { handleSessionError(error); return }
+      }
+      do { try await Task.sleep(for: .seconds(delay * Double.random(in: 0.8...1.2))) } catch { return }
+      delay = min(900, delay * 2)
+    }
   }
 }
 

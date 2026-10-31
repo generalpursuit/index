@@ -141,6 +141,21 @@ public actor APIClient {
       throw error
     }
   }
+  /// A one-use ticket crosses the upgrade boundary; signed bearer credentials never enter URLs.
+  public func liveConnection() async throws -> URLSessionWebSocketTask {
+    struct Ticket: Decodable, Sendable { let url: URL }
+    let version = generation
+    let ticket: Ticket = try await request("/me/live/ticket", method: "POST", body: [:])
+    guard version == generation else { throw CancellationError() }
+    let expectedScheme = baseURL.scheme == "https" ? "wss" : "ws"
+    guard ticket.url.scheme == expectedScheme, ticket.url.host == baseURL.host,
+      (ticket.url.port ?? (expectedScheme == "wss" ? 443 : 80)) == (baseURL.port ?? (baseURL.scheme == "https" ? 443 : 80)),
+      ticket.url.user == nil, ticket.url.password == nil, ticket.url.fragment == nil,
+      let accountID, ticket.url.path == "/live/\(accountID)" else { throw APIError.invalidResponse }
+    let socket = session.webSocketTask(with: ticket.url)
+    socket.resume()
+    return socket
+  }
   /// Uploads one file with form fields and decodes the JSON answer. Uploads change no cached
   /// resource, so nothing is invalidated.
   public func upload<T: Decodable & Sendable>(
@@ -164,7 +179,7 @@ public actor APIClient {
   /// Resource ownership is the single home for transport invalidation. Housekeeping
   /// never invalidates content; mutations affecting membership invalidate those lists.
   private static func affectedResources(_ path: String) -> [String] {
-    if path.hasPrefix("/me/notifications/") || path.hasSuffix("/read") { return [] }
+    if path.hasPrefix("/me/notifications/") || path.hasPrefix("/me/live/") || path.hasSuffix("/read") { return [] }
     if path.hasPrefix("/conversations") { return ["/conversations"] }
     if path.hasPrefix("/links") || path.hasPrefix("/comments") {
       return ["/links", "/feed", "/profiles", "/me/profile", "/groups", "/me/activity"]
