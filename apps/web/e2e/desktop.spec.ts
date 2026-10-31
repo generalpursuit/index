@@ -111,8 +111,11 @@ test("desktop restricted bearer survives interruption, verifies, and is erased a
       newPassword: "recovered-bearer-password",
     },
   });
-  await page.getByRole("link", { name: "Settings", exact: true }).first().click();
-  await expect(page).toHaveURL(/login/);
+  // The account socket carries the revocation: without a protected read, the app erases the
+  // bearer and stays on this public profile as a visitor.
+  await expect(page.getByText("Sign in to follow", { exact: true })).toBeVisible();
   await expect.poll(() => desktop.token).toBeNull();
+  await page.goto("/settings");
+  await expect(page).toHaveURL(/login/);
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });

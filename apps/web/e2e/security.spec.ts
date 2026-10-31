@@ -235,6 +235,8 @@ test("a cookie session revoked by recovery leaves the app on its next protected 
   page,
   request,
 }) => {
+  // A socket that never delivers the revocation hint; the read must still end the session.
+  await page.routeWebSocket(/\/live\//, () => {});
   await page.goto("/login");
   await signIn(page);
   await request.post(apiURL + "/api/auth/security/request-reset", {

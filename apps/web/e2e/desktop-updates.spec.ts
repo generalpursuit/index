@@ -121,7 +121,8 @@ test("web identifies its release and reloads when the API requires an update", a
   await page.reload();
   const dialog = page.getByRole("alertdialog", { name: "Update Index" });
   await expect(dialog).toContainText("no longer supported");
-  await page.unroute("**/rpc/v1/**");
+  // The app keeps starting behind the dialog; let its in-flight reads get their 426 first.
+  await page.unrouteAll({ behavior: "wait" });
   await dialog.getByRole("button", { name: "Reload" }).click();
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
   await expect(dialog).toHaveCount(0);
