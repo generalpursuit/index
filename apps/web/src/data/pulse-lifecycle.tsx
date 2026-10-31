@@ -6,6 +6,9 @@ import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary"
 import { isMenuBar } from "@/lib/desktop";
 import { editRevision, hasEdits, viewerPath } from "./edits";
 import { createPulseDriver, mergeNewestPage, type Pulse } from "./pulse";
+import { connectLive } from "./live";
+import { sessionOptions } from "@/lib/session";
+import { onAccountClear } from "@/lib/account-boundary";
 import {
   conversationsOptions,
   conversationOptions,
@@ -47,7 +50,6 @@ export function PulseLifecycle() {
       legacyVersion = 0;
     const driver = createPulseDriver({
       visible: () => !document.hidden,
-      focusedConversation: () => !!openConversation.current && document.hasFocus(),
       request: async () => {
         try {
           if (!legacy) {
@@ -157,6 +159,15 @@ export function PulseLifecycle() {
       },
     });
     clock.current = driver;
+    const stopLive = connectLive({
+      ticket: () => api.live.ticket.call(),
+      changed: () => void driver.tick(),
+      revalidate: () => cache.fetchQuery({ ...sessionOptions, staleTime: 0 }),
+    });
+    const stopAccount = onAccountClear(() => {
+      stopLive();
+      driver.stop();
+    });
     void driver.tick();
     const refresh = () => void driver.tick();
     window.addEventListener("focus", refresh);
@@ -164,6 +175,8 @@ export function PulseLifecycle() {
     document.addEventListener("visibilitychange", refresh);
     return () => {
       driver.stop();
+      stopLive();
+      stopAccount();
       clock.current = undefined;
       window.removeEventListener("focus", refresh);
       window.removeEventListener("index:pulse", refresh);

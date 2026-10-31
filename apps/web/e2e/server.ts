@@ -10,7 +10,59 @@ import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { clientHeader } from "../../server/src/client-version.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
+import type { Context } from "../../../packages/api/src/context.ts";
+import * as liveRepository from "../../../packages/api/src/features/live/repository.ts";
 const database = await createTestDatabase();
+type LivePeer = {
+  userId: string;
+  sessionId: string;
+  expiresAt: number;
+  conversationId: string | null;
+  activeUntil: number;
+};
+const peers = new Set<import("bun").ServerWebSocket<LivePeer>>();
+const tickets = new Map<string, LivePeer & { redeemUntil: number }>();
+const live: NonNullable<Context["live"]> = {
+  async ticket(session) {
+    const ticket = crypto.randomUUID();
+    tickets.set(ticket, {
+      userId: session.user.id,
+      sessionId: session.session.id,
+      expiresAt: new Date(session.session.expiresAt).getTime(),
+      redeemUntil: Date.now() + 60_000,
+      conversationId: null,
+      activeUntil: 0,
+    });
+    return { url: `${apiURL.replace(/^http/, "ws")}/live/${session.user.id}?ticket=${ticket}` };
+  },
+  async active(userId, sessionId, conversationId) {
+    for (const peer of peers)
+      if (peer.data.userId === userId && peer.data.sessionId === sessionId) {
+        peer.data.conversationId = conversationId;
+        peer.data.activeUntil = Date.now() + 90_000;
+      }
+  },
+  async isActive(userId, sessionId, conversationId) {
+    return [...peers].some(
+      ({ data }) =>
+        data.userId === userId &&
+        data.sessionId === sessionId &&
+        data.expiresAt > Date.now() &&
+        data.activeUntil > Date.now() &&
+        data.conversationId === conversationId,
+    );
+  },
+};
+async function flushLive() {
+  for (const row of await liveRepository.changes(database.db, 1000)) {
+    for (const peer of peers)
+      if (peer.data.userId === row.userId) {
+        if (row.sessionChanged) peer.close(4001, "Revalidate session");
+        else peer.send('{"type":"change"}');
+      }
+    await liveRepository.acknowledge(database.db, row.userId, row.version);
+  }
+}
 // Isolated public key only; browser notification tests stub the push provider.
 const pushKey = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
   "sign",
@@ -78,14 +130,63 @@ async function seed() {
 let fixture = await seed();
 // Uploaded photos stay in memory, served at `/media/*` like the bucket on the real server.
 const media = memoryMediaStore(apiURL);
-Bun.serve({
+Bun.serve<LivePeer>({
   hostname: "127.0.0.1",
   port: Number(new URL(apiURL).port),
-  async fetch(request) {
+  websocket: {
+    open(peer) {
+      peers.add(peer);
+      peer.send('{"type":"change"}');
+    },
+    close(peer) {
+      peers.delete(peer);
+    },
+    message(peer, frame) {
+      if (peer.data.expiresAt <= Date.now()) {
+        peer.close(4001);
+        return;
+      }
+      if (String(frame) === "ping") {
+        peer.send("pong");
+        return;
+      }
+      try {
+        const value = JSON.parse(String(frame));
+        if (value.type === "presence") {
+          peer.data.conversationId =
+            typeof value.conversationId === "string" ? value.conversationId : null;
+          peer.data.activeUntil = Date.now() + 90_000;
+        }
+      } catch {
+        peer.close(1008);
+      }
+    },
+  },
+  async fetch(request, server) {
     const url = new URL(request.url);
+    if (url.pathname.startsWith("/live/")) {
+      const proof = url.searchParams.get("ticket") ?? "";
+      const ticket = tickets.get(proof);
+      tickets.delete(proof);
+      const origin = request.headers.get("origin");
+      if (origin && ![webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))
+        return new Response(null, { status: 403 });
+      if (
+        !ticket ||
+        ticket.redeemUntil <= Date.now() ||
+        ticket.expiresAt <= Date.now() ||
+        url.pathname !== `/live/${ticket.userId}`
+      )
+        return new Response(null, { status: 401 });
+      return server.upgrade(request, { data: ticket })
+        ? undefined
+        : new Response(null, { status: 400 });
+    }
     let response;
     if (request.method === "OPTIONS") response = new Response(null, { status: 204 });
     else if (url.pathname === "/_test/reset" && request.method === "POST") {
+      for (const peer of peers) peer.close(4001);
+      tickets.clear();
       fixture = await seed();
       response = Response.json(fixture);
     } else if (url.pathname === "/_test/notify" && request.method === "POST") {
@@ -140,6 +241,7 @@ Bun.serve({
         media,
         files,
         notifications,
+        live,
       };
       const result = await rpcHandler.handle(request, { prefix: "/rpc/v1", context });
       const rest = result.matched
@@ -147,6 +249,7 @@ Bun.serve({
         : await apiHandler.handle(request, { prefix: "/api/v1", context });
       response = rest.response ?? new Response("Not found", { status: 404 });
     }
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) await flushLive();
     const headers = new Headers(response.headers);
     const origin = request.headers.get("origin");
     if (origin && [webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))

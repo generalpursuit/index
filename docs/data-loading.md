@@ -24,7 +24,7 @@ Each kind of data refreshes on its own schedule:
 - **On show:** feeds, profiles, groups, posts and discovery refresh when a screen shows them and they are older than 30 seconds.
 - **Stable:** settings and notification preferences refresh when shown and older than five minutes.
 
-The pulse is one cheap request that reports unread counts and a version for the viewer's conversations and activity. Clients request it while visible, about every 15 seconds and every few seconds while a conversation is open and focused, as well as on focus, on foreground and when a notification arrives. They refetch only the lists whose version changed. Hidden windows and backgrounded apps do not poll.
+The pulse reports unread counts and a version for the viewer's conversations and activity. An authenticated account socket carries content-free invalidation hints. Clients reconcile through the pulse while visible on a hint, focus, foreground, reconnect or notification, and refetch only lists whose version changed. There is no periodic database poll. Hidden windows keep no content refresh loop; backgrounded iOS apps close their socket. Reconnects use backoff and reconcile missed events. Connection presence and keepalives remain at the edge.
 
 Clients load what the user is likely to open next: on hover, focus or the start of a press; the main screens once the first screen is idle; and the first page behind a visible control. Prefetching stops when the device asks to save data.
 

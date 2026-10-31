@@ -3,31 +3,27 @@ export type Pulse = {
   activity: { unreadCount: number; version: string };
 };
 
-/** One visible-window clock; overlapping focus, notifications and ticks share the in-flight read. */
+/** One visible-window reconciliation; overlapping focus and connection hints share a read. */
 export function createPulseDriver({
   request,
   visible,
-  focusedConversation,
   changed,
 }: {
   request: () => Promise<Pulse>;
   visible: () => boolean;
-  focusedConversation: () => boolean;
   changed: (pulse: Pulse, messages: boolean, activity: boolean) => Promise<unknown> | void;
 }) {
   let previous: Pulse | undefined,
     running: Promise<void> | undefined,
-    stopped = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const schedule = () => {
-    clearTimeout(timer);
-    if (!stopped) timer = setTimeout(() => void tick(), focusedConversation() ? 3000 : 15_000);
-  };
+    stopped = false,
+    queued = false;
   function tick(): Promise<void> {
     if (stopped) return Promise.resolve();
-    if (running) return running;
+    if (running) {
+      queued = true;
+      return running;
+    }
     if (!visible()) {
-      schedule();
       return Promise.resolve();
     }
     running = (async () => {
@@ -41,10 +37,13 @@ export function createPulseDriver({
         );
         previous = pulse;
       } catch {
-        /* A failed pulse retains readable content and tries again on the next tick. */
+        /* Keep readable content; the next hint, focus or navigation retries reconciliation. */
       } finally {
         running = undefined;
-        schedule();
+        if (queued && !stopped) {
+          queued = false;
+          void tick();
+        }
       }
     })();
     return running;
@@ -53,7 +52,6 @@ export function createPulseDriver({
     tick,
     stop: () => {
       stopped = true;
-      clearTimeout(timer);
     },
   };
 }

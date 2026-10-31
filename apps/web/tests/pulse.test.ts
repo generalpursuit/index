@@ -12,7 +12,6 @@ test("pulse skips hidden windows and unchanged lists, and resumes on focus", asy
   const changes: boolean[][] = [];
   const driver = createPulseDriver({
     visible: () => shown,
-    focusedConversation: () => false,
     request: async () => {
       requests++;
       return answer;
@@ -47,7 +46,6 @@ test("overlapping pulse triggers share one request and account disposal drops a 
   });
   const driver = createPulseDriver({
     visible: () => true,
-    focusedConversation: () => true,
     request: () => {
       requests++;
       return promise;
@@ -84,6 +82,32 @@ test("newest-page refresh keeps loaded history and never duplicates an overlappi
   );
   assert.deepEqual(merged.pageParams, current.pageParams);
   assert.equal(merged.pages[0]!.nextCursor, "a");
+});
+
+test("a change arriving during reconciliation receives a follow-up read without a polling timer", async () => {
+  let release!: (value: Pulse) => void;
+  let requests = 0;
+  const versions: string[] = [];
+  const driver = createPulseDriver({
+    visible: () => true,
+    request: () =>
+      ++requests === 1
+        ? new Promise<Pulse>((resolve) => {
+            release = resolve;
+          })
+        : Promise.resolve(pulse("newer")),
+    changed: (state) => {
+      versions.push(state.messages.version);
+    },
+  });
+  const first = driver.tick();
+  void driver.tick();
+  release(pulse("older"));
+  await first;
+  await Promise.resolve();
+  driver.stop();
+  assert.equal(requests, 2);
+  assert.deepEqual(versions, ["older", "newer"]);
 });
 
 test("newest-page refresh preserves the cursor's ID tie-breaker when messages share a timestamp", () => {

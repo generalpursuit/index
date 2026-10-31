@@ -12,6 +12,7 @@ import {
   deviceStatus,
 } from "./device";
 import { notificationPath } from "./navigation";
+import { setLiveConversation } from "@/data/live";
 export function NotificationLifecycle() {
   const viewer = useViewer(),
     router = useRouter();
@@ -42,7 +43,8 @@ export function NotificationLifecycle() {
         }
         assertCurrentAccount(generation);
         if (disposed) return;
-        await activeConversation(id, expectedRevision);
+        setLiveConversation(id);
+        if (isDesktop) await activeConversation(id, expectedRevision);
         if (isDesktop) {
           const click = await desktopInvoke<{
             id: string;
@@ -66,20 +68,24 @@ export function NotificationLifecycle() {
       }
     }
     void update();
-    const interval = setInterval(() => {
-      if (!document.hidden) void update();
-    }, 15_000);
     const refresh = () => void update();
+    let stopClick: (() => void) | undefined;
+    if (isDesktop)
+      void window.__TAURI__?.event.listen("index:notification-click", refresh).then((stop) => {
+        if (disposed) stop();
+        else stopClick = stop;
+      });
     window.addEventListener("focus", refresh);
     window.addEventListener("blur", refresh);
     document.addEventListener("visibilitychange", refresh);
     return () => {
       disposed = true;
-      clearInterval(interval);
+      stopClick?.();
+      setLiveConversation(null);
       window.removeEventListener("focus", refresh);
       window.removeEventListener("blur", refresh);
       document.removeEventListener("visibilitychange", refresh);
-      void activeConversation(null, cleanupRevision).catch(() => {});
+      if (isDesktop) void activeConversation(null, cleanupRevision).catch(() => {});
     };
   }, [viewer?.id, path, router]);
   return null;

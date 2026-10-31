@@ -50,7 +50,7 @@ export const sessionOptions = queryOptions({
     return result.data ? { user: result.data.user } : null;
   },
   staleTime: 15_000,
-  refetchInterval: 60_000,
+  refetchOnWindowFocus: "always",
   retry: 1,
 });
 export async function requireSession({ location }: { location: { href: string } }) {

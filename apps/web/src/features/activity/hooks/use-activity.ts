@@ -2,7 +2,13 @@ import { pulseKey } from "@/data/pulse-lifecycle";
 import type { Pulse } from "@/data/pulse";
 import { accountMutationOptions } from "@/lib/account-boundary";
 import { activityOptions } from "../queries";
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  skipToken,
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useAPI, useViewer } from "@/hooks/use-api";
 export function useActivity(type?: "comment" | "request" | "mention" | "follow") {
   const api = useAPI(),
@@ -36,7 +42,10 @@ export function useActivity(type?: "comment" | "request" | "mention" | "follow")
 }
 export function useUnread() {
   const viewer = useViewer();
-  const pulse = useQuery<Pulse>({ queryKey: pulseKey(viewer?.id ?? "anonymous"), enabled: false });
+  const pulse = useQuery<Pulse>({
+    queryKey: pulseKey(viewer?.id ?? "anonymous"),
+    queryFn: skipToken,
+  });
   return {
     activity: pulse.data?.activity.unreadCount ?? 0,
     messages: pulse.data?.messages.unreadCount ?? 0,
