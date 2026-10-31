@@ -62,7 +62,8 @@ export function findSentFile(
   );
 }
 /**
- * Forgets a batch of staged files nobody sent within a day, returning their object keys. The
+ * Forgets staged files older than two days; sending rejects them after one day. The margin
+ * separates deletion from valid sends. Returns their object keys. The
  * outer `message_id is null` is rechecked on rows a concurrent send just claimed, so a file
  * that was sent meanwhile is never taken.
  */
@@ -70,7 +71,7 @@ export function claimStagedFiles(db: QueryDatabase, limit: number) {
   const claimed = db.$with("claimed_files", { objectKey: sql<string>`object_key`.as("object_key") })
     .as(sql`
  delete from message_files where message_id is null and id in (
-   select id from message_files where message_id is null and created_at < now() - interval '1 day'
+   select id from message_files where message_id is null and created_at < now() - interval '2 days'
    order by created_at limit ${limit}
  ) returning object_key
  `);

@@ -5,7 +5,7 @@ export interface PushConfig extends APNsEnvironment, WebPushEnvironment {
   NOTIFICATIONS_ENABLED?: string;
 }
 
-// Worker bindings are immutable. Validate once per binding object, shared by API and cron.
+// Worker bindings are immutable. Validate once per binding object, shared by API and delivery.
 const configurations = new WeakMap<PushConfig, ReturnType<typeof configure>>();
 async function configure(env: PushConfig) {
   const enabled = env.NOTIFICATIONS_ENABLED === "true";

@@ -4,7 +4,7 @@ Better Auth owns password hashing and signed sessions. [security-plugin.ts](../p
 
 ## Sessions
 
-Unverified accounts, including legacy accounts, receive restricted sessions. Get-session, sign-out and verification/correction remain available; application REST/RPC rejects the identity with HTTP 403 and `EMAIL_NOT_VERIFIED`, including otherwise-public reads. Anonymous reads retain normal visibility. Resolve current database session and verification state; cookie session caching is disabled.
+Unverified accounts, including legacy accounts, receive restricted sessions. Get-session, sign-out and verification/correction remain available; application REST/RPC rejects the identity with HTTP 403 and `EMAIL_NOT_VERIFIED`, including otherwise-public reads. Anonymous reads retain normal visibility. Resolve current database session and verification state on API requests; cookie session caching is disabled. Idle clients do not run session-check timers. Live connections use one-use tickets minted after verified authentication, enforce their session expiry before sending hints, and close on committed session revocation. Hints carry no content; subsequent reads still authorize against current database state.
 
 Native clients keep the signed **`set-auth-token` header**, replace it on rotation, and send it as a bearer credential. Never store the unsigned JSON token. Use API-scoped secure storage, erase credentials on expiry/sign-out, and follow the [shared Keychain contract](sharing.md#secure-hostextension-session-boundary) for extensions. Restricted sessions retain their credential while private content clears.
 

@@ -226,7 +226,7 @@ describe("message files", () => {
     assert.equal(reply.replyTo!.hasAttachment, false);
   });
 
-  it("sweeps day-old unsent files and keeps sent and recent ones", async () => {
+  it("sweeps two-day-old unsent files and keeps sent and recent ones", async () => {
     const alice = api.client("alice");
     const c = await chat();
     const kept = await alice.messages.upload({ conversationId: c.id, file: png() });
@@ -235,7 +235,7 @@ describe("message files", () => {
     await alice.messages.send(send(c.id, [kept.id]));
     // The recent file stays as uploaded, so only its age protects it.
     await api.postgres.query(
-      "update message_files set created_at = now() - interval '2 days' where id in ($1, $2)",
+      "update message_files set created_at = now() - interval '49 hours' where id in ($1, $2)",
       [kept.id, abandoned.id],
     );
     const before = await api.db.select().from(messageFiles);
@@ -246,5 +246,21 @@ describe("message files", () => {
     assert.equal(files.keys().includes(keyOf(abandoned.id)), false);
     assert.equal(files.keys().includes(keyOf(kept.id)), true);
     assert.equal(files.keys().includes(keyOf(recent.id)), true);
+  });
+  it("rejects expired staged files before the janitor while preserving an already committed retry", async () => {
+    const alice = api.client("alice");
+    const c = await chat();
+    const expired = await alice.messages.upload({ conversationId: c.id, file: png() });
+    const sent = await alice.messages.upload({ conversationId: c.id, file: png() });
+    const attempt = send(c.id, [sent.id]);
+    const original = await alice.messages.send(attempt);
+    await api.postgres.query(
+      "update message_files set created_at=now()-interval '25 hours' where id in ($1,$2)",
+      [expired.id, sent.id],
+    );
+    await assert.rejects(alice.messages.send(send(c.id, [expired.id])), { code: "NOT_FOUND" });
+    await sweepStagedFiles(api.db, files);
+    assert.equal((await api.db.select().from(messageFiles)).length, 2);
+    assert.equal((await alice.messages.send(attempt)).id, original.id);
   });
 });

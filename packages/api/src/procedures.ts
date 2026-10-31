@@ -31,6 +31,28 @@ export const requireAuth = os.$context<Context>().middleware(async ({ context, n
   });
 });
 
+/** Contract methods classify operations even when RPC transports reads with HTTP POST. */
+export const scheduleMutation = os
+  .$context<Context>()
+  .middleware(async ({ context, procedure, path, next }) => {
+    const housekeeping =
+      path[0] === "live" ||
+      (path[0] === "notifications" && ["active", "poll", "ack", "resolve"].includes(path[1] ?? ""));
+    if (
+      !context.dispatch ||
+      !context.session?.user.emailVerified ||
+      procedure["~orpc"].route.method === "GET" ||
+      housekeeping
+    )
+      return next();
+    const complete = await context.dispatch();
+    try {
+      return await next();
+    } finally {
+      complete();
+    }
+  });
+
 export function unwrapResult<T>(result: Result<T, ApplicationError>): T {
   return result.match(
     (value) => value,

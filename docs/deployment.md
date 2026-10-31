@@ -24,7 +24,7 @@ console.log(`VAPID_PUBLIC_KEY=${raw.toString("base64url")}\nVAPID_PRIVATE_KEY=${
 '
 ```
 
-Browsers treat `http://localhost` as secure, and development runs the one-minute cron locally; it delivers notifications and sweeps unsent message files. Leave the `APNS_*` inputs unset: Apple push needs a real Apple key and a signed app with the push entitlement, so a local stage reports it unavailable.
+Browsers treat `http://localhost` as secure. Development uses the same durable delivery clock and account sockets as releases; the daily cron cleans old notification history and unsent message files. Leave the `APNS_*` inputs unset: Apple push needs a real Apple key and a signed app with the push entitlement, so a local stage reports it unavailable.
 
 From the root, `bun dev` runs Alchemy with web on port 3000 and API on 8080, supplying database, auth URL, media, message-file and frontend API bindings. Use a personal stage for development; never run Alchemy development against a release stage. [Browser fixtures](../apps/web/README.md#checks) provide a disposable backend for tests without these cloud credentials.
 

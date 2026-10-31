@@ -199,7 +199,7 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
     ? sql`(select count(*) from message_files f
    where f.id in (select value::uuid from jsonb_array_elements_text(${fileIds}))
    and f.uploader_id=${actorId} and f.conversation_id=${input.conversationId}::uuid
-   and f.message_id is null) = jsonb_array_length(${fileIds})`
+   and f.message_id is null and f.created_at > now() - interval '1 day') = jsonb_array_length(${fileIds})`
     : sql`true`;
   // Compared as uuid[], so the IDs' letter case never matters.
   const requestedFiles = input.fileIds.length

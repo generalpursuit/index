@@ -66,6 +66,15 @@ jobs:
           RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
           AUTH_EMAIL_FROM: ${{ vars.AUTH_EMAIL_FROM }}
           AUTH_TRUSTED_ORIGINS: ${{ vars.AUTH_TRUSTED_ORIGINS }}
+          NOTIFICATIONS_ENABLED: ${{ vars.NOTIFICATIONS_ENABLED }}
+          VAPID_PUBLIC_KEY: ${{ vars.VAPID_PUBLIC_KEY }}
+          VAPID_SUBJECT: ${{ vars.VAPID_SUBJECT }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          APNS_KEY_ID: ${{ vars.APNS_KEY_ID }}
+          APNS_TEAM_ID: ${{ vars.APNS_TEAM_ID }}
+          APNS_TOPIC: ${{ vars.APNS_TOPIC }}
+          APNS_ENVIRONMENT: ${{ vars.APNS_ENVIRONMENT }}
+          APNS_PRIVATE_KEY: ${{ secrets.APNS_PRIVATE_KEY }}
         run: bun run deploy --stage "$DEPLOY_STAGE" --yes
       - name: Verify the deployed application
         working-directory: packages/infra

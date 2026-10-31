@@ -31,7 +31,7 @@ Comments are plain text on accessible originals. Authors can edit while they ret
 
 Links are grouped by their server-assigned `savedOn` date, in UTC Monday weeks. Starring, commenting or editing does not create a new save or move a link to another week.
 
-Most lists use opaque `(createdAt, id)` keyset cursors; inboxes use `(updatedAt, id)` and should refresh their first page when polling. Weekly indexes and people searches have their own cursors in the generated contracts. Preserve cursor precision and recheck authorization on every page.
+Most lists use opaque `(createdAt, id)` keyset cursors; inboxes use `(updatedAt, id)` and refresh their first page after a live invalidation. Weekly indexes and people searches have their own cursors in the generated contracts. Preserve cursor precision and recheck authorization on every page.
 
 Neon HTTP does not provide interactive transactions. Multi-write invariants use atomic SQL statements/functions: relationship/activity changes, group deletion, message/inbox updates and share receipts must succeed together. Checked-in migrations include custom triggers and functions; follow the [migration rules](deployment.md#database-and-recovery).
 

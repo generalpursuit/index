@@ -1,4 +1,5 @@
 import { notificationsContract } from "./features/notifications/contract";
+import { liveContract } from "./features/live/contract";
 import { routesContract } from "./features/routes/contract";
 import { activityContract } from "./features/activity/contract";
 import { messagesContract } from "./features/messages/contract";
@@ -23,6 +24,7 @@ export const appContract = {
     .input(z.strictObject({}).optional())
     .output(z.literal("OK")),
   notifications: notificationsContract,
+  live: liveContract,
   routes: routesContract,
   links: linksContract,
   groups: groupsContract,

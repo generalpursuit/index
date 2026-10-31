@@ -25,7 +25,7 @@ export async function createTestDatabase() {
 
   async function reset() {
     await client.exec(
-      'TRUNCATE TABLE "user", conversations, short_routes, auth_throttle, auth_challenge CASCADE',
+      'TRUNCATE TABLE "user", conversations, short_routes, auth_throttle, auth_challenge, live_changes CASCADE',
     );
     await db.insert(user).values([
       {

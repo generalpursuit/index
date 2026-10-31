@@ -1,5 +1,6 @@
 import { notificationsRouter } from "../features/notifications/router";
-import { requireVerifiedSession } from "../procedures";
+import { liveRouter } from "../features/live/router";
+import { requireVerifiedSession, scheduleMutation } from "../procedures";
 import { routesRouter } from "../features/routes/router";
 import { activityRouter } from "../features/activity/router";
 import { messagesRouter } from "../features/messages/router";
@@ -19,13 +20,17 @@ import { feedRouter } from "../features/feed/router";
 import { discoveryRouter } from "../features/discovery/router";
 import { importsRouter } from "../features/imports/router";
 
-const api = implement(appContract).$context<Context>().use(requireVerifiedSession);
+const api = implement(appContract)
+  .$context<Context>()
+  .use(requireVerifiedSession)
+  .use(scheduleMutation);
 
 export const appRouter = api.router({
   healthCheck: api.healthCheck.handler(() => {
     return "OK";
   }),
   notifications: notificationsRouter,
+  live: liveRouter,
   routes: routesRouter,
   links: linksRouter,
   groups: groupsRouter,

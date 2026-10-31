@@ -6,6 +6,13 @@ import type { FileStore } from "./features/messages/files";
 import type { MediaStore } from "./features/profiles/media";
 
 export type Context = {
+  /** Register recovery before a domain mutation; the returned callback schedules its drain. */
+  dispatch?: () => Promise<() => void>;
+  live?: {
+    ticket: (session: Session) => Promise<{ url: string }>;
+    active: (userId: string, sessionId: string, conversationId: string | null) => Promise<void>;
+    isActive: (userId: string, sessionId: string, conversationId: string) => Promise<boolean>;
+  };
   notifications?: Omit<NotificationCapabilities, "sessionId">;
   session: Session | null;
   db: QueryDatabase;

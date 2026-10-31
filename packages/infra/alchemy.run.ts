@@ -61,12 +61,14 @@ export const server = Cloudflare.Worker(
       name: release?.serverName,
       domain: release?.apiDomain,
       main: "../../apps/server/src/index.ts",
-      crons: ["* * * * *"],
+      crons: ["0 3 * * *"],
       // Node.js APIs are on by default from 2026-08-04; workerd warns if nodejs_compat is named.
       compatibility: {
         date: "2026-08-31",
       },
       env: {
+        OUTBOX_CLOCK: Cloudflare.DurableObject("OutboxClock"),
+        ACCOUNT_HUB: Cloudflare.DurableObject("AccountHub"),
         ...databaseBindings,
         CORS_ORIGIN: release?.webURL ?? Config.String("CORS_ORIGIN"),
         BETTER_AUTH_SECRET: authSecret,

@@ -27,7 +27,13 @@ export const notificationsContract = {
     .output(successSchema),
   poll: route("POST", "/poll")
     .input(deviceInput)
-    .output(z.object({ items: z.array(z.object({ alert: alertSchema, lease: z.uuid() })) })),
+    .output(
+      z.object({
+        items: z.array(z.object({ alert: alertSchema, lease: z.uuid() })),
+        hasMore: z.boolean(),
+        retryAfterSeconds: z.number().int().nonnegative().nullable(),
+      }),
+    ),
   ack: route("POST", "/ack")
     .input(deviceInput.extend({ id: z.uuid(), lease: z.uuid() }))
     .output(successSchema),

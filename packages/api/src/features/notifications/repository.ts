@@ -1,5 +1,5 @@
 import { ORPCError } from "@orpc/server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, notInArray, sql } from "drizzle-orm";
 import {
   notificationDevices as devices,
   notificationPreferences as preferences,
@@ -198,6 +198,21 @@ export async function renewLease(db: QueryDatabase, job: Claim) {
     )
     .returning({ id: deliveries.id });
   return rows.length > 0;
+}
+/** A reconnect must recover existing leases without introducing an idle desktop poll. */
+export async function nextDeviceAttempt(db: QueryDatabase, deviceId: string, claimed: string[]) {
+  const [row] = await db
+    .select({ at: sql<Date | string | null>`min(${deliveries.nextAttemptAt})` })
+    .from(deliveries)
+    .where(
+      and(
+        eq(deliveries.deviceId, deviceId),
+        eq(deliveries.state, "pending"),
+        sql`${deliveries.attempts} < 8`,
+        claimed.length ? notInArray(deliveries.id, claimed) : undefined,
+      ),
+    );
+  return row?.at ? Math.max(0, Math.ceil((new Date(row.at).getTime() - Date.now()) / 1000)) : null;
 }
 export async function finish(
   db: QueryDatabase,

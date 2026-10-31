@@ -14,6 +14,8 @@ export type AppOptions = {
   auth: AuthFactory;
   createContext: (request: Request, backgroundTask: BackgroundTask) => Promise<ApiContext>;
   readMedia: (key: string) => Promise<Response | null>;
+  beginMutation?: () => Promise<() => Promise<void>>;
+  connect?: (userId: string, request: Request) => Promise<Response>;
 };
 
 // Both transports' upload routes. The RPC matcher ignores the method, and the REST matcher
@@ -24,7 +26,8 @@ const uploadPath = /^\/(?:rpc(?:\/v1)?\/messages\/upload|api\/v1\/conversations\
 /** Mount the HTTP application; the Worker entrypoint supplies runtime services. */
 export function createApp(options: AppOptions) {
   const app = new Hono();
-  app.use(logger());
+  // Never log the one-use WebSocket ticket in its URL.
+  app.use("/*", (c, next) => (c.req.path.startsWith("/live/") ? next() : logger()(c, next)));
   // Members share arbitrary files; a response is only ever the type it declares.
   app.use("/*", async (c, next) => {
     await next();
@@ -41,7 +44,14 @@ export function createApp(options: AppOptions) {
     }),
   );
   app.use("/*", clientVersionGate);
-  mountAuthentication(app, options.auth);
+  app.get("/live/:account", (c) => {
+    const origin = c.req.header("Origin");
+    if (origin && !options.origins.includes(origin)) return c.body(null, 403);
+    if (!options.connect || c.req.header("Upgrade")?.toLowerCase() !== "websocket")
+      return c.notFound();
+    return options.connect(c.req.param("account"), c.req.raw);
+  });
+  mountAuthentication(app, options.auth, options.beginMutation);
   // The schema's file limit applies only after a whole upload is in memory, so the body is
   // capped first. The extra megabyte allows for multipart framing.
   const capUpload = bodyLimit({

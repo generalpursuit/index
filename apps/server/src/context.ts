@@ -6,6 +6,7 @@ import { r2FileStore } from "./files";
 import { r2MediaStore } from "./media";
 import { getDb } from "./services";
 import { createAuth } from "./services";
+import { beginDispatch, liveServices } from "./live/services";
 
 export async function createContext(
   request: Request,
@@ -20,6 +21,11 @@ export async function createContext(
   return {
     db,
     session,
+    live: liveServices(request),
+    dispatch: async () => {
+      const finish = await beginDispatch();
+      return () => backgroundTask(finish());
+    },
     notifications: await notificationCapabilities(ENV),
     fetchPage,
     fetchImport: (url, init) => fetch(url, init),

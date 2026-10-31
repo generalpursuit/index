@@ -383,6 +383,47 @@ describe("durable notifications", () => {
       "delivered",
     );
   });
+  it("returns a deadline for interrupted desktop leases and no timer for an empty queue", async () => {
+    await enroll("bob", secret("b"), "desktop");
+    await message();
+    const input = { installation: secret("b"), sessionId: "session-bob" };
+    const first = await api("bob").notifications.poll(input);
+    assert.ok(first.items.length > 0);
+    assert.equal(first.retryAfterSeconds, null);
+    const interrupted = await api("bob").notifications.poll(input);
+    assert.equal(interrupted.items.length, 0);
+    assert.ok(interrupted.retryAfterSeconds! > 0 && interrupted.retryAfterSeconds! <= 121);
+    await due();
+    const recovered = await api("bob").notifications.poll(input);
+    assert.deepEqual(
+      recovered.items.map((item) => item.alert.id).sort(),
+      first.items.map((item) => item.alert.id).sort(),
+    );
+    for (const item of recovered.items)
+      await api("bob").notifications.ack({ ...input, id: item.alert.id, lease: item.lease });
+    const idle = await api("bob").notifications.poll(input);
+    assert.equal(idle.retryAfterSeconds, null);
+    assert.equal(idle.hasMore, false);
+  });
+  it("drains a full discarded desktop batch without waiting for another event", async () => {
+    await enroll("bob", secret("b"), "desktop");
+    const { c } = await message();
+    await api("bob").notifications.updatePreferences({ message: false, follow: false });
+    for (let i = 0; i < 20; i++)
+      await api("alice").messages.send({
+        conversationId: c.id,
+        clientId: crypto.randomUUID(),
+        body: "Muted",
+      });
+    const input = { installation: secret("b"), sessionId: "session-bob" };
+    const first = await api("bob").notifications.poll(input);
+    assert.equal(first.items.length, 0);
+    assert.equal(first.hasMore, true);
+    const rest = await api("bob").notifications.poll(input);
+    assert.equal(rest.items.length, 0);
+    assert.equal(rest.hasMore, false);
+    assert.equal(rest.retryAfterSeconds, null);
+  });
   it("clears queued work when rebinding a proven installation; rejects endpoint theft", async () => {
     await enroll();
     await message();

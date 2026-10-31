@@ -70,14 +70,14 @@ export const notificationsRouter = api.router({
   unregister: api.unregister.handler(({ context, input }) =>
     repo.unregister(context.db, context.actorId, context.session.session.id, input.installation),
   ),
-  active: api.active.handler(async ({ context, input }) =>
-    repo.active(
-      context.db,
-      (await requireDevice(context, input.installation)).id,
-      context.actorId,
-      input.conversationId,
-    ),
-  ),
+  active: api.active.handler(async ({ context, input }) => {
+    const device = await requireDevice(context, input.installation);
+    if (context.live) {
+      await context.live.active(context.actorId, device.sessionId, input.conversationId);
+      return { success: true as const };
+    }
+    return repo.active(context.db, device.id, context.actorId, input.conversationId);
+  }),
   poll: api.poll.handler(async ({ context, input }) => {
     const device = await requireDevice(context, input.installation);
     if (device.kind !== "desktop") throw new ORPCError("BAD_REQUEST");
@@ -85,10 +85,29 @@ export const notificationsRouter = api.router({
     const items = [];
     for (const job of jobs) {
       const result = await repo.prepare(context.db, job.id, device.id);
-      if (result) items.push({ alert: result.alert, lease: job.lease });
+      if (
+        result &&
+        !(
+          result.alert.conversationId &&
+          (await context.live?.isActive(
+            context.actorId,
+            device.sessionId,
+            result.alert.conversationId,
+          ))
+        )
+      )
+        items.push({ alert: result.alert, lease: job.lease });
       else await repo.finish(context.db, job, "discarded", "ineligible");
     }
-    return { items };
+    return {
+      items,
+      hasMore: jobs.length === 20,
+      retryAfterSeconds: await repo.nextDeviceAttempt(
+        context.db,
+        device.id,
+        jobs.map((job) => job.id),
+      ),
+    };
   }),
   ack: api.ack.handler(async ({ context, input }) => {
     const device = await requireDevice(context, input.installation);

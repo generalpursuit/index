@@ -27,14 +27,29 @@ export type DeliveryAdapter = (
   alert: Alert,
 ) => Promise<DeliveryResult>;
 /** Bounded, durable attempts. Provider collapse/tag identifiers use the job UUID on every retry. */
-export async function deliverBatch(db: QueryDatabase, send: DeliveryAdapter, limit = 40) {
-  await repo.cleanup(db);
+export async function deliverBatch(
+  db: QueryDatabase,
+  send: DeliveryAdapter,
+  limit = 40,
+  active?: (userId: string, sessionId: string, conversationId: string) => Promise<boolean>,
+) {
   const jobs = await repo.claim(db, null, limit);
   const deliver = async (job: repo.Claim) => {
     if (!(await repo.renewLease(db, job))) return;
     const prepared = await repo.prepare(db, job.id);
     if (!prepared) {
       await repo.finish(db, job, "discarded", "ineligible");
+      return;
+    }
+    if (
+      prepared.alert.conversationId &&
+      (await active?.(
+        prepared.device.userId,
+        prepared.device.sessionId,
+        prepared.alert.conversationId,
+      ))
+    ) {
+      await repo.finish(db, job, "discarded", "active");
       return;
     }
     let result: DeliveryResult;

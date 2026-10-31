@@ -2,11 +2,17 @@ import { conversationMembers } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
 import { and, eq } from "drizzle-orm";
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { beforeEach, describe, it } from "node:test";
 import { setupApiTests } from "../../testing/api";
+import { liveChanges } from "@index/db/schema/live";
+import { acknowledge } from "../live/repository";
 
 describe("pulse", () => {
   const api = setupApiTests();
+  const previous = new Map<string, string>();
+  beforeEach(() => {
+    previous.clear();
+  });
   const send = (actor: string, conversationId: string, body = "Hello") =>
     api.client(actor).messages.send({ conversationId, clientId: crypto.randomUUID(), body });
   async function pulse(actor: string) {
@@ -15,6 +21,13 @@ describe("pulse", () => {
     assert.equal(state.messages.unreadCount, (await client.messages.unread()).unreadCount);
     assert.equal(state.activity.unreadCount, (await client.activity.list({})).unreadCount);
     assert.deepEqual(await client.pulse.get({}), state);
+    const version = JSON.stringify([state.messages.version, state.activity.version]);
+    const [hint] = await api.db.select().from(liveChanges).where(eq(liveChanges.userId, actor));
+    if (previous.has(actor) && previous.get(actor) !== version) {
+      assert.ok(hint, "Every pulse change must also durably invalidate the affected account");
+    }
+    if (hint) await acknowledge(api.db, actor, hint.version);
+    previous.set(actor, version);
     return state;
   }
   async function conversation(recipientIds = ["bob"]) {
