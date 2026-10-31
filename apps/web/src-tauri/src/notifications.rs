@@ -19,6 +19,10 @@ mod os {
         fn index_notifications_optin(api: *const c_char, value: *const c_char) -> *mut c_char;
         fn index_notifications_free(value: *mut c_char);
         fn index_notifications_request(api: *const c_char, token: *const c_char, path: *const c_char, json: *const c_char) -> *mut c_char;
+        fn index_notifications_socket_open(url: *const c_char, generation: u64);
+        fn index_notifications_socket_close(generation: u64);
+        fn index_notifications_socket_wait(generation: u64) -> *mut c_char;
+        fn index_notifications_socket_send(generation: u64, message: *const c_char);
     }
     fn string(value: *mut c_char) -> Option<String> {
         if value.is_null() { return None; }
@@ -32,6 +36,10 @@ mod os {
         let body = body.and_then(|v| CString::new(v).ok());
         string(unsafe { index_notifications_request(api.as_ptr(), token.as_ptr(), path.as_ptr(), body.as_ref().map_or(std::ptr::null(), |v| v.as_ptr())) })
     }
+    pub fn connect(url: &str, generation: u64) { if let Ok(url) = CString::new(url) { unsafe { index_notifications_socket_open(url.as_ptr(), generation); } } }
+    pub fn disconnect(generation: u64) { unsafe { index_notifications_socket_close(generation); } }
+    pub fn receive(generation: u64) -> String { string(unsafe { index_notifications_socket_wait(generation) }).unwrap_or_else(|| "closed".into()) }
+    pub fn send(generation: u64, message: &str) { if let Ok(message) = CString::new(message) { unsafe { index_notifications_socket_send(generation, message.as_ptr()); } } }
     pub fn init() { unsafe { index_notifications_init(); } }
     pub fn permission(request: bool) -> i32 { unsafe { index_notifications_permission(request) } }
     pub fn epoch() -> u64 { unsafe { index_notifications_epoch() } }
@@ -57,6 +65,10 @@ mod os {
     use std::sync::atomic::{AtomicU64, Ordering};
     static EPOCH: AtomicU64 = AtomicU64::new(0);
     pub fn request(_: &str, _: &str, _: Option<&str>) -> Option<String> { None }
+    pub fn connect(_: &str, _: u64) {}
+    pub fn disconnect(_: u64) {}
+    pub fn receive(_: u64) -> String { "closed".into() }
+    pub fn send(_: u64, _: &str) {}
     pub fn init() {}
     pub fn permission(_: bool) -> i32 { -1 }
     pub fn epoch() -> u64 { EPOCH.load(Ordering::SeqCst) }
@@ -78,6 +90,7 @@ pub fn init() { os::init(); }
 // All transitions and epoch capture share the runtime lock. Never acquire the
 // session lock here: window commands already hold session -> runtime in that order.
 fn advance(state: &mut Runtime) -> u64 {
+    os::disconnect(state.generation);
     state.generation += 1; state.binding = None; state.active = None;
     os::clear();
     state.generation
@@ -184,10 +197,15 @@ async fn stop(preserve_click: Option<bool>, expected_revision: u64) -> Result<()
     Ok(())
 }
 /// Native window lifecycle owns this internal cleanup independently of any webview.
-pub fn clear_active() { runtime().lock().unwrap().active = None; }
+pub fn clear_active() {
+    let mut state = runtime().lock().unwrap(); state.active = None;
+    os::send(state.generation, r#"{"type":"presence","conversationId":null}"#);
+}
 #[tauri::command]
-pub async fn notification_active(conversation_id: Option<String>, expected_revision: u64) -> Result<(), String> {
-    crate::session::with_revision(expected_revision, || { runtime().lock().unwrap().active = conversation_id; })
+pub async fn notification_active(app: tauri::AppHandle, conversation_id: Option<String>, expected_revision: u64) -> Result<(), String> {
+    crate::session::with_revision(expected_revision, || { runtime().lock().unwrap().active = conversation_id; })?;
+    send_presence(&app, false);
+    Ok(())
 }
 #[derive(Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -213,44 +231,93 @@ fn valid_path(path: &str) -> bool {
     let parts: Vec<_> = path.split('/').collect();
     parts.len() == 3 && parts[0].is_empty() && matches!(parts[1], "messages" | "l" | "u") && !parts[2].is_empty() && parts[2].bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')
 }
+fn send_presence(app: &tauri::AppHandle, heartbeat: bool) {
+    let visible = app.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false));
+    let state = runtime().lock().unwrap();
+    let conversation = if visible { state.active.clone() } else { None };
+    if heartbeat && conversation.is_none() { os::send(state.generation, "ping"); }
+    else { os::send(state.generation, &json!({ "type": "presence", "conversationId": conversation }).to_string()); }
+}
+fn valid_socket(address: &str, user_id: &str) -> bool {
+    let Ok(socket) = tauri::Url::parse(address) else { return false; };
+    let Ok(api) = tauri::Url::parse(env!("INDEX_API_SERVER")) else { return false; };
+    let expected = if api.scheme() == "https" { "wss" } else { "ws" };
+    socket.scheme() == expected && socket.host_str() == api.host_str() && socket.port_or_known_default() == api.port_or_known_default()
+      && socket.username().is_empty() && socket.password().is_none() && socket.fragment().is_none()
+      && socket.path() == format!("/live/{}", user_id) && socket.query_pairs().any(|(key, value)| key == "ticket" && !value.is_empty())
+}
+fn handle_socket_event(event: &str, presence: impl FnOnce()) -> bool {
+    // A pong acknowledges our keepalive; replying to it would create a ping/pong loop.
+    if matches!(event, "timeout" | "{\"type\":\"change\"}") { presence(); }
+    event == "{\"type\":\"change\"}"
+}
 async fn run(app: tauri::AppHandle, binding: Binding, generation: u64) {
     let mut seen = std::collections::VecDeque::<String>::new();
+    let mut backoff = 2;
+    let mut poll_backoff = 30;
     while current(generation) {
         let token = match crate::session::session_read().await { Ok(Some(token)) => token, _ => break };
-        if permission(false).await < 2 { break; }
-        if !current(generation) { return; }
-        // Native visibility is authoritative even if the hidden webview stops running JS.
-        let visible = app.get_webview_window("main").is_some_and(|w| w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false));
-        let active = if visible { runtime().lock().unwrap().active.clone() } else { None };
-        let mut presence = body(&binding); presence["conversationId"] = json!(active);
-        let _ = request(&token, "/api/v1/me/notifications/active", Some(presence)).await;
-        let polled = request(&token, "/api/v1/me/notifications/poll", Some(body(&binding))).await;
-        match polled {
+        if permission(false).await < 2 || !current(generation) { break; }
+        let ticket = match request(&token, "/api/v1/me/live/ticket", Some(json!({}))).await {
+            Ok(ticket) => ticket,
             Err(error) if error == "revoked" => break,
-            Ok(result) => {
-                for item in result["items"].as_array().into_iter().flatten() {
-                    if !current(generation) || crate::session::session_read().await.ok().flatten().as_deref() != Some(token.as_str()) { return; }
-                    let alert = &item["alert"];
-                    if alert["recipientId"].as_str() != Some(binding.user_id.as_str()) || !alert["path"].as_str().is_some_and(valid_path) { continue; }
-                    let Some(id) = alert["id"].as_str() else { continue; };
-                    let delivered = if seen.iter().any(|old| old == id) { true } else {
-                        // Capture while this runtime owns delivery, before queueing the
-                        // blocking job. A delayed job must never adopt B's new epoch.
-                        let Some(epoch) = display_epoch(generation) else { return; };
-                        let data = alert.to_string();
-                        tauri::async_runtime::spawn_blocking(move || os::show(&data, epoch)).await.unwrap_or(false)
-                    };
-                    if !current(generation) { return; }
-                    if delivered {
-                        seen.push_back(id.into()); if seen.len() > 256 { seen.pop_front(); }
-                        let mut ack = body(&binding); ack["id"] = json!(id); ack["lease"] = item["lease"].clone();
-                        let _ = request(&token, "/api/v1/me/notifications/ack", Some(ack)).await;
+            _ => { tokio::time::sleep(Duration::from_secs(backoff)).await; backoff = (backoff * 2).min(900); continue; }
+        };
+        let Some(url) = ticket["url"].as_str().filter(|url| valid_socket(url, &binding.user_id)) else { break; };
+        if !current(generation) { return; }
+        os::connect(url, generation);
+        let mut retry_at: Option<std::time::Instant> = None;
+        while current(generation) {
+            let event = if retry_at.is_some_and(|at| at <= std::time::Instant::now()) {
+                retry_at = None; "{\"type\":\"change\"}".to_owned()
+            } else {
+                tauri::async_runtime::spawn_blocking(move || os::receive(generation)).await.unwrap_or_else(|_| "closed".into())
+            };
+            if !current(generation) { return; }
+            if event == "closed" { break; }
+            if !handle_socket_event(&event, || send_presence(&app, true)) { continue; }
+            backoff = 2;
+            let token = match crate::session::session_read().await { Ok(Some(token)) => token, _ => return };
+            let polled = request(&token, "/api/v1/me/notifications/poll", Some(body(&binding))).await;
+            match polled {
+                Err(error) if error == "revoked" => { invalidate_if_current(generation); return; },
+                Ok(result) => {
+                    poll_backoff = 30;
+                    if result["hasMore"] == true || result["items"].as_array().is_some_and(|items| items.len() == 20) { retry_at = Some(std::time::Instant::now()); }
+                    if let Some(seconds) = result["retryAfterSeconds"].as_u64() {
+                        let deadline = std::time::Instant::now() + Duration::from_secs(seconds);
+                        retry_at = Some(retry_at.map_or(deadline, |old| old.min(deadline)));
+                    }
+                    for item in result["items"].as_array().into_iter().flatten() {
+                        if !current(generation) || crate::session::session_read().await.ok().flatten().as_deref() != Some(token.as_str()) { return; }
+                        let alert = &item["alert"];
+                        if alert["recipientId"].as_str() != Some(binding.user_id.as_str()) || !alert["path"].as_str().is_some_and(valid_path) { continue; }
+                        let Some(id) = alert["id"].as_str() else { continue; };
+                        let delivered = if seen.iter().any(|old| old == id) { true } else {
+                            // Capture while this runtime owns delivery, before queueing the
+                            // blocking job. A delayed job must never adopt B's new epoch.
+                            let Some(epoch) = display_epoch(generation) else { return; };
+                            let data = alert.to_string();
+                            tauri::async_runtime::spawn_blocking(move || os::show(&data, epoch)).await.unwrap_or(false)
+                        };
+                        if !current(generation) { return; }
+                        if delivered {
+                            seen.push_back(id.into()); if seen.len() > 256 { seen.pop_front(); }
+                            let mut ack = body(&binding); ack["id"] = json!(id); ack["lease"] = item["lease"].clone();
+                            if request(&token, "/api/v1/me/notifications/ack", Some(ack)).await.is_err() { retry_at = Some(std::time::Instant::now() + Duration::from_secs(120)); }
+                        } else {
+                            retry_at = Some(std::time::Instant::now() + Duration::from_secs(120));
+                        }
                     }
                 }
+                _ => {
+                    retry_at = Some(std::time::Instant::now() + Duration::from_secs(poll_backoff));
+                    poll_backoff = (poll_backoff * 2).min(900);
+                }
             }
-            _ => {} // Network errors retain jobs for leased retry; no content logging.
         }
-        tokio::time::sleep(Duration::from_secs(15)).await;
+        os::disconnect(generation);
+        if current(generation) { tokio::time::sleep(Duration::from_secs(backoff)).await; backoff = (backoff * 2).min(900); }
     }
     invalidate_if_current(generation);
 }
@@ -258,6 +325,19 @@ async fn run(app: tauri::AppHandle, binding: Binding, generation: u64) {
 mod tests {
     use super::*;
     static TEST_RUNTIME: Mutex<()> = Mutex::new(());
+    #[test] fn socket_pongs_cannot_create_a_keepalive_feedback_loop() {
+        let mut incoming = std::collections::VecDeque::from(["timeout", "{\"type\":\"change\"}"]);
+        let mut sent = 0;
+        let mut changes = 0;
+        let mut handled = 0;
+        while let Some(event) = incoming.pop_front() {
+            handled += 1;
+            assert!(handled < 10, "keepalive replies triggered more keepalives");
+            if handle_socket_event(event, || { sent += 1; incoming.push_back("pong"); }) { changes += 1; }
+        }
+        assert_eq!(sent, 2);
+        assert_eq!(changes, 1);
+    }
     #[test] fn notification_paths_cannot_escape_the_resolver() {
         assert!(valid_path("/messages/abc_123"));
         for path in ["//evil.test", "https://evil.test", "/l/a?token=b", "/u/../settings", "/l/a%2Fb"] { assert!(!valid_path(path)); }

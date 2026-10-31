@@ -83,7 +83,7 @@ const config = {
         "default-src": "'self'",
         "script-src": "'self'",
         "style-src": "'self' 'unsafe-inline'",
-        "connect-src": `'self' ipc: http://ipc.localhost ${new URL(process.env.VITE_SERVER_URL).origin}`,
+        "connect-src": `'self' ipc: http://ipc.localhost ${new URL(process.env.VITE_SERVER_URL).origin} ${new URL(process.env.VITE_SERVER_URL).origin.replace(/^http/, "ws")}`,
         "img-src": "'self' data: blob: https:",
         "font-src": "'self' data:",
         "object-src": "'none'",

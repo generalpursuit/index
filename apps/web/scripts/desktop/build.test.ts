@@ -70,7 +70,7 @@ describe("desktop build entrypoint", () => {
         .parse(JSON.parse(captured.args[5]!));
       assert.equal(
         config.app.security.csp["connect-src"],
-        "'self' ipc: http://ipc.localhost http://localhost:3002",
+        "'self' ipc: http://ipc.localhost http://localhost:3002 ws://localhost:3002",
       );
     }));
   test("release channels reject overrides and local/test hooks before launching tools", () =>

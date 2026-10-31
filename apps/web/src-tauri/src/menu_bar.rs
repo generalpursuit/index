@@ -65,7 +65,10 @@ pub fn init(app: &AppHandle) -> Result<bool, String> {
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]
 pub extern "C" fn index_show_main() {
-    if let Some(app) = APP.get() { let _ = show_main(app); }
+    if let Some(app) = APP.get() {
+        let _ = show_main(app);
+        let _ = app.emit("index:notification-click", ());
+    }
 }
 #[cfg(target_os = "macos")]
 #[unsafe(no_mangle)]

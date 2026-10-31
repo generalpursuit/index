@@ -162,6 +162,79 @@ char *index_notifications_optin(const char *api, const char *set) {
 }
 void index_notifications_free(char *value) { free(value); }
 
+// One process-owned socket. Waiting here waits on local events, never on a database poll.
+static NSCondition *liveCondition;
+static NSMutableArray<NSString *> *liveEvents;
+static uint64_t liveGeneration;
+static NSURLSessionWebSocketTask *liveSocket;
+static NSURLSession *liveSession;
+static void live_event(uint64_t generation, NSString *event) {
+  [liveCondition lock];
+  if (generation == liveGeneration) {
+    // Hints are coalescible; never retain unbounded events while the process is suspended.
+    if (liveEvents.count < 8) [liveEvents addObject:event];
+    [liveCondition broadcast];
+  }
+  [liveCondition unlock];
+}
+static void live_receive(NSURLSessionWebSocketTask *socket, uint64_t generation) {
+  [socket receiveMessageWithCompletionHandler:^(NSURLSessionWebSocketMessage *message, NSError *error) {
+    if (error) {
+      [liveCondition lock]; BOOL current = generation == liveGeneration && socket == liveSocket; [liveCondition unlock];
+      if (current) live_event(generation, @"closed");
+      return;
+    }
+    if (message.string) live_event(generation, message.string);
+    [liveCondition lock]; BOOL current = generation == liveGeneration && socket == liveSocket; [liveCondition unlock];
+    if (current) live_receive(socket, generation);
+  }];
+}
+void index_notifications_socket_close(uint64_t generation) {
+  [liveCondition lock];
+  if (generation == liveGeneration) {
+    [liveSocket cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+    [liveSession invalidateAndCancel];
+    liveSocket = nil; liveSession = nil;
+    [liveEvents removeAllObjects]; [liveEvents addObject:@"closed"];
+    [liveCondition broadcast];
+  }
+  [liveCondition unlock];
+}
+void index_notifications_socket_open(const char *address, uint64_t generation) {
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{ liveCondition = [NSCondition new]; liveEvents = [NSMutableArray new]; });
+  [liveCondition lock];
+  [liveSocket cancelWithCloseCode:NSURLSessionWebSocketCloseCodeNormalClosure reason:nil];
+  [liveSession invalidateAndCancel];
+  liveGeneration = generation; [liveEvents removeAllObjects];
+  NSURLSessionConfiguration *config = NSURLSessionConfiguration.ephemeralSessionConfiguration;
+  config.HTTPShouldSetCookies = NO; config.HTTPCookieStorage = nil; config.URLCache = nil;
+  liveSession = [NSURLSession sessionWithConfiguration:config delegate:[NSClassFromString(@"IndexNotificationNetwork") new] delegateQueue:nil];
+  liveSocket = [liveSession webSocketTaskWithURL:[NSURL URLWithString:[NSString stringWithUTF8String:address]]];
+  NSURLSessionWebSocketTask *socket = liveSocket;
+  [socket resume];
+  [liveCondition unlock];
+  live_receive(socket, generation);
+}
+char *index_notifications_socket_wait(uint64_t generation) {
+  [liveCondition lock];
+  if (generation == liveGeneration && !liveEvents.count) [liveCondition waitUntilDate:[NSDate dateWithTimeIntervalSinceNow:30]];
+  NSString *event = generation == liveGeneration ? liveEvents.firstObject : @"closed";
+  if (generation == liveGeneration && liveEvents.count) [liveEvents removeObjectAtIndex:0];
+  char *result = strdup((event ?: @"timeout").UTF8String);
+  [liveCondition unlock];
+  return result;
+}
+void index_notifications_socket_send(uint64_t generation, const char *message) {
+  [liveCondition lock]; NSURLSessionWebSocketTask *socket = generation == liveGeneration ? liveSocket : nil; [liveCondition unlock];
+  if (socket) [socket sendMessage:[[NSURLSessionWebSocketMessage alloc] initWithString:[NSString stringWithUTF8String:message]] completionHandler:^(NSError *error) {
+    if (error) {
+      [liveCondition lock]; BOOL current = generation == liveGeneration && socket == liveSocket; [liveCondition unlock];
+      if (current) live_event(generation, @"closed");
+    }
+  }];
+}
+
 @interface IndexNotificationNetwork : NSObject <NSURLSessionTaskDelegate>
 @end
 @implementation IndexNotificationNetwork
