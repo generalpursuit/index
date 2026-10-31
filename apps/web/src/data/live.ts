@@ -76,7 +76,7 @@ export function connectLive({
         error &&
         typeof error === "object" &&
         "status" in error &&
-        [401, 403, 404, 501].includes(Number(error.status))
+        [401, 403, 404, 426, 501].includes(Number(error.status))
       )
         return;
       schedule();
