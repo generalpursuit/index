@@ -95,6 +95,9 @@ export const server = Cloudflare.Worker(
           Config.withDefault(Redacted.make("")),
         ),
         BETTER_AUTH_URL: Cloudflare.Worker.URL,
+        // Fetching client metadata documents relies on the public egress above, which a local
+        // Worker lacks; only release stages accept them (dynamic registration works anywhere).
+        CLIENT_METADATA_DOCUMENTS_ENABLED: isReleaseStage(stage) ? "true" : "false",
         MEDIA: media,
         MESSAGE_FILES: messageFiles,
       },

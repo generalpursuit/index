@@ -30,10 +30,17 @@ export const mcpAuthorizationPaths = new Set([
  *
  * Access tokens are opaque and stored as digests, so every MCP request is checked against
  * the database and a revoked connection stops at once (see `verifyMcpAccess`). Clients
- * register through Client ID Metadata Documents, or unauthenticated dynamic registration
- * as the fallback older clients need.
+ * register by unauthenticated dynamic registration and, where `clientMetadataDocuments` is
+ * set, through Client ID Metadata Documents. Fetching a document is safe only where the
+ * Worker's fetches leave through Cloudflare's public egress, that is in deployed stages (see
+ * `clientMetadataTransport`); a local Worker reaches loopback and private addresses.
  */
-export function mcpAuthorizationPlugins(apiURL: string, webURL: string, database: DB) {
+export function mcpAuthorizationPlugins(
+  apiURL: string,
+  webURL: string,
+  database: DB,
+  clientMetadataDocuments: boolean,
+) {
   const connectPage = new URL("/connect", webURL).href;
   return [
     mcp({
@@ -50,10 +57,14 @@ export function mcpAuthorizationPlugins(apiURL: string, webURL: string, database
       // Native clients such as Cursor omit application_type for loopback callbacks.
       clientRegistrationDefaultApplicationType: "infer",
     }),
-    cimd({
-      fetchClientMetadataResource: clientMetadataTransport(),
-      metadataProfile: "mcp-2026-07-28",
-    }),
+    ...(clientMetadataDocuments
+      ? [
+          cimd({
+            fetchClientMetadataResource: clientMetadataTransport(),
+            metadataProfile: "mcp-2026-07-28",
+          }),
+        ]
+      : []),
     connectionsPlugin(database),
   ];
 }

@@ -15,18 +15,22 @@ describe("MCP client authorization", () => {
   let fixture: Awaited<ReturnType<typeof createTestDatabase>>;
   let app: ReturnType<typeof createApp>;
   let mail: SecurityEmail[];
+  /** As in deployed stages; local Workers leave metadata documents off. */
+  let clientMetadataDocuments: string | undefined;
   before(async () => {
     fixture = await createTestDatabase();
   });
   beforeEach(async () => {
     await fixture.reset();
     mail = [];
+    clientMetadataDocuments = "true";
     const auth = () =>
       createAuth(
         {
           BETTER_AUTH_URL: api,
           BETTER_AUTH_SECRET: "test-only-secret-with-at-least-32-characters",
           CORS_ORIGIN: web,
+          CLIENT_METADATA_DOCUMENTS_ENABLED: clientMetadataDocuments,
         },
         fixture.db,
         [],
@@ -810,6 +814,28 @@ describe("MCP client authorization", () => {
       (fetches.mock.calls.at(-1)!.arguments[0] as Request).url,
       "https://redirecting.example/client.json",
     );
+  });
+
+  it("accepts metadata documents only where the switch is on, as in deployed stages", async (t) => {
+    clientMetadataDocuments = undefined;
+    const fetches = t.mock.method(globalThis, "fetch", async () => Response.json({}));
+    const metadata = await request("/.well-known/oauth-authorization-server/api/auth");
+    const document = (await metadata.json()) as Record<string, unknown>;
+    assert.equal(document.client_id_metadata_document_supported, undefined);
+    const person = await account("local");
+    const { challenge } = await pkce();
+    const refused = await request(
+      authorizeURL("https://looks-public.example/client.json", challenge)
+        .toString()
+        .slice(api.length),
+      { headers: { Cookie: person.cookie }, redirect: "manual" },
+    );
+    const error = new URL(refused.headers.get("location")!);
+    assert.equal(error.searchParams.get("error"), "invalid_client");
+    assert.equal(fetches.mock.callCount(), 0);
+    // Dynamic registration keeps working.
+    const tokens = await connect(await register(), person.cookie, "read");
+    assert.ok(await verifyMcpAccess(fixture.db, api, tokens.access_token));
   });
 
   it("rate-limits unauthenticated registration per address", async () => {

@@ -29,6 +29,8 @@ export type AuthConfig = {
   AUTH_TRUSTED_ORIGINS?: string;
   AUTH_EMAIL_FROM?: string;
   RESEND_API_KEY?: string;
+  /** Only the exact value "true" lets MCP clients register by Client ID Metadata Document. */
+  CLIENT_METADATA_DOCUMENTS_ENABLED?: string;
 };
 
 export function createAuth<TQueryResult extends PgQueryResultHKT>(
@@ -201,7 +203,12 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
       bearer({ requireSignature: true }),
       securityPlugin(security),
       openAPI({ disableDefaultReference: true }),
-      ...mcpAuthorizationPlugins(env.BETTER_AUTH_URL, env.CORS_ORIGIN, database),
+      ...mcpAuthorizationPlugins(
+        env.BETTER_AUTH_URL,
+        env.CORS_ORIGIN,
+        database,
+        env.CLIENT_METADATA_DOCUMENTS_ENABLED === "true",
+      ),
       username({
         displayUsername: false,
         usernameValidator: (value) => usernameSchema.safeParse(value).success,
