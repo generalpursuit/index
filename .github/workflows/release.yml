@@ -193,7 +193,7 @@ jobs:
         run: python3 apps/web/scripts/ci-apple-signing.py prepare
       - name: Test native shell
         env:
-          VITE_SERVER_URL: ${{ needs.version.outputs.stage == 'production' && 'https://index-production-api.generalpursuit.workers.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
+          VITE_SERVER_URL: ${{ needs.version.outputs.stage == 'production' && 'https://api.index.generalpursuit.dev' || 'https://index-staging-api.generalpursuit.workers.dev' }}
         run: cargo test --locked --manifest-path apps/web/src-tauri/Cargo.toml
       - name: Install pinned DMG layout tool
         if: runner.os == 'macOS'
