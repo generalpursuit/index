@@ -37,6 +37,7 @@ import { DockSettings } from "./dock";
 import { LaunchAtLoginSettings } from "./launch-at-login";
 import { CurateeImport } from "./curatee-import";
 import { MobileAppSettings } from "./mobile-app";
+import { ConnectionsSettings } from "@/features/connections/connections-settings";
 import { rowButtonClassName, SettingsGroup, SettingsRow, thisDevice } from "./rows";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
@@ -141,6 +142,7 @@ function SettingsBoxes({
         <ProfileVisibility profile={profile} />
         <AccountSecurity />
       </SettingsGroup>
+      <ConnectionsSettings />
       <NotificationSettings />
       <SettingsGroup
         title={thisDevice === "this Mac" ? "This Mac" : "This device"}
