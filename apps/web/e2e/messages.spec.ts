@@ -525,9 +525,11 @@ test("Enter on a reply with a link still leads back to its original", async ({ p
   await expect(page.getByText("Sending…")).toHaveCount(0);
   let popups = 0;
   page.on("popup", () => popups++);
-  await reply.focus();
-  await page.keyboard.press("Enter");
-  await expect(original).toBeFocused();
+  // The server's copy of the reply can still replace its pending element, taking focus with it.
+  await expect(async () => {
+    await reply.press("Enter");
+    await expect(original).toBeFocused({ timeout: 1000 });
+  }).toPass();
   expect(popups).toBe(0);
 });
 
