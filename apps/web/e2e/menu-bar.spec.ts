@@ -520,6 +520,20 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   await expect(panel.getByRole("switch", { name: "Launch at login" })).toHaveCount(0);
   await panel.getByRole("button", { name: "Open Index", exact: true }).click();
   await expect.poll(() => desktop.commands.some((c) => c.command === "desktop_open")).toBe(true);
+  // Escape in a field with text only clears it; the next one closes the panel.
+  const field = panel.getByRole("textbox", { name: "Add a link to this week" });
+  await field.fill("https://pages.test/half-typed");
+  await field.press("Escape");
+  await expect(field).toHaveValue("");
+  await panel.waitForTimeout(200);
+  expect(desktop.hidden).not.toContain("menu-bar");
+  // Keys an input method composes with are its own, even in an empty field.
+  const command = process.platform === "darwin" ? { metaKey: true } : { ctrlKey: true };
+  await field.dispatchEvent("keydown", { key: "Escape", isComposing: true });
+  await field.dispatchEvent("keydown", { key: ",", isComposing: true, ...command });
+  await panel.waitForTimeout(200);
+  expect(desktop.hidden).not.toContain("menu-bar");
+  expect(desktop.commands.some((c) => c.args?.path === "/settings")).toBe(false);
   await panel.keyboard.press("Escape");
   await expect.poll(() => desktop.hidden).toContain("menu-bar");
   const quit = panel.getByRole("button", { name: "Quit Index", exact: true });
@@ -533,7 +547,18 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   ).toHaveLength(0);
   expect(desktop.commands.some((c) => c.command.startsWith("launch_at_login"))).toBe(false);
 
-  await page.goto("/settings");
+  // Index is not the active app while its panel is shown, so the panel opens Settings itself.
+  await panel.keyboard.press("ControlOrMeta+Comma");
+  await expect
+    .poll(() =>
+      desktop.commands.some(
+        (c) =>
+          c.label === "menu-bar" && c.command === "desktop_open" && c.args?.path === "/settings",
+      ),
+    )
+    .toBe(true);
+  await expect(page).toHaveURL(/\/settings$/);
+
   const checkbox = page.getByRole("switch", { name: "Launch at login" });
   const box = page.locator(".settings-row").filter({ has: checkbox });
   await expect(checkbox).not.toBeChecked();
