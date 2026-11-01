@@ -147,7 +147,7 @@ class MenuBarPackaging(unittest.TestCase):
         run = source.split('async fn run(', 1)[1].split('#[cfg(test)]', 1)[0]
         self.assertIn('invalidate_if_current(generation);', run)
         self.assertNotIn('os::clear()', run)
-        self.assertLess(run.index('display_epoch(generation)'), run.index('spawn_blocking'))
+        self.assertLess(run.index('display_epoch(generation)'), run.index('spawn_blocking(move || os::show'))
         self.assertIn('move || os::show(&data, epoch)', run)
         native = (TAURI / 'native/notifications.m').read_text()
         show = native.split('int index_notifications_show(const char *json, uint64_t epoch)', 1)[1].split('void index_notifications_clear', 1)[0]
