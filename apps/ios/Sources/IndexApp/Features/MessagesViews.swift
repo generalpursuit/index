@@ -494,6 +494,7 @@ struct MessageRow: View {
   @Environment(AppModel.self) private var app
   @Environment(AccountStore.self) private var store
   @Environment(\.screenVisible) private var visible
+  @Environment(\.openURL) private var openURL
   @State private var previewing: URL?
   private var message: Message { row.message }
   private var own: Bool { message.senderId == app.userID }
@@ -540,13 +541,16 @@ struct MessageRow: View {
       .accessibilityActions {
         // SwiftUI offers these actions in reverse of their declaration, so they are declared
         // last to first. VoiceOver reads them in the order shown: the replied message, photos,
-        // files and the post, then Copy and Reply.
+        // files, the text's links and the post, then Copy and Reply.
         if canReply { Button("Reply", action: reply) }
         if !message.body.isEmpty { Button("Copy") { copy(message.body) } }
         if let attachment = message.attachment {
           Button("Open post") { app.openLink(attachment) }
         } else if let author = message.restrictedAuthor {
           Button("View profile") { app.navigate(.profile(author.id)) }
+        }
+        ForEach(MessageLinks.detect(in: message.body).reversed(), id: \.range) { link in
+          Button("Open \(message.body[link.range])") { openURL(link.url) }
         }
         ForEach(message.files.filter { !$0.isPhoto }.reversed()) { file in
           Button("Open \(file.name)") { open(file) }
@@ -649,13 +653,26 @@ struct MessageContent<Quote: View>: View {
       quote()
       if !message.files.isEmpty { MessageFilesView(message: message, own: own, highlighted: highlighted, open: open) }
       if !message.body.isEmpty {
-        Text(message.body).font(IndexFont.sans(15)).padding(.horizontal, 13).padding(.vertical, 8)
+        // Links keep the bubble's text colour, so they read on either sender's bubble.
+        Text(linkedBody).font(IndexFont.sans(15)).padding(.horizontal, 13).padding(.vertical, 8)
           .foregroundStyle(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
+          .tint(own ? IndexPalette.primaryForeground : IndexPalette.foreground)
           .background(own ? IndexPalette.primary : IndexPalette.muted, in: bubble)
           .overlay(bubble.stroke(IndexPalette.ring, lineWidth: 2).opacity(highlighted ? 1 : 0))
       }
       SharedPostCard(message: message, highlighted: highlighted)
     }.animation(.easeOut(duration: 0.2), value: highlighted)
+  }
+  /// The body as written, with each web address underlined. Tapping one opens it in the
+  /// browser, as other external links do.
+  private var linkedBody: AttributedString {
+    var text = AttributedString(message.body)
+    for link in MessageLinks.detect(in: message.body) {
+      guard let range = Range(link.range, in: text) else { continue }
+      text[range].link = link.url
+      text[range].underlineStyle = Text.LineStyle.single
+    }
+    return text
   }
   private var bubble: UnevenRoundedRectangle {
     let tailed = tail && !card
