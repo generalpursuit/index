@@ -31,6 +31,20 @@ pub fn smoke_icon_matches(paper: bool) -> bool {
     unsafe { index_app_icon_matches(bytes.as_ptr(), bytes.len()) }
 }
 
+/// Opens Index again as Finder or Spotlight does: LaunchServices first makes the running app a
+/// regular one, with a Dock icon, then sends the reopen event. Main-thread command.
+#[tauri::command]
+pub fn smoke_reopen(app: tauri::AppHandle) -> bool {
+    unsafe extern "C" {
+        fn index_dock_show(visible: bool, persist: bool) -> bool;
+    }
+    if !unsafe { index_dock_show(true, false) } {
+        return false;
+    }
+    crate::reopen(&app);
+    true
+}
+
 #[tauri::command]
 pub fn smoke_resize(webview: Webview, width: f64, height: f64) -> Result<(), String> {
     webview

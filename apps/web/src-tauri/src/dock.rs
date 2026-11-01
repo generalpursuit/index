@@ -1,5 +1,6 @@
 //! Whether Index appears in the Dock and app switcher, or only in the menu bar. The native store
-//! owns this device preference; restore it before opening any windows.
+//! owns this device preference; restore it before opening any windows, and again whenever Index
+//! is opened while it runs.
 use serde::Serialize;
 
 #[derive(Serialize)]

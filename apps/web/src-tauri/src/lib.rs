@@ -65,6 +65,15 @@ fn restrict_navigation<'a>(builder: WebviewWindowBuilder<'a, tauri::Wry, tauri::
     })
 }
 
+/// Opening Index while it runs, from Finder, Spotlight, Launchpad or `open`, makes LaunchServices
+/// turn it back into a regular app with a Dock icon before this event arrives, so the Dock choice
+/// is applied again before main shows.
+#[cfg(target_os = "macos")]
+fn reopen(app: &tauri::AppHandle) {
+    dock::restore();
+    let _ = menu_bar::show_main(app);
+}
+
 pub fn run() {
     let builder = tauri::Builder::default();
     #[cfg(feature = "native-smoke")]
@@ -106,6 +115,7 @@ pub fn run() {
         smoke::smoke_complete,
         smoke::smoke_resize,
         smoke::smoke_icon_matches,
+        smoke::smoke_reopen,
         smoke::smoke_progress
     ]);
     #[cfg(not(feature = "native-smoke"))]
@@ -172,7 +182,7 @@ pub fn run() {
         .expect("error while building Index")
         .run(|app, event| match event {
             #[cfg(target_os = "macos")]
-            tauri::RunEvent::Reopen { .. } => { let _ = menu_bar::show_main(app); }
+            tauri::RunEvent::Reopen { .. } => reopen(app),
             // Closing a macOS window is intercepted by its lifecycle handler; Quit
             // (including Command-Q) exits normally and retains device opt-in.
             tauri::RunEvent::Exit => {

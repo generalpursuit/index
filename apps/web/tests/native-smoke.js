@@ -47,6 +47,13 @@
           !(await invoke("dock_status")).visible,
           "Hidden Dock icon was not restored at launch",
         );
+        for (let opening = 0; opening < 2; opening++) {
+          assert(await invoke("smoke_reopen"), "Could not open Index again");
+          assert(
+            !(await invoke("dock_status")).visible,
+            "Opening Index again brought back its hidden Dock icon",
+          );
+        }
         assert(
           (await invoke("set_dock_visible", { visible: true })).visible,
           "Dock icon did not return",
