@@ -133,7 +133,10 @@ test("a deleted forwarded link permits confirmed recovery without guessing wheth
   await page.getByRole("button", { name: "Start a new message", exact: true }).click();
   const confirmation = page.getByRole("alertdialog", { name: "Discard this unconfirmed draft?" });
   await expect(confirmation).toContainText("may already have been delivered");
-  await confirmation.getByRole("button", { name: "Cancel", exact: true }).click();
+  // Discarding can't be undone, so a stray Return presses Cancel.
+  await expect(confirmation.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(confirmation).toHaveCount(0);
   await expect(page.locator(".draft-attachment")).toContainText("Are.na");
   await page.getByRole("button", { name: "Start a new message", exact: true }).click();
   await confirmation.getByRole("button", { name: "Discard draft", exact: true }).click();

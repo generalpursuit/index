@@ -249,13 +249,15 @@ test("Edit group waits for its question, so it saves what it asked about", async
   await lock.click();
   await edit.getByRole("button", { name: "Save", exact: true }).click();
   const ask = question(page, "Unlock group?");
-  await expect(ask.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+  // Not destructive, so Return answers it: focus starts on its action.
+  const unlock = ask.getByRole("button", { name: "Unlock and save", exact: true });
+  await expect(unlock).toBeFocused();
   // Relocking while the question is open does nothing: the form waits for the answer.
   await lock.click({ force: true });
   await expect(lock).toHaveAttribute("aria-pressed", "false");
   await edit.getByLabel("Name", { exact: true }).click({ force: true });
-  await expect(ask.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
-  await ask.getByRole("button", { name: "Unlock and save", exact: true }).click();
+  await expect(unlock).toBeFocused();
+  await unlock.click();
   await expect(edit).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Lock Notes", exact: true })).toHaveAttribute(
     "aria-pressed",

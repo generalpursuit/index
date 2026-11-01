@@ -5,11 +5,13 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type ReactNode,
   type RefObject,
   type SyntheticEvent,
 } from "react";
 import { Button } from "./button";
+import { isComposing, isConfirm, submitForm } from "../lib/keys";
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from "./dialog";
 import { Drawer, DrawerContent, DrawerTitle, DrawerDescription } from "./drawer";
 import { useMediaQuery } from "../hooks/use-media-query";
@@ -43,6 +45,7 @@ export const useModalPresentation = () => useContext(ModalPresentation);
 /**
  * A titled dialog on larger screens and a swipeable bottom sheet on phones. The title row stays
  * put while the children scroll beneath it; put actions in a `ModalFooter` to pin them below.
+ * Escape closes it (or goes back, see `onBack`); its form submits on ⌘↩ (see `submitKeys`).
  */
 export function Modal({
   open,
@@ -107,6 +110,7 @@ export function Modal({
       <Drawer open={open} onOpenChange={change}>
         <DrawerContent
           finalFocus={returnFocus}
+          onKeyDown={submitKeys}
           className={
             modalClassName +
             " app-sheet relative flex min-h-0 w-full! max-w-full! flex-col gap-4 overflow-hidden rounded-t-[22px] border-t border-border [outline:0] pt-2.5 [--modal-inset:20px] [--modal-bottom:calc(20px_+_env(safe-area-inset-bottom,_0px))] max-h-full! [transform:translateY(var(--drawer-swipe-movement-y,_0px))] [transition:transform_450ms_cubic-bezier(0.32,_0.72,_0,_1)] [&[data-starting-style]]:[transform:translateY(100%)] [&[data-ending-style]]:[transform:translateY(100%)] [&[data-ending-style]]:duration-[calc(var(--drawer-swipe-strength)_*_400ms)] [&_[data-slot=drawer-close]]:absolute [&_[data-slot=drawer-close]]:top-7.5 [&_[data-slot=drawer-close]]:right-3.5 " +
@@ -124,6 +128,7 @@ export function Modal({
     <Dialog open={open} onOpenChange={change}>
       <DialogContent
         finalFocus={returnFocus}
+        onKeyDown={submitKeys}
         className={
           modalClassName +
           ` ${modalWidth} ${modalPositions[position]} ${fixedHeight ? fixedDialogHeight : ""} flex flex-col gap-0 overflow-hidden rounded-[22px] p-0 pt-6 [--modal-inset:28px] [--modal-bottom:28px] [&_[data-slot='dialog-close']]:absolute [&_[data-slot='dialog-close']]:top-6.5 [&_[data-slot='dialog-close']]:right-5.5 ` +
@@ -134,6 +139,29 @@ export function Modal({
       </DialogContent>
     </Dialog>
   );
+}
+
+/**
+ * ⌘↩ submits the form around focus from anywhere in the modal, multi-line fields included. Focus
+ * outside a form, such as on the Close button, submits the shown view's form when it has only
+ * one. Return keeps its meaning where it has one: a single-line field submits its form, a button
+ * is pressed and a multi-line field breaks the line. So Return submits here only with focus on
+ * the modal itself, not on one of its controls.
+ */
+function submitKeys(event: KeyboardEvent<HTMLElement>) {
+  if (event.key !== "Enter" || event.defaultPrevented || isComposing(event.nativeEvent)) return;
+  const popup = event.currentTarget,
+    target = event.target as HTMLElement;
+  const plain = !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey;
+  // Content portaled out of the modal, such as a menu, passes its keys through it in React.
+  if (!popup.contains(target) || !(isConfirm(event) || (plain && target === popup))) return;
+  const forms = Array.from(popup.querySelectorAll("form")).filter(
+    (form) => !form.closest("[inert]"),
+  );
+  const form = target.closest("form") ?? (forms.length === 1 ? forms[0] : undefined);
+  if (!form) return;
+  event.preventDefault();
+  submitForm(form);
 }
 
 /**

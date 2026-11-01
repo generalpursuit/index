@@ -400,6 +400,8 @@ function ProfileVisibility({ profile }: { profile: Profile }) {
             : "Anyone can see your links. Pending follow requests will be accepted. Locked groups remain only yours."
         }
         label={next === "private" ? "Make private" : "Make public"}
+        // Going public accepts pending requests, which going private again doesn't undo.
+        reversible={next === "private"}
         pending={update.isPending}
         onConfirm={() =>
           next && update.mutate({ profileVisibility: next }, { onSuccess: () => setNext(null) })

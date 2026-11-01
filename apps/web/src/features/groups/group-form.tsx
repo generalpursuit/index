@@ -141,6 +141,7 @@ export function GroupForm({
           title={locking ? "Lock group?" : "Unlock group?"}
           description={groupPrivacyDescription(locking)}
           label={locking ? "Lock and save" : "Unlock and save"}
+          reversible
           returnFocus={submit}
           pending={pending}
           onConfirm={() => {

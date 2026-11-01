@@ -9,6 +9,7 @@ import {
 import { useEffectEvent, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
 import { Button } from "./button";
 import { modalCenter, modalClassName, useModalPresentation } from "./modal";
+import { isComposing, isConfirm } from "../lib/keys";
 
 type ConfirmationProps = {
   open: boolean;
@@ -17,19 +18,34 @@ type ConfirmationProps = {
   description?: string;
   pending?: boolean;
   onConfirm: () => void;
-  destructive?: boolean;
   label?: string;
   /** What the question takes the place of while it is asked inside a modal. */
   children?: ReactNode;
   /** Where focus goes once it is answered, when what asked was a menu item. */
   returnFocus?: RefObject<HTMLElement | null>;
-};
+} & (
+  | {
+      /** Shows the action as one that destroys something. It can't be undone either. */
+      destructive: true;
+      reversible?: never;
+    }
+  | {
+      destructive?: false;
+      /** The action can be undone, so a stray Return may confirm it: focus starts on it. */
+      reversible?: boolean;
+    }
+);
 
 /**
  * Asks before an action. A page asks in a dialog; a modal never opens another dialog on top of
  * itself, so inside one the question takes the place of `children` until it is answered.
+ *
+ * Escape cancels and ⌘↩ confirms. Focus starts on Cancel, so a Return meant for something else
+ * can't confirm what may not be undone; Return confirms once the action itself has focus. Only a
+ * `reversible` action starts with focus, so Return confirms it at once.
  */
 export function Confirmation(props: ConfirmationProps) {
+  const confirm = useRef<HTMLButtonElement>(null);
   if (useModalPresentation()) return <ConfirmationInPlace {...props} />;
   const {
     open,
@@ -39,6 +55,7 @@ export function Confirmation(props: ConfirmationProps) {
     pending,
     onConfirm,
     destructive = false,
+    reversible = false,
     label = "Confirm",
     children,
     returnFocus,
@@ -49,6 +66,8 @@ export function Confirmation(props: ConfirmationProps) {
       <AlertDialog open={open} onOpenChange={onOpenChange}>
         <AlertDialogContent
           finalFocus={returnFocus}
+          initialFocus={reversible ? confirm : undefined}
+          onKeyDown={(event) => answerKeys(event.nativeEvent, () => !pending && onConfirm())}
           className={
             modalClassName +
             ` ${modalCenter} rounded-[22px] max-w-[calc(100vw_-_24px)] overflow-y-auto p-7 [@media(width<=700px)]:p-6.25 gap-5`
@@ -67,6 +86,7 @@ export function Confirmation(props: ConfirmationProps) {
           >
             <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
             <AlertDialogAction
+              ref={confirm}
               variant={destructive ? "destructive" : "default"}
               disabled={pending}
               onClick={onConfirm}
@@ -81,11 +101,25 @@ export function Confirmation(props: ConfirmationProps) {
 }
 
 /**
+ * Return held down from what asked doesn't answer the question that appears, and ⌘↩ confirms
+ * from anywhere in it. Returns whether the key was the question's.
+ */
+function answerKeys(event: KeyboardEvent, confirm: () => void) {
+  if (event.key !== "Enter" || isComposing(event)) return false;
+  if (event.repeat) event.preventDefault();
+  else if (isConfirm(event)) {
+    event.preventDefault();
+    confirm();
+  } else return false;
+  return true;
+}
+
+/**
  * The question as a row in place of what it asks about, with the footer's buttons. The rest of
  * the modal waits for the answer: it is inert, so nothing the question is about can change and
- * focus stays with it, and Escape anywhere cancels the question before the modal hears another.
- * It is announced as it appears and focus moves to its Cancel; once answered, focus goes back to
- * what asked, unless it has moved on.
+ * focus stays with it, and its keys (Escape, ⌘↩) answer the question before the modal hears them.
+ * It is announced as it appears and focus moves to its Cancel, or to its action when that is
+ * reversible; once answered, focus goes back to what asked, unless it has moved on.
  */
 function ConfirmationInPlace({
   open,
@@ -95,6 +129,7 @@ function ConfirmationInPlace({
   pending,
   onConfirm,
   destructive = false,
+  reversible = false,
   label = "Confirm",
   children,
   returnFocus,
@@ -102,13 +137,15 @@ function ConfirmationInPlace({
   const content = useRef<HTMLDivElement>(null),
     question = useRef<HTMLDivElement>(null),
     cancel = useRef<HTMLButtonElement>(null),
+    confirm = useRef<HTMLButtonElement>(null),
     // Where focus was when the question appeared, while it is asked.
     returnTo = useRef<Element>(undefined);
-  const escape = useEffectEvent((event: KeyboardEvent) => {
-    if (event.key !== "Escape") return;
-    event.preventDefault();
+  const keys = useEffectEvent((event: KeyboardEvent) => {
+    if (event.key === "Escape" && !isComposing(event)) {
+      event.preventDefault();
+      if (!pending) onOpenChange(false);
+    } else if (!answerKeys(event, () => !pending && onConfirm())) return;
     event.stopPropagation();
-    if (!pending) onOpenChange(false);
   });
   useLayoutEffect(() => {
     if (open) {
@@ -116,7 +153,7 @@ function ConfirmationInPlace({
       const asked = question.current!,
         modal = asked.closest<HTMLElement>('[role="dialog"]');
       const waiting = modal ? waitFor(asked, modal) : [];
-      let focused: HTMLElement | null = cancel.current;
+      let focused: HTMLElement | null = reversible ? confirm.current : cancel.current;
       focused?.focus();
       // Focus stays with the question, such as after a click on the inert rest of the modal;
       // it can still leave the modal, which closing it does.
@@ -125,8 +162,8 @@ function ConfirmationInPlace({
         if (asked.contains(target)) focused = target;
         else if (modal?.contains(target)) focused?.focus();
       };
-      // Captured on the window, ahead of the modal's own Escape, wherever focus is.
-      const keydown = (event: KeyboardEvent) => escape(event);
+      // Captured on the window, ahead of the modal's own keys, wherever focus is.
+      const keydown = (event: KeyboardEvent) => keys(event);
       document.addEventListener("focusin", focusin);
       window.addEventListener("keydown", keydown, true);
       return () => {
@@ -144,7 +181,7 @@ function ConfirmationInPlace({
         ? back
         : content.current?.querySelector<HTMLElement>("a[href], button:not(:disabled), input"));
     target?.focus();
-  }, [open, returnFocus]);
+  }, [open, returnFocus, reversible]);
   return (
     <>
       {children !== undefined && (
@@ -174,6 +211,7 @@ function ConfirmationInPlace({
               Cancel
             </Button>
             <Button
+              ref={confirm}
               type="button"
               variant={destructive ? "destructive" : "default"}
               disabled={pending}

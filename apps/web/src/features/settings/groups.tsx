@@ -163,6 +163,7 @@ function GroupActions({ group }: { group: Group }) {
           title={privacy ? "Lock group?" : "Unlock group?"}
           description={groupPrivacyDescription(privacy ?? locked)}
           label={privacy ? "Lock group" : "Unlock group"}
+          reversible
           pending={busy}
           onConfirm={() => void changePrivacy()}
         />
