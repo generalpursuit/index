@@ -6,7 +6,7 @@ import { Confirmation } from "@index/ui/components/confirmation";
 import { accountMutationOptions } from "@/lib/account-boundary";
 import { useViewer } from "@/hooks/use-api";
 import { rowButtonClassName, SettingsGroup, SettingsRow } from "@/features/settings/rows";
-import { connections, mcpServerURL, safeLogo, type Connection } from "./api";
+import { connections, safeLogo, type Connection } from "./api";
 
 const connectedOn = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -23,16 +23,17 @@ export function ConnectionsSettings() {
   const key = ["connections", viewer?.id];
   const list = useQuery({
     queryKey: key,
-    queryFn: () => connections.list().then((result) => result.connections),
+    queryFn: connections.list,
     enabled: !!viewer,
   });
+  const mcpServerURL = list.data?.mcpServerURL;
   return (
     <SettingsGroup
       title="Connections"
       footer={
         list.error
           ? "Connected apps couldn’t be loaded."
-          : list.data?.length === 0 && "No apps are connected."
+          : list.data?.connections.length === 0 && "No apps are connected."
       }
     >
       <SettingsRow
@@ -40,16 +41,19 @@ export function ConnectionsSettings() {
         description={
           <>
             Add it to an MCP client, such as an AI assistant, to use Index there.{" "}
-            <code className="select-all font-mono break-all text-foreground">{mcpServerURL}</code>
+            {mcpServerURL && (
+              <code className="select-all font-mono break-all text-foreground">{mcpServerURL}</code>
+            )}
           </>
         }
       >
         <Button
           variant="outline"
           className={rowButtonClassName}
+          disabled={!mcpServerURL}
           onClick={() =>
             void navigator.clipboard
-              .writeText(mcpServerURL)
+              .writeText(mcpServerURL!)
               .then(() => toast.success("MCP server URL copied"))
               .catch(() => toast.error("Could not copy the URL. Select and copy it instead."))
           }
@@ -57,7 +61,7 @@ export function ConnectionsSettings() {
           Copy
         </Button>
       </SettingsRow>
-      {list.data?.map((connection) => (
+      {list.data?.connections.map((connection) => (
         <ConnectedApp key={connection.clientId} connection={connection} listKey={key} />
       ))}
     </SettingsGroup>

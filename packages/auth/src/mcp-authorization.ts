@@ -65,7 +65,7 @@ export function mcpAuthorizationPlugins(
           }),
         ]
       : []),
-    connectionsPlugin(database),
+    connectionsPlugin(database, apiURL),
   ];
 }
 

@@ -391,7 +391,7 @@ describe("MCP client authorization", () => {
     const empty = await request("/api/auth/connections", {
       headers: { Cookie: person.cookie, Origin: web },
     });
-    assert.deepEqual(await empty.json(), { connections: [] });
+    assert.deepEqual(await empty.json(), { mcpServerURL: resource, connections: [] });
   });
 
   it("grants write with read, and rejects expired tokens and deleted accounts", async () => {

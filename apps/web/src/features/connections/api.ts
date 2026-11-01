@@ -3,9 +3,6 @@ import { ENV } from "@/env.public";
 
 const api = ENV.VITE_SERVER_URL.replace(/\/$/, "");
 
-/** The URL people paste into an MCP client: this stage's API, never a fixed host. */
-export const mcpServerURL = `${api}/mcp`;
-
 export type Permission = "read" | "write";
 export type Connection = {
   clientId: string;
@@ -35,7 +32,9 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export const connections = {
-  list: () => request<{ connections: Connection[] }>("/connections"),
+  /** With the URL people paste into an MCP client, which the server names: the desktop app
+   * reaches the API on another host than the one its tokens are bound to. */
+  list: () => request<{ mcpServerURL: string; connections: Connection[] }>("/connections"),
   revoke: (clientId: string) => request<{ success: true }>("/connections/revoke", { clientId }),
   app: (clientId: string) =>
     request<ConnectingApp>(`/oauth2/public-client?client_id=${encodeURIComponent(clientId)}`),
