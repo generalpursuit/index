@@ -69,6 +69,11 @@ export class DesktopHarness {
         }),
     );
   }
+  /** Like Index's Settings… menu item (app_menu.rs): main shows, then takes Settings as its destination. */
+  async chooseSettings() {
+    this.pending = { id: this.nextNavigation++, path: "/settings", recipientId: null };
+    await this.emit("index:desktop-open", null, "main");
+  }
   /** Like a click on the status item: shows committed content at once, or waits for the check. */
   async togglePanel() {
     if (this.panel.shown || this.panel.requested) return this.hidePanel();

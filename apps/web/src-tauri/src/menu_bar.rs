@@ -189,13 +189,23 @@ fn valid_navigation(path: &str, recipient: Option<&str>) -> bool {
     if matches!(path, "/" | "/login" | "/settings") { return true; }
     path.strip_prefix("/l/").is_some_and(|id| !id.is_empty() && id.len() <= 64 && id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'_' || c == b'-')) && recipient.is_some_and(|id| !id.is_empty())
 }
+/// Main takes the destination with desktop_take_navigation as it shows, or as it starts.
+fn queue_navigation(path: String, recipient_id: Option<String>) {
+    *NAVIGATION.lock().unwrap() = Some(PendingNavigation { id: NEXT_NAVIGATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed), path, recipient_id });
+}
+/// Shows main at a page of no particular account, such as Settings from the app menu. Signed out,
+/// the page's own guard asks to sign in first.
+#[cfg(target_os = "macos")]
+pub fn open_main_at(app: &AppHandle, path: &str) -> tauri::Result<()> {
+    debug_assert!(valid_navigation(path, None));
+    queue_navigation(path.into(), None);
+    show_main(app)
+}
 #[tauri::command]
 pub async fn desktop_open(app: AppHandle, path: Option<String>, recipient_id: Option<String>, expected_revision: u64) -> Result<(), String> {
     if path.as_ref().is_some_and(|path| !valid_navigation(path, recipient_id.as_deref())) { return Err("Invalid Index destination.".into()); }
     crate::session::with_revision(expected_revision, || {
-        if let Some(path) = path {
-            *NAVIGATION.lock().unwrap() = Some(PendingNavigation { id: NEXT_NAVIGATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed), path, recipient_id });
-        }
+        if let Some(path) = path { queue_navigation(path, recipient_id); }
     })?;
     let handle = app.clone();
     app.run_on_main_thread(move || {

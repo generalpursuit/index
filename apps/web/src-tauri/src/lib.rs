@@ -1,4 +1,6 @@
 mod notifications;
+#[cfg(target_os = "macos")]
+mod app_menu;
 mod menu_bar;
 mod downloads;
 mod session_revision;
@@ -153,6 +155,8 @@ pub fn run() {
         dock::set_dock_visible,
         haptics::desktop_haptic
     ]);
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(app_menu::build).on_menu_event(app_menu::handle);
     builder
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {

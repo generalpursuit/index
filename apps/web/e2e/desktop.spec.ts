@@ -62,6 +62,43 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });
 
+test("Index's Settings… menu item opens Settings in main, asking to sign in first", async ({
+  page,
+  request,
+}) => {
+  await request.post(apiURL + "/_test/reset");
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await page.goto("/login");
+  await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+  await desktop.chooseSettings();
+  await expect(page).toHaveURL(/\/login\?next=%2Fsettings$/);
+  await expect.poll(() => desktop.pending).toBeNull();
+  await page.getByLabel("Email or username", { exact: true }).fill("alice@test.example");
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await page.getByRole("link", { name: "Home", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+  await desktop.chooseSettings();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("button", { name: "Edit profile", exact: true })).toBeVisible();
+  // Settings waits for an open modal rather than discarding what it holds.
+  await page.goto("/u/alice");
+  await page
+    .getByRole("navigation", { name: "Lists" })
+    .getByRole("button", { name: "New group", exact: true })
+    .click();
+  const name = page
+    .getByRole("dialog", { name: "New group", exact: true })
+    .getByLabel("Name", { exact: true });
+  await name.fill("Half typed");
+  await desktop.chooseSettings();
+  await expect.poll(() => desktop.pending).toBeNull();
+  await expect(page).toHaveURL(/\/u\/alice$/);
+  await expect(name).toHaveValue("Half typed");
+});
+
 test("desktop restricted bearer survives interruption, verifies, and is erased after recovery revocation", async ({
   page,
   request,
