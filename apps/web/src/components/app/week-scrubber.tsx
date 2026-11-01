@@ -1,16 +1,10 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { desktopHaptic } from "@/lib/desktop";
 import { weekLabel, weekNumber, weekRange, yearMarks } from "@/lib/weeks";
 import { Modal } from "@index/ui/components/modal";
 
 export type Week = { weekStart: string; count: number };
 
-// Holding still this long opens the focus ring; moving farther than DRAG_PX first makes a drag.
-const HOLD_MS = 350;
-const DRAG_PX = 6;
-// In the focus ring each week is a row this tall (its `h-6`), and the pointer moves one row per
-// week.
-const ROW_PX = 24;
 // Ticks within this distance of the cursor surface.
 const SURFACE_PX = 44;
 
@@ -20,10 +14,9 @@ type Spot = { index: number; inside: boolean; fresh: boolean; roll?: "older" | "
  * A strip along the right edge with one tick per week, read like a ruler: length shows the unit
  * and ink the state. Weeks are short and light, the weeks on screen dark at a middle length, and
  * the first week of a year long. Weeks near the cursor surface. Hovering names a week. Pressing
- * goes there, and dragging scrubs through the weeks with the page following. Holding still opens
- * a focus ring that spreads out the nearby weeks, so a drag then moves one week at a time. It is
- * a pointer shortcut: the week title opens the same choice as a list (`WeekPicker`) for keyboards
- * and screen readers.
+ * goes there, and dragging scrubs through the weeks with the page following. It is a pointer
+ * shortcut: the week title opens the same choice as a list (`WeekPicker`) for keyboards and screen
+ * readers.
  */
 export function WeekScrubber({
   weeks,
@@ -36,13 +29,11 @@ export function WeekScrubber({
   onJump: (week: string, scrubbing: boolean) => void;
 }) {
   const [spot, setSpot] = useState<Spot | null>(null);
-  // The open focus ring: its center on the rail, and the week there (fractional mid-drag).
-  const [ring, setRing] = useState<{ top: number; at: number } | null>(null);
   const [pitch, setPitch] = useState(12);
   const rail = useRef<HTMLDivElement>(null);
   const label = useRef<HTMLDivElement>(null);
-  // The current press: where it started, its pending hold, and the ring's anchor once open.
-  const press = useRef<{ y: number; hold: number; anchor?: { y: number; index: number } }>(null);
+  // Whether the pointer is pressed, so moving it scrubs.
+  const pressed = useRef(false);
   // The named week, for events to compare against before the next render.
   const named = useRef<number | null>(null);
   const years = useMemo(() => yearMarks(weeks.map((w) => w.weekStart)), [weeks]);
@@ -56,7 +47,6 @@ export function WeekScrubber({
     observer.observe(element);
     return () => observer.disconnect();
   }, [count]);
-  useEffect(() => () => clearTimeout(press.current?.hold), []);
   if (count < 2) return null;
 
   const measure = (y: number) => {
@@ -91,21 +81,6 @@ export function WeekScrubber({
     setSpot(null);
     rail.current?.style.removeProperty("--at");
   };
-  const release = () => {
-    if (!press.current) return;
-    clearTimeout(press.current.hold);
-    press.current = null;
-    setRing(null);
-  };
-  const hold = (y: number) => {
-    const current = press.current,
-      index = named.current,
-      box = rail.current?.getBoundingClientRect();
-    if (!current || index === null || !box) return;
-    current.anchor = { y, index };
-    setRing({ top: y - box.top, at: index });
-    desktopHaptic("boundary");
-  };
   const shown = spot && weeks[spot.index];
   return (
     <div
@@ -119,42 +94,28 @@ export function WeekScrubber({
       onPointerDown={(e) => {
         if (e.button !== 0) return;
         e.currentTarget.setPointerCapture(e.pointerId);
-        const y = e.clientY,
-          next = measure(y);
-        clearTimeout(press.current?.hold);
-        press.current = { y, hold: window.setTimeout(() => hold(y), HOLD_MS) };
+        const next = measure(e.clientY);
+        pressed.current = true;
         follow(next.at);
         name(next.index, next.inside);
         go(next.index, false);
       }}
       onPointerMove={(e) => {
-        const current = press.current;
-        if (current?.anchor) {
-          const { anchor } = current;
-          const at = Math.min(
-            count - 1,
-            Math.max(0, anchor.index + (e.clientY - anchor.y) / ROW_PX),
-          );
-          setRing((ring) => ring && { ...ring, at });
-          if (name(Math.round(at), spot?.inside ?? false)) go(Math.round(at), true);
-          return;
-        }
-        if (!current && e.pointerType !== "mouse") return;
+        if (!pressed.current && e.pointerType !== "mouse") return;
         const next = measure(e.clientY);
         follow(next.at);
-        if (name(next.index, next.inside) && current) go(next.index, true);
-        if (current && Math.abs(e.clientY - current.y) > DRAG_PX) clearTimeout(current.hold);
+        if (name(next.index, next.inside) && pressed.current) go(next.index, true);
       }}
       onPointerUp={(e) => {
-        release();
+        pressed.current = false;
         if (e.pointerType !== "mouse") hide();
       }}
       onPointerCancel={() => {
-        release();
+        pressed.current = false;
         hide();
       }}
       onPointerLeave={() => {
-        if (!press.current) hide();
+        if (!pressed.current) hide();
       }}
       // A long press would otherwise open the context menu on touch screens.
       onContextMenu={(e) => e.preventDefault()}
@@ -174,19 +135,15 @@ export function WeekScrubber({
           data-hovered={index === spot?.index || undefined}
         />
       ))}
-      {ring && <FocusRing weeks={weeks} years={years} {...ring} />}
       <div
         ref={label}
         className={
-          "week-tick-label absolute left-9 flex [visibility:hidden] flex-col gap-0.5 p-[8px_12px] border border-border rounded-[12px] bg-card text-subtle-foreground text-[12px] text-left whitespace-nowrap [font-variant-numeric:tabular-nums] pointer-events-none [transform:translateY(-50%)] [transition:top_90ms_ease-out,_right_160ms_ease-out] [&[data-fresh]]:[transition:none] motion-reduce:[transition:none] [&[data-visible]]:[visibility:visible] [&[data-inside]]:right-9 [&[data-inside]]:left-auto [&[data-inside][data-focus]]:right-15 [&_strong]:font-serif [&_strong]:text-[16px] [&_strong]:font-bold [&_strong]:text-foreground"
+          "week-tick-label absolute left-9 flex [visibility:hidden] flex-col gap-0.5 p-[8px_12px] border border-border rounded-[12px] bg-card text-subtle-foreground text-[12px] text-left whitespace-nowrap [font-variant-numeric:tabular-nums] pointer-events-none [transform:translateY(-50%)] [transition:top_90ms_ease-out,_right_160ms_ease-out] [&[data-fresh]]:[transition:none] motion-reduce:[transition:none] [&[data-visible]]:[visibility:visible] [&[data-inside]]:right-9 [&[data-inside]]:left-auto [&_strong]:font-serif [&_strong]:text-[16px] [&_strong]:font-bold [&_strong]:text-foreground"
         }
         data-visible={shown ? true : undefined}
         data-inside={spot?.inside || undefined}
         data-fresh={spot?.fresh || undefined}
-        data-focus={ring ? true : undefined}
-        style={{
-          top: ring ? ring.top : `calc((${spot?.index ?? 0} + 0.5) * 100% / ${count})`,
-        }}
+        style={{ top: `calc((${spot?.index ?? 0} + 0.5) * 100% / ${count})` }}
       >
         <strong className={"size-stack grid overflow-hidden [&>*]:[grid-area:1_/_1]"}>
           <span>
@@ -217,61 +174,6 @@ export function WeekScrubber({
           ))}
         </span>
       </div>
-    </div>
-  );
-}
-
-/**
- * The weeks around a held one, a row each, sliding past the selection marks as a drag moves
- * through them. A row that starts a year shows the year in place of its number, unless selected.
- */
-function FocusRing({
-  weeks,
-  years,
-  top,
-  at,
-}: {
-  weeks: Week[];
-  years: readonly (string | null)[];
-  top: number;
-  at: number;
-}) {
-  const center = Math.round(at);
-  const rows = [];
-  for (let i = Math.max(0, center - 6); i <= Math.min(weeks.length - 1, center + 6); i++)
-    rows.push(i);
-  return (
-    <div
-      className={
-        "week-focus absolute right-0 w-13 h-66 -translate-y-1/2 bg-background pointer-events-none [mask-image:linear-gradient(transparent,_#000_30%,_#000_70%,_transparent)] [animation:week-focus-in_160ms_ease-out] motion-reduce:[animation:none]"
-      }
-      style={{ top }}
-    >
-      {rows.map((index) => {
-        const year = index === center ? null : years[index];
-        return (
-          <span
-            key={weeks[index]!.weekStart}
-            className={
-              "absolute inset-x-0 top-1/2 -mt-3 h-6 flex items-center justify-center font-mono text-[13px] tabular-nums text-foreground [&[data-center]]:font-bold [&[data-year]]:text-[11px] [&[data-year]]:text-subtle-foreground"
-            }
-            data-center={index === center || undefined}
-            data-year={year ? true : undefined}
-            style={{
-              transform: `translateY(${(index - at) * ROW_PX}px)`,
-              opacity: Math.max(0, 1 - Math.abs(index - at) / 5.5),
-            }}
-          >
-            {year ?? weekNumber(weeks[index]!.weekStart)}
-          </span>
-        );
-      })}
-      <span
-        className={"absolute top-1/2 left-0 w-2 h-[3px] -mt-[1.5px] rounded-full bg-foreground"}
-      />
-      <span
-        className={"absolute top-1/2 right-0 w-2 h-[3px] -mt-[1.5px] rounded-full bg-foreground"}
-      />
     </div>
   );
 }
