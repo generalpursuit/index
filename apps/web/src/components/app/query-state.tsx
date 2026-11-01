@@ -1,5 +1,6 @@
 import { Button } from "@index/ui/components/button";
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { failedWith } from "@/data/errors";
 
 const PendingPageContext = createContext(false);
 /** The router has already waited 300 ms before mounting a page's pending component. */
@@ -58,7 +59,7 @@ export function QueryState({
         {placeholder ?? children}
       </div>
     );
-  if (error && hasData && !("status" in error && [401, 403, 404].includes(Number(error.status))))
+  if (error && hasData && !failedWith(error, 401, 403, 404))
     return (
       <>
         {children}

@@ -7,6 +7,7 @@ import { isMenuBar } from "@/lib/desktop";
 import { editRevision, hasEdits, viewerPath } from "./edits";
 import { createPulseDriver, mergeNewestPage, type Pulse } from "./pulse";
 import { connectLive } from "./live";
+import { failedWith } from "./errors";
 import { sessionOptions } from "@/lib/session";
 import { onAccountClear } from "@/lib/account-boundary";
 import {
@@ -58,8 +59,7 @@ export function PulseLifecycle() {
             return pulse;
           }
         } catch (error) {
-          if (!(error && typeof error === "object" && "status" in error && error.status === 404))
-            throw error;
+          if (!failedWith(error, 404)) throw error;
           legacy = true;
         }
         const [messages, activity] = await Promise.all([

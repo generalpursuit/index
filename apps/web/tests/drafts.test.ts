@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { MalformedResponseError, ORPCError, ResponseError } from "@orpc/client";
 import { MessageDraft } from "../src/features/messages/draft";
 import { LinkDrafts } from "../src/features/links/draft";
 import type { MessageFile, MessageReply, SavedLink } from "../src/lib/types";
@@ -12,6 +13,9 @@ const quote = (id: string): MessageReply => ({
   hasAttachment: false,
   files: [],
 });
+/** An oRPC error as the RPC link decodes it from an error response. */
+const answered = (status: number, code: string) =>
+  new ORPCError(code, { cause: new ResponseError({ response: { status, headers: {} } }) });
 const file = (name: string) => new File(["bytes"], name);
 const uploaded = (id: string): MessageFile => ({
   id,
@@ -64,7 +68,7 @@ test("a rejected reply stays editable and an abandoned one is dropped", () => {
   const draft = new MessageDraft("conversation");
   draft.reply(quote("first"));
   draft.editBody("Answer");
-  draft.fail(draft.prepare()!, { status: 400 });
+  draft.fail(draft.prepare()!, answered(400, "BAD_REQUEST"));
   draft.reply(quote("second"));
   assert.equal(draft.prepare()!.replyToMessageId, "second");
   const uncertain = new MessageDraft("conversation");
@@ -97,7 +101,7 @@ test("definite validation rejection releases editing and starts a new attempt", 
   const draft = new MessageDraft("conversation");
   draft.editBody("Rejected");
   const sent = draft.prepare()!;
-  draft.fail(sent, { status: 400 });
+  draft.fail(sent, answered(400, "BAD_REQUEST"));
   assert.equal(draft.getSnapshot().status, "rejected");
   draft.editBody("Corrected");
   const next = draft.prepare()!;
@@ -123,12 +127,12 @@ test("an inaccessible attachment retains uncertain identity until explicitly aba
   const draft = new MessageDraft("conversation");
   draft.attach(attachment);
   const missing = draft.prepare()!;
-  draft.fail(missing, { status: 404 });
+  draft.fail(missing, answered(404, "NOT_FOUND"));
   draft.editBody("Cannot silently change the attempted payload");
   assert.equal(draft.prepare(), missing);
   draft.abandonUnconfirmed();
   assert.equal(draft.getSnapshot().status, "sending");
-  draft.fail(missing, { status: 404 });
+  draft.fail(missing, answered(404, "NOT_FOUND"));
   draft.attach({ ...attachment, id: "next" });
   draft.abandonUnconfirmed();
   assert.equal(draft.getSnapshot().attachment?.id, "next");
@@ -219,8 +223,46 @@ test("a rejected send keeps its files for a new attempt", () => {
   const [added] = draft.addFiles([file("a.png")]);
   draft.fileUploaded(added!.localId, uploaded("a"));
   const rejected = draft.prepare()!;
-  draft.fail(rejected, { status: 400 });
+  draft.fail(rejected, answered(400, "BAD_REQUEST"));
   const next = draft.prepare()!;
   assert.notEqual(next.clientId, rejected.clientId);
   assert.deepEqual(next.files, rejected.files);
+});
+
+test("only answers that rule out a write release the send identity", () => {
+  const outcome = (error: unknown) => {
+    const draft = new MessageDraft("conversation");
+    draft.editBody("Hello");
+    draft.fail(draft.prepare()!, error);
+    return draft.getSnapshot().status;
+  };
+  for (const [status, code] of [
+    [400, "BAD_REQUEST"],
+    [413, "PAYLOAD_TOO_LARGE"],
+    [422, "UNPROCESSABLE_CONTENT"],
+  ] as const) {
+    assert.equal(outcome(answered(status, code)), "rejected", code);
+    // An unreadable answer could have followed a committed send.
+    assert.equal(
+      outcome(new MalformedResponseError({ response: { status, headers: {} } })),
+      "uncertain",
+      `${status} without an oRPC error`,
+    );
+  }
+  for (const [status, code] of [
+    [401, "UNAUTHORIZED"],
+    [403, "FORBIDDEN"],
+    [404, "NOT_FOUND"],
+    [409, "CONFLICT"],
+    [500, "INTERNAL_SERVER_ERROR"],
+    [502, "BAD_GATEWAY"],
+  ] as const)
+    assert.equal(outcome(answered(status, code)), "uncertain", code);
+  assert.equal(
+    outcome(new MalformedResponseError({ response: { status: 426, headers: {} } })),
+    "uncertain",
+  );
+  // Without a response, the API may have committed the message.
+  assert.equal(outcome(new ORPCError("BAD_REQUEST")), "uncertain");
+  assert.equal(outcome(new TypeError("Failed to fetch")), "uncertain");
 });

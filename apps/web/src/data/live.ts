@@ -1,3 +1,4 @@
+import { failedWith } from "./errors";
 type Socket = Pick<WebSocket, "send" | "close" | "readyState" | "addEventListener">;
 let conversation: string | null = null;
 let publishPresence: (() => void) | undefined;
@@ -72,13 +73,7 @@ export function connectLive({
       });
       current.addEventListener("error", () => current.close());
     } catch (error) {
-      if (
-        error &&
-        typeof error === "object" &&
-        "status" in error &&
-        [401, 403, 404, 426, 501].includes(Number(error.status))
-      )
-        return;
+      if (failedWith(error, 401, 403, 404, 426, 501)) return;
       schedule();
     } finally {
       connecting = false;

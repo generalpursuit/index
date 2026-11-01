@@ -1,5 +1,6 @@
 import { MutationCache, QueryCache, QueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { failedWith } from "./errors";
 
 export const freshness = { live: Infinity, onShow: 30_000, stable: 5 * 60_000 };
 export const cacheMaxAge = 7 * 24 * 60 * 60_000;
@@ -8,7 +9,7 @@ export function createQueryClient() {
   return new QueryClient({
     queryCache: new QueryCache({
       onError: (error, query) => {
-        if ("status" in error && [403, 404].includes(Number(error.status))) {
+        if (failedWith(error, 403, 404)) {
           // Keep observers and the permission error, but erase previously authorized content.
           query.setState({ data: undefined, dataUpdatedAt: 0 });
         }
@@ -24,9 +25,7 @@ export function createQueryClient() {
       queries: {
         staleTime: freshness.onShow,
         gcTime: cacheMaxAge,
-        retry: (count, error) =>
-          !("status" in error && [400, 401, 403, 404, 426].includes(Number(error.status))) &&
-          count < 2,
+        retry: (count, error) => !failedWith(error, 400, 401, 403, 404, 426) && count < 2,
         refetchOnWindowFocus: true,
       },
       mutations: { retry: false },

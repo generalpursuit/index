@@ -1,5 +1,7 @@
 import { maxFilesPerMessage } from "@index/api/features/messages/files";
 import type { MessageFile, MessageReply, SavedLink } from "@/lib/types";
+import { failedWith } from "@/data/errors";
+import { ORPCError } from "@orpc/client";
 
 export type MessageAttempt = Readonly<{
   conversationId: string;
@@ -137,13 +139,10 @@ export class MessageDraft {
   }
   fail(attempt: MessageAttempt, error: unknown) {
     if (attempt !== this.attempt) return;
-    // Validation rejects before writing. Transport/5xx/permission errors can follow an
-    // accepted write, so keep the exact request for retry rather than risk a duplicate.
-    const status =
-      typeof error === "object" && error !== null && "status" in error
-        ? Number(error.status)
-        : undefined;
-    if (status === 400 || status === 413 || status === 422) {
+    // Validation rejects before writing. Transport/5xx/permission errors and unreadable answers
+    // can follow an accepted write, so keep the exact request for retry rather than risk a
+    // duplicate.
+    if (error instanceof ORPCError && failedWith(error, 400, 413, 422)) {
       this.attempt = undefined;
       this.change({ ...this.value, status: "rejected" });
     } else this.change({ ...this.value, status: "uncertain" });

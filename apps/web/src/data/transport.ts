@@ -2,10 +2,11 @@ import { ENV } from "@/env.public";
 import { apiFetch, notifySessionEvent } from "@/lib/desktop";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import type { AppRouterClient } from "@index/api/contracts";
-import { createORPCClient } from "@orpc/client";
+import { createORPCClient, ORPCError } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
 import { BatchLinkPlugin } from "@orpc/client/plugins";
 import { createTanstackQueryUtils } from "@orpc/tanstack-query";
+import { failedWith } from "./errors";
 
 const reads = new Set([
   "get",
@@ -45,15 +46,14 @@ function acceptedClient() {
             return result;
           } catch (error) {
             assertCurrentAccount(generation);
-            if (error && typeof error === "object" && "status" in error) {
-              if (error.status === 401) notifySessionEvent("index:session-expired");
-              else if (
-                error.status === 403 &&
-                "data" in error &&
-                (error.data as { code?: string } | undefined)?.code === "EMAIL_NOT_VERIFIED"
-              )
-                notifySessionEvent("index:verification-required");
-            }
+            // Any 401 ends the session, including one without an oRPC error body.
+            if (failedWith(error, 401)) notifySessionEvent("index:session-expired");
+            else if (
+              error instanceof ORPCError &&
+              error.code === "FORBIDDEN" &&
+              (error.data as { code?: string } | undefined)?.code === "EMAIL_NOT_VERIFIED"
+            )
+              notifySessionEvent("index:verification-required");
             assertCurrentAccount(generation);
             throw error;
           }
