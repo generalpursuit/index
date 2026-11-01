@@ -15,7 +15,13 @@ import {
   listOwnerLinks,
 } from "./repository";
 import { readLinkMetadata, type FetchPage } from "./metadata";
-import type { CreateLinkInput, Link, ListMyLinksInput, UpdateLinkInput } from "./schemas";
+import type {
+  CreateLinkInput,
+  Link,
+  ListMyLinksInput,
+  SearchLinksInput,
+  UpdateLinkInput,
+} from "./schemas";
 
 const readMetadata = (url: string, fetchPage: FetchPage) =>
   ResultAsync.fromSafePromise(readLinkMetadata(url, fetchPage));
@@ -101,9 +107,19 @@ export function listByOwner(
 ) {
   const cursor = input.cursor ? decodeCursor(input.cursor) : ok(undefined);
   return cursor.asyncAndThen((decoded) =>
-    listOwnerLinks(db, viewerId, input.userId, input.limit + 1, decoded, input.weekStart).map(
-      (rows) => toPage(rows, input.limit),
-    ),
+    listOwnerLinks(db, viewerId, input.userId, input.limit + 1, decoded, {
+      weekStart: input.weekStart,
+    }).map((rows) => toPage(rows, input.limit)),
+  );
+}
+
+/** Searches the viewer's links, or another person's as their list shows them to the viewer. */
+export function searchLinks(db: QueryDatabase, viewerId: string, input: SearchLinksInput) {
+  const cursor = input.cursor ? decodeCursor(input.cursor) : ok(undefined);
+  return cursor.asyncAndThen((decoded) =>
+    listOwnerLinks(db, viewerId, input.userId ?? viewerId, input.limit + 1, decoded, {
+      words: input.query.split(/\s+/),
+    }).map((rows) => toPage(rows, input.limit)),
   );
 }
 

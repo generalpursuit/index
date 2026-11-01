@@ -49,6 +49,7 @@ it("marks exactly the agent tools, each described for a model", () => {
     list_comments: "read",
     find_people: "read",
     resolve_index_url: "read",
+    search_links: "read",
     list_group_links: "read",
     save_link: "write",
     forward_link: "write",

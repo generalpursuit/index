@@ -94,6 +94,25 @@ export const listOwnerLinksSchema = listMyLinksInputSchema
   .omit({ groupId: true, category: true })
   .extend({ userId: userIdSchema.describe("The person's user ID, the `id` of their profile.") });
 
+export const searchLinksInputSchema = z.strictObject({
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .describe(
+      "Words to look for. A link matches when every word appears in its title, address or note, ignoring case and also inside longer words.",
+    ),
+  userId: userIdSchema
+    .optional()
+    .describe(
+      "Search this person's links instead of your own: their user ID, the `id` of their profile.",
+    ),
+  limit: pageLimitSchema,
+  cursor: pageCursorSchema,
+});
+export type SearchLinksInput = z.output<typeof searchLinksInputSchema>;
+
 export const libraryWeeksInputSchema = z.strictObject({
   userId: z.string().min(1).max(128),
   groupId: z.uuid().optional(),

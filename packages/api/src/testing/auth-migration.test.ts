@@ -3,12 +3,13 @@ import { it } from "node:test";
 import { readFile, readdir } from "node:fs/promises";
 import { URL } from "node:url";
 import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { drizzle } from "drizzle-orm/pglite";
 import { relations } from "@index/db/relations";
 import { createAuth } from "@index/auth";
 
 it("upgrades legacy unverified password accounts without verifying them or losing their content", async () => {
-  const client = new PGlite();
+  const client = new PGlite({ extensions: { pg_trgm } });
   const base = new URL("../../../db/src/migrations/", import.meta.url);
   try {
     const migrations = (await readdir(base)).sort();

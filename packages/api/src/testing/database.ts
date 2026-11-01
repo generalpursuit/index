@@ -1,4 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
+import { pg_trgm } from "@electric-sql/pglite/contrib/pg_trgm";
 import { memoryFileStore } from "../features/messages/files";
 import { memoryMediaStore } from "../features/profiles/media";
 import type { Session } from "@index/auth";
@@ -11,7 +12,8 @@ import { URL } from "node:url";
 import type { Context } from "../context";
 
 export async function createTestDatabase() {
-  const client = new PGlite();
+  // Neon provides the extensions migrations create; PGlite must load them up front.
+  const client = new PGlite({ extensions: { pg_trgm } });
   const db = drizzle({ client, relations });
   const migrations = new URL("../../../db/src/migrations/", import.meta.url);
   const directories = (await readdir(migrations, { withFileTypes: true }))

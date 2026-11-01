@@ -6,7 +6,15 @@ import { implement } from "@orpc/server";
 import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { linksContract } from "./contract";
-import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup } from "./service";
+import {
+  createLink,
+  getLink,
+  listMyLinks,
+  updateLink,
+  deleteLink,
+  listInGroup,
+  searchLinks,
+} from "./service";
 
 const implementer = implement(linksContract).$context<Context>();
 const api = implementer.use(requireVerifiedSession);
@@ -36,6 +44,11 @@ export const linksRouter = implementer.router({
     .use(requireAuth)
     .handler(async ({ context, input }) =>
       unwrapResult(await listMyLinks(context.db, context.actorId, input)),
+    ),
+  search: api.search
+    .use(requireAuth)
+    .handler(async ({ context, input }) =>
+      unwrapResult(await searchLinks(context.db, context.actorId, input)),
     ),
   update: api.update
     .use(requireAuth)

@@ -14,6 +14,7 @@ import {
   updateLinkInputSchema,
   listGroupLinksInputSchema,
   listGroupLinksOutputSchema,
+  searchLinksInputSchema,
 } from "./schemas";
 
 export const linksContract = {
@@ -51,7 +52,7 @@ export const linksContract = {
         tags: ["Links"],
         summary: "List a person's saved links, newest first",
         description:
-          "Lists the links one person saved that the signed-in user may see, newest first: all of them on a public profile, on a private profile only for accepted followers, and never those in the person's locked groups. When none are visible the list is empty.",
+          "Lists the links one person saved that the signed-in user may see, newest first: all of them on a public profile, on a private profile only for accepted followers, and never those in the person's locked groups. When none are visible the list is empty. To find their links by words, search links with their user ID.",
       }),
       agentTool({ name: "list_person_links", permission: "read" }),
     )
@@ -77,12 +78,27 @@ export const linksContract = {
         path: "/links",
         summary: "List your saved links, newest first",
         description:
-          "Lists the signed-in user's own saved links, newest first, optionally only one week, group or kind.",
+          "Lists the signed-in user's own saved links, newest first, optionally only one week, group or kind. To find links by words in their title, address or note, search links instead.",
         tags: ["Links"],
       }),
       agentTool({ name: "list_my_links", permission: "read" }),
     )
     .input(listMyLinksInputSchema)
+    .output(listMyLinksOutputSchema),
+
+  search: baseContract
+    .meta(
+      openapi({
+        method: "GET",
+        path: "/links/search",
+        summary: "Search saved links by words, newest first",
+        description:
+          "Finds the signed-in user's saved links whose title, address or note contains every word of the query, ignoring case, newest first. With a person's user ID it searches that person's links instead, among only those their list shows the user: none of a private profile's unless the user is an accepted follower, and never those in locked groups. It does not search the web, comments or messages.",
+        tags: ["Links"],
+      }),
+      agentTool({ name: "search_links", permission: "read" }),
+    )
+    .input(searchLinksInputSchema)
     .output(listMyLinksOutputSchema),
 
   get: baseContract

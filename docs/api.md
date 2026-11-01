@@ -25,6 +25,8 @@ Raise a minimum only after a release with compatible clients is published, or th
 - Starred references other people's originals and is always owner-only. Favorites references the owner's originals and is never locked; each original still follows its own group's lock. Both are protected system groups: originals cannot be moved into them, and their names/existence cannot be edited. Reads enforce both collection and original visibility; revocation hides a reference without deleting it.
 - Publishing a private profile atomically accepts pending follow requests. Making it private retains accepted followers. Privacy changes require confirmation. Custom group names and historical slugs remain subject to [route reservations](readable-routes.md).
 
+Link search matches literal, whitespace-separated words: each must appear in a link's title, URL or note, ignoring case and also inside longer words. It covers the viewer's own links or one person's, with exactly that person's link-list visibility applied before pagination, newest first with the ordinary cursor. A `pg_trgm` GIN index over the three columns serves large libraries; for small ones the planner keeps the owner index.
+
 Comments are plain text on accessible originals. Authors can edit while they retain access and delete their own comments even after losing it; link owners can moderate comments on their links. Activity references live sources and rechecks visibility rather than storing private text copies.
 
 ## Ordering and atomicity

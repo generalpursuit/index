@@ -99,6 +99,13 @@ export const links = pgTable(
       table.createdAt.desc(),
       table.id.desc(),
     ),
+    // Serves case-insensitive substring search over each column (requires pg_trgm).
+    index("links_search_trgm_idx").using(
+      "gin",
+      table.title.op("gin_trgm_ops"),
+      table.url.op("gin_trgm_ops"),
+      table.description.op("gin_trgm_ops"),
+    ),
     check("links_url_not_empty", sql`length(btrim(${table.url})) > 0`),
     check("links_title_not_empty", sql`length(btrim(${table.title})) > 0`),
     check("links_category_check", inArray(table.category, linkCategories)),

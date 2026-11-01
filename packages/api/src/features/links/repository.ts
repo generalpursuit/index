@@ -1,6 +1,6 @@
 import { groups, links, stars, favorites } from "@index/db/schema/app";
 import { user } from "@index/db/schema/auth";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { ResultAsync } from "neverthrow";
 
 import type { QueryDatabase } from "../../data-access/database";
@@ -174,13 +174,27 @@ export function listGroupLinks(
 export function inWeek(weekStart: string) {
   return sql`${links.savedOn} >= ${weekStart}::date and ${links.savedOn} < (${weekStart}::date + interval '1 week')`;
 }
+/** Each word appears, ignoring case, in the title, address or note; the trigram index serves it. */
+function containsWords(words: string[]) {
+  return and(
+    ...words.map((word) => {
+      const pattern = `%${word.replace(/[\\%_]/g, "\\$&")}%`;
+      return or(
+        ilike(links.title, pattern),
+        ilike(links.url, pattern),
+        ilike(links.description, pattern),
+      );
+    }),
+  );
+}
+
 export function listOwnerLinks(
   db: QueryDatabase,
   viewerId: string | null,
   ownerId: string,
   limit: number,
   cursor?: Cursor,
-  weekStart?: string,
+  filters: { weekStart?: string; words?: string[] } = {},
 ) {
   return ResultAsync.fromPromise(
     db
@@ -190,7 +204,8 @@ export function listOwnerLinks(
         and(
           eq(links.ownerId, ownerId),
           linkVisible(viewerId),
-          weekStart ? inWeek(weekStart) : undefined,
+          filters.weekStart ? inWeek(filters.weekStart) : undefined,
+          filters.words ? containsWords(filters.words) : undefined,
           cursor
             ? sql`(${links.createdAt},${links.id}) < (${cursor.createdAt}::timestamptz,${cursor.id}::uuid)`
             : undefined,
