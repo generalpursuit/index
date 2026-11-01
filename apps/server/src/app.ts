@@ -6,6 +6,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { isClientOAuthPath, mountAuthentication, type AuthFactory } from "./authentication";
 import { clientHeader, clientVersionGate } from "./client-version";
+import { mcpCorsPolicy, mcpHandler, type McpOptions } from "./mcp";
 import { apiHandler, rpcHandler } from "./transport";
 
 type BackgroundTask = (task: Promise<unknown>) => void;
@@ -16,6 +17,8 @@ export type AppOptions = {
   readMedia: (key: string) => Promise<Response | null>;
   beginMutation?: () => Promise<() => Promise<void>>;
   connect?: (userId: string, request: Request) => Promise<Response>;
+  /** Serves the MCP endpoint at `/mcp`. */
+  mcp?: McpOptions;
 };
 
 // Both transports' upload routes. The RPC matcher ignores the method, and the REST matcher
@@ -45,9 +48,11 @@ export function createApp(options: AppOptions) {
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization", "MCP-Protocol-Version"],
   });
-  app.use("/*", (c, next) =>
-    isClientOAuthPath(c.req.path) ? clientOAuthCors(c, next) : appCors(c, next),
-  );
+  const mcpCors = cors(mcpCorsPolicy);
+  app.use("/*", (c, next) => {
+    if (c.req.path === "/mcp") return mcpCors(c, next);
+    return isClientOAuthPath(c.req.path) ? clientOAuthCors(c, next) : appCors(c, next);
+  });
   app.use("/*", clientVersionGate);
   app.get("/live/:account", (c) => {
     const origin = c.req.header("Origin");
@@ -57,6 +62,12 @@ export function createApp(options: AppOptions) {
     return options.connect(c.req.param("account"), c.req.raw);
   });
   mountAuthentication(app, options.auth, options.beginMutation);
+  if (options.mcp) {
+    const mcp = mcpHandler(options.mcp);
+    app.on(["GET", "POST", "DELETE"], "/mcp", (c) =>
+      mcp(c.req.raw, (task) => c.executionCtx.waitUntil(task)),
+    );
+  }
   // The schema's file limit applies only after a whole upload is in memory, so the body is
   // capped first. The extra megabyte allows for multipart framing.
   const capUpload = bodyLimit({

@@ -13,7 +13,7 @@ const errorStatusMap: Record<string, number> = COMMON_ERROR_STATUS_MAP;
 const errorStatus = (error: ORPCError<string, unknown>) =>
   errorStatusMap[error.code] ?? DEFAULT_ERROR_STATUS;
 
-function logUnexpectedError(error: unknown) {
+export function logUnexpectedError(error: unknown) {
   if (!(error instanceof ORPCError) || errorStatus(error) >= 500) console.error(error);
 }
 

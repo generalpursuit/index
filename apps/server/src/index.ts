@@ -1,7 +1,7 @@
 import { sweepStagedFiles } from "@index/api/features/messages/service";
 import { trustedWebOrigins } from "@index/auth/origins";
 import { createApp } from "./app";
-import { createContext } from "./context";
+import { createAgentContext, createContext } from "./context";
 import { desktopOrigins, ENV } from "./env.server";
 import { r2FileStore } from "./files";
 import { readPhoto } from "./media";
@@ -18,6 +18,7 @@ const app = createApp({
   readMedia: (key) => readPhoto(ENV.MEDIA, key),
   beginMutation: beginDispatch,
   connect: (userId, request) => hub(userId).fetch(request),
+  mcp: { apiURL: ENV.BETTER_AUTH_URL, createContext: createAgentContext },
 });
 
 // One daily maintenance wake. Expiry checks never depend on physical cleanup.
