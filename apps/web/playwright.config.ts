@@ -7,7 +7,8 @@ export default defineConfig({
   workers: 1,
   timeout: 45_000,
   expect: { timeout: 10_000 },
-  reporter: "list",
+  // Shards write blob reports that CI merges into one.
+  reporter: process.env.CI ? [["list"], ["blob"]] : "list",
   use: {
     baseURL: webURL,
     launchOptions: {

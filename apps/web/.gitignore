@@ -65,3 +65,5 @@ dev-dist
 # Browser test artifacts
 /test-results/
 /playwright-report/
+/blob-report/
+/all-blob-reports/

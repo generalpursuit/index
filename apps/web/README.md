@@ -44,6 +44,8 @@ VITE_SERVER_URL=http://localhost:3002 bun run check-types
 E2E_PRODUCTION=1 bun run test:e2e --headed
 ```
 
+CI splits the browser suite into four shards, each with its own fixture API, and merges their reports into one.
+
 `bun run check:tooling` from the root separately checks the Bun/Node tools in [scripts/desktop](scripts/desktop), [e2e/server.ts](e2e/server.ts), [e2e/fixtures.ts](e2e/fixtures.ts), and brand generation under strict TypeScript. CI runs this check; Bun execution alone does not check types.
 
 The web type check builds the production frontend. Playwright starts its own disposable PGlite API on 3002 and web preview on 4173. It resets fixture data; do not share that API with simultaneous native tests. Override `E2E_API_PORT` / `E2E_WEB_PORT` for another test stack and build with the matching `VITE_SERVER_URL`. Omit `E2E_PRODUCTION=1` to use Vite development mode; bootstrap cases require a production build.

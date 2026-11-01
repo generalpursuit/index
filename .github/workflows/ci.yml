@@ -53,6 +53,27 @@ jobs:
           bun run --cwd packages/ui check-types
           bun run --cwd apps/server check-types
           bun run --cwd packages/infra check-types
+
+  # The browser suite runs one test at a time against its own fixture API, so shards on separate
+  # runners keep tests isolated while running in parallel.
+  browser:
+    name: Browser tests (${{ matrix.shard }}/4)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - name: Build the production bundle
+        env:
+          VITE_SERVER_URL: http://localhost:3002
+        run: bun run --cwd apps/web build
       - name: Install Chromium
         working-directory: apps/web
         run: bun run playwright install --with-deps chromium
@@ -62,12 +83,46 @@ jobs:
           E2E_PRODUCTION: "1"
         # The headless shell reports notification permission as denied despite
         # a browser-context grant. Use the full browser for the real worker tests.
-        run: xvfb-run --auto-servernum bun run test:e2e --headed
+        run: xvfb-run --auto-servernum bun run test:e2e --headed --shard=${{ matrix.shard }}/4
+      - name: Upload the shard's report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: blob-report-${{ matrix.shard }}
+          path: apps/web/blob-report
+          retention-days: 1
       - name: Upload failure artifacts
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: browser-failures
+          name: browser-failures-${{ matrix.shard }}
           path: apps/web/test-results
           if-no-files-found: ignore
           retention-days: 7
+
+  browser-report:
+    name: Browser test report
+    needs: browser
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: apps/web/all-blob-reports
+          pattern: blob-report-*
+          merge-multiple: true
+      - name: Merge the shards
+        working-directory: apps/web
+        run: bun run playwright merge-reports --reporter html all-blob-reports
+      - name: Upload the HTML report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: browser-report
+          path: apps/web/playwright-report
+          retention-days: 14
