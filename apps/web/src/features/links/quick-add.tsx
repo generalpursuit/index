@@ -5,6 +5,7 @@ import { useShareSave } from "@/features/sharing/use-share-save";
 import { accountGeneration, assertCurrentAccount } from "@/lib/account-boundary";
 import { dayLabel, monday } from "@/lib/weeks";
 import { useMediaQuery } from "@index/ui/hooks/use-media-query";
+import { isComposing } from "@index/ui/lib/keys";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { useLibraryActions } from "./hooks/use-links";
@@ -167,7 +168,11 @@ export function QuickAdd({
             void save(pasted);
           }}
           onKeyDown={(e) => {
+            if (isComposing(e.nativeEvent)) return;
             if (e.key === "Escape") {
+              // Clearing the field is all this Escape does. In an empty one it goes on to what
+              // holds the field, such as the menu bar panel, which closes.
+              if (text || hint || duplicate) e.preventDefault();
               setText("");
               setHint(false);
               setDuplicate(null);

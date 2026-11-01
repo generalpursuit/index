@@ -8,6 +8,7 @@ import { Input } from "@index/ui/components/input";
 import { Textarea } from "@index/ui/components/textarea";
 import { Button } from "@index/ui/components/button";
 import { Confirmation } from "@index/ui/components/confirmation";
+import { isComposing, submitForm } from "@index/ui/lib/keys";
 import { Field, FieldLabel, FieldError } from "@index/ui/components/field";
 import {
   DropdownMenu,
@@ -195,9 +196,9 @@ function LinkForm({
               onBlur={field.handleBlur}
               // A title is one line; Return saves, as in any single-line field.
               onKeyDown={(e) => {
-                if (e.key !== "Enter") return;
+                if (e.key !== "Enter" || isComposing(e.nativeEvent)) return;
                 e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
+                if (e.currentTarget.form) submitForm(e.currentTarget.form);
               }}
               onChange={(e) => {
                 const value = e.target.value.replace(/\s*\n\s*/g, " ");

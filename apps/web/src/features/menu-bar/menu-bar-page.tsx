@@ -11,6 +11,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
+import { isComposing } from "@index/ui/lib/keys";
 import { LinkList, scrollToTop } from "@/features/links/link-list";
 import { LinkMark } from "@/features/links/link-mark";
 import { QuickAdd } from "@/features/links/quick-add";
@@ -62,6 +63,8 @@ function MenuPanel() {
   }, [session.isPending, session.isError, session.dataUpdatedAt, checking]);
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
+      // Keys an input method composes with, such as quick add's, are its own.
+      if (isComposing(event)) return;
       // The footer promises Command-Q; Index is not the active app, so its menu may never see it.
       if (event.metaKey && event.key.toLowerCase() === "q") {
         event.preventDefault();
