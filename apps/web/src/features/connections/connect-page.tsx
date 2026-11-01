@@ -11,7 +11,8 @@ import { connections, safeLogo } from "./api";
  * Where an MCP client's authorization request lands on the web origin. The API's authorize
  * endpoint sends the browser here to sign in and to approve; the answer goes back to the API,
  * which sends the browser on to the app. Signing in and email verification use the login page
- * and return here.
+ * and return here. An app that forces a fresh login (`prompt=login`) gets one even when the
+ * browser is signed in: approving with the older session would only ask for login again.
  */
 export function ConnectPage() {
   const session = useQuery(sessionOptions);
@@ -20,12 +21,15 @@ export function ConnectPage() {
   // search turns values such as a long numeric `state` into lossy numbers, and Better Auth
   // checks the exact signed values.
   const query = window.location.search.slice(1);
+  const forcesLogin = !!new URLSearchParams(query).get("prompt")?.split(" ").includes("login");
   const user = session.data?.user;
   const ready = !!user?.emailVerified;
   useEffect(() => {
-    if (query && !session.isPending && !ready)
+    // Signing in with the signed request lets Better Auth resume it without the login prompt.
+    if (forcesLogin) void navigate({ to: "/login", search: { oauth: query }, replace: true });
+    else if (query && !session.isPending && !ready)
       void navigate({ to: "/login", search: { next: `/connect?${query}` }, replace: true });
-  }, [navigate, query, ready, session.isPending]);
+  }, [forcesLogin, navigate, query, ready, session.isPending]);
   if (!query)
     return (
       <ConnectFrame>
@@ -35,7 +39,7 @@ export function ConnectPage() {
         </p>
       </ConnectFrame>
     );
-  if (!user || !ready)
+  if (forcesLogin || !user || !ready)
     return (
       <ConnectFrame>
         <p role="status">Checking your session…</p>

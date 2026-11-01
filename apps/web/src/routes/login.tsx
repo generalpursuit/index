@@ -14,7 +14,11 @@ import wordmark from "@/assets/wordmark.svg";
 import { authClient } from "@/lib/auth-client";
 import { resetSession, safeReturn, sessionOptions } from "@/lib/session";
 export const Route = createFileRoute("/login")({
-  validateSearch: z.object({ next: z.string().optional().catch(undefined) }),
+  validateSearch: z.object({
+    next: z.string().optional().catch(undefined),
+    // An MCP client's signed authorization request that asked for a fresh login.
+    oauth: z.string().optional().catch(undefined),
+  }),
   component: Login,
 });
 const defaultValues = { name: "", username: "", email: "", identifier: "", password: "" };
@@ -48,14 +52,21 @@ const signUpFields: LoginField[] = [
   { name: "email", label: "Email", type: "email", autoComplete: "email" },
   { name: "password", label: "Password", type: "password", autoComplete: "new-password" },
 ];
-function authenticate(signUp: boolean, value: LoginValues) {
+function authenticate(signUp: boolean, value: LoginValues, oauthQuery?: string) {
   const { name, username, email, password } = value;
-  if (signUp) return authClient.signUp.email({ name, username, email, password });
+  // With a signed authorization request, Better Auth resumes it from the new session and
+  // answers with where the browser continues instead of the account.
+  const fetchOptions = oauthQuery ? { body: { oauth_query: oauthQuery } } : undefined;
+  if (signUp) return authClient.signUp.email({ name, username, email, password, fetchOptions });
   // Better Auth signs in by email and by username at separate endpoints.
   const identifier = value.identifier.trim();
   return identifier.includes("@")
-    ? authClient.signIn.email({ email: identifier, password })
-    : authClient.signIn.username({ username: identifier, password });
+    ? authClient.signIn.email({ email: identifier, password, fetchOptions })
+    : authClient.signIn.username({ username: identifier, password, fetchOptions });
+}
+function resumedAuthorization(data: unknown) {
+  const url = (data as { url?: unknown } | null)?.url;
+  return typeof url === "string" ? url : null;
 }
 function Login() {
   const session = useQuery(sessionOptions);
@@ -124,7 +135,7 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
   const [signUp, setSignUp] = useState(false),
     [error, setError] = useState(""),
     router = useRouter(),
-    { next } = Route.useSearch();
+    { next, oauth } = Route.useSearch();
   const form = useForm({
     defaultValues,
     validators: {
@@ -141,14 +152,21 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
       try {
         // Fence old drafts and requests before credentials can change, including native login.
         await clearAccountState(queryClient);
-        const result = await authenticate(signUp, value);
+        const result = await authenticate(signUp, value, oauth);
         if (result.error) {
-          setError(result.error.message ?? "Could not sign in.");
+          setError(
+            result.error.message ||
+              (oauth
+                ? "This request has expired. Start connecting again from the app."
+                : "Could not sign in."),
+          );
           return;
         }
         await resetSession();
         await router.invalidate();
-        if (result.data?.user.emailVerified) router.history.replace(safeReturn(next));
+        const resumed = resumedAuthorization(result.data);
+        if (resumed) window.location.assign(resumed);
+        else if (result.data?.user.emailVerified) router.history.replace(safeReturn(next));
       } catch {
         setError("Could not connect. Please try again.");
       }
@@ -172,6 +190,11 @@ function LoginForm({ onRecover }: { onRecover: () => void }) {
         >
           <img src={wordmark} alt="Index" />
         </h1>
+        {oauth && (
+          <p role="status" className="mb-6 text-center text-subtle-foreground">
+            The app connecting to Index asks you to sign in again.
+          </p>
+        )}
         <form
           className={"form-stack flex flex-col gap-4.5"}
           onSubmit={(e) => {

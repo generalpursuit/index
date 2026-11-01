@@ -590,6 +590,37 @@ describe("MCP client authorization", () => {
     assert.equal(Number(rows[0]!.count), 0);
   });
 
+  it("resumes a request that forces login from a fresh sign-in, even when already signed in", async () => {
+    const person = await account("relogin");
+    const clientId = await register();
+    const { verifier, challenge } = await pkce();
+    const page = await authorize(
+      authorizeURL(clientId, challenge, { prompt: "login" }),
+      person.cookie,
+    );
+    assert.equal(page.origin + page.pathname, `${web}/connect`);
+    assert.equal(page.searchParams.get("prompt"), "login");
+    // Approving with the older session only asks for login again: the loop the web avoids.
+    const stale = await consent(page, person.cookie, "read offline_access");
+    assert.equal(new URL(((await stale.json()) as { url: string }).url).pathname, "/connect");
+
+    // Signing in again with the signed request resumes it without the login prompt.
+    const signedIn = await json(
+      "/api/auth/sign-in/username",
+      { username: "relogin", password, oauth_query: page.search.slice(1) },
+      { Origin: web },
+    );
+    assert.equal(signedIn.status, 200, await signedIn.clone().text());
+    const cookie = `__Secure-better-auth.session_token=${signedIn.headers.get("set-auth-token")}`;
+    const next = new URL(((await signedIn.json()) as { url: string }).url);
+    assert.equal(next.origin + next.pathname, `${web}/connect`);
+    assert.equal(next.searchParams.get("prompt"), null);
+    const approved = await consent(next, cookie, "read offline_access");
+    assert.equal(approved.status, 200, await approved.clone().text());
+    const tokens = await exchange(clientId, approved, verifier);
+    assert.equal((await verifyMcpAccess(fixture.db, api, tokens.access_token))?.userId, person.id);
+  });
+
   it("binds tokens to the MCP resource and requires PKCE", async () => {
     const person = await account("bound");
     const clientId = await register();

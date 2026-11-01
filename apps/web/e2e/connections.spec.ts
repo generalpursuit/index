@@ -85,3 +85,55 @@ test("an MCP client connects through sign-in and consent, then is disconnected",
   await page.goto("/settings");
   await expect(app).toContainText("Read only");
 });
+
+test("an app that forces a fresh login gets one, even from a signed-in browser", async ({
+  page,
+  request,
+}) => {
+  const registered = await request.post(apiURL + "/api/auth/oauth2/register", {
+    data: {
+      client_name: "Strict agent",
+      redirect_uris: [callback],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+    },
+  });
+  const { client_id } = (await registered.json()) as { client_id: string };
+  await page.route(`${callback}**`, (route) => route.fulfill({ body: "Connected" }));
+  const signIn = async () => {
+    await page.getByLabel("Email or username", { exact: true }).fill("alice");
+    await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  };
+  await page.goto("/login");
+  await signIn();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+
+  const authorize = new URL(apiURL + "/api/auth/oauth2/authorize");
+  for (const [key, value] of Object.entries({
+    response_type: "code",
+    client_id,
+    redirect_uri: callback,
+    scope: "read offline_access",
+    state: "fresh-login",
+    code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+    code_challenge_method: "S256",
+    resource: apiURL + "/mcp",
+    prompt: "login",
+  }))
+    authorize.searchParams.set(key, value);
+  await page.goto(authorize.href);
+  await expect(page).toHaveURL(new RegExp(`^${webURL}/login\\?oauth=`));
+  await expect(page.getByText("asks you to sign in again")).toBeVisible();
+  await signIn();
+
+  await expect(
+    page.getByRole("heading", { name: "Strict agent wants to use your Index account" }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Allow", exact: true }).click();
+  await page.waitForURL(`${callback}**`);
+  const returned = new URL(page.url());
+  expect(returned.searchParams.get("code")).toBeTruthy();
+  expect(returned.searchParams.get("state")).toBe("fresh-login");
+});
