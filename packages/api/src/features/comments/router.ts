@@ -12,9 +12,7 @@ export const commentsRouter = implementer.router({
   create: api.create
     .use(requireAuth)
     .handler(async ({ context, input }) =>
-      unwrapResult(
-        await service.createComment(context.db, context.actorId, input.linkId, input.body),
-      ),
+      unwrapResult(await service.createComment(context.db, context.actorId, input)),
     ),
   list: api.list.handler(async ({ context, input }) =>
     unwrapResult(await service.listComments(context.db, context.session?.user.id ?? null, input)),

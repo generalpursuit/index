@@ -27,7 +27,7 @@ Raise a minimum only after a release with compatible clients is published, or th
 
 Link search matches literal, whitespace-separated words: each must appear in a link's title, URL or note, ignoring case and also inside longer words. It covers the viewer's own links or one person's, with exactly that person's link-list visibility applied before pagination, newest first with the ordinary cursor. A `pg_trgm` GIN index over the three columns serves large libraries; for small ones the planner keeps the owner index.
 
-Comments are plain text on accessible originals. Authors can edit while they retain access and delete their own comments even after losing it; link owners can moderate comments on their links. Activity references live sources and rechecks visibility rather than storing private text copies.
+Comments are plain text on accessible originals. Authors can edit while they retain access and delete their own comments even after losing it; link owners can moderate comments on their links. Activity references live sources and rechecks visibility rather than storing private text copies. A comment may carry an optional client-generated `clientId`, with the send receipt rules below: a retry with the same ID, link and text returns the committed comment before access is checked again, and reusing the ID for another link or text conflicts. The receipt is the comment itself, so once its author edits it the original retry conflicts, and once it is deleted a retry posts it again.
 
 ## Ordering and atomicity
 

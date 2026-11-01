@@ -47,7 +47,24 @@ function commentNotices(db: QueryDatabase, body: string) {
   return [recipients, removed, notice] as const;
 }
 
-export function createComment(db: QueryDatabase, actorId: string, linkId: string, body: string) {
+/**
+ * Comments on a visible link. With a client ID, a retry is answered by the comment it committed
+ * before the link's visibility is checked again; `reused` marks an ID that committed another link
+ * or text.
+ */
+export function createComment(
+  db: QueryDatabase,
+  actorId: string,
+  input: { linkId: string; body: string; clientId?: string },
+) {
+  const { linkId, body } = input;
+  const clientId = input.clientId ?? null;
+  const previous = db.$with("previous_comment").as(
+    db
+      .select()
+      .from(comments)
+      .where(and(eq(comments.authorId, actorId), eq(comments.clientId, sql`${clientId}::uuid`))),
+  );
   const inserted = db.$with("changed_comment").as(
     db
       .insert(comments)
@@ -58,26 +75,58 @@ export function createComment(db: QueryDatabase, actorId: string, linkId: string
             linkId: links.id,
             authorId: sql<string>`${actorId}`.as("author_id"),
             body: sql<string>`${body}`.as("body"),
+            clientId: sql<string | null>`${clientId}::uuid`.as("client_id"),
             createdAt: sql<Date>`now()`.as("created_at"),
             updatedAt: sql<Date>`now()`.as("updated_at"),
           })
           .from(links)
-          .where(and(eq(links.id, linkId), linkVisible(actorId))),
+          .where(
+            and(
+              eq(links.id, linkId),
+              linkVisible(actorId),
+              sql`not exists (select 1 from ${previous})`,
+            ),
+          ),
       )
+      // A concurrent attempt with the same ID returns its comment when the payload matches.
+      .onConflictDoUpdate({
+        target: [comments.authorId, comments.clientId],
+        // Answering a retry is not an edit, so it keeps the comment's update time.
+        set: { clientId: sql`excluded.client_id`, updatedAt: sql`${comments.updatedAt}` },
+        setWhere: sql`${comments.linkId} = ${linkId}::uuid and ${comments.body} = ${body}`,
+      })
       .returning(),
   );
+  // Rows this statement writes are visible only through what the insert returns.
+  const answered = db.$with("answered_comment", {
+    id: sql<string>`id`.as("id"),
+    linkId: sql<string>`link_id`.as("link_id"),
+    authorId: sql<string>`author_id`.as("author_id"),
+    body: sql<string>`body`.as("body"),
+    createdAt: sql<Date>`created_at`.as("created_at"),
+    updatedAt: sql<Date>`updated_at`.as("updated_at"),
+    reused: sql<boolean>`reused`.as("reused"),
+  }).as(sql`
+      select id, link_id, author_id, body, created_at, updated_at, false as reused
+      from changed_comment
+      union all
+      select id, link_id, author_id, body, created_at, updated_at,
+        not (link_id = ${linkId}::uuid and body = ${body})
+      from previous_comment
+    `);
   return ResultAsync.fromPromise(
     db
-      .with(inserted, ...commentNotices(db, body))
+      .with(previous, inserted, ...commentNotices(db, body), answered)
       .select({
-        id: inserted.id,
-        linkId: inserted.linkId,
-        authorId: inserted.authorId,
-        body: inserted.body,
-        createdAt: timestamp(inserted.createdAt),
-        updatedAt: timestamp(inserted.updatedAt),
+        id: answered.id,
+        linkId: answered.linkId,
+        authorId: answered.authorId,
+        body: answered.body,
+        createdAt: timestamp(answered.createdAt),
+        updatedAt: timestamp(answered.updatedAt),
+        reused: answered.reused,
       })
-      .from(inserted)
+      .from(answered)
       .then((rows) => rows[0]),
     databaseError,
   );

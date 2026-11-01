@@ -17,6 +17,12 @@ export const createCommentSchema = z.strictObject({
   body: bodySchema.describe(
     "The comment's plain text, up to 5000 characters. Write @username to mention someone.",
   ),
+  clientId: z
+    .uuid()
+    .optional()
+    .describe(
+      "A new random UUID for each comment. Reuse it, with the same other fields, only to retry a comment whose outcome is unknown: the retry then returns the comment already posted instead of posting twice.",
+    ),
 });
 export const updateCommentSchema = z.strictObject({ id: z.uuid(), body: bodySchema });
 export const listCommentsSchema = pageInputSchema.extend({ linkId: commentedLinkSchema });

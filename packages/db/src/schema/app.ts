@@ -175,6 +175,8 @@ export const comments = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     body: text("body").notNull(),
+    // Optional client-generated retry key, scoped to the author.
+    clientId: uuid("client_id"),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
@@ -182,6 +184,7 @@ export const comments = pgTable(
       .notNull(),
   },
   (table) => [
+    unique("comments_author_client_unique").on(table.authorId, table.clientId),
     index("comments_link_created_at_id_idx").on(table.linkId, table.createdAt, table.id),
     index("comments_author_id_idx").on(table.authorId),
     check("comments_body_not_empty", sql`length(btrim(${table.body})) > 0`),

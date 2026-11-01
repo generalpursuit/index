@@ -20,7 +20,7 @@ export const commentsContract = {
         tags: ["Comments"],
         summary: "Comment on a link",
         description:
-          "Posts a plain-text comment on a link the signed-in user may see. Everyone who can see the link can read it, and its owner and anyone mentioned as @username are notified. Post only what the user asked you to post. It cannot edit or delete comments.",
+          "Posts a plain-text comment on a link the signed-in user may see. Everyone who can see the link can read it, and its owner and anyone mentioned as @username are notified. Always send a new `clientId`, so a retry can't post twice. Post only what the user asked you to post. It cannot edit or delete comments.",
       }),
       agentTool({ name: "post_comment", permission: "write" }),
     )
