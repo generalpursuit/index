@@ -15,6 +15,7 @@ mod macos {
         pub fn index_dock_visible() -> bool;
         pub fn index_dock_show(visible: bool, persist: bool) -> bool;
         pub fn index_dock_restore() -> bool;
+        pub fn index_dock_prepare_main(window: *mut std::ffi::c_void);
     }
 }
 
@@ -23,6 +24,16 @@ pub fn restore() {
     if !unsafe { macos::index_dock_restore() } {
         log::warn!("Could not restore the Dock preference.");
     }
+}
+
+/// Main keeps its own Space and can enter full screen, also while Index is out of the Dock.
+pub fn prepare_main(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "macos")]
+    if let Ok(pointer) = window.ns_window() {
+        unsafe { macos::index_dock_prepare_main(pointer) };
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
 }
 
 #[tauri::command]

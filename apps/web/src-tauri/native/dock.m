@@ -36,3 +36,17 @@ bool index_dock_show(bool visible, bool persist) {
 bool index_dock_restore(void) {
   return index_dock_show(![NSUserDefaults.standardUserDefaults boolForKey:hiddenKey], false);
 }
+
+// Out of the Dock, AppKit treats an accessory app's windows as auxiliary: they open in another
+// app's full-screen Space and cannot enter full screen themselves. Main stays an ordinary window
+// in either mode.
+void index_dock_prepare_main(void *pointer) {
+  onMain(^{
+    NSWindow *window = (__bridge NSWindow *)pointer;
+    NSWindowCollectionBehavior auxiliary = NSWindowCollectionBehaviorCanJoinAllSpaces
+        | NSWindowCollectionBehaviorMoveToActiveSpace | NSWindowCollectionBehaviorFullScreenAuxiliary
+        | NSWindowCollectionBehaviorFullScreenNone;
+    window.collectionBehavior = (window.collectionBehavior & ~auxiliary)
+        | NSWindowCollectionBehaviorManaged | NSWindowCollectionBehaviorFullScreenPrimary;
+  });
+}

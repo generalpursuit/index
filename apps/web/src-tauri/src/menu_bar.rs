@@ -106,6 +106,7 @@ pub fn ensure_main(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .on_download(crate::downloads::handle)
         .build()?;
     crate::titlebar::install(&window);
+    crate::dock::prepare_main(&window);
     crate::appearance::paint_background(&window);
     attach_lifecycle(&window);
     if config.visible { window.show()?; }
