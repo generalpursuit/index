@@ -7,16 +7,18 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
-import { Copy, Download, ImageIcon, Reply } from "lucide-react";
+import { Copy, Download, ExternalLink, ImageIcon, Reply } from "lucide-react";
 import { toast } from "sonner";
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
+  ContextMenuLinkItem,
   ContextMenuTrigger,
 } from "@index/ui/components/context-menu";
 import { UserAvatar } from "@/components/app/user-avatar";
 import type { Conversation, Message, MessageFile } from "@/lib/types";
+import { bodyParts } from "./body-links";
 import { replyExcerpt, replyLabel } from "./conversation-presentation";
 import { MessageFiles, PhotoViewer, isPhoto, useSaveFile } from "./message-files";
 import { SharedPost } from "./shared-post";
@@ -211,7 +213,8 @@ function Run({
 
 /**
  * A message with its reply menu (right click, long press, or the ContextMenu key or Shift+F10)
- * and swipe to reply. It is announced by sender, content and time.
+ * and swipe to reply. It is announced by sender, content and time. Links in its text open on
+ * their own; on the desktop app in the default browser, as every outside link does.
  */
 function MessageItem({
   message,
@@ -243,7 +246,8 @@ function MessageItem({
     if (canReply) onReply();
   });
   // The menu keeps focus while open, so what it opens takes focus as it closes: replying hands
-  // it to the composer, and a photo's viewer takes it itself.
+  // it to the composer, and a photo's viewer takes it itself. Otherwise it returns to the
+  // message, even when the menu opened over a link a click had focused.
   const handoff = useRef<"composer" | "viewer">(undefined);
   const item = useRef<HTMLDivElement>(null);
   const [viewer, setViewer] = useState<{ file: MessageFile; open: boolean }>();
@@ -251,6 +255,8 @@ function MessageItem({
   const label = useId();
   const photos = message.files.filter(isPhoto),
     others = message.files.filter((file) => !isPhoto(file));
+  const parts = bodyParts(message.body),
+    links = parts.filter((part) => part.href);
   // A run's tail belongs to its final bubble; a card below it is its own surface.
   const card = !!message.attachment || !!message.restrictedAuthor || message.hasAttachment;
   return (
@@ -272,11 +278,13 @@ function MessageItem({
           onFocus={onFocus}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.target !== event.currentTarget) return;
-            // Enter opens the post a message carries, or else the original a reply quotes. The
-            // arrow keys reach that original too, but nothing else reaches the post.
+            // Enter opens the post a message carries, or else the original a reply quotes, or
+            // else its first link. The menu reaches every link, but nothing else reaches the
+            // post or the quote.
             const action =
               event.currentTarget.querySelector<HTMLElement>(".shared-post:is(button, a)") ??
-              event.currentTarget.querySelector<HTMLElement>("button.message-quote");
+              event.currentTarget.querySelector<HTMLElement>("button.message-quote") ??
+              event.currentTarget.querySelector<HTMLElement>("a.message-link");
             if (!action) return;
             event.preventDefault();
             action.click();
@@ -318,7 +326,24 @@ function MessageItem({
                   (tail && !card ? (outgoing ? " rounded-br-[5px]" : " rounded-bl-[5px]") : "")
                 }
               >
-                {message.body}
+                {parts.map((part, index) =>
+                  part.href ? (
+                    <a
+                      key={index}
+                      href={part.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      // Its message is the tab stop and opens the first link with Enter.
+                      tabIndex={-1}
+                      // The bubble's own colour, so it reads on both senders' bubbles.
+                      className="message-link underline underline-offset-2"
+                    >
+                      {part.text}
+                    </a>
+                  ) : (
+                    part.text
+                  ),
+                )}
               </p>
             )}
             <SharedPost message={message} />
@@ -337,7 +362,9 @@ function MessageItem({
         </ContextMenuTrigger>
         <ContextMenuContent
           finalFocus={() =>
-            handoff.current === "composer" ? composer.current : handoff.current !== "viewer"
+            handoff.current === "composer"
+              ? composer.current
+              : handoff.current !== "viewer" && item.current
           }
         >
           <ContextMenuItem
@@ -362,7 +389,18 @@ function MessageItem({
               Copy
             </ContextMenuItem>
           )}
-          {/* The keyboard's way to the message's files, which aren't tab stops. */}
+          {/* The keyboard's way to the message's links and files, which aren't tab stops. */}
+          {links.map((link, index) => (
+            <ContextMenuLinkItem
+              key={index}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <ExternalLink />
+              <span className="truncate">Open {link.text}</span>
+            </ContextMenuLinkItem>
+          ))}
           {photos.map((file, index) => (
             <ContextMenuItem
               key={file.id}

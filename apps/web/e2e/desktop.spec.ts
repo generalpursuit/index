@@ -62,6 +62,51 @@ test("desktop bridge uses bearer auth, restores login, opens websites and erases
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
 });
 
+test("links in messages open in the default browser and the window stays", async ({
+  page,
+  request,
+  context,
+}) => {
+  const { conversationId } = await (await request.post(apiURL + "/_test/reset")).json();
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await page.goto("/login");
+  await page.getByLabel("Email or username", { exact: true }).fill("alice@test.example");
+  await page.getByLabel("Password", { exact: true }).fill("test-password-123");
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
+  await page.goto("/messages/" + conversationId);
+  await page.getByLabel("Message", { exact: true }).fill("See https://are.na/x, or www.are.na.");
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const message = page.getByRole("listitem").last(),
+    thread = page.url();
+  // The sent message replaces the pending one, which would take focus with it.
+  await expect(message.getByRole("link")).toHaveCount(2);
+  await expect(page.getByText("Sending…")).toHaveCount(0);
+  // A click, Enter on the message and its menu all hand the link to the browser.
+  await message.getByRole("link", { name: "https://are.na/x", exact: true }).click();
+  await expect.poll(() => desktop.opened).toEqual(["https://are.na/x"]);
+  await message.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => desktop.opened).toHaveLength(2);
+  expect(desktop.opened[1]).toBe("https://are.na/x");
+  await message.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Open www.are.na", exact: true }).click();
+  await expect.poll(() => desktop.opened).toHaveLength(3);
+  expect(desktop.opened[2]).toBe("https://www.are.na/");
+  // The menu closes on its item as it does in a browser, from the keyboard too.
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(message).toBeFocused();
+  await page.keyboard.press("Shift+F10");
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await expect.poll(() => desktop.opened).toHaveLength(4);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(message).toBeFocused();
+  expect(page.url()).toBe(thread);
+  expect(context.pages()).toHaveLength(1);
+});
+
 test("Index's Settings… menu item opens Settings in main, asking to sign in first", async ({
   page,
   request,

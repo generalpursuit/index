@@ -110,7 +110,9 @@ export function installDesktopLinks(reportError: (message: string) => void) {
     const url = new URL(anchor.href);
     if (!["https:", "http:"].includes(url.protocol) || url.origin === location.origin) return;
     event.preventDefault();
-    event.stopPropagation();
+    // The click stays with the link, not the rows and cards around it. A menu item's click
+    // still reaches its menu, which closes on it.
+    if (!anchor.closest('[role="menu"]')) event.stopPropagation();
     void desktopInvoke<void>("open_website", { url: url.href }).catch(() =>
       reportError("Could not open this link in your browser."),
     );

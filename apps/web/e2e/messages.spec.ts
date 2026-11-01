@@ -414,6 +414,141 @@ test("a message's menu opens its photo, and closing the photo returns to the mes
   await expect(message).toBeFocused();
 });
 
+/** A message with links on example.com, whose pages the tests serve instead of the network. */
+const linked =
+  "Read https://example.com/wiki/Foo_(bar), then (www.example.com/x?y=1).\nNot example.com or javascript:alert(1)";
+async function serveExample(page: Page) {
+  await page
+    .context()
+    .route(/^https:\/\/(www\.)?example\.com\//, (route) =>
+      route.fulfill({ contentType: "text/html", body: "<title>Example</title>" }),
+    );
+}
+
+test("links in a message open in a new tab, by click, Enter or its menu, and Copy copies the text", async ({
+  page,
+  context,
+}) => {
+  await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+  await serveExample(page);
+  await login(page);
+  await page.goto("/messages/" + data.conversationId);
+  const field = page.getByLabel("Message", { exact: true });
+  await field.fill(linked);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const bubble = page.locator(".message-bubble").last(),
+    message = page.getByRole("listitem").last();
+  await expect(bubble).toHaveText(linked);
+  // The sent message replaces the pending one, which would take focus with it.
+  await expect(page.getByText("Sending…")).toHaveCount(0);
+  const links = bubble.getByRole("link");
+  await expect(links).toHaveText(["https://example.com/wiki/Foo_(bar)", "www.example.com/x?y=1"]);
+  for (const [index, href] of [
+    "https://example.com/wiki/Foo_(bar)",
+    "https://www.example.com/x?y=1",
+  ].entries()) {
+    await expect(links.nth(index)).toHaveAttribute("href", href);
+    await expect(links.nth(index)).toHaveAttribute("target", "_blank");
+    await expect(links.nth(index)).toHaveAttribute("rel", "noopener noreferrer");
+    // Not a tab stop of its own: the message is.
+    await expect(links.nth(index)).toHaveAttribute("tabindex", "-1");
+  }
+  // The bubble's colour, underlined, so it reads on either bubble in either theme.
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    await expect.poll(() => contrast(bubble, "a")).toBeGreaterThanOrEqual(4.5);
+    expect(
+      await links.first().evaluate((link) => {
+        const style = getComputedStyle(link);
+        return [
+          style.color === getComputedStyle(link.parentElement!).color,
+          style.textDecorationLine,
+        ];
+      }),
+    ).toEqual([true, "underline"]);
+  }
+
+  // A click opens only the link. Its tab stays open: closing one moves focus between pages.
+  const thread = page.url();
+  const opened = async (open: () => Promise<void>) => {
+    const popup = page.waitForEvent("popup");
+    await open();
+    return (await popup).url();
+  };
+  expect(await opened(() => links.first().click())).toBe("https://example.com/wiki/Foo_(bar)");
+  expect(page.url()).toBe(thread);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await expect(page.locator("form.composer .draft-reply")).toHaveCount(0);
+
+  // A link's right click is its message's menu, whose Copy copies the text as written.
+  await links.first().click({ button: "right" });
+  const menu = page.getByRole("menu");
+  await menu.getByRole("menuitem", { name: "Copy", exact: true }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(linked);
+  await expect(message).toBeFocused();
+
+  // Enter on the message opens its first link, and its menu offers every link.
+  expect(await opened(() => page.keyboard.press("Enter"))).toBe(
+    "https://example.com/wiki/Foo_(bar)",
+  );
+  await expect(message).toBeFocused();
+  await page.keyboard.press("Shift+F10");
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Reply",
+    "Copy",
+    "Open https://example.com/wiki/Foo_(bar)",
+    "Open www.example.com/x?y=1",
+  ]);
+  await expect(menu).toBeFocused();
+  await page.keyboard.press("End");
+  await expect(
+    menu.getByRole("menuitem", { name: "Open www.example.com/x?y=1", exact: true }),
+  ).toBeFocused();
+  expect(await opened(() => page.keyboard.press("Enter"))).toBe("https://www.example.com/x?y=1");
+  await expect(menu).toHaveCount(0);
+  await expect(message).toBeFocused();
+  expect(page.url()).toBe(thread);
+});
+
+test("Enter on a reply with a link still leads back to its original", async ({ page }) => {
+  await login(page);
+  await page.goto("/messages/" + data.conversationId);
+  const original = page
+    .getByRole("listitem")
+    .filter({ has: page.locator(".message-bubble", { hasText: "Adding it to my list." }) });
+  await original.click({ button: "right" });
+  await page.getByRole("menuitem", { name: "Reply", exact: true }).click();
+  await page.getByLabel("Message", { exact: true }).fill("See https://example.com/read");
+  await page.keyboard.press("Enter");
+  const reply = page.getByRole("listitem").last();
+  await expect(reply.getByRole("link")).toHaveText("https://example.com/read");
+  await expect(page.getByText("Sending…")).toHaveCount(0);
+  let popups = 0;
+  page.on("popup", () => popups++);
+  await reply.focus();
+  await page.keyboard.press("Enter");
+  await expect(original).toBeFocused();
+  expect(popups).toBe(0);
+});
+
+test("tapping a link on a touch screen opens it without replying", async ({ browser }) => {
+  const page = await phone(browser, "no-preference");
+  await serveExample(page);
+  await page.goto("/messages/" + data.conversationId);
+  await page.getByLabel("Message", { exact: true }).fill(linked);
+  await page.getByRole("button", { name: "Send message", exact: true }).click();
+  const link = page.locator(".message-bubble").last().getByRole("link").first();
+  await expect(link).toHaveText("https://example.com/wiki/Foo_(bar)");
+  const thread = page.url(),
+    popup = page.waitForEvent("popup");
+  await link.tap();
+  expect((await popup).url()).toBe("https://example.com/wiki/Foo_(bar)");
+  expect(page.url()).toBe(thread);
+  await expect(page.locator("form.composer .draft-reply")).toHaveCount(0);
+  await expect(page.getByRole("menu")).toHaveCount(0);
+  await page.context().close();
+});
+
 test("swiping a message right replies on touch screens, leaving the edge to back", async ({
   browser,
 }) => {
