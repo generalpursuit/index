@@ -4,13 +4,14 @@ import type { SecurityEmail } from "../../../packages/auth/src/delivery.ts";
 import { deliverBatch } from "../../../packages/api/src/features/notifications/delivery.ts";
 import { apiURL, webURL } from "./urls.ts";
 import { createTestDatabase, files } from "../../../packages/api/src/testing/database.ts";
-import { createAuth } from "../../../packages/auth/src/index.ts";
+import { createAuth, verifyMcpAccess } from "../../../packages/auth/src/index.ts";
 import { createRouterClient } from "@orpc/server";
 import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { clientHeader } from "../../server/src/client-version.ts";
+import { mcpCorsPolicy, mcpHandler } from "../../server/src/mcp.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
-import { sessionCaller, type Context } from "../../../packages/api/src/context.ts";
+import { sessionCaller, type Caller, type Context } from "../../../packages/api/src/context.ts";
 import * as liveRepository from "../../../packages/api/src/features/live/repository.ts";
 const database = await createTestDatabase();
 type LivePeer = {
@@ -130,6 +131,23 @@ async function seed() {
 let fixture = await seed();
 // Uploaded photos stay in memory, served at `/media/*` like the bucket on the real server.
 const media = memoryMediaStore(apiURL);
+const contextFor = (caller: Caller | null): Context => ({
+  db: database.db,
+  caller,
+  fetchPage,
+  fetchImport,
+  media,
+  files,
+  notifications,
+  live,
+});
+const mcp = mcpHandler({
+  apiURL,
+  createContext: async (request) => {
+    const access = await verifyMcpAccess(database.db, apiURL, request);
+    return access && contextFor({ kind: "agent", ...access });
+  },
+});
 Bun.serve<LivePeer>({
   hostname: "127.0.0.1",
   port: Number(new URL(apiURL).port),
@@ -231,18 +249,11 @@ Bun.serve<LivePeer>({
           })
         : new Response("Not found", { status: 404 });
     } else if (url.pathname.startsWith("/api/auth/")) response = await auth.handler(request);
+    else if (url.pathname === "/mcp")
+      response = await mcp(request, (task) => deliveries.push(task));
     else {
       const session = await auth.api.getSession({ headers: request.headers });
-      const context = {
-        db: database.db,
-        caller: sessionCaller(session),
-        fetchPage,
-        fetchImport,
-        media,
-        files,
-        notifications,
-        live,
-      };
+      const context = contextFor(sessionCaller(session));
       const result = await rpcHandler.handle(request, { prefix: "/rpc/v1", context });
       const rest = result.matched
         ? result
@@ -252,15 +263,23 @@ Bun.serve<LivePeer>({
     if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) await flushLive();
     const headers = new Headers(response.headers);
     const origin = request.headers.get("origin");
-    if (origin && [webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))
-      headers.set("Access-Control-Allow-Origin", origin);
-    headers.set("Access-Control-Expose-Headers", "set-auth-token");
-    headers.set("Access-Control-Allow-Credentials", "true");
-    headers.set(
-      "Access-Control-Allow-Headers",
-      `Content-Type,Authorization,${clientHeader},ORPC-Batch`,
-    );
-    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    if (url.pathname === "/mcp") {
+      // The Worker's MCP policy: any origin, never credentials.
+      headers.set("Access-Control-Allow-Origin", mcpCorsPolicy.origin);
+      headers.set("Access-Control-Allow-Headers", mcpCorsPolicy.allowHeaders.join(","));
+      headers.set("Access-Control-Allow-Methods", mcpCorsPolicy.allowMethods.join(","));
+      headers.set("Access-Control-Expose-Headers", mcpCorsPolicy.exposeHeaders.join(","));
+    } else {
+      if (origin && [webURL, "tauri://localhost", "http://tauri.localhost"].includes(origin))
+        headers.set("Access-Control-Allow-Origin", origin);
+      headers.set("Access-Control-Expose-Headers", "set-auth-token");
+      headers.set("Access-Control-Allow-Credentials", "true");
+      headers.set(
+        "Access-Control-Allow-Headers",
+        `Content-Type,Authorization,${clientHeader},ORPC-Batch`,
+      );
+      headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    }
     return new Response(response.body, { status: response.status, headers });
   },
 });
