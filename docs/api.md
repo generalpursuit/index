@@ -59,6 +59,14 @@ Files are typed by their bytes: JPEG, PNG, GIF and WebP keep their image type, a
 
 Unsent files are swept after a day. Rows are deleted before objects, so a failed sweep leaves an orphaned object, never a file without its bytes. Deleting a user, conversation or message cascades to its file rows but not to their objects; whatever deletes those must delete the objects first.
 
+## Agent tools
+
+Apps an account connected ([delegated access](authentication.md#delegated-access-for-mcp-clients)) use Index through MCP at `<API origin>/mcp`. [mcp.ts](../apps/server/src/mcp.ts) serves stateless Streamable HTTP: each request authorizes with its own access token, and a fresh server registers the tools its grant allows. It speaks the 2026-07-28 revision and, through the SDK's stateless fallback, the 2025-era versions most clients still use; there are no MCP sessions, so GET and DELETE answer 405. A missing, invalid or revoked token gets 401 with a `WWW-Authenticate: Bearer` challenge naming `resource_metadata="<API origin>/.well-known/oauth-protected-resource/mcp"`. CORS allows any origin without credentials, and the client-version gate never applies because MCP clients send no `X-Index-Client`.
+
+A procedure becomes a tool only when its contract carries `agentTool({ name, permission })` from `@index/api/agent-tools`: a unique snake_case name, `read` if it changes nothing and `write` otherwise, an OpenAPI summary and description written for a model, and an object input whose every field is described. [agent-tools.test.ts](../packages/api/src/agent-tools.test.ts) checks this and holds the list of tools. Read tools are announced with `readOnlyHint`. A write tool must be safe to retry with a client-generated ID, as under [messages and retries](#messages-and-retries). A failing tool returns the API error's JSON, with its code and message, as an MCP tool error.
+
+The API context names its caller: the account's own session, or an agent acting for the account with its grant. Both get the same visibility, verification and mutation scheduling, so an agent's writes notify and update live clients like the user's own. `authorizeAgent`, which the app router applies to every procedure, refuses an agent any procedure without `agentTool` and any tool needing a permission its grant lacks, whichever transport delivered the call; write implies read. A read-only connection is not shown write tools. Procedures bound to a session itself, such as live tickets and notification devices, use `requireSession`. Agent tokens count only at `/mcp`: `/api/v1`, `/rpc` and `/api/auth` resolve Better Auth sessions alone, and `/mcp` accepts neither session cookies nor signed session tokens.
+
 ## External data and photos
 
 [Metadata reads](../packages/api/src/features/links/metadata.ts) accept only public HTTP(S) destinations, check redirects, and bound time and bytes. Metadata failure must not fail a save.
