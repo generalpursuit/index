@@ -3,6 +3,7 @@ import { ArrowUp, Link2, Paperclip, Reply, X } from "lucide-react";
 import { maxBodyLength } from "@index/api/features/messages/schemas";
 import { Button } from "@index/ui/components/button";
 import { IconButton } from "@index/ui/components/icon-button";
+import { isComposing, isConfirm, submitForm } from "@index/ui/lib/keys";
 import { domain } from "@/features/links/url";
 import type { Conversation } from "@/lib/types";
 import { ComposerFiles } from "./composer-files";
@@ -53,6 +54,20 @@ export function Composer({
       onSubmit={(e) => {
         e.preventDefault();
         onSend();
+      }}
+      // From anywhere in the composer, ⌘↩ sends and Escape lets go of the message being replied
+      // to, as in Messages.
+      onKeyDown={(e) => {
+        if (isComposing(e.nativeEvent)) return;
+        if (isConfirm(e)) {
+          e.preventDefault();
+          submitForm(e.currentTarget);
+        } else if (e.key === "Escape" && draft.replyTo && !locked) {
+          e.preventDefault();
+          // Its Cancel reply button, which may have focus, goes with it.
+          if (!input.current?.contains(e.target as Node)) input.current?.focus();
+          owner.removeReply();
+        }
       }}
     >
       {draft.replyTo && (
@@ -127,10 +142,9 @@ export function Composer({
           }}
           onKeyDown={(e) => {
             // With a keyboard and pointer, Enter sends and Shift+Enter breaks the line. On touch
-            // screens Return breaks the line, as in iMessage, and only the button sends.
-            // Safari ends IME composition before this Enter, reporting it only as key 229.
-            const composing = e.nativeEvent.isComposing || e.keyCode === 229;
-            if (e.key !== "Enter" || e.shiftKey || composing) return;
+            // screens Return breaks the line, as in iMessage, and only the button or ⌘↩ sends.
+            if (e.key !== "Enter" || e.shiftKey || isConfirm(e) || isComposing(e.nativeEvent))
+              return;
             if (matchMedia("(pointer: coarse)").matches) return;
             e.preventDefault();
             e.currentTarget.form?.requestSubmit();
