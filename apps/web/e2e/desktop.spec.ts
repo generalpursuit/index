@@ -98,9 +98,15 @@ test("links in messages open in the default browser and the window stays", async
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(message).toBeFocused();
   await page.keyboard.press("Shift+F10");
+  // Keys pressed before the menu has taken focus still reach the message.
+  await expect
+    .poll(() => page.evaluate(() => !!document.activeElement?.closest("[role=menu]")))
+    .toBe(true);
   await page.keyboard.press("End");
+  await expect(page.getByRole("menuitem", { name: "Open www.are.na", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
   await expect.poll(() => desktop.opened).toHaveLength(4);
+  expect(desktop.opened[3]).toBe("https://www.are.na/");
   await expect(page.getByRole("menu")).toHaveCount(0);
   await expect(message).toBeFocused();
   expect(page.url()).toBe(thread);
