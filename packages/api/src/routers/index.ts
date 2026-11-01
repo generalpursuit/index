@@ -1,6 +1,6 @@
 import { notificationsRouter } from "../features/notifications/router";
 import { liveRouter } from "../features/live/router";
-import { requireVerifiedSession, scheduleMutation } from "../procedures";
+import { authorizeAgent, requireVerifiedSession, scheduleMutation } from "../procedures";
 import { routesRouter } from "../features/routes/router";
 import { activityRouter } from "../features/activity/router";
 import { messagesRouter } from "../features/messages/router";
@@ -25,6 +25,7 @@ const implementer = implement(appContract).$context<Context>();
 // The router applies its middleware to every procedure, including feature routers.
 export const appRouter = implementer
   .use(requireVerifiedSession)
+  .use(authorizeAgent)
   .use(scheduleMutation)
   .router({
     healthCheck: implementer.healthCheck.handler(() => {

@@ -2,6 +2,7 @@ import { getOpenAPIMeta } from "@orpc/openapi";
 import { ORPCError, os } from "@orpc/server";
 import type { Result } from "neverthrow";
 
+import { getAgentTool } from "./agent-tools";
 import type { Caller, Context } from "./context";
 import type { ApplicationError } from "./errors";
 
@@ -42,6 +43,24 @@ export const requireSession = os.$context<Context>().middleware(async ({ context
     throw new ORPCError("FORBIDDEN", { message: "Only a signed-in session can do this." });
   return next({ context: { caller, session: caller.session, actorId: caller.userId } });
 });
+
+/**
+ * Agents call only procedures marked as agent tools, and only within their grant; writing
+ * implies reading. Sessions are unaffected. The check runs inside the procedure, whichever
+ * transport delivered the call.
+ */
+export const authorizeAgent = os
+  .$context<Context>()
+  .middleware(async ({ context, procedure, next }) => {
+    if (context.caller?.kind !== "agent") return next();
+    const tool = getAgentTool(procedure);
+    if (!tool) throw new ORPCError("FORBIDDEN", { message: "Connected apps can't do this." });
+    if (!context.caller.permissions.includes(tool.permission))
+      throw new ORPCError("FORBIDDEN", {
+        message: "This connection can only read. Connect the app again with write access.",
+      });
+    return next();
+  });
 
 /** Contract methods classify operations even when RPC transports reads with HTTP POST. */
 export const scheduleMutation = os
