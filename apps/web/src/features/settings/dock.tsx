@@ -15,16 +15,24 @@ function DesktopDockSettings() {
     [error, setError] = useState("");
   useEffect(() => {
     let active = true;
-    void desktopInvoke<DockStatus>("dock_status").then(
-      (value) => {
-        if (active) setStatus(value);
-      },
-      () => {
-        if (active) setError("Could not load your Dock setting.");
-      },
-    );
+    const read = () =>
+      void desktopInvoke<DockStatus>("dock_status").then(
+        (value) => {
+          if (active) {
+            setStatus(value);
+            setError("");
+          }
+        },
+        () => {
+          if (active) setError("Could not load your Dock setting.");
+        },
+      );
+    read();
+    // Main is hidden rather than closed, so returning to it shows what AppKit applies now.
+    window.addEventListener("focus", read);
     return () => {
       active = false;
+      window.removeEventListener("focus", read);
     };
   }, []);
   if (status?.supported === false || (!status && !error)) return null;

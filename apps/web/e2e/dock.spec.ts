@@ -30,6 +30,13 @@ test("Dock setting reflects the native state, survives reload, and stays put on 
   expect(desktop.dockVisible).toBe(false);
   await page.reload();
   await expect(show).not.toBeChecked();
+  // Returning to the hidden main window shows what AppKit applies now, not what it last showed.
+  desktop.dockVisible = true;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(show).toBeChecked();
+  desktop.dockVisible = false;
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(show).not.toBeChecked();
 
   desktop.dockError = true;
   await show.click();
