@@ -1,3 +1,4 @@
+import { openapi } from "@orpc/openapi";
 import { optionalAuth } from "../../shared/schemas";
 import { baseContract } from "../../shared/schemas";
 import {
@@ -9,11 +10,13 @@ import {
 
 export const discoveryContract = {
   searchUsers: baseContract
-    .route({ spec: optionalAuth, method: "GET", path: "/discovery/users", tags: ["Discovery"] })
+    .meta(
+      openapi({ spec: optionalAuth, method: "GET", path: "/discovery/users", tags: ["Discovery"] }),
+    )
     .input(searchUsersSchema)
     .output(discoveredUserPageSchema),
   recommendations: baseContract
-    .route({ method: "GET", path: "/discovery/recommendations", tags: ["Discovery"] })
+    .meta(openapi({ method: "GET", path: "/discovery/recommendations", tags: ["Discovery"] }))
     .input(recommendationsInputSchema)
     .output(recommendationsSchema),
 };

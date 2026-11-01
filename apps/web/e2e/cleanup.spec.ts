@@ -104,7 +104,7 @@ test("a definite send rejection retains editable input and the corrected send ha
     if (ids.length === 1)
       await route.fulfill({
         status: 400,
-        json: { json: { code: "BAD_REQUEST", status: 400, message: "Check the message" } },
+        json: { json: { defined: false, code: "BAD_REQUEST", message: "Check the message" } },
       });
     else await route.continue();
   });
@@ -277,7 +277,11 @@ test("a profile group beyond page one remains unknown on failure, then loads on 
       await route.fulfill({
         status: 503,
         json: {
-          json: { code: "INTERNAL_SERVER_ERROR", status: 503, message: "Group index unavailable" },
+          json: {
+            defined: false,
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Group index unavailable",
+          },
         },
       });
     else await route.continue();
@@ -309,7 +313,9 @@ test("week index errors expose retry without hiding the loaded feed", async ({ p
   await routeRPC(page, "**/rpc/v1/feed/weeks**", (route) =>
     route.fulfill({
       status: 503,
-      json: { json: { code: "INTERNAL_SERVER_ERROR", status: 503, message: "Weeks unavailable" } },
+      json: {
+        json: { defined: false, code: "INTERNAL_SERVER_ERROR", message: "Weeks unavailable" },
+      },
     }),
   );
   await login(page);

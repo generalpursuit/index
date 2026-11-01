@@ -1,16 +1,19 @@
 import type { Request } from "@playwright/test";
+/** One call in a batch; its URL is relative to the batch request's. */
+type BatchItem = {
+  id: string;
+  kind: "request";
+  json: { url: string; body?: unknown; method?: string; headers?: Record<string, string> };
+};
+const batchItems = (request: Request) =>
+  request.headers()["orpc-batch"] ? (request.postDataJSON() as BatchItem[]) : undefined;
+const itemURL = (request: Request, item: BatchItem) => new URL(item.json.url, request.url()).href;
+
 /** Counts logical reads even when they share one physical request. */
 export function rpcPaths(request: Request) {
-  const url = new URL(request.url());
-  const batch = url.searchParams.get("batch");
-  const items = batch
-    ? JSON.parse(batch)
-    : request.headers()["x-orpc-batch"]
-      ? request.postDataJSON()
-      : undefined;
-  if (Array.isArray(items))
-    return (items as { url: string }[]).map((item) => new URL(item.url).pathname);
-  return [url.pathname];
+  const items = batchItems(request);
+  if (items) return items.map((item) => new URL(itemURL(request, item)).pathname);
+  return [new URL(request.url()).pathname];
 }
 
 import type { Page, Route } from "@playwright/test";
@@ -31,41 +34,37 @@ export async function routeRPC(page: Page, pattern: string, handler: (route: Rou
   );
   await page.route("**/rpc/v1/**", async (route) => {
     const request = route.request();
-    if (!request.headers()["x-orpc-batch"]) {
+    const items = batchItems(request);
+    if (!items) {
       if (match.test(request.url())) await handler(route);
       else await route.fallback();
       return;
     }
-    const items = request.postDataJSON() as {
-      url: string;
-      body: unknown;
-      method?: string;
-      headers?: Record<string, string>;
-    }[];
-    if (!items.some((item) => match.test(item.url))) {
+    if (!items.some((item) => match.test(itemURL(request, item)))) {
       await route.fallback();
       return;
     }
     const headers = await request.allHeaders();
-    delete headers["x-orpc-batch"];
+    delete headers["orpc-batch"];
     const responses = await Promise.all(
-      items.map(async (item, index) => {
+      items.map(async (item) => {
+        const url = itemURL(request, item);
         const fetchItem = () =>
           route.fetch({
-            url: item.url,
-            method: item.method ?? request.method(),
-            headers: { ...headers, ...item.headers },
-            postData: JSON.stringify(item.body),
+            url,
+            method: item.json.method ?? request.method(),
+            headers: { ...headers, ...item.json.headers },
+            postData: JSON.stringify(item.json.body),
           });
-        let packet: { index: number; status: number; body: unknown } | undefined;
+        let answer: { status: number; body: unknown } | undefined;
         const virtual = new Proxy(route, {
           get: (target, property) => {
             if (property === "request")
               return () =>
                 new Proxy(request, {
                   get: (source, key) => {
-                    if (key === "url") return () => item.url;
-                    if (key === "postDataJSON") return () => item.body;
+                    if (key === "url") return () => url;
+                    if (key === "postDataJSON") return () => item.json.body;
                     const value = Reflect.get(source, key);
                     return typeof value === "function" ? value.bind(source) : value;
                   },
@@ -74,22 +73,24 @@ export async function routeRPC(page: Page, pattern: string, handler: (route: Rou
             if (property === "continue")
               return async () => {
                 const response = await fetchItem();
-                packet = { index, status: response.status(), body: await response.json() };
+                answer = { status: response.status(), body: await response.json() };
               };
             if (property === "abort")
               return async () => {
-                packet = {
-                  index,
+                answer = {
                   status: 503,
                   body: {
-                    json: { code: "INTERNAL_SERVER_ERROR", message: "Fixture request failed" },
+                    json: {
+                      defined: false,
+                      code: "INTERNAL_SERVER_ERROR",
+                      message: "Fixture request failed",
+                    },
                   },
                 };
               };
             if (property === "fulfill")
               return async (options: NonNullable<Parameters<Route["fulfill"]>[0]>) => {
-                packet = {
-                  index,
+                answer = {
                   status: options.status ?? options.response?.status() ?? 200,
                   body:
                     options.json ??
@@ -102,12 +103,13 @@ export async function routeRPC(page: Page, pattern: string, handler: (route: Rou
             return typeof value === "function" ? value.bind(target) : value;
           },
         });
-        if (match.test(item.url)) await handler(virtual);
+        if (match.test(url)) await handler(virtual);
         else await virtual.continue();
-        if (!packet) throw new Error("RPC fixture did not complete its read");
-        return packet;
+        if (!answer) throw new Error("RPC fixture did not complete its read");
+        return { id: item.id, kind: "response", json: answer };
       }),
     );
+    // A JSON array of responses is valid in either batch mode.
     await route.fulfill({ status: 207, contentType: "application/json", json: responses });
   });
 }

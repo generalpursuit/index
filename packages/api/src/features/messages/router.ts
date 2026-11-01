@@ -3,8 +3,10 @@ import type { Context } from "../../context";
 import { requireAuth, unwrapResult } from "../../procedures";
 import { messagesContract } from "./contract";
 import * as service from "./service";
-const api = implement(messagesContract).$context<Context>().use(requireAuth);
-export const messagesRouter = api.router({
+const implementer = implement(messagesContract).$context<Context>();
+const api = implementer.use(requireAuth);
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const messagesRouter = implementer.router({
   unread: api.unread.handler(async ({ context }) =>
     unwrapResult(await service.unreadCount(context.db, context.actorId)),
   ),

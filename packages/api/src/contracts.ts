@@ -1,3 +1,4 @@
+import { openapi } from "@orpc/openapi";
 import { notificationsContract } from "./features/notifications/contract";
 import { liveContract } from "./features/live/contract";
 import { routesContract } from "./features/routes/contract";
@@ -5,7 +6,7 @@ import { activityContract } from "./features/activity/contract";
 import { messagesContract } from "./features/messages/contract";
 import { pulseContract } from "./features/pulse/contract";
 import { favoritesContract } from "./features/favorites/contract";
-import { oc, type ContractRouterClient } from "@orpc/contract";
+import { oc, type RouterContractClient } from "@orpc/contract";
 import { z } from "zod";
 
 import { linksContract } from "./features/links/contract";
@@ -20,7 +21,7 @@ import { importsContract } from "./features/imports/contract";
 
 export const appContract = {
   healthCheck: oc
-    .route({ method: "GET", path: "/health", tags: ["System"], spec: { security: [] } })
+    .meta(openapi({ method: "GET", path: "/health", tags: ["System"], spec: { security: [] } }))
     .input(z.strictObject({}).optional())
     .output(z.literal("OK")),
   notifications: notificationsContract,
@@ -41,4 +42,4 @@ export const appContract = {
   imports: importsContract,
 };
 
-export type AppRouterClient = ContractRouterClient<typeof appContract>;
+export type AppRouterClient = RouterContractClient<typeof appContract>;

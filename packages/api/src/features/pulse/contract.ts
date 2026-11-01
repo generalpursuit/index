@@ -1,3 +1,4 @@
+import { openapi } from "@orpc/openapi";
 import { z } from "zod";
 import { baseContract } from "../../shared/schemas";
 
@@ -8,7 +9,7 @@ const listPulseSchema = z.object({
 
 export const pulseContract = {
   get: baseContract
-    .route({ method: "GET", path: "/me/pulse", tags: ["System"] })
+    .meta(openapi({ method: "GET", path: "/me/pulse", tags: ["System"] }))
     .input(z.strictObject({}).optional())
     .output(z.object({ messages: listPulseSchema, activity: listPulseSchema })),
 };

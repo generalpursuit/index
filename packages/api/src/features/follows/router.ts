@@ -5,8 +5,10 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { followsContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(followsContract).$context<Context>().use(requireVerifiedSession);
-export const followsRouter = api.router({
+const implementer = implement(followsContract).$context<Context>();
+const api = implementer.use(requireVerifiedSession);
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const followsRouter = implementer.router({
   follow: api.follow
     .use(requireAuth)
     .handler(async ({ context, input }) =>

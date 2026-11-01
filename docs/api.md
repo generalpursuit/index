@@ -6,7 +6,7 @@ The application exposes REST at `/api/v1` and typed oRPC at `/rpc/v1`, with `/rp
 
 Browser calls include the secure HttpOnly session cookie. Native clients retain the signed `set-auth-token` response header and send it as `Authorization: Bearer <token>`; the JSON token is unsigned and unsuitable. See [authentication](authentication.md) for verification and credential lifetime.
 
-RPC clients can add `BatchLinkPlugin` from `@orpc/client/plugins` to their `RPCLink`, with `groups: [{ condition: () => true, context: {} }]`. Its default `streaming` mode returns each result as it finishes; `buffered` is also supported. The plugin sends `X-ORPC-Batch: streaming` (or `buffered`), allowed by CORS. A batch of up to ten calls shares one API context and session lookup; each call retains its own result or error. Group only calls for the same server and account, and keep authorization and `X-Index-Client` on the outer request. The client-version gate applies before context creation. REST calls remain individual requests.
+RPC clients can add `BatchLinkPlugin` from `@orpc/client/plugins` to their `RPCLink`, with `groups: [{ condition: () => true, context: {} }]`. With `mode: "streaming"`, as the web client sets it, each result returns as it finishes; the default `buffered` mode is also supported. The plugin sends `ORPC-Batch: streaming` (or `buffered`), allowed by CORS. RPC calls cannot use GET. A batch of up to ten calls shares one API context and session lookup; each call retains its own result or error. Group only calls for the same server and account, and keep authorization and `X-Index-Client` on the outer request. The client-version gate applies before context creation. REST calls remain individual requests.
 
 ## Client versions
 

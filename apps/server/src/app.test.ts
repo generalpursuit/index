@@ -219,12 +219,13 @@ describe("mounted server application", () => {
       assert.equal(response.status, 200);
       assert.equal(((await response.json()) as { username: string }).username, "reader");
     }
-    for (const prefix of ["/rpc/v1", "/rpc"]) {
+    for (const prefix of ["/rpc/v1", "/rpc"] as const) {
       const rpc: AppRouterClient = createORPCClient(
         new RPCLink({
-          url: `${origin}${prefix}`,
+          origin,
+          url: prefix,
           headers: { Authorization: `Bearer ${token}` },
-          fetch: fetchApp,
+          fetch: (url, init) => fetchApp(new Request(url, init)),
         }),
       );
       assert.equal(await rpc.healthCheck(), "OK");
@@ -276,7 +277,8 @@ describe("mounted server application", () => {
       const requests: Request[] = [];
       const rpc: AppRouterClient = createORPCClient(
         new RPCLink({
-          url: `${origin}/rpc/v1`,
+          origin,
+          url: "/rpc/v1",
           headers: {
             Authorization: `Bearer ${token}`,
             "X-Index-Client": `web/${minimumClientVersions.web}`,
@@ -284,7 +286,8 @@ describe("mounted server application", () => {
           plugins: [
             new BatchLinkPlugin({ mode, groups: [{ condition: () => true, context: {} }] }),
           ],
-          fetch: async (request) => {
+          fetch: async (url, init) => {
+            const request = new Request(url, init);
             requests.push(request.clone());
             return fetchApp(request);
           },
@@ -296,7 +299,7 @@ describe("mounted server application", () => {
         rpc.links.get({ id: crypto.randomUUID() }),
       ]);
       assert.equal(requests.length, 1);
-      assert.equal(requests[0]!.headers.get("x-orpc-batch"), mode);
+      assert.equal(requests[0]!.headers.get("orpc-batch"), mode);
       assert.equal(contexts, 1);
       assert.deepEqual(results[0], { status: "fulfilled", value: "OK" });
       assert.equal(results[1]!.status, "fulfilled");
@@ -313,11 +316,11 @@ describe("mounted server application", () => {
         headers: {
           Origin: web,
           "Access-Control-Request-Method": "POST",
-          "Access-Control-Request-Headers": "content-type,x-index-client,x-orpc-batch",
+          "Access-Control-Request-Headers": "content-type,x-index-client,orpc-batch",
         },
       });
       assert.equal(preflight.status, 204);
-      assert.match(preflight.headers.get("access-control-allow-headers")!, /X-ORPC-Batch/);
+      assert.match(preflight.headers.get("access-control-allow-headers")!, /ORPC-Batch/);
       assert.equal(contexts, 1);
     });
   }

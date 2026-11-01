@@ -1,3 +1,4 @@
+import { openapi } from "@orpc/openapi";
 import { z } from "zod";
 import { baseContract, optionalAuth } from "../../shared/schemas";
 export const resolvedRouteSchema = z.discriminatedUnion("kind", [
@@ -18,7 +19,7 @@ export const resolvedRouteSchema = z.discriminatedUnion("kind", [
 export type ResolvedRoute = z.infer<typeof resolvedRouteSchema>;
 export const routesContract = {
   resolve: baseContract
-    .route({ method: "GET", path: "/routes/resolve", tags: ["Routes"], spec: optionalAuth })
+    .meta(openapi({ method: "GET", path: "/routes/resolve", tags: ["Routes"], spec: optionalAuth }))
     .input(
       z.strictObject({ path: z.string().min(1).max(2048), group: z.string().max(128).optional() }),
     )

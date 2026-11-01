@@ -34,7 +34,8 @@ function acceptedClient() {
   if (active?.generation === generation) return active.client;
   const client: AppRouterClient = createORPCClient(
     new RPCLink({
-      url: ENV.VITE_SERVER_URL.replace(/\/$/, "") + "/rpc/v1",
+      origin: ENV.VITE_SERVER_URL,
+      url: "/rpc/v1",
       interceptors: [
         async ({ next }) => {
           assertCurrentAccount(generation);
@@ -58,17 +59,18 @@ function acceptedClient() {
           }
         },
       ],
-      fetch: async (input, init) => {
+      fetch: async (url, init) => {
         assertCurrentAccount(generation);
-        const response = await apiFetch(input, init);
+        const response = await apiFetch(url, init);
         assertCurrentAccount(generation);
         return response;
       },
       // A batch belongs to one accepted generation. Writes retain their individual retry identity.
       plugins: [
         new BatchLinkPlugin({
+          mode: "streaming",
           groups: [{ condition: () => true, context: {} }],
-          exclude: ({ path }) => !reads.has(path.at(-1)!),
+          filter: ({ path }) => reads.has(path.at(-1)!),
         }),
       ],
     }),
@@ -79,6 +81,13 @@ function acceptedClient() {
 export const client = new Proxy({} as AppRouterClient, {
   get: (_target, feature: keyof AppRouterClient) => acceptedClient()[feature],
 });
-export const apiFor = (viewerId: string | null) =>
-  createTanstackQueryUtils(acceptedClient(), { path: ["viewer", viewerId ?? "anonymous"] });
+// Query keys start with the path `["viewer", id, ...procedure]`, which the cache code reads.
+// oRPC's `prefix` option would add a separate string element instead.
+export const apiFor = (viewerId: string | null) => {
+  const viewer = viewerId ?? "anonymous";
+  const clients: { viewer: Record<string, AppRouterClient> } = {
+    viewer: { [viewer]: acceptedClient() },
+  };
+  return createTanstackQueryUtils(clients).viewer[viewer]!;
+};
 export const orpc = apiFor(null);

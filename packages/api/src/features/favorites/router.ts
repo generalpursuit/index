@@ -4,8 +4,10 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { favoritesContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(favoritesContract).$context<Context>().use(requireAuth);
-export const favoritesRouter = api.router({
+const implementer = implement(favoritesContract).$context<Context>();
+const api = implementer.use(requireAuth);
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const favoritesRouter = implementer.router({
   add: api.add.handler(async ({ context, input }) =>
     unwrapResult(await service.favoriteLink(context.db, context.actorId, input.linkId)),
   ),

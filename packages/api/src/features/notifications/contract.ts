@@ -1,3 +1,4 @@
+import { openapi } from "@orpc/openapi";
 import { z } from "zod";
 import { baseContract, successSchema } from "../../shared/schemas";
 import {
@@ -8,7 +9,7 @@ import {
   registerSchema,
 } from "./schemas";
 const route = (method: "GET" | "POST" | "PATCH", path: string) =>
-  baseContract.route({ method, path: `/me/notifications${path}`, tags: ["Notifications"] });
+  baseContract.meta(openapi({ method, path: `/me/notifications${path}`, tags: ["Notifications"] }));
 export const notificationsContract = {
   preferences: route("GET", "/preferences").input(z.strictObject({})).output(preferencesSchema),
   updatePreferences: route("PATCH", "/preferences")

@@ -15,7 +15,7 @@
     "@index/auth": "workspace:*",
     "@index/db": "workspace:*",
     "@orpc/client": "catalog:",
-    "@orpc/contract": "^1.15.0",
+    "@orpc/contract": "2.0.0-beta.48",
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",

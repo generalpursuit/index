@@ -5,9 +5,11 @@ import { requireAuth, requireVerifiedSession, unwrapResult } from "../../procedu
 import { importsContract } from "./contract";
 import { importCuratee } from "./service";
 
-const api = implement(importsContract).$context<Context>().use(requireVerifiedSession);
+const implementer = implement(importsContract).$context<Context>();
+const api = implementer.use(requireVerifiedSession);
 
-export const importsRouter = api.router({
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const importsRouter = implementer.router({
   curatee: api.curatee
     .use(requireAuth)
     .handler(async ({ context, input }) =>

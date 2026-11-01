@@ -1,3 +1,4 @@
+import { getOpenAPIMeta } from "@orpc/openapi";
 import { ORPCError, os } from "@orpc/server";
 import type { Result } from "neverthrow";
 
@@ -41,7 +42,7 @@ export const scheduleMutation = os
     if (
       !context.dispatch ||
       !context.session?.user.emailVerified ||
-      procedure["~orpc"].route.method === "GET" ||
+      getOpenAPIMeta(procedure)?.method === "GET" ||
       housekeeping
     )
       return next();

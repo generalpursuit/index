@@ -5,8 +5,10 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { groupsContract } from "./contract";
 import * as service from "./service";
 
-const api = implement(groupsContract).$context<Context>().use(requireVerifiedSession);
-export const groupsRouter = api.router({
+const implementer = implement(groupsContract).$context<Context>();
+const api = implementer.use(requireVerifiedSession);
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const groupsRouter = implementer.router({
   create: api.create
     .use(requireAuth)
     .handler(async ({ context, input }) =>

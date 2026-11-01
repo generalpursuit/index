@@ -258,7 +258,7 @@ Bun.serve<LivePeer>({
     headers.set("Access-Control-Allow-Credentials", "true");
     headers.set(
       "Access-Control-Allow-Headers",
-      `Content-Type,Authorization,${clientHeader},X-ORPC-Batch`,
+      `Content-Type,Authorization,${clientHeader},ORPC-Batch`,
     );
     headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
     return new Response(response.body, { status: response.status, headers });

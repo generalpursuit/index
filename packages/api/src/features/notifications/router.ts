@@ -5,19 +5,17 @@ import type { Context } from "../../context";
 import { requireAuth } from "../../procedures";
 import { notificationsContract } from "./contract";
 import * as repo from "./repository";
-const api = implement(notificationsContract)
-  .$context<Context>()
-  .use(requireAuth)
-  .use(async ({ context, next }, input) => {
-    if (
-      input &&
-      typeof input === "object" &&
-      "sessionId" in input &&
-      input.sessionId !== context.session.session.id
-    )
-      throw new ORPCError("UNAUTHORIZED");
-    return next();
-  });
+const implementer = implement(notificationsContract).$context<Context>();
+const api = implementer.use(requireAuth).use(async ({ context, next }, input) => {
+  if (
+    input &&
+    typeof input === "object" &&
+    "sessionId" in input &&
+    input.sessionId !== context.session.session.id
+  )
+    throw new ORPCError("UNAUTHORIZED");
+  return next();
+});
 const capabilities = (c: Context) =>
   c.notifications ?? {
     web: false,
@@ -36,7 +34,8 @@ async function requireDevice(context: Context & { actorId: string }, installatio
   if (!device) throw new ORPCError("NOT_FOUND");
   return device;
 }
-export const notificationsRouter = api.router({
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const notificationsRouter = implementer.router({
   preferences: api.preferences.handler(({ context }) =>
     repo.getPreferences(context.db, context.actorId),
   ),

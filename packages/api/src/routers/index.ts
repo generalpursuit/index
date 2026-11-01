@@ -20,31 +20,32 @@ import { feedRouter } from "../features/feed/router";
 import { discoveryRouter } from "../features/discovery/router";
 import { importsRouter } from "../features/imports/router";
 
-const api = implement(appContract)
-  .$context<Context>()
-  .use(requireVerifiedSession)
-  .use(scheduleMutation);
+const implementer = implement(appContract).$context<Context>();
 
-export const appRouter = api.router({
-  healthCheck: api.healthCheck.handler(() => {
-    return "OK";
-  }),
-  notifications: notificationsRouter,
-  live: liveRouter,
-  routes: routesRouter,
-  links: linksRouter,
-  groups: groupsRouter,
-  profiles: profilesRouter,
-  follows: followsRouter,
-  stars: starsRouter,
-  activity: activityRouter,
-  messages: messagesRouter,
-  pulse: pulseRouter,
-  favorites: favoritesRouter,
-  comments: commentsRouter,
-  feed: feedRouter,
-  discovery: discoveryRouter,
-  imports: importsRouter,
-});
+// The router applies its middleware to every procedure, including feature routers.
+export const appRouter = implementer
+  .use(requireVerifiedSession)
+  .use(scheduleMutation)
+  .router({
+    healthCheck: implementer.healthCheck.handler(() => {
+      return "OK";
+    }),
+    notifications: notificationsRouter,
+    live: liveRouter,
+    routes: routesRouter,
+    links: linksRouter,
+    groups: groupsRouter,
+    profiles: profilesRouter,
+    follows: followsRouter,
+    stars: starsRouter,
+    activity: activityRouter,
+    messages: messagesRouter,
+    pulse: pulseRouter,
+    favorites: favoritesRouter,
+    comments: commentsRouter,
+    feed: feedRouter,
+    discovery: discoveryRouter,
+    imports: importsRouter,
+  });
 export type AppRouter = typeof appRouter;
 export type { AppRouterClient } from "../contracts";

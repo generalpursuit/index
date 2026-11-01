@@ -116,9 +116,9 @@ test("warm home renders without another blocking read", async ({ page }) => {
           request
             .postDataJSON()
             .some(
-              (item: { url: string; body?: { json?: { weekStart?: string } } }) =>
-                new URL(item.url).pathname === "/rpc/v1/feed/week" &&
-                item.body?.json?.weekStart === fixture.week,
+              (item: { json: { url: string; body?: { json?: { weekStart?: string } } } }) =>
+                new URL(item.json.url, request.url()).pathname === "/rpc/v1/feed/week" &&
+                item.json.body?.json?.weekStart === fixture.week,
             )))
     ) {
       if (returning) warm++;
@@ -324,7 +324,6 @@ test("a seeded post checks access and hides a forbidden server response", async 
       json: {
         json: {
           defined: false,
-          status: 404,
           code: "NOT_FOUND",
           message: "This post is no longer available",
         },
@@ -348,7 +347,6 @@ test("a failing profile week keeps the page and offers a local retry", async ({ 
       json: {
         json: {
           defined: false,
-          status: 404,
           code: "NOT_FOUND",
           message: "Could not load this week",
         },
@@ -404,7 +402,7 @@ test("navigation preserves the legacy pulse driver after one unsupported endpoin
     probes++;
     await route.fulfill({
       status: 404,
-      json: { json: { defined: false, status: 404, code: "NOT_FOUND", message: "Unsupported" } },
+      json: { json: { defined: false, code: "NOT_FOUND", message: "Unsupported" } },
     });
   });
   await login(page);

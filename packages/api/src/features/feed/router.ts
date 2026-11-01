@@ -4,8 +4,10 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { feedContract } from "./contract";
 import { feedWeeks, listFeed, weekFeed } from "./service";
 
-const api = implement(feedContract).$context<Context>().use(requireAuth);
-export const feedRouter = api.router({
+const implementer = implement(feedContract).$context<Context>();
+const api = implementer.use(requireAuth);
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const feedRouter = implementer.router({
   week: api.week.handler(async ({ context, input }) =>
     unwrapResult(await weekFeed(context.db, context.actorId, input)),
   ),

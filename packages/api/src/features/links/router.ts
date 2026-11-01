@@ -8,9 +8,11 @@ import { requireAuth, unwrapResult } from "../../procedures";
 import { linksContract } from "./contract";
 import { createLink, getLink, listMyLinks, updateLink, deleteLink, listInGroup } from "./service";
 
-const api = implement(linksContract).$context<Context>().use(requireVerifiedSession);
+const implementer = implement(linksContract).$context<Context>();
+const api = implementer.use(requireVerifiedSession);
 
-export const linksRouter = api.router({
+// Procedures carry `api`'s middleware; building the router from `api` would run it again.
+export const linksRouter = implementer.router({
   share: api.share
     .use(requireAuth)
     .handler(async ({ context, input }) =>

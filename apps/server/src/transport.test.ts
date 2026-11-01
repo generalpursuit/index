@@ -3,7 +3,7 @@ import { linkSchema, listMyLinksOutputSchema } from "@index/api/features/links/s
 import { createTestDatabase } from "@index/api/testing/database";
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/fetch";
-import type { OpenAPI } from "@orpc/openapi";
+import type { OpenAPIDocument } from "@orpc/openapi";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 
@@ -85,18 +85,18 @@ describe("HTTP API transports", () => {
   it("serves the OpenAPI contract with explicit request and response schemas", async () => {
     const response = await request("/openapi.json", null);
     assert.equal(response.status, 200);
-    const spec = (await response.json()) as OpenAPI.Document;
+    const spec = (await response.json()) as OpenAPIDocument<"3.1.1">;
     assert.match(spec.openapi, /^3\./);
     assert.ok(spec.paths);
     const body = spec.paths["/links"]?.post?.requestBody;
     assert.ok(body && "content" in body);
     const schema = body.content["application/json"]?.schema;
-    assert.ok(schema && !("$ref" in schema));
+    assert.ok(typeof schema === "object" && !("$ref" in schema));
     const url = schema.properties?.url;
-    assert.ok(url && !("$ref" in url));
+    assert.ok(typeof url === "object" && !("$ref" in url));
     assert.equal(url.format, "uri");
     assert.equal(url.maxLength, 8192);
-    assert.ok(spec.paths["/links"]?.post?.responses["201"]);
+    assert.ok(spec.paths["/links"]?.post?.responses?.["201"]);
     assert.ok(spec.paths["/links"]?.get);
     assert.ok(spec.paths["/links/{id}"]?.get);
     for (const path of [
@@ -120,7 +120,7 @@ describe("HTTP API transports", () => {
       "/me/pulse",
       "/discovery/users",
       "/discovery/recommendations",
-    ]) {
+    ] as const) {
       assert.ok(spec.paths[path], path);
     }
     assert.deepEqual(spec.security, [{ bearerAuth: [] }, { sessionCookie: [] }]);
@@ -208,9 +208,10 @@ describe("HTTP API transports", () => {
   it("uses the same contract through the typed RPC client", async () => {
     const rpc: AppRouterClient = createORPCClient(
       new RPCLink({
-        url: "https://api.example.com/rpc/v1",
-        async fetch(request) {
-          const result = await rpcHandler.handle(request, {
+        origin: "https://api.example.com",
+        url: "/rpc/v1",
+        async fetch(url, init) {
+          const result = await rpcHandler.handle(new Request(url, init), {
             prefix: "/rpc/v1",
             context: fixture.context("alice"),
           });
