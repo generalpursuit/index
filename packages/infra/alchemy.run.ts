@@ -63,8 +63,12 @@ export const server = Cloudflare.Worker(
       main: "../../apps/server/src/index.ts",
       crons: ["0 3 * * *"],
       // Node.js APIs are on by default from 2026-08-04; workerd warns if nodejs_compat is named.
+      // Fetches to the API's own zone go through Cloudflare's front door like any Internet
+      // request, never straight to the zone's origin: required for client metadata documents
+      // (packages/auth/src/client-metadata-transport.ts).
       compatibility: {
         date: "2026-08-31",
+        flags: ["global_fetch_strictly_public"],
       },
       env: {
         OUTBOX_CLOCK: Cloudflare.DurableObject("OutboxClock"),
