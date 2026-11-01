@@ -34,9 +34,40 @@ jobs:
           RELEASE_STAGE: ${{ inputs.stage }}
         run: bun packages/infra/release.ts
 
+  # Every push to main runs CI, so a release requires that run to have passed instead of
+  # repeating it. A run still in progress is awaited.
   checks:
     needs: version
-    uses: ./.github/workflows/ci.yml
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: read
+    steps:
+      - name: Require a green CI run for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 80); do
+            run=$(gh run list --workflow ci.yml --commit "$SHA" --event push --limit 1 \
+              --json status,conclusion,url --jq '.[0] // empty')
+            if [ -n "$run" ] && [ "$(jq -r .status <<<"$run")" = completed ]; then
+              if [ "$(jq -r .conclusion <<<"$run")" = success ]; then
+                echo "CI passed for $SHA: $(jq -r .url <<<"$run")"
+                exit 0
+              fi
+              echo "::error::CI did not pass for $SHA: $(jq -r .url <<<"$run")"
+              exit 1
+            fi
+            if [ -z "$run" ] && [ "$attempt" -ge 10 ]; then
+              echo "::error::No CI run exists for $SHA."
+              exit 1
+            fi
+            sleep 30
+          done
+          echo "::error::CI for $SHA did not finish within 40 minutes."
+          exit 1
 
   deploy:
     needs: [version, checks]
