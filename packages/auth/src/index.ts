@@ -1,6 +1,7 @@
 import { drizzleAdapter } from "@better-auth/drizzle-adapter/relations-v2";
 import type { relations } from "@index/db/relations";
-import * as schema from "@index/db/schema/auth";
+import * as authSchema from "@index/db/schema/auth";
+import * as oauthSchema from "@index/db/schema/oauth";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import { bearer, openAPI, username } from "better-auth/plugins";
@@ -11,6 +12,14 @@ import { resendTransport } from "./delivery";
 import { trustedWebOrigins } from "./origins";
 import { isUsernameAvailable } from "./namespace";
 import { usernameSchema } from "./username";
+import {
+  clientOAuthPaths,
+  mcpAuthorizationPaths,
+  mcpAuthorizationPlugins,
+  shapeAuthorizationRequest,
+} from "./mcp-authorization";
+
+export { verifyMcpAccess, type McpAccess, type Permission } from "./connections";
 
 export type AuthConfig = {
   BETTER_AUTH_URL: string;
@@ -38,7 +47,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
   return betterAuth({
     database: drizzleAdapter(database, {
       provider: "pg",
-      schema,
+      schema: { ...authSchema, ...oauthSchema },
     }),
     trustedOrigins: origins,
     // Password authentication issues a restricted session until the application gate
@@ -61,7 +70,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
       // The username plugin validates a supplied username; every new account must supply one.
       before: createAuthMiddleware(async (ctx) => {
         const origin = ctx.request?.headers.get("origin");
-        if (origin && !origins.includes(origin))
+        if (origin && !origins.includes(origin) && !clientOAuthPaths.has(ctx.path))
           throw new APIError("FORBIDDEN", { message: "Untrusted origin." });
         const allowed = new Set([
           "/sign-up/email",
@@ -73,7 +82,11 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
           "/open-api/generate-schema",
           "/update-user",
         ]);
-        if (!allowed.has(ctx.path) && !ctx.path.startsWith("/security/")) {
+        if (
+          !allowed.has(ctx.path) &&
+          !mcpAuthorizationPaths.has(ctx.path) &&
+          !ctx.path.startsWith("/security/")
+        ) {
           throw new APIError("NOT_FOUND", { message: "Use the Index account security flow." });
         }
         if (ctx.path === "/update-user") {
@@ -86,11 +99,35 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
           // Account identity is changed only through the profile/namespace contract.
           throw new APIError("BAD_REQUEST", { message: "Edit your profile in Settings." });
         }
+        // CF supplies this header at its edge. Never trust arbitrary X-Forwarded-For.
+        const ip = ctx.request?.headers.get("cf-connecting-ip") ?? "local";
+        if (ctx.path === "/oauth2/authorize") {
+          const session = await getSessionFromCtx(ctx);
+          // Better Auth reads a POSTed authorization request from its form body.
+          const params = ctx.method === "POST" ? ctx.body : ctx.query;
+          if (params && typeof params === "object")
+            shapeAuthorizationRequest(
+              params,
+              env.BETTER_AUTH_URL,
+              !!session && !session.user.emailVerified,
+            );
+          await security.throttle(`authorize:${ip}`, 60, 600);
+        }
+        if (ctx.path === "/oauth2/consent") {
+          const session = await getSessionFromCtx(ctx);
+          if (!session) throw new APIError("UNAUTHORIZED", { message: "Sign in to continue." });
+          if (!session.user.emailVerified)
+            throw new APIError("FORBIDDEN", {
+              code: "EMAIL_NOT_VERIFIED",
+              message: "Verify your email to continue.",
+            });
+        }
+        if (ctx.path === "/oauth2/register") await security.throttle(`register:${ip}`, 30);
         if (ctx.method === "POST" && ctx.path !== "/sign-out") {
           await security.maintain();
-          // CF supplies this header at its edge. Never trust arbitrary X-Forwarded-For.
-          const ip = ctx.request?.headers.get("cf-connecting-ip") ?? "local";
-          await security.throttle(`ip:${ip}`, 120, 600);
+          // Hosted MCP clients refresh tokens for many users from shared addresses.
+          if (ctx.path !== "/oauth2/token" && ctx.path !== "/oauth2/revoke")
+            await security.throttle(`ip:${ip}`, 120, 600);
           if (ctx.path.startsWith("/sign-in/")) {
             const identifier = String(ctx.body?.email ?? ctx.body?.username ?? "")
               .trim()
@@ -162,6 +199,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
       bearer({ requireSignature: true }),
       securityPlugin(security),
       openAPI({ disableDefaultReference: true }),
+      ...mcpAuthorizationPlugins(env.BETTER_AUTH_URL, env.CORS_ORIGIN, database),
       username({
         displayUsername: false,
         usernameValidator: (value) => usernameSchema.safeParse(value).success,
