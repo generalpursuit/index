@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 
 export type WeekNeighbors = { newerWeek: string | null; olderWeek: string | null };
 /**
- * Keep one settled week in the URL while the browser handles scrolling and snap physics.
- * Neighbors come from the page (they skip empty weeks); `go` puts a settled week in the URL.
+ * Keep the pager on the URL's week while the browser animates slides to a neighbor.
+ * Neighbors come from the page (they skip empty weeks); `go` puts a week in the URL once a
+ * slide toward it settles. Only those slides choose a week: any other scroll, such as the
+ * router restoring an offset on Back, resizing or centering, returns to the URL's week.
  */
 export function useWeekPager(
   week: string,
@@ -11,7 +13,8 @@ export function useWeekPager(
   go: (week: string) => void,
 ) {
   const viewport = useRef<HTMLDivElement>(null);
-  const committing = useRef<string | null>(null);
+  // The neighbor a slide is heading to, and whether it has reached it and asked for its URL.
+  const slide = useRef<{ week: string; arrived: boolean } | null>(null);
   const goTo = useRef(go);
   goTo.current = go;
   const newer = neighbors?.newerWeek,
@@ -24,47 +27,46 @@ export function useWeekPager(
   useLayoutEffect(() => {
     const element = viewport.current;
     if (!element) return;
-    committing.current = null;
+    slide.current = null;
     const center = () =>
       element.scrollTo({ top: weeks.indexOf(week) * element.clientHeight, behavior: "instant" });
     center();
     const resize = new ResizeObserver(center);
     resize.observe(element);
-    return () => resize.disconnect();
-  }, [week, weeks]);
-
-  useEffect(() => {
-    const element = viewport.current;
-    if (!element) return;
     let timer: ReturnType<typeof setTimeout>;
+    const at = (date: string) =>
+      Math.abs(element.scrollTop - weeks.indexOf(date) * element.clientHeight) <= 2;
+    // A slide that rests on its week puts it in the URL; one stopped elsewhere is over.
     const settle = () => {
-      const index = Math.round(element.scrollTop / element.clientHeight);
-      const next = weeks[index];
-      // Ignore inner-list scrolls and a gesture that has not reached a snap point yet.
-      if (
-        !next ||
-        next === week ||
-        committing.current ||
-        Math.abs(element.scrollTop - index * element.clientHeight) > 2
-      )
-        return;
-      committing.current = next;
-      goTo.current(next);
+      const current = slide.current;
+      if (!current || current.arrived) return;
+      if (at(current.week)) {
+        current.arrived = true;
+        goTo.current(current.week);
+      } else {
+        slide.current = null;
+        center();
+      }
+    };
+    const scrolled = (event: Event) => {
+      if (event.target !== element) return;
+      if (!slide.current && !at(week)) center();
+      if (!("onscrollend" in document.documentElement)) {
+        // Older WebViews have CSS snapping but no scrollend event.
+        clearTimeout(timer);
+        timer = setTimeout(settle, 220);
+      }
     };
     const finished = (event: Event) => {
       if (event.target === element) settle();
     };
-    const fallback = () => {
-      clearTimeout(timer);
-      timer = setTimeout(settle, 220);
-    };
+    element.addEventListener("scroll", scrolled);
     element.addEventListener("scrollend", finished);
-    // Older WebViews have CSS snapping but no scrollend event.
-    if (!("onscrollend" in document.documentElement)) element.addEventListener("scroll", fallback);
     return () => {
+      resize.disconnect();
       clearTimeout(timer);
+      element.removeEventListener("scroll", scrolled);
       element.removeEventListener("scrollend", finished);
-      element.removeEventListener("scroll", fallback);
     };
   }, [week, weeks]);
 
@@ -75,6 +77,7 @@ export function useWeekPager(
       // Newer weeks sit above the current one, so moving forward means a lower index.
       const index = weeks.indexOf(week) - direction;
       if (!element || index < 0 || index >= weeks.length) return;
+      slide.current = direction ? { week: weeks[index]!, arrived: false } : null;
       element.scrollTo({
         top: index * element.clientHeight,
         behavior:

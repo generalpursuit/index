@@ -249,6 +249,42 @@ test("the week you leave keeps its draft and scroll while the next one loads", a
   expect(await list.evaluate((el) => el.scrollTop)).toBe(scrolled);
 });
 
+test("Back and Forward land on the week of their history entry and stay there", async ({
+  page,
+}) => {
+  await login(page, "alice");
+  const current = page.locator('.week-page[data-active="true"]');
+  const pager = page.locator(".week-pager");
+  // The pager rests with the chosen week in view, and no settling scroll picks another.
+  const settledOn = async (week: string) => {
+    await expect(current).toHaveAttribute("data-week", week);
+    await page.waitForTimeout(600);
+    if (week === fixture.older) await expect(page).toHaveURL(new RegExp(fixture.older));
+    else await expect(page).not.toHaveURL(new RegExp(fixture.older));
+    await expect(current).toHaveAttribute("data-week", week);
+    const top = (await current.boundingBox())!.y - (await pager.boundingBox())!.y;
+    expect(Math.abs(top)).toBeLessThan(2);
+  };
+  await expect(current.locator(".own-links")).toContainText("Are.na");
+  // Opening and closing a post leaves history entries in which the pager has not moved.
+  await current.locator(".own-links").getByRole("button", { name: "Are.na", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Post", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: /jump to a week/ }).click();
+  await page
+    .getByRole("dialog", { name: "Weeks" })
+    .getByRole("button", { name: /Week/ })
+    .nth(1)
+    .click();
+  await expect(current.locator(".own-links")).toContainText("Earlier notes");
+  await settledOn(fixture.older);
+  await page.goBack();
+  await settledOn(fixture.week);
+  await page.goForward();
+  await settledOn(fixture.older);
+});
+
 test("your links scroll under the field, with fades instead of scrollbars", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 620 });
   await login(page, "alice");
