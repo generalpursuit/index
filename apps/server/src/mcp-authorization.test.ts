@@ -528,6 +528,68 @@ describe("MCP client authorization", () => {
     assert.equal(((await exchanged.json()) as { error: string }).error, "invalid_grant");
   });
 
+  it("disconnects every app on password recovery, issuance in flight included, but not on sign-out", async () => {
+    const person = await account("recovering");
+    const email = "recovering@example.test";
+    const clientId = await register();
+    const second = await register({ client_name: "Second agent" });
+    const refresh = (refresh_token: string) =>
+      form("/api/auth/oauth2/token", {
+        grant_type: "refresh_token",
+        refresh_token,
+        client_id: clientId,
+        resource,
+      });
+    const connected = await connect(clientId, person.cookie, "read write offline_access");
+    // Signing out ends the session's access tokens; the app stays connected and refreshes.
+    await json("/api/auth/sign-out", {}, { Cookie: person.cookie, Origin: web });
+    const refreshed = await refresh(connected.refresh_token);
+    assert.equal(refreshed.status, 200);
+    const tokens = (await refreshed.json()) as { access_token: string; refresh_token: string };
+    assert.ok(await verifyMcpAccess(fixture.db, api, tokens.access_token));
+
+    const signedIn = await json("/api/auth/sign-in/email", { email, password }, { Origin: web });
+    const cookie = `__Secure-better-auth.session_token=${signedIn.headers.get("set-auth-token")}`;
+    const { challenge } = await pkce();
+    const pending = await authorize(
+      authorizeURL(clientId, challenge, { prompt: "consent" }),
+      cookie,
+    );
+    assert.equal((await consent(pending, cookie, "read offline_access")).status, 200);
+    const secondPage = await authorize(authorizeURL(second, challenge), cookie);
+
+    // A refresh and a second app's approval stall before storing anything while the account is
+    // recovered.
+    const stalledRefresh = pauseAt(/^insert into "oauth_refresh_token"/i);
+    const refreshing = refresh(tokens.refresh_token);
+    await stalledRefresh.arrived;
+    const stalledApproval = pauseAt(/^insert into "oauth_consent"/i);
+    const approving = consent(secondPage, cookie, "read write offline_access");
+    await stalledApproval.arrived;
+    await json("/api/auth/security/request-reset", { email }, { Origin: web });
+    let reset: SecurityEmail | undefined;
+    while (!(reset = mail.find((message) => message.purpose === "reset")))
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    const recovered = await json(
+      "/api/auth/security/reset-password",
+      { email, code: reset.code, newPassword: "recovered-test-password" },
+      { Origin: web },
+    );
+    assert.equal(recovered.status, 200, await recovered.clone().text());
+    stalledApproval.resume();
+    assert.notEqual((await approving).status, 200);
+    stalledRefresh.resume();
+    assert.notEqual((await refreshing).status, 200);
+
+    assert.equal(await verifyMcpAccess(fixture.db, api, tokens.access_token), null);
+    const { rows } = await fixture.client.query<{ count: number }>(
+      `SELECT (SELECT count(*) FROM oauth_consent) + (SELECT count(*) FROM oauth_code_approval)
+        + (SELECT count(*) FROM oauth_access_token) + (SELECT count(*) FROM oauth_refresh_token)
+        + (SELECT count(*) FROM verification WHERE value LIKE '%"authorization_code"%') AS count`,
+    );
+    assert.equal(Number(rows[0]!.count), 0);
+  });
+
   it("binds tokens to the MCP resource and requires PKCE", async () => {
     const person = await account("bound");
     const clientId = await register();
