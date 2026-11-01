@@ -549,11 +549,32 @@ test("menu shell forwards hide/Open/Quit without notification ownership; Setting
   await expect(checkbox).toBeChecked();
   desktop.loginError = true;
   await checkbox.click();
-  await expect(box.getByRole("alert")).toContainText("Could not update Launch at login");
+  await expect(box.getByRole("alert")).toContainText("macOS didn’t turn off Launch at login");
   await expect(checkbox).toBeChecked();
   desktop.loginError = false;
   await checkbox.click();
   await expect(checkbox).not.toBeChecked();
+  // A refused registration says what to do next and opens Login Items from the message.
+  desktop.loginError = true;
+  await checkbox.click();
+  await expect(box.getByRole("alert")).toContainText(
+    "macOS didn’t turn on Launch at login. Check that Index is in Applications",
+  );
+  await expect(checkbox).not.toBeChecked();
+  await box.getByRole("alert").getByRole("button", { name: "Open Login Items" }).click();
+  await expect
+    .poll(() => desktop.commands.filter((c) => c.command === "launch_at_login_settings").length)
+    .toBe(2);
+  desktop.loginError = false;
+  // Run from its disk image or a translocated download, Index asks to be moved first.
+  desktop.loginState = "move-to-applications";
+  await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+  await expect(
+    box.getByText("Move Index to Applications and open it from there", { exact: false }),
+  ).toBeVisible();
+  await expect(checkbox).toBeDisabled();
+  await expect(checkbox).not.toBeChecked();
+  await expect(box.getByRole("alert")).toHaveCount(0);
   desktop.loginState = "unsupported";
   desktop.loginSupported = false;
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

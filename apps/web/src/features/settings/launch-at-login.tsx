@@ -5,7 +5,7 @@ import { SwitchRow } from "./rows";
 
 type LoginStatus = {
   supported: boolean;
-  state: "off" | "enabled" | "requires-approval" | "not-found" | "unsupported";
+  state: "off" | "enabled" | "requires-approval" | "move-to-applications" | "unsupported";
 };
 
 export function LaunchAtLoginSettings() {
@@ -46,7 +46,7 @@ function DesktopLaunchAtLogin() {
       label="Launch at login"
       description="Keep Index in your menu bar after you log in."
       checked={enabled}
-      disabled={!status || status.state === "not-found" || pending}
+      disabled={!status || status.state === "move-to-applications" || pending}
       onChange={async (event) => {
         const next = event.target.checked;
         setPending(true);
@@ -54,7 +54,11 @@ function DesktopLaunchAtLogin() {
         try {
           setStatus(await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: next }));
         } catch {
-          setError("Could not update Launch at login. Check System Settings.");
+          setError(
+            next
+              ? "macOS didn’t turn on Launch at login. Check that Index is in Applications and try again, or add it in Login Items."
+              : "macOS didn’t turn off Launch at login. You can remove Index in Login Items.",
+          );
         } finally {
           setPending(false);
         }
@@ -63,18 +67,7 @@ function DesktopLaunchAtLogin() {
       {/* Links sit above the row's stretched label, so they don't toggle the switch. */}
       {status?.state === "requires-approval" && (
         <span className="block">
-          Approval needed in System Settings.{" "}
-          <button
-            type="button"
-            className="relative underline"
-            onClick={() =>
-              void desktopInvoke("launch_at_login_settings").catch(() =>
-                toast.error("Could not open System Settings. Try again."),
-              )
-            }
-          >
-            Open Login Items
-          </button>
+          Approval needed in System Settings. <OpenLoginItems />
           <button
             type="button"
             className="relative ml-2 underline"
@@ -83,7 +76,9 @@ function DesktopLaunchAtLogin() {
               setPending(true);
               try {
                 setStatus(
-                  await desktopInvoke<LoginStatus>("launch_at_login_set", { enabled: false }),
+                  await desktopInvoke<LoginStatus>("launch_at_login_set", {
+                    enabled: false,
+                  }),
                 );
               } catch {
                 setError("Could not cancel Launch at login.");
@@ -96,14 +91,32 @@ function DesktopLaunchAtLogin() {
           </button>
         </span>
       )}
-      {status?.state === "not-found" && (
-        <span className="block">Install Index in Applications to use Launch at login.</span>
+      {status?.state === "move-to-applications" && (
+        <span className="block">
+          Move Index to Applications and open it from there to use Launch at login.
+        </span>
       )}
       {error && (
         <span role="alert" className="block text-destructive">
-          {error}
+          {error} <OpenLoginItems />
         </span>
       )}
     </SwitchRow>
+  );
+}
+
+function OpenLoginItems() {
+  return (
+    <button
+      type="button"
+      className="relative underline"
+      onClick={() =>
+        void desktopInvoke("launch_at_login_settings").catch(() =>
+          toast.error("Could not open System Settings. Try again."),
+        )
+      }
+    >
+      Open Login Items
+    </button>
   );
 }

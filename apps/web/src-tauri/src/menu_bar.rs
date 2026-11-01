@@ -32,7 +32,7 @@ struct MenuOpened { presented: bool }
 pub struct LoginStatus { supported: bool, state: &'static str }
 fn login_status(code: i32) -> LoginStatus {
     LoginStatus { supported: code >= 0, state: match code {
-        0 => "off", 1 => "enabled", 2 => "requires-approval", 3 => "not-found", _ => "unsupported",
+        0 => "off", 1 => "enabled", 2 => "requires-approval", 3 => "move-to-applications", _ => "unsupported",
     } }
 }
 #[cfg(target_os = "macos")]
@@ -312,7 +312,8 @@ mod tests {
     fn login_items_reflect_approval_and_support_without_assuming_enabled() {
         assert_eq!(login_status(0).state, "off");
         assert_eq!(login_status(2).state, "requires-approval");
-        assert_eq!(login_status(3).state, "not-found");
+        assert_eq!(login_status(3).state, "move-to-applications");
+        assert!(login_status(3).supported);
         assert!(!login_status(-1).supported);
     }
 }

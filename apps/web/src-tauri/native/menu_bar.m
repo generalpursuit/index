@@ -251,24 +251,39 @@ void index_menu_resize(void *pointer, double height) {
   }];
 }
 // No preference mirror and no registration during launch/status. The OS is authoritative.
+// Off (0), enabled (1), waiting for approval in Login Items (2), or off and unable to turn on until
+// Index is moved to Applications (3); -1 where there is no login item.
 int index_login_status(void) {
   if (@available(macOS 13.0, *)) {
-    if (![NSBundle.mainBundle.bundlePath.pathExtension isEqualToString:@"app"]) return -1;
+    NSURL *bundle = NSBundle.mainBundle.bundleURL;
+    if (![bundle.pathExtension isEqualToString:@"app"]) return -1;
     switch (SMAppService.mainAppService.status) {
-      case SMAppServiceStatusNotRegistered: return 0;
       case SMAppServiceStatusEnabled: return 1;
       case SMAppServiceStatusRequiresApproval: return 2;
-      case SMAppServiceStatusNotFound: return 3;
+      // A copy that has never been registered reads as not found rather than not registered, and
+      // registering it works, so both are off.
+      case SMAppServiceStatusNotRegistered:
+      case SMAppServiceStatusNotFound: break;
     }
+    // Run from its disk image, or from the read-only place Gatekeeper translocates a downloaded
+    // app to, Index would register a location that disappears with the image or the translocation.
+    NSNumber *readOnly = nil;
+    [bundle getResourceValue:&readOnly forKey:NSURLVolumeIsReadOnlyKey error:nil];
+    return readOnly.boolValue ? 3 : 0;
   }
   return -1;
 }
+// Returns the status that results, or -2 when macOS did not make the change. The status decides,
+// not the call's error: registering an item that is waiting for approval can fail while leaving it
+// waiting, and macOS reports a damaged signature with the same generic error as other refusals.
 int index_login_set(bool enabled) {
   if (@available(macOS 13.0, *)) {
-    if (index_login_status() < 0) return -1;
-    NSError *error = nil;
-    BOOL success = enabled ? [SMAppService.mainAppService registerAndReturnError:&error] : [SMAppService.mainAppService unregisterAndReturnError:&error];
-    return success ? index_login_status() : -2;
+    int status = index_login_status();
+    if (status < 0 || (enabled && status == 3)) return status;
+    if (enabled) [SMAppService.mainAppService registerAndReturnError:nil];
+    else [SMAppService.mainAppService unregisterAndReturnError:nil];
+    status = index_login_status();
+    return (enabled ? status == 1 || status == 2 : status == 0 || status == 3) ? status : -2;
   }
   return -1;
 }

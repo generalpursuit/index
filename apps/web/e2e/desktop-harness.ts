@@ -219,7 +219,9 @@ export class DesktopHarness {
           return { supported: this.loginSupported, state: this.loginState };
         if (command === "launch_at_login_set") {
           if (this.loginError) throw new Error("OS denied request");
-          this.loginState = args.enabled ? "requires-approval" : "off";
+          // Like macOS, a copy outside Applications stays off rather than registering.
+          if (!(args.enabled && this.loginState === "move-to-applications"))
+            this.loginState = args.enabled ? "requires-approval" : "off";
           return { supported: this.loginSupported, state: this.loginState };
         }
         if (command === "launch_at_login_settings") return;
