@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { mountAuthentication, type AuthFactory } from "./authentication";
+import { isClientOAuthPath, mountAuthentication, type AuthFactory } from "./authentication";
 import { clientHeader, clientVersionGate } from "./client-version";
 import { apiHandler, rpcHandler } from "./transport";
 
@@ -33,15 +33,20 @@ export function createApp(options: AppOptions) {
     await next();
     c.res.headers.set("X-Content-Type-Options", "nosniff");
   });
-  app.use(
-    "/*",
-    cors({
-      origin: options.origins,
-      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowHeaders: ["Content-Type", "Authorization", clientHeader, "ORPC-Batch"],
-      exposeHeaders: ["set-auth-token"],
-      credentials: true,
-    }),
+  const appCors = cors({
+    origin: options.origins,
+    allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", clientHeader, "ORPC-Batch"],
+    exposeHeaders: ["set-auth-token"],
+    credentials: true,
+  });
+  const clientOAuthCors = cors({
+    origin: "*",
+    allowMethods: ["GET", "POST", "OPTIONS"],
+    allowHeaders: ["Content-Type", "Authorization", "MCP-Protocol-Version"],
+  });
+  app.use("/*", (c, next) =>
+    isClientOAuthPath(c.req.path) ? clientOAuthCors(c, next) : appCors(c, next),
   );
   app.use("/*", clientVersionGate);
   app.get("/live/:account", (c) => {
