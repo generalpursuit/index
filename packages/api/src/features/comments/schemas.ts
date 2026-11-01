@@ -11,9 +11,15 @@ export const commentSchema = z.object({
   createdAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
 });
-export const createCommentSchema = z.strictObject({ linkId: z.uuid(), body: bodySchema });
+const commentedLinkSchema = z.uuid().describe("The ID of the link the comments are on.");
+export const createCommentSchema = z.strictObject({
+  linkId: commentedLinkSchema,
+  body: bodySchema.describe(
+    "The comment's plain text, up to 5000 characters. Write @username to mention someone.",
+  ),
+});
 export const updateCommentSchema = z.strictObject({ id: z.uuid(), body: bodySchema });
-export const listCommentsSchema = pageInputSchema.extend({ linkId: z.uuid() });
+export const listCommentsSchema = pageInputSchema.extend({ linkId: commentedLinkSchema });
 export const commentPageSchema = z.object({
   items: z.array(commentSchema.extend({ author: publicUserSchema })),
   nextCursor: z.string().nullable(),

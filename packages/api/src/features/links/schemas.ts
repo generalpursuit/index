@@ -1,4 +1,5 @@
 import { weekStartSchema } from "../../shared/weeks";
+import { pageCursorSchema, pageLimitSchema, userIdSchema } from "../../shared/schemas";
 import { linkCategories } from "@index/db/categories";
 import { z } from "zod";
 
@@ -15,14 +16,27 @@ export const createLinkInputSchema = z.strictObject({
   groupId: z.uuid().nullable().optional(),
 });
 
-export const getLinkInputSchema = z.strictObject({ id: z.uuid() });
+export const getLinkInputSchema = z.strictObject({
+  id: z.uuid().describe("The link's ID, as returned by a list, search or resolved Index URL."),
+});
+
+const weekFilterSchema = weekStartSchema
+  .optional()
+  .describe(
+    "Only links saved in the UTC week starting on this Monday (YYYY-MM-DD). Omit for all weeks.",
+  );
 
 export const listMyLinksInputSchema = z.strictObject({
-  limit: z.number().int().min(1).max(100).default(20),
-  cursor: z.string().min(1).max(512).optional(),
-  weekStart: weekStartSchema.optional(),
-  groupId: z.uuid().optional(),
-  category: linkCategorySchema.optional(),
+  limit: pageLimitSchema,
+  cursor: pageCursorSchema,
+  weekStart: weekFilterSchema,
+  groupId: z
+    .uuid()
+    .optional()
+    .describe("Only links in this group of yours. Omit for links in any group or none."),
+  category: linkCategorySchema
+    .optional()
+    .describe("Only links of this kind, as Index classified the page. Omit for every kind."),
 });
 
 export const updateLinkInputSchema = z
@@ -39,10 +53,10 @@ export const updateLinkInputSchema = z
   );
 
 export const listGroupLinksInputSchema = z.strictObject({
-  groupId: z.uuid(),
-  limit: z.number().int().min(1).max(100).default(20),
-  cursor: z.string().min(1).max(512).optional(),
-  weekStart: weekStartSchema.optional(),
+  groupId: z.uuid().describe("The group's ID, for example from resolving its Index address."),
+  limit: pageLimitSchema,
+  cursor: pageCursorSchema,
+  weekStart: weekFilterSchema,
 });
 
 export const linkSchema = z.object({
@@ -78,7 +92,7 @@ export type UpdateLinkInput = z.output<typeof updateLinkInputSchema>;
 
 export const listOwnerLinksSchema = listMyLinksInputSchema
   .omit({ groupId: true, category: true })
-  .extend({ userId: z.string().min(1).max(128) });
+  .extend({ userId: userIdSchema.describe("The person's user ID, the `id` of their profile.") });
 
 export const libraryWeeksInputSchema = z.strictObject({
   userId: z.string().min(1).max(128),

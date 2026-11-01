@@ -1,4 +1,5 @@
 import { openapi } from "@orpc/openapi";
+import { agentTool } from "../../agent-tools";
 import { baseContract, pageInputSchema } from "../../shared/schemas";
 import { libraryWeeksSchema } from "../links/schemas";
 import {
@@ -31,7 +32,10 @@ export const feedContract = {
         path: "/feed",
         tags: ["Feed"],
         summary: "Newest visible links saved by people you follow",
+        description:
+          "Lists the links saved by people the signed-in user follows (accepted follows only), newest first, each with its author. It leaves out the user's own links and anything those people may not show them, such as links in locked groups.",
       }),
+      agentTool({ name: "list_following_feed", permission: "read" }),
     )
     .input(pageInputSchema)
     .output(feedPageSchema),

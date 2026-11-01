@@ -9,14 +9,30 @@ export const baseContract = oc.errors({
   INTERNAL_SERVER_ERROR: { message: "Something went wrong." },
 });
 
-export const pageInputSchema = z.strictObject({
-  limit: z.number().int().min(1).max(100).default(20),
-  cursor: z.string().min(1).max(512).optional(),
-});
+export const pageLimitSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(100)
+  .default(20)
+  .describe("How many items to return, from 1 to 100. Defaults to 20.");
+export const pageCursorSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .optional()
+  .describe(
+    "The `nextCursor` of the previous page, passed back unchanged to continue the list. Omit it for the first page.",
+  );
+export const pageInputSchema = z.strictObject({ limit: pageLimitSchema, cursor: pageCursorSchema });
 export const userIdSchema = z.string().min(1).max(128);
 export const userPageInputSchema = z.strictObject({
-  limit: z.number().int().min(1).max(100).default(20),
-  after: userIdSchema.optional(),
+  limit: pageLimitSchema,
+  after: userIdSchema
+    .optional()
+    .describe(
+      "The `nextAfter` of the previous page, passed back unchanged to continue the list. Omit it for the first page.",
+    ),
 });
 export const idInputSchema = z.strictObject({ id: z.uuid() });
 export const successSchema = z.object({ success: z.literal(true) });

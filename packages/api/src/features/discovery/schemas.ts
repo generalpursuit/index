@@ -3,7 +3,12 @@ import { userIdSchema, userPageInputSchema } from "../../shared/schemas";
 import { followedBySchema, publicUserSchema } from "../profiles/schemas";
 
 export const searchUsersSchema = userPageInputSchema.extend({
-  query: z.string().trim().min(1).max(100),
+  query: z
+    .string()
+    .trim()
+    .min(1)
+    .max(100)
+    .describe("Part of the person's name or username, matched anywhere and ignoring case."),
 });
 export const recommendationsInputSchema = z.strictObject({
   limit: z.number().int().min(1).max(50).default(20),
