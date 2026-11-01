@@ -173,6 +173,50 @@ describe("MCP client authorization", () => {
     };
   }
 
+  /**
+   * Pauses the first statement matching `pattern` before it reaches the database, as a slow
+   * request would against a shared database, until `resume` lets it continue.
+   */
+  function pauseAt(pattern: RegExp) {
+    const query = fixture.client.query.bind(fixture.client);
+    let reached = () => {};
+    let resume = () => {};
+    const arrived = new Promise<void>((resolve) => (reached = resolve));
+    const resumed = new Promise<void>((resolve) => (resume = resolve));
+    let paused = false;
+    fixture.client.query = (async (statement: string, ...rest: unknown[]) => {
+      if (!paused && pattern.test(statement)) {
+        paused = true;
+        reached();
+        await resumed;
+      }
+      return (query as (...args: unknown[]) => unknown)(statement, ...rest);
+    }) as typeof fixture.client.query;
+    return {
+      arrived,
+      resume() {
+        fixture.client.query = query;
+        resume();
+      },
+    };
+  }
+
+  async function exchange(clientId: string, approved: Response, verifier: string) {
+    const code = new URL(((await approved.json()) as { url: string }).url).searchParams.get(
+      "code",
+    )!;
+    const exchanged = await form("/api/auth/oauth2/token", {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: callback,
+      client_id: clientId,
+      code_verifier: verifier,
+      resource,
+    });
+    assert.equal(exchanged.status, 200, await exchanged.clone().text());
+    return (await exchanged.json()) as { access_token: string; refresh_token: string };
+  }
+
   const bearer = (token: string) =>
     new Request(resource, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
 
@@ -392,6 +436,39 @@ describe("MCP client authorization", () => {
         + (SELECT count(*) FROM oauth_consent) AS count`,
     );
     assert.equal(Number(rows[0]!.count), 0);
+  });
+
+  it("keeps one approval per account and app when approvals race, so re-approving narrows all", async () => {
+    const person = await account("racer");
+    const clientId = await register();
+    const requests = await Promise.all(
+      [0, 1].map(async () => {
+        const { verifier, challenge } = await pkce();
+        return {
+          verifier,
+          page: await authorize(authorizeURL(clientId, challenge), person.cookie),
+        };
+      }),
+    );
+    // The first approval stores nothing until the second, finding no approval either, is done.
+    const first = pauseAt(/^insert into "oauth_consent"/i);
+    const pending = consent(requests[0]!.page, person.cookie, "read write offline_access");
+    await first.arrived;
+    const second = await consent(requests[1]!.page, person.cookie, "read write offline_access");
+    first.resume();
+    const approvals = [await pending, second];
+    for (const approved of approvals) assert.equal(approved.status, 200);
+    const { rows } = await fixture.client.query("SELECT id FROM oauth_consent");
+    assert.equal(rows.length, 1);
+    const tokens = await Promise.all(
+      approvals.map((approved, index) => exchange(clientId, approved, requests[index]!.verifier)),
+    );
+
+    await connect(clientId, person.cookie, "read offline_access", { prompt: "consent" });
+    for (const { access_token } of tokens)
+      assert.deepEqual((await verifyMcpAccess(fixture.db, api, access_token))?.permissions, [
+        "read",
+      ]);
   });
 
   it("binds tokens to the MCP resource and requires PKCE", async () => {

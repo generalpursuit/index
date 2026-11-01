@@ -181,7 +181,8 @@ export const oauthConsent = pgTable(
   },
   (table) => [
     index("oauthConsent_clientId_idx").on(table.clientId),
-    index("oauthConsent_userId_idx").on(table.userId),
+    // One approval per account and app: a re-approval changes it rather than adding another.
+    uniqueIndex("oauthConsent_userId_clientId_uidx").on(table.userId, table.clientId),
   ],
 );
 
