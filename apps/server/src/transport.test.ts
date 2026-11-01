@@ -82,6 +82,28 @@ describe("HTTP API transports", () => {
     assert.equal(logged.mock.callCount(), 1);
   });
 
+  it("answers unexpected exceptions with the published internal error body", async (t) => {
+    t.mock.method(console, "error", () => {});
+    const result = await apiHandler.handle(
+      new Request("https://api.example.com/api/v1/links", save(input)),
+      {
+        prefix: "/api/v1",
+        context: {
+          ...fixture.context("alice"),
+          dispatch: () => Promise.reject(new Error("queue unavailable")),
+        },
+      },
+    );
+    assert.ok(result.matched);
+    assert.equal(result.response.status, 500);
+    assert.deepEqual(await result.response.json(), {
+      defined: false,
+      code: "INTERNAL_SERVER_ERROR",
+      status: 500,
+      message: "Internal server error",
+    });
+  });
+
   it("serves the OpenAPI contract with explicit request and response schemas", async () => {
     const response = await request("/openapi.json", null);
     assert.equal(response.status, 200);

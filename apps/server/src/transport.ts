@@ -24,6 +24,33 @@ const generateSpecification = () =>
   (specification ??= new OpenAPIGenerator({ converters }).generate(appRouter, {
     version: "3.1.1",
     errorStatusMap,
+    // Documents the body `errorResponseBodyEncoder` sends.
+    errorResponseBodySchema: (definedErrors, status) => ({
+      oneOf: [
+        ...definedErrors.map(({ code, defaultMessage, dataJsonSchema, dataOptional }) => ({
+          type: "object" as const,
+          properties: {
+            defined: { const: true },
+            code: { const: code },
+            status: { const: status },
+            message: { type: "string" as const, default: defaultMessage },
+            data: dataJsonSchema,
+          },
+          required: ["defined", "code", "status", "message", ...(dataOptional ? [] : ["data"])],
+        })),
+        {
+          type: "object" as const,
+          properties: {
+            defined: { const: false },
+            code: { type: "string" as const },
+            status: { type: "number" as const },
+            message: { type: "string" as const },
+            data: {},
+          },
+          required: ["defined", "code", "status", "message"],
+        },
+      ],
+    }),
     base: {
       info: { title: "Index API", version: "1.0.0" },
       servers: [{ url: "/api/v1" }],
@@ -47,6 +74,19 @@ const generateSpecification = () =>
 
 export const apiHandler = new OpenAPIHandler(appRouter, {
   errorStatusMap,
+  // REST clients rely on the published error body, which includes `status`.
+  errorResponseBodyEncoder: (error) => ({
+    defined: error.defined,
+    code: error.code,
+    status: errorStatus(error),
+    // An undefined internal error is an unexpected exception, not one a procedure threw. oRPC 2
+    // names it "Internal Server Error"; the published v1 body says "Internal server error".
+    message:
+      error.code === "INTERNAL_SERVER_ERROR" && !error.defined
+        ? "Internal server error"
+        : error.message,
+    data: error.data,
+  }),
   plugins: [
     new SmartCoercionHandlerPlugin({ converters }),
     new OpenAPIReferenceHandlerPlugin({
