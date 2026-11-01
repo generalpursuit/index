@@ -111,7 +111,9 @@ export const oauthRefreshToken = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     referenceId: text("reference_id"),
-    authorizationCodeId: text("authorization_code_id"),
+    authorizationCodeId: text("authorization_code_id").references(() => oauthCodeApproval.codeId, {
+      onDelete: "cascade",
+    }),
     resources: text("resources").array(),
     requestedUserInfoClaims: text("requested_user_info_claims").array(),
     expiresAt: timestamp("expires_at"),
@@ -144,7 +146,9 @@ export const oauthAccessToken = pgTable(
     sessionId: text("session_id").references(() => session.id, { onDelete: "set null" }),
     userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
     referenceId: text("reference_id"),
-    authorizationCodeId: text("authorization_code_id"),
+    authorizationCodeId: text("authorization_code_id").references(() => oauthCodeApproval.codeId, {
+      onDelete: "cascade",
+    }),
     resources: text("resources").array(),
     requestedUserInfoClaims: text("requested_user_info_claims").array(),
     refreshId: text("refresh_id").references(() => oauthRefreshToken.id, { onDelete: "cascade" }),
@@ -184,6 +188,26 @@ export const oauthConsent = pgTable(
     // One approval per account and app: a re-approval changes it rather than adding another.
     uniqueIndex("oauthConsent_userId_clientId_uidx").on(table.userId, table.clientId),
   ],
+);
+
+/**
+ * The approval each authorization code was issued under; Index's own table, which Better Auth
+ * doesn't know. A trigger binds a code to its account's approval of the app as Better Auth
+ * stores the code. Tokens reference the row through the `authorization_code_id` Better Auth
+ * keeps through every refresh, so deleting the approval deletes its pending codes and every
+ * token issued under it, and no token can be issued under it afterwards, even by an exchange
+ * or refresh already in flight. A later approval of the same app never revives them.
+ */
+export const oauthCodeApproval = pgTable(
+  "oauth_code_approval",
+  {
+    codeId: text("code_id").primaryKey(),
+    consentId: text("consent_id")
+      .notNull()
+      .references(() => oauthConsent.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [index("oauthCodeApproval_consentId_idx").on(table.consentId)],
 );
 
 export const oauthClientAssertion = pgTable("oauth_client_assertion", {

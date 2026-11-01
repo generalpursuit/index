@@ -1,8 +1,8 @@
 import {
   oauthAccessToken,
   oauthClient,
+  oauthCodeApproval,
   oauthConsent,
-  oauthRefreshToken,
 } from "@index/db/schema/oauth";
 import { user } from "@index/db/schema/auth";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
@@ -54,8 +54,10 @@ export type McpAccess = {
  * (or the token itself). Returns null unless the token was issued for this stage's MCP
  * resource, is unexpired and unrevoked, bound to no key (Index has no DPoP, so a key-bound
  * token must not count as Bearer), its app is enabled and still connected, and its account
- * still exists with a verified email. Permissions are those of both the token and the
- * current connection, so a narrower re-approval also narrows tokens issued before it.
+ * still exists with a verified email. A token counts only under the approval its code was
+ * issued under, never another approval of the same app (see `oauthCodeApproval`). Permissions
+ * are those of both the token and that approval, so a narrower re-approval also narrows
+ * tokens issued before it.
  *
  * Every call reads the database: revoking a connection stops the agent's next request.
  */
@@ -71,24 +73,24 @@ export async function verifyMcpAccess(
   if (!token?.startsWith(tokenPrefixes.opaqueAccessToken)) return null;
   const [row] = await database
     .select({
-      userId: oauthAccessToken.userId,
+      userId: oauthConsent.userId,
       tokenScopes: oauthAccessToken.scopes,
       grantedScopes: oauthConsent.scopes,
       clientId: oauthClient.clientId,
       clientName: oauthClient.name,
     })
     .from(oauthAccessToken)
-    .innerJoin(user, and(eq(user.id, oauthAccessToken.userId), eq(user.emailVerified, true)))
-    .innerJoin(oauthClient, eq(oauthClient.clientId, oauthAccessToken.clientId))
     .innerJoin(
-      oauthConsent,
-      and(
-        eq(oauthConsent.clientId, oauthAccessToken.clientId),
-        eq(oauthConsent.userId, oauthAccessToken.userId),
-      ),
+      oauthCodeApproval,
+      eq(oauthCodeApproval.codeId, oauthAccessToken.authorizationCodeId),
     )
+    .innerJoin(oauthConsent, eq(oauthConsent.id, oauthCodeApproval.consentId))
+    .innerJoin(user, and(eq(user.id, oauthConsent.userId), eq(user.emailVerified, true)))
+    .innerJoin(oauthClient, eq(oauthClient.clientId, oauthConsent.clientId))
     .where(
       and(
+        eq(oauthAccessToken.userId, oauthConsent.userId),
+        eq(oauthAccessToken.clientId, oauthConsent.clientId),
         eq(
           oauthAccessToken.token,
           await digestToken(token.slice(tokenPrefixes.opaqueAccessToken.length)),
@@ -142,18 +144,11 @@ export async function listConnections(database: DB, userId: string): Promise<Con
 }
 
 /**
- * Disconnects an app: its approval and every access and refresh token it holds for the user
- * go in one statement, so no later request or refresh can use them.
+ * Disconnects an app: deleting its approval deletes the pending codes and every token issued
+ * under it, and no exchange or refresh already in flight can issue another.
  */
 export async function revokeConnection(database: DB, userId: string, clientId: string) {
   await database.execute(sql`
-    WITH access AS (
-      DELETE FROM ${oauthAccessToken}
-      WHERE ${oauthAccessToken.userId} = ${userId} AND ${oauthAccessToken.clientId} = ${clientId}
-    ), refresh AS (
-      DELETE FROM ${oauthRefreshToken}
-      WHERE ${oauthRefreshToken.userId} = ${userId} AND ${oauthRefreshToken.clientId} = ${clientId}
-    )
     DELETE FROM ${oauthConsent}
     WHERE ${oauthConsent.userId} = ${userId} AND ${oauthConsent.clientId} = ${clientId}`);
 }

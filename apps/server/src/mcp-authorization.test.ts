@@ -471,6 +471,63 @@ describe("MCP client authorization", () => {
       ]);
   });
 
+  it("never revives what was issued under a deleted approval, refreshes in flight included", async () => {
+    const person = await account("reconnecting");
+    const clientId = await register();
+    const disconnect = () =>
+      json("/api/auth/connections/revoke", { clientId }, { Cookie: person.cookie, Origin: web });
+    const refresh = (refresh_token: string) =>
+      form("/api/auth/oauth2/token", {
+        grant_type: "refresh_token",
+        refresh_token,
+        client_id: clientId,
+        resource,
+      });
+    const old = await connect(clientId, person.cookie, "read write offline_access");
+
+    // A refresh claims the old refresh token and stalls before storing its successor; the app
+    // is disconnected and connected again before the refresh continues.
+    const stalled = pauseAt(/^insert into "oauth_refresh_token"/i);
+    const refreshing = refresh(old.refresh_token);
+    await stalled.arrived;
+    assert.equal((await disconnect()).status, 200);
+    const current = await connect(clientId, person.cookie, "read offline_access");
+    stalled.resume();
+    assert.notEqual((await refreshing).status, 200);
+    assert.equal(await verifyMcpAccess(fixture.db, api, old.access_token), null);
+    assert.equal((await refresh(old.refresh_token)).status, 400);
+    const { rows } = await fixture.client.query<{ token: string }>(
+      "SELECT token FROM oauth_refresh_token WHERE revoked IS NULL",
+    );
+    assert.equal(rows.length, 1);
+    assert.deepEqual((await verifyMcpAccess(fixture.db, api, current.access_token))?.permissions, [
+      "read",
+    ]);
+
+    // A code issued before a disconnect can't be exchanged after it, nor after reconnecting.
+    const { verifier, challenge } = await pkce();
+    const page = await authorize(
+      authorizeURL(clientId, challenge, { prompt: "consent" }),
+      person.cookie,
+    );
+    const approved = await consent(page, person.cookie, "read write offline_access");
+    assert.equal((await disconnect()).status, 200);
+    await connect(clientId, person.cookie, "read offline_access");
+    const code = new URL(((await approved.json()) as { url: string }).url).searchParams.get(
+      "code",
+    )!;
+    const exchanged = await form("/api/auth/oauth2/token", {
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: callback,
+      client_id: clientId,
+      code_verifier: verifier,
+      resource,
+    });
+    assert.equal(exchanged.status, 400);
+    assert.equal(((await exchanged.json()) as { error: string }).error, "invalid_grant");
+  });
+
   it("binds tokens to the MCP resource and requires PKCE", async () => {
     const person = await account("bound");
     const clientId = await register();
