@@ -8,8 +8,8 @@ export const clientHeader = "X-Index-Client";
  * compatible clients is published; older clients then receive 426 and must update.
  */
 export const minimumClientVersions = {
-  web: "0.5.0",
-  desktop: "0.5.0",
+  web: "0.7.1",
+  desktop: "0.7.1",
   ios: "0.5.0",
 } as const;
 
