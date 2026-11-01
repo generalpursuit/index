@@ -52,8 +52,9 @@ export type McpAccess = {
 /**
  * Authorizes a request to the MCP endpoint from its `Authorization: Bearer` access token
  * (or the token itself). Returns null unless the token was issued for this stage's MCP
- * resource, is unexpired and unrevoked, its app is enabled and still connected, and its
- * account still exists with a verified email. Permissions are those of both the token and the
+ * resource, is unexpired and unrevoked, bound to no key (Index has no DPoP, so a key-bound
+ * token must not count as Bearer), its app is enabled and still connected, and its account
+ * still exists with a verified email. Permissions are those of both the token and the
  * current connection, so a narrower re-approval also narrows tokens issued before it.
  *
  * Every call reads the database: revoking a connection stops the agent's next request.
@@ -94,6 +95,7 @@ export async function verifyMcpAccess(
         ),
         gt(oauthAccessToken.expiresAt, new Date()),
         isNull(oauthAccessToken.revoked),
+        isNull(oauthAccessToken.confirmation),
         sql`${mcpResource(apiURL)} = ANY(${oauthAccessToken.resources})`,
         sql`${oauthClient.disabled} IS NOT TRUE`,
       ),

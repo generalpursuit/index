@@ -176,6 +176,30 @@ describe("MCP client authorization", () => {
   const bearer = (token: string) =>
     new Request(resource, { method: "POST", headers: { Authorization: `Bearer ${token}` } });
 
+  /** A valid RFC 9449 proof of a fresh P-256 key, for a POST to `url`. */
+  async function dpopProof(url: string) {
+    const keys = (await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, [
+      "sign",
+      "verify",
+    ])) as CryptoKeyPair;
+    const { kty, crv, x, y } = (await crypto.subtle.exportKey("jwk", keys.publicKey)) as JsonWebKey;
+    const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+    const header = { typ: "dpop+jwt", alg: "ES256", jwk: { kty, crv, x, y } };
+    const claims = {
+      jti: crypto.randomUUID(),
+      htm: "POST",
+      htu: url,
+      iat: Math.floor(Date.now() / 1000),
+    };
+    const input = `${encode(header)}.${encode(claims)}`;
+    const signature = await crypto.subtle.sign(
+      { name: "ECDSA", hash: "SHA-256" },
+      keys.privateKey,
+      new TextEncoder().encode(input),
+    );
+    return `${input}.${Buffer.from(signature).toString("base64url")}`;
+  }
+
   it("publishes authorization-server and protected-resource discovery for the stage", async () => {
     const server = await request("/.well-known/oauth-authorization-server/api/auth", {
       headers: { Origin: "https://agent.example" },
@@ -407,6 +431,74 @@ describe("MCP client authorization", () => {
     assert.ok(await verifyMcpAccess(fixture.db, api, access_token));
     await fixture.client.query("UPDATE oauth_access_token SET resources = $1", [[`${api}/other`]]);
     assert.equal(await verifyMcpAccess(fixture.db, api, access_token), null);
+  });
+
+  it("issues Bearer tokens only: DPoP is not advertised, refused when asked for and never accepted", async () => {
+    for (const path of [
+      "/.well-known/oauth-authorization-server/api/auth",
+      "/api/auth/.well-known/oauth-authorization-server",
+      "/.well-known/oauth-protected-resource",
+      "/.well-known/oauth-protected-resource/mcp",
+    ]) {
+      const document = (await (await request(path)).json()) as Record<string, unknown>;
+      assert.deepEqual(
+        Object.keys(document).filter((field) => field.startsWith("dpop_")),
+        [],
+        path,
+      );
+      assert.equal((await request(path, { method: "HEAD" })).status, 200, path);
+    }
+
+    const registration = await json("/api/auth/oauth2/register", {
+      client_name: "Bound agent",
+      redirect_uris: [callback],
+      token_endpoint_auth_method: "none",
+      dpop_bound_access_tokens: true,
+    });
+    assert.equal(registration.status, 400);
+    assert.equal(
+      ((await registration.json()) as { error: string }).error,
+      "invalid_client_metadata",
+    );
+
+    const person = await account("bearer");
+    const clientId = await register();
+    const { verifier, challenge } = await pkce();
+    const page = await authorize(authorizeURL(clientId, challenge), person.cookie);
+    const approved = await consent(page, person.cookie, "read offline_access");
+    const code = new URL(((await approved.json()) as { url: string }).url).searchParams.get(
+      "code",
+    )!;
+    const tokenEndpoint = `${api}/api/auth/oauth2/token`;
+    const bound = await request("/api/auth/oauth2/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+        DPoP: await dpopProof(tokenEndpoint),
+      },
+      body: new URLSearchParams({
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: callback,
+        client_id: clientId,
+        code_verifier: verifier,
+        resource,
+      }),
+    });
+    assert.equal(bound.status, 400, await bound.clone().text());
+    assert.equal((await fixture.client.query("SELECT 1 FROM oauth_access_token")).rows.length, 0);
+
+    // A key thumbprint in the authorization request is ignored rather than binding the code.
+    const tokens = await connect(clientId, person.cookie, "read offline_access", {
+      dpop_jkt: "0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I",
+      prompt: "consent",
+    });
+    assert.ok(await verifyMcpAccess(fixture.db, api, tokens.access_token));
+    // A token carrying a key confirmation never counts as a Bearer token.
+    await fixture.client.query(
+      `UPDATE oauth_access_token SET confirmation = '{"jkt":"0ZcOCORZNYy-DWpqq30jZyJGHTN0d2HglBV3uiguA4I"}'`,
+    );
+    assert.equal(await verifyMcpAccess(fixture.db, api, tokens.access_token), null);
   });
 
   it("lets only verified accounts approve and keeps connections private to their account", async () => {

@@ -1,4 +1,4 @@
-import { clientOAuthPaths } from "@index/auth/mcp-authorization";
+import { clientOAuthPaths, withoutDpopDiscovery } from "@index/auth/mcp-authorization";
 import type { Hono } from "hono";
 
 export type AuthFactory = (
@@ -31,6 +31,10 @@ export function mountAuthentication(
   factory: AuthFactory,
   beginMutation?: () => Promise<() => Promise<void>>,
 ) {
+  app.on("GET", [...discoveryPaths, "/api/auth/.well-known/*"], async (c) => {
+    const auth = await factory((task) => c.executionCtx.waitUntil(task));
+    return withoutDpopDiscovery(await auth.handler(c.req.raw));
+  });
   app.on(["POST", "GET"], "/api/auth/*", async (c) => {
     // Better Auth also owns session-revocation endpoints. Cover its whole write boundary.
     const writing = c.req.method === "POST";
@@ -41,9 +45,5 @@ export function mountAuthentication(
     } finally {
       if (finish) c.executionCtx.waitUntil(finish());
     }
-  });
-  app.on("GET", discoveryPaths, async (c) => {
-    const auth = await factory((task) => c.executionCtx.waitUntil(task));
-    return auth.handler(c.req.raw);
   });
 }

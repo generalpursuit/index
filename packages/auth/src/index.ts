@@ -16,6 +16,7 @@ import {
   clientOAuthPaths,
   mcpAuthorizationPaths,
   mcpAuthorizationPlugins,
+  refuseDpop,
   shapeAuthorizationRequest,
 } from "./mcp-authorization";
 
@@ -123,6 +124,7 @@ export function createAuth<TQueryResult extends PgQueryResultHKT>(
             });
         }
         if (ctx.path === "/oauth2/register") await security.throttle(`register:${ip}`, 30);
+        refuseDpop(ctx.path, ctx.headers, ctx.body);
         if (ctx.method === "POST" && ctx.path !== "/sign-out") {
           await security.maintain();
           // Hosted MCP clients refresh tokens for many users from shared addresses.
