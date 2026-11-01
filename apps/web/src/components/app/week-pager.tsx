@@ -23,15 +23,18 @@ export function WeekPager({
   label: string;
   children: (week: string) => ReactNode;
 }) {
-  const { viewport, weeks: pages, move } = useWeekPager(week, neighbors, go);
+  // Until the week's own page names its neighbors, the week list does, so the week just left
+  // stays mounted beside a chosen one that is still loading, and keeps its drafts and scroll.
+  const around = neighbors ?? listNeighbors(weeks, week);
+  const { viewport, weeks: pages, move } = useWeekPager(week, around, go);
   // A pressed neighbor slides into place. While scrubbing every week lands at once, and
   // returning to this one stops a slide still under way.
   const jump = (target: string, scrubbing: boolean) => {
     if (target === week) {
       if (scrubbing) move(0, true);
     } else if (scrubbing) go(target);
-    else if (target === neighbors?.newerWeek) move(1);
-    else if (target === neighbors?.olderWeek) move(-1);
+    else if (target === around?.newerWeek) move(1);
+    else if (target === around?.olderWeek) move(-1);
     else go(target);
   };
   return (
@@ -62,4 +65,14 @@ export function WeekPager({
       <WeekScrubber weeks={weeks} active={[week]} onJump={jump} />
     </>
   );
+}
+
+/** The weeks beside `week` in the newest-first list, or nothing when the list lacks it. */
+function listNeighbors(weeks: Week[], week: string): WeekNeighbors | undefined {
+  const index = weeks.findIndex((w) => w.weekStart === week);
+  if (index < 0) return undefined;
+  return {
+    newerWeek: weeks[index - 1]?.weekStart ?? null,
+    olderWeek: weeks[index + 1]?.weekStart ?? null,
+  };
 }

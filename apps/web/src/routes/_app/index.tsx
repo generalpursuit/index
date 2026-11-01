@@ -14,7 +14,7 @@ export const Route = createFileRoute("/_app/")({
   beforeLoad: requireSession,
   validateSearch: z.object({ week: weekSearch }),
   loaderDeps: ({ search }) => ({ week: search.week ?? monday() }),
-  loader: ({ context, deps }) => {
+  loader: ({ context, deps, cause }) => {
     const api = apiFor(context.session.user.id),
       cache = context.queryClient;
     void cache.prefetchInfiniteQuery({ ...feedWeeksOptions(api), retry: false });
@@ -23,13 +23,19 @@ export const Route = createFileRoute("/_app/")({
       ...groupsOptions(api, context.session.user.id),
       retry: false,
     });
+    // A week chosen on the feed already on screen shows at once, with placeholders until its
+    // links arrive. Awaiting it would keep the previous week up, then show the pending view.
+    if (cause === "stay") return;
     return cache.ensureInfiniteQueryData(feedWeekOptions(api, deps.week)).then(() => {});
   },
-  pendingComponent: () => (
-    <PendingPage>
-      <FeedPage week={monday()} />
-    </PendingPage>
-  ),
+  pendingComponent: function PendingFeed() {
+    const { week } = Route.useSearch();
+    return (
+      <PendingPage>
+        <FeedPage week={week ?? monday()} />
+      </PendingPage>
+    );
+  },
   component: () => {
     const { week } = Route.useSearch();
     return <FeedPage week={week ?? monday()} />;

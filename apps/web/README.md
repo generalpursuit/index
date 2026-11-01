@@ -18,7 +18,7 @@ IndexedDB content belongs to one API scope and verified account, with an app/for
 
 Use the data helpers to seed destinations from responses already on screen; seeded posts recheck access immediately. Related edits reconcile against current content, preserve read timestamps and leave missing loads running. Errors roll back without removing other pending edits; server responses patch their items. Invalidate only membership/order that cannot be derived, after the last related edit settles. Reads share an RPC batch within one accepted account generation. Hover and idle prefetching respect Save Data.
 
-Page placeholders wait 300 ms and remain for at least 400 ms. Refreshes keep content visible; forbidden/not-found errors erase it. Post dialogs keep a fixed frame while details, authors and comments load. Searches retain the previous results.
+Page placeholders wait 300 ms and remain for at least 400 ms. A week chosen on the feed is not awaited by the loader: it shows at once with its own placeholders, so another week never stands in for it. Until its feed names its neighbors, the week list does, so the week just left stays mounted with its drafts and scroll. Refreshes keep content visible; forbidden/not-found errors erase it. Post dialogs keep a fixed frame while details, authors and comments load. Searches retain the previous results.
 
 ## Appearance and mobile focus
 

@@ -1,4 +1,5 @@
 import { apiURL } from "./urls";
+import { routeRPC } from "./rpc";
 import { test, expect } from "@playwright/test";
 
 let fixture: { week: string; older: string; people: Record<string, string> };
@@ -128,6 +129,124 @@ test("weeks change only through the scrubber or the week list, never by scrollin
   await expect
     .poll(() => pager.evaluate((el) => Math.abs(el.scrollTop % el.clientHeight)))
     .toBeLessThan(2);
+});
+
+for (const way of ["scrubber", "week list"] as const)
+  test(`a week chosen with the ${way} holds its place while it loads`, async ({ page }) => {
+    // The older week's feed waits until the test lets it through.
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await routeRPC(page, "**/rpc/v1/feed/week", async (route) => {
+      if (
+        (route.request().postDataJSON() as { json: { weekStart: string } }).json.weekStart ===
+        fixture.older
+      )
+        await held;
+      await route.continue();
+    });
+    await login(page, "alice");
+    const heading = page.getByRole("heading", { level: 1 });
+    const current = page.locator('.week-page[data-active="true"]');
+    const pager = page.locator(".week-pager");
+    await expect(current.locator(".own-links")).toContainText("Are.na");
+    await expect(page.locator(".week-tick")).toHaveCount(2);
+    const start = (await heading.textContent())!;
+    // Every state the page passes through, from the choice until the week has loaded.
+    await page.evaluate(() => {
+      const states: string[] = [];
+      (window as any).weekStates = states;
+      const note = () => {
+        const page = document.querySelector<HTMLElement>('.week-page[data-active="true"]');
+        const state = [
+          document.querySelector("h1")?.textContent,
+          page?.dataset.week,
+          page?.querySelector(".own-links")?.textContent,
+        ].join(" | ");
+        if (states.at(-1) !== state) states.push(state);
+      };
+      new MutationObserver(note).observe(document.body, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        characterData: true,
+      });
+    });
+    if (way === "scrubber") await page.locator(".week-tick").nth(1).click();
+    else {
+      await page.getByRole("button", { name: /jump to a week/ }).click();
+      await page
+        .getByRole("dialog", { name: "Weeks" })
+        .getByRole("button", { name: /Week/ })
+        .nth(1)
+        .click();
+    }
+    // The chosen week shows at once, as placeholders until its links arrive.
+    await expect(page).toHaveURL(new RegExp(fixture.older));
+    await expect(heading).not.toHaveText(start);
+    const target = (await heading.textContent())!;
+    await expect(current).toHaveAttribute("data-week", fixture.older);
+    await expect(current.locator(".own-links [data-placeholder]").first()).toBeVisible();
+    await expect(current.locator(".own-links")).not.toContainText("Are.na");
+    release();
+    await expect(current.locator(".own-links")).toContainText("Earlier notes");
+    // It stays on that week, in view, once they have.
+    await expect
+      .poll(() => pager.evaluate((el) => Math.abs(el.scrollTop % el.clientHeight)))
+      .toBeLessThan(2);
+    await page.waitForTimeout(400);
+    await expect(page).toHaveURL(new RegExp(fixture.older));
+    await expect(heading).toHaveText(target);
+    const top = (await current.boundingBox())!.y - (await pager.boundingBox())!.y;
+    expect(Math.abs(top)).toBeLessThan(2);
+    // Nothing between: the page went straight from the first week to the chosen one, and then
+    // showed no other week or its links.
+    const states: string[] = await page.evaluate(() => (window as any).weekStates);
+    const chosen = states.findIndex((state) => state.startsWith(target + " |"));
+    expect(chosen).toBeGreaterThanOrEqual(0);
+    for (const state of states.slice(0, chosen)) expect(state).toMatch(new RegExp(`^${start} \\|`));
+    for (const state of states.slice(chosen)) {
+      expect(state).toMatch(new RegExp(`^${target} \\| ${fixture.older} \\|`));
+      expect(state).not.toContain("Are.na");
+    }
+  });
+
+test("the week you leave keeps its draft and scroll while the next one loads", async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>((resolve) => (release = resolve));
+  await routeRPC(page, "**/rpc/v1/feed/week", async (route) => {
+    if (
+      (route.request().postDataJSON() as { json: { weekStart: string } }).json.weekStart ===
+      fixture.older
+    )
+      await held;
+    await route.continue();
+  });
+  await page.setViewportSize({ width: 1280, height: 620 });
+  await login(page, "alice");
+  const own = page.locator('.week-page[data-active="true"] .own-links');
+  const list = own.locator(".link-list");
+  await expect(own).toContainText("Are.na");
+  const field = own.getByRole("textbox", { name: /Enter a link to add it/ });
+  await field.fill("https://example.com/unfinished");
+  await list.evaluate((el) => (el.scrollTop = 1000));
+  const scrolled = await list.evaluate((el) => el.scrollTop);
+  expect(scrolled).toBeGreaterThan(0);
+  await page.getByRole("button", { name: /jump to a week/ }).click();
+  await page
+    .getByRole("dialog", { name: "Weeks" })
+    .getByRole("button", { name: /Week/ })
+    .nth(1)
+    .click();
+  await expect(page.locator('.week-page[data-active="true"]')).toHaveAttribute(
+    "data-week",
+    fixture.older,
+  );
+  release();
+  await expect(own).toContainText("Earlier notes");
+  await page.locator(".week-tick").first().click();
+  await expect(own).toContainText("Are.na");
+  await expect(field).toHaveValue("https://example.com/unfinished");
+  expect(await list.evaluate((el) => el.scrollTop)).toBe(scrolled);
 });
 
 test("your links scroll under the field, with fades instead of scrollbars", async ({ page }) => {
