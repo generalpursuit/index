@@ -3,7 +3,7 @@ import { placeholderProfile } from "@/data/placeholders";
 import { seedConversation } from "@/data/seeding";
 import { useQueryClient } from "@tanstack/react-query";
 import { ChatAvatars, conversationName } from "./conversation-presentation";
-import { useId, useState, type ReactNode } from "react";
+import { useId, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { Button } from "@index/ui/components/button";
 import { Input } from "@index/ui/components/input";
@@ -11,6 +11,7 @@ import { Checkbox } from "@index/ui/components/checkbox";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { IconButton } from "@index/ui/components/icon-button";
 import { Modal, ModalFooter } from "@index/ui/components/modal";
+import { isConfirm } from "@index/ui/lib/keys";
 import { UserAvatar } from "@/components/app/user-avatar";
 import { QueryState, More } from "@/components/app/query-state";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
@@ -27,6 +28,13 @@ const personLabelClassName =
   "person-label [&_small]:text-subtle-foreground [&_small]:leading-[16px] [&_small]:text-[12px] [&_small]:overflow-hidden [&_small]:text-ellipsis [&_small]:whitespace-nowrap [&_strong]:font-medium [&_strong]:leading-[18px] [&_strong]:overflow-hidden [&_strong]:text-ellipsis flex flex-col min-w-0 gap-px [&_strong_svg]:inline [&_strong_svg]:align-middle";
 const recipientRowClassName =
   "recipient-row [&>.person-label]:flex-1 [@media(hover:_hover)_and_(pointer:_fine)]:[&:hover_.recipient-select]:opacity-[1] [@media(hover:_hover)_and_(pointer:_fine)]:[&:focus-within_.recipient-select]:opacity-[1]";
+/** A row that opens a chat is the action itself: ⌘↩ presses it, as Return does, instead of
+ * submitting Next for the people picked. */
+function pressOnConfirm(event: KeyboardEvent<HTMLButtonElement>) {
+  if (!isConfirm(event)) return;
+  event.preventDefault();
+  event.currentTarget.click();
+}
 
 /** What the picker shows first, for whatever opens it. */
 export function prefetchRecipients(
@@ -78,7 +86,8 @@ export function SendLink({ link, onBack }: { link: SavedLink; onBack: () => void
 }
 /**
  * Search, the people you follow and your group chats. Choosing opens the chat, with `link`
- * attached; `footer` places the Next action for picking several people.
+ * attached; `footer` places the Next action for picking several people. It is a form, so Next
+ * is what the modal's Return and ⌘↩ submit.
  */
 function Recipients({
   link,
@@ -116,8 +125,16 @@ function Recipients({
       state: { conversationId: chat.id },
     });
   };
+  const canNext =
+    !singleRecipient && !!selected.length && !start.isPending && selected.length <= 19;
   return (
-    <>
+    <form
+      className="contents"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (canNext) start.mutate({ recipientIds: selected }, { onSuccess: open });
+      }}
+    >
       {link && author.data?.profileVisibility === "private" && (
         <p className={"muted text-subtle-foreground"}>
           Only approved followers can view this post. Other recipients will see a link to the
@@ -191,6 +208,7 @@ function Recipients({
               className={recipientRowClassName}
               key={chat.id}
               onClick={() => open(chat)}
+              onKeyDown={pressOnConfirm}
             >
               <ChatAvatars chat={chat} viewerId={viewer.id} />
               <span className={personLabelClassName}>{conversationName(chat, viewer.id)}</span>
@@ -205,17 +223,14 @@ function Recipients({
       </div>
       {footer(
         !singleRecipient && (
-          <Button
-            disabled={!selected.length || start.isPending || selected.length > 19}
-            onClick={() => start.mutate({ recipientIds: selected }, { onSuccess: open })}
-          >
+          <Button type="submit" disabled={!canNext}>
             {start.isPending
               ? "Opening…"
               : "Next" + (selected.length ? " (" + selected.length + ")" : "")}
           </Button>
         ),
       )}
-    </>
+    </form>
   );
 }
 
@@ -251,6 +266,7 @@ function RecipientRow({
         className={recipientRowClassName}
         disabled={disabled}
         onClick={onOpen}
+        onKeyDown={pressOnConfirm}
       >
         {identity}
       </Button>
