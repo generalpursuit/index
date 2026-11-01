@@ -1,3 +1,4 @@
+import { frameProtection } from "./frame-protection";
 import { themeBootstrap } from "./theme-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import { tanstackRouter } from "@tanstack/router-plugin/vite";
@@ -12,6 +13,7 @@ export default defineConfig({
     tsconfigPaths: true,
   },
   plugins: [
+    frameProtection(),
     themeBootstrap(),
     tailwindcss(),
     tanstackRouter({

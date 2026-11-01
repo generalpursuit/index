@@ -1,5 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { apiURL } from "./urls";
+import { apiURL, webURL } from "./urls";
 const password = "auth-browser-password-123";
 async function signIn(page: import("@playwright/test").Page, identifier = "alice") {
   await page.getByLabel("Email or username", { exact: true }).fill(identifier);
@@ -253,4 +253,32 @@ test("a cookie session revoked by recovery leaves the app on its next protected 
   await expect(page).toHaveURL(/login/);
   await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
   await expect(page.locator(".settings-identity")).toHaveCount(0);
+});
+
+test("no page can be framed, so a framed consent page cannot collect a click", async ({
+  page,
+  request,
+}) => {
+  for (const path of ["/connect?client_id=agent", "/login", "/"]) {
+    const headers = (await request.get(webURL + path)).headers();
+    expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'");
+    expect(headers["x-frame-options"]).toBe("DENY");
+  }
+  await page.route("https://framing.example/", (route) =>
+    route.fulfill({
+      contentType: "text/html",
+      body: `<iframe src="${webURL}/login"></iframe><iframe src="${webURL}/connect?client_id=agent"></iframe>`,
+    }),
+  );
+  await page.goto("https://framing.example/");
+  // The browser refuses both documents and shows its own error page in their place.
+  await expect
+    .poll(() =>
+      page
+        .frames()
+        .slice(1)
+        .map((frame) => frame.url()),
+    )
+    .toEqual([expect.stringMatching(/^chrome-error:/), expect.stringMatching(/^chrome-error:/)]);
+  await expect(page.frameLocator("iframe").first().getByLabel("Password")).toHaveCount(0);
 });
