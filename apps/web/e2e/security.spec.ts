@@ -255,8 +255,11 @@ test("a cookie session revoked by recovery leaves the app on its next protected 
   await expect(page.locator(".settings-identity")).toHaveCount(0);
 });
 
-test("no page can be framed, so a framed consent page cannot collect a click", async ({
-  page,
+// Browsers refuse to frame a document sent with these headers, so a framed consent page cannot
+// collect a click. How a refused frame looks differs between browser modes (an error page when
+// headless, an empty frame that never finishes loading in a full browser), so this checks the
+// headers browsers act on.
+test("every page forbids framing, so a framed consent page cannot collect a click", async ({
   request,
 }) => {
   for (const path of ["/connect?client_id=agent", "/login", "/"]) {
@@ -264,21 +267,4 @@ test("no page can be framed, so a framed consent page cannot collect a click", a
     expect(headers["content-security-policy"]).toBe("frame-ancestors 'none'");
     expect(headers["x-frame-options"]).toBe("DENY");
   }
-  await page.route("https://framing.example/", (route) =>
-    route.fulfill({
-      contentType: "text/html",
-      body: `<iframe src="${webURL}/login"></iframe><iframe src="${webURL}/connect?client_id=agent"></iframe>`,
-    }),
-  );
-  await page.goto("https://framing.example/");
-  // The browser refuses both documents and shows its own error page in their place.
-  await expect
-    .poll(() =>
-      page
-        .frames()
-        .slice(1)
-        .map((frame) => frame.url()),
-    )
-    .toEqual([expect.stringMatching(/^chrome-error:/), expect.stringMatching(/^chrome-error:/)]);
-  await expect(page.frameLocator("iframe").first().getByLabel("Password")).toHaveCount(0);
 });
