@@ -51,6 +51,7 @@ it("marks exactly the agent tools, each described for a model", () => {
     resolve_index_url: "read",
     list_group_links: "read",
     save_link: "write",
+    forward_link: "write",
     post_comment: "write",
   });
 });

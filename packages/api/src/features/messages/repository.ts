@@ -19,8 +19,11 @@ export function isMember(actorId: string, conversationId: SQLWrapper) {
 function canSend(actorId: string, conversationId: SQLWrapper) {
   return isMember(actorId, conversationId);
 }
+/** Identifies the one conversation of exactly these people. */
+const memberKeyOf = (actorId: string, recipientIds: string[]) =>
+  JSON.stringify([actorId, ...recipientIds].sort());
 export function createConversation(db: QueryDatabase, actorId: string, recipientIds: string[]) {
-  const memberKey = JSON.stringify([actorId, ...recipientIds].sort());
+  const memberKey = memberKeyOf(actorId, recipientIds);
   const created = db.$with("created_conversation", { id: sql<string>`id`.as("id") }).as(sql`
  insert into conversations(member_key)
  select ${memberKey} where not exists (
@@ -255,6 +258,27 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
       .with(previous, inserted, ...attached, sent, touched)
       .select({ id: sql<string>`id` })
       .from(sent)
+      .then((rows) => rows[0]),
+    databaseError,
+  );
+}
+/** Where the actor's message with this client ID went, if it was sent, and whether that is the
+ * conversation of exactly the actor and these recipients. */
+export function previousSend(
+  db: QueryDatabase,
+  actorId: string,
+  clientId: string,
+  recipientIds: string[],
+) {
+  return ResultAsync.fromPromise(
+    db
+      .select({
+        conversationId: messages.conversationId,
+        sameMembers: sql<boolean>`${conversations.memberKey} = ${memberKeyOf(actorId, recipientIds)}`,
+      })
+      .from(messages)
+      .innerJoin(conversations, eq(conversations.id, messages.conversationId))
+      .where(and(eq(messages.senderId, actorId), eq(messages.clientId, clientId)))
       .then((rows) => rows[0]),
     databaseError,
   );

@@ -92,6 +92,25 @@ export const sendMessageSchema = z
     (input) => !!input.body || !!input.linkId || input.fileIds.length > 0,
     "Provide text, a link or files.",
   );
+/** A link sent on its own, with an optional note, to the conversation with exactly one person. */
+export const forwardLinkSchema = z.strictObject({
+  linkId: z.uuid().describe("The ID of the link to forward."),
+  recipientId: userIdSchema.describe(
+    "The user ID of the person to send it to. The signed-in user must follow them, and their follow must be accepted.",
+  ),
+  note: z
+    .string()
+    .trim()
+    .max(maxBodyLength)
+    .default("")
+    .describe("Plain text sent with the link. Omit it to send the link alone."),
+  clientId: z
+    .uuid()
+    .describe(
+      "A new random UUID for each forward. Reuse it, with the same other fields, only to retry a forward whose outcome is unknown: the retry then returns the message already sent instead of sending twice.",
+    ),
+});
+export type ForwardLinkInput = z.output<typeof forwardLinkSchema>;
 export const readMessageSchema = z.strictObject({ conversationId: z.uuid(), messageId: z.uuid() });
 export type SendMessageInput = z.output<typeof sendMessageSchema>;
 

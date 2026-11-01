@@ -1,9 +1,9 @@
 import { err, errAsync, ok, ResultAsync } from "neverthrow";
 import type { QueryDatabase } from "../../data-access/database";
-import { databaseError, notFound } from "../../errors";
+import { databaseError, notFound, type ApplicationError } from "../../errors";
 import { decodeCursor, toPage } from "../../pagination";
 import { fileKey, fileName, servedType, type FileStore } from "./files";
-import type { SendMessageInput } from "./schemas";
+import type { ForwardLinkInput, SendMessageInput } from "./schemas";
 import * as fileRepository from "./file-repository";
 import * as repository from "./repository";
 
@@ -25,7 +25,12 @@ export function getConversation(db: QueryDatabase, actorId: string, id: string) 
     lastMessage: messages[0] ?? null,
   }));
 }
-export function createConversation(db: QueryDatabase, actorId: string, recipientIds: string[]) {
+/** The conversation of exactly the actor and the recipients, started if needed. */
+function openConversation(
+  db: QueryDatabase,
+  actorId: string,
+  recipientIds: string[],
+): ResultAsync<string, ApplicationError> {
   if (recipientIds.includes(actorId))
     return errAsync({
       code: "BAD_REQUEST" as const,
@@ -33,9 +38,10 @@ export function createConversation(db: QueryDatabase, actorId: string, recipient
     });
   return repository
     .createConversation(db, actorId, recipientIds)
-    .andThen((row) => (row ? ok(row.id) : err(notFound("Recipients"))))
-    .andThen((id) => getConversation(db, actorId, id));
+    .andThen((row) => (row ? ok(row.id) : err(notFound("Recipients"))));
 }
+export const createConversation = (db: QueryDatabase, actorId: string, recipientIds: string[]) =>
+  openConversation(db, actorId, recipientIds).andThen((id) => getConversation(db, actorId, id));
 export function listConversations(
   db: QueryDatabase,
   actorId: string,
@@ -88,6 +94,45 @@ export function sendMessage(db: QueryDatabase, actorId: string, input: SendMessa
     )
     .andThen((id) => repository.listMessages(db, actorId, input.conversationId, 1, undefined, id))
     .andThen((rows) => (rows[0] ? ok(rows[0]) : err(notFound("Message"))));
+}
+/**
+ * Sends a link in the conversation with exactly its recipient. Opening that conversation is
+ * idempotent, so a retry after an uncertain attempt finds the conversation it may have started.
+ * A retry whose message committed is answered by it before the follow is checked again, as any
+ * send's retry is.
+ */
+export async function forwardLink(db: QueryDatabase, actorId: string, input: ForwardLinkInput) {
+  const attempt = await attemptForward(db, actorId, input);
+  if (attempt.isOk() || attempt.error.code !== "NOT_FOUND") return attempt;
+  // A concurrent attempt can commit after this one read no receipt and before it was refused,
+  // for example before an unfollow. A second attempt reads that receipt and answers by it.
+  return attemptForward(db, actorId, input);
+}
+async function attemptForward(db: QueryDatabase, actorId: string, input: ForwardLinkInput) {
+  const recipientIds = [input.recipientId];
+  const reused = {
+    code: "CONFLICT" as const,
+    message: "This client ID already sent something else. Use a new one for a new forward.",
+  };
+  const previous = await repository.previousSend(db, actorId, input.clientId, recipientIds);
+  if (previous.isErr()) return err(previous.error);
+  if (previous.value && !previous.value.sameMembers) return err(reused);
+  const conversation = previous.value
+    ? ok(previous.value.conversationId)
+    : await openConversation(db, actorId, recipientIds).mapErr((error) =>
+        error.code === "NOT_FOUND" ? notFound("Recipient among the people you follow") : error,
+      );
+  if (conversation.isErr()) return err(conversation.error);
+  const sent = await sendMessage(db, actorId, {
+    conversationId: conversation.value,
+    clientId: input.clientId,
+    body: input.note,
+    linkId: input.linkId,
+    fileIds: [],
+  });
+  if (sent.isOk() || sent.error.code !== "NOT_FOUND") return sent;
+  // The actor may send here, so a refusal concerns the link, or a committed send's payload.
+  return err(previous.value ? reused : { ...sent.error, message: "Link not found or locked." });
 }
 export function markRead(
   db: QueryDatabase,

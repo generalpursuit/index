@@ -49,6 +49,8 @@ A reply can only quote a message in its own conversation. It carries an excerpt 
 
 Forwarding an original grants no access to it. Locked originals cannot be forwarded. A reader blocked by profile privacy receives only the author's public identity; locked/deleted originals expose neither content nor that fallback. A message keeps the attached link's ID as sent, so its attachment marker survives deletion and clients can show an unavailable post.
 
+The forward operation sends one link, with an optional note, to one person in the conversation of exactly the two of them, starting it under the creator's follow rule. It is a send with its own `clientId`, whose payload also includes the recipient. Starting a conversation is idempotent, so a retry converges whether the conversation, the message or neither committed. A retry whose message committed returns it before the follow or the link is checked again; reusing the ID for another link, note or recipient conflicts.
+
 A member uploads a file of at most 25 MB to a conversation before sending; the request body is capped at 26 MB to allow for multipart framing. Only the uploader can send an unsent file, and nobody can read it from the server. A send lists up to ten of the sender's unsent files from that conversation. The message stores their order, which is part of the retry identity, and a sent file cannot join another message.
 
 Files are typed by their bytes: JPEG, PNG, GIF and WebP keep their image type, and anything else is served as `application/octet-stream`. Every API response carries `X-Content-Type-Options: nosniff`, so no file renders on the API origin. Members read sent files through the API; objects live in a private bucket with no public address.

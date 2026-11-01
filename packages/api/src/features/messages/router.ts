@@ -25,6 +25,9 @@ export const messagesRouter = implementer.router({
   send: api.send.handler(async ({ context, input }) =>
     unwrapResult(await service.sendMessage(context.db, context.actorId, input)),
   ),
+  forward: api.forward.handler(async ({ context, input }) =>
+    unwrapResult(await service.forwardLink(context.db, context.actorId, input)),
+  ),
   markRead: api.markRead.handler(async ({ context, input }) =>
     unwrapResult(
       await service.markRead(context.db, context.actorId, input.conversationId, input.messageId),

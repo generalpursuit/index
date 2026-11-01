@@ -1,4 +1,5 @@
 import { openapi } from "@orpc/openapi";
+import { agentTool } from "../../agent-tools";
 import { z } from "zod";
 import { baseContract, successSchema } from "../../shared/schemas";
 import {
@@ -10,6 +11,7 @@ import {
   messagesInputSchema,
   messagePageSchema,
   sendMessageSchema,
+  forwardLinkSchema,
   messageSchema,
   readMessageSchema,
   uploadFileSchema,
@@ -52,6 +54,20 @@ export const messagesContract = {
       }),
     )
     .input(sendMessageSchema)
+    .output(messageSchema),
+  forward: baseContract
+    .meta(
+      openapi({
+        method: "POST",
+        path: "/links/{linkId}/forward",
+        tags: ["Messages"],
+        summary: "Send a link to someone you follow",
+        description:
+          "Sends one link, with an optional note, to one person the signed-in user follows, in their one-to-one conversation, which it starts if needed. The person sees the link only if they may see it themselves: forwarding grants no access. Links in locked groups cannot be forwarded, and links the user may not see return not found, exactly like missing ones. Forward only what the user asked you to send.",
+      }),
+      agentTool({ name: "forward_link", permission: "write" }),
+    )
+    .input(forwardLinkSchema)
     .output(messageSchema),
   markRead: baseContract
     .meta(
