@@ -59,17 +59,36 @@ function ContextMenuContent({ className, ...props }: ContextMenuPrimitive.Popup.
   );
 }
 
+// The same look for items that act and items that are links.
+const itemClassName =
+  "relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 min-h-9 p-[0_12px_0_34px] rounded-[8px] text-[14px] whitespace-nowrap [transition:background_100ms_ease,_color_100ms_ease] [&>svg]:absolute [&>svg]:left-2.5 [&>svg]:w-3.75 [&>svg]:h-3.75 [&>svg]:text-subtle-foreground [&[data-highlighted]]:bg-muted [&[data-highlighted]]:text-foreground [&[data-highlighted]>svg]:text-foreground";
+
 function ContextMenuItem({ className, ...props }: ContextMenuPrimitive.Item.Props) {
   return (
     <ContextMenuPrimitive.Item
       data-slot="context-menu-item"
-      className={cn(
-        "relative flex cursor-default items-center outline-hidden select-none data-disabled:pointer-events-none data-disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 min-h-9 p-[0_12px_0_34px] rounded-[8px] text-[14px] whitespace-nowrap [transition:background_100ms_ease,_color_100ms_ease] [&>svg]:absolute [&>svg]:left-2.5 [&>svg]:w-3.75 [&>svg]:h-3.75 [&>svg]:text-subtle-foreground [&[data-highlighted]]:bg-muted [&[data-highlighted]]:text-foreground [&[data-highlighted]>svg]:text-foreground",
-        className,
-      )}
+      className={cn(itemClassName, className)}
       {...props}
     />
   );
 }
 
-export { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem };
+/** An item that is a link, so it opens where links do, and closes the menu. */
+function ContextMenuLinkItem({ className, ...props }: ContextMenuPrimitive.LinkItem.Props) {
+  return (
+    <ContextMenuPrimitive.LinkItem
+      data-slot="context-menu-item"
+      closeOnClick
+      className={cn(itemClassName, className)}
+      {...props}
+    />
+  );
+}
+
+export {
+  ContextMenu,
+  ContextMenuTrigger,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLinkItem,
+};
