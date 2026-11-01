@@ -10,7 +10,7 @@ import { appRouter } from "../../../packages/api/src/routers/index.ts";
 import { clientHeader } from "../../server/src/client-version.ts";
 import { apiHandler, rpcHandler } from "../../server/src/transport.ts";
 import { memoryMediaStore } from "../../../packages/api/src/features/profiles/media.ts";
-import type { Context } from "../../../packages/api/src/context.ts";
+import { sessionCaller, type Context } from "../../../packages/api/src/context.ts";
 import * as liveRepository from "../../../packages/api/src/features/live/repository.ts";
 const database = await createTestDatabase();
 type LivePeer = {
@@ -235,7 +235,7 @@ Bun.serve<LivePeer>({
       const session = await auth.api.getSession({ headers: request.headers });
       const context = {
         db: database.db,
-        session,
+        caller: sessionCaller(session),
         fetchPage,
         fetchImport,
         media,

@@ -1,4 +1,5 @@
 import { createAuth } from "@index/auth";
+import { sessionCaller } from "@index/api/context";
 import { createTestDatabase } from "@index/api/testing/database";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -110,7 +111,7 @@ describe("native and browser authentication", () => {
       }),
       {
         prefix: "/api/v1",
-        context: { ...fixture.context(null), session: restored },
+        context: { ...fixture.context(null), caller: sessionCaller(restored) },
       },
     );
     assert.ok(result.matched);

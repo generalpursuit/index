@@ -23,7 +23,7 @@ export const followsRouter = implementer.router({
     unwrapResult(
       await service.listNetwork(
         context.db,
-        context.session?.user.id ?? null,
+        context.caller?.userId ?? null,
         input.userId,
         "followers",
         input.limit,
@@ -36,7 +36,7 @@ export const followsRouter = implementer.router({
     unwrapResult(
       await service.listNetwork(
         context.db,
-        context.session?.user.id ?? null,
+        context.caller?.userId ?? null,
         input.userId,
         "following",
         input.limit,

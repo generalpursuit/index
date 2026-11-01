@@ -1,12 +1,13 @@
 import { implement, ORPCError } from "@orpc/server";
 import { and, eq } from "drizzle-orm";
 import { notificationDeliveries } from "@index/db/schema/notifications";
+import type { Session } from "@index/auth";
 import type { Context } from "../../context";
-import { requireAuth } from "../../procedures";
+import { requireSession } from "../../procedures";
 import { notificationsContract } from "./contract";
 import * as repo from "./repository";
 const implementer = implement(notificationsContract).$context<Context>();
-const api = implementer.use(requireAuth).use(async ({ context, next }, input) => {
+const api = implementer.use(requireSession).use(async ({ context, next }, input) => {
   if (
     input &&
     typeof input === "object" &&
@@ -24,11 +25,14 @@ const capabilities = (c: Context) =>
     desktop: true,
     vapidPublicKey: null,
   };
-async function requireDevice(context: Context & { actorId: string }, installation: string) {
+async function requireDevice(
+  context: Context & { actorId: string; session: Session },
+  installation: string,
+) {
   const device = await repo.ownedDevice(
     context.db,
     context.actorId,
-    context.session!.session.id,
+    context.session.session.id,
     installation,
   );
   if (!device) throw new ORPCError("NOT_FOUND");

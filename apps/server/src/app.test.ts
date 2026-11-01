@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
 import type { AppRouterClient } from "@index/api/contracts";
+import { sessionCaller } from "@index/api/context";
 import { createTestDatabase } from "@index/api/testing/database";
 import { createAuth } from "@index/auth";
 import type { SecurityEmail } from "@index/auth/delivery";
@@ -57,7 +58,9 @@ describe("mounted server application", () => {
         contexts++;
         return {
           ...fixture.context(null),
-          session: await auth(backgroundTask).api.getSession({ headers: request.headers }),
+          caller: sessionCaller(
+            await auth(backgroundTask).api.getSession({ headers: request.headers }),
+          ),
         };
       },
       readMedia: (key) =>

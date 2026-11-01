@@ -9,7 +9,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import { readdir, readFile } from "node:fs/promises";
 import { URL } from "node:url";
 
-import type { Context } from "../context";
+import { sessionCaller, type Context } from "../context";
 
 export async function createTestDatabase() {
   // Neon provides the extensions migrations create; PGlite must load them up front.
@@ -45,7 +45,7 @@ export async function createTestDatabase() {
   function context(actorId: string | null): Context {
     return {
       db,
-      session: actorId ? sessionFor(actorId) : null,
+      caller: sessionCaller(actorId ? sessionFor(actorId) : null),
       fetchPage: offline,
       fetchImport: offline,
       media,

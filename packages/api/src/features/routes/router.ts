@@ -9,6 +9,6 @@ export const routesRouter = api.router({
   resolve: api.resolve
     .use(requireVerifiedSession)
     .handler(async ({ context, input }) =>
-      unwrapResult(await resolveRoute(context.db, context.session?.user.id ?? null, input)),
+      unwrapResult(await resolveRoute(context.db, context.caller?.userId ?? null, input)),
     ),
 });

@@ -27,10 +27,10 @@ export const linksRouter = implementer.router({
       unwrapResult(await shareLink(context.db, context.actorId, input, context.fetchPage)),
     ),
   weeks: api.weeks.handler(async ({ context, input }) =>
-    unwrapResult(await libraryWeeks(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await libraryWeeks(context.db, context.caller?.userId ?? null, input)),
   ),
   listByOwner: api.listByOwner.handler(async ({ context, input }) =>
-    unwrapResult(await listByOwner(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await listByOwner(context.db, context.caller?.userId ?? null, input)),
   ),
   create: api.create
     .use(requireAuth)
@@ -38,7 +38,7 @@ export const linksRouter = implementer.router({
       unwrapResult(await createLink(context.db, context.actorId, input, context.fetchPage)),
     ),
   get: api.get.handler(async ({ context, input }) =>
-    unwrapResult(await getLink(context.db, context.session?.user.id ?? null, input.id)),
+    unwrapResult(await getLink(context.db, context.caller?.userId ?? null, input.id)),
   ),
   listMine: api.listMine
     .use(requireAuth)
@@ -61,6 +61,6 @@ export const linksRouter = implementer.router({
       unwrapResult(await deleteLink(context.db, context.actorId, input.id)),
     ),
   listInGroup: api.listInGroup.handler(async ({ context, input }) =>
-    unwrapResult(await listInGroup(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await listInGroup(context.db, context.caller?.userId ?? null, input)),
   ),
 });

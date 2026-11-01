@@ -15,10 +15,10 @@ export const groupsRouter = implementer.router({
       unwrapResult(await service.createGroup(context.db, context.actorId, input)),
     ),
   get: api.get.handler(async ({ context, input }) =>
-    unwrapResult(await service.getGroup(context.db, context.session?.user.id ?? null, input.id)),
+    unwrapResult(await service.getGroup(context.db, context.caller?.userId ?? null, input.id)),
   ),
   list: api.list.handler(async ({ context, input }) => {
-    const viewerId = context.session?.user.id ?? null;
+    const viewerId = context.caller?.userId ?? null;
     const ownerId = input.ownerId ?? viewerId;
     if (!ownerId) throw new ORPCError("UNAUTHORIZED");
     return unwrapResult(

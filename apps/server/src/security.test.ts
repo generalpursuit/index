@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { mountAuthentication } from "./authentication";
 import { createAuth } from "@index/auth";
 import type { SecurityEmail } from "@index/auth/delivery";
+import { sessionCaller } from "@index/api/context";
 import { createTestDatabase } from "@index/api/testing/database";
 import assert from "node:assert/strict";
 import { after, before, beforeEach, describe, it } from "node:test";
@@ -88,7 +89,7 @@ describe("verification and account security", () => {
       new Request(`${origin}/api/v1${path}`, { headers: headers(token, cookie) }),
       {
         prefix: "/api/v1",
-        context: { ...fixture.context(null), session: await session(token, cookie) },
+        context: { ...fixture.context(null), caller: sessionCaller(await session(token, cookie)) },
       },
     );
     assert.ok(result.matched);
@@ -207,7 +208,10 @@ describe("verification and account security", () => {
         }),
         {
           prefix: "/rpc/v1",
-          context: { ...fixture.context(null), session: await session(token, cookie) },
+          context: {
+            ...fixture.context(null),
+            caller: sessionCaller(await session(token, cookie)),
+          },
         },
       );
       assert.ok(response.matched);
@@ -250,7 +254,10 @@ describe("verification and account security", () => {
         }),
         {
           prefix: "/rpc/v1",
-          context: { ...fixture.context(null), session: await session(token, cookie) },
+          context: {
+            ...fixture.context(null),
+            caller: sessionCaller(await session(token, cookie)),
+          },
         },
       );
       assert.ok(rpc.matched);

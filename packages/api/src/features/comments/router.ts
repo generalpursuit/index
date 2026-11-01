@@ -15,7 +15,7 @@ export const commentsRouter = implementer.router({
       unwrapResult(await service.createComment(context.db, context.actorId, input)),
     ),
   list: api.list.handler(async ({ context, input }) =>
-    unwrapResult(await service.listComments(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await service.listComments(context.db, context.caller?.userId ?? null, input)),
   ),
   update: api.update
     .use(requireAuth)

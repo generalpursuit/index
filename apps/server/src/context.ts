@@ -1,5 +1,5 @@
 import { notificationCapabilities } from "./notifications/config";
-import type { Context as ApiContext } from "@index/api/context";
+import { sessionCaller, type Context as ApiContext } from "@index/api/context";
 
 import { ENV } from "./env.server";
 import { r2FileStore } from "./files";
@@ -20,7 +20,7 @@ export async function createContext(
   });
   return {
     db,
-    session,
+    caller: sessionCaller(session),
     live: liveServices(request),
     dispatch: async () => {
       const finish = await beginDispatch();

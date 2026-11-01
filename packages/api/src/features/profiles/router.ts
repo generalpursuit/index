@@ -17,10 +17,10 @@ export const profilesRouter = implementer.router({
       ),
     ),
   get: api.get.handler(async ({ context, input }) =>
-    unwrapResult(await service.getProfile(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await service.getProfile(context.db, context.caller?.userId ?? null, input)),
   ),
   byUsername: api.byUsername.handler(async ({ context, input }) =>
-    unwrapResult(await service.getProfile(context.db, context.session?.user.id ?? null, input)),
+    unwrapResult(await service.getProfile(context.db, context.caller?.userId ?? null, input)),
   ),
   update: api.update
     .use(requireAuth)
