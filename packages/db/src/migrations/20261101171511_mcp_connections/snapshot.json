@@ -1,9 +1,9 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "beae3c1c-b0d6-4224-ae35-bd7bd4a0c159",
+  "id": "fab9153a-9292-46a8-bff1-a5bf7d3705c2",
   "prevIds": [
-    "9e26fa0a-5a26-4fd3-8508-e6573d8a2be5"
+    "ed27eff3-6bff-443c-a2b7-283cb6ffb3ec"
   ],
   "ddl": [
     {
@@ -387,6 +387,19 @@
       "generated": null,
       "identity": null,
       "name": "body",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "comments"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "client_id",
       "entityType": "columns",
       "schema": "public",
       "table": "comments"
@@ -4416,6 +4429,50 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "title",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "gin_trgm_ops",
+            "default": false
+          }
+        },
+        {
+          "value": "url",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "gin_trgm_ops",
+            "default": false
+          }
+        },
+        {
+          "value": "description",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": {
+            "name": "gin_trgm_ops",
+            "default": false
+          }
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "gin",
+      "concurrently": false,
+      "name": "links_search_trgm_idx",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "links"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "message_id",
           "isExpression": false,
           "asc": true,
@@ -6415,6 +6472,18 @@
       "schema": "public",
       "table": "oauth_resource",
       "entityType": "pks"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        "author_id",
+        "client_id"
+      ],
+      "nullsNotDistinct": false,
+      "name": "comments_author_client_unique",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "comments"
     },
     {
       "nameExplicit": true,
