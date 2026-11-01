@@ -19,6 +19,7 @@ import { MessageDraftProvider } from "@/features/messages/drafts";
 import { LinkDraftProvider } from "@/features/links/drafts";
 import { queryClient } from "@/utils/orpc";
 import { useWarmUp } from "@/hooks/use-warm-up";
+import { settingsShortcut, useSettingsShortcut } from "@/features/settings/shortcut";
 
 // Shared by instances in this component; markers remain available to scroll hooks/tests.
 // The current page's icon is ink with a heavier stroke; the others recede (at least 3:1 against
@@ -46,6 +47,7 @@ export function AppShell({
   const feed = layout === "feed",
     chat = layout === "chat";
   useWarmUp(viewer);
+  useSettingsShortcut(!!viewer);
   useEffect(() => {
     if (prior.current !== viewer?.id) {
       const old = prior.current;
@@ -131,6 +133,7 @@ export function AppShell({
                   "nav-item [&.nav-settings]:absolute [&.nav-settings]:bottom-7 relative flex items-center justify-center w-11 h-11 text-subtle-foreground rounded-full [&_svg]:w-6.25 [&_svg]:h-6.25 [&_svg]:stroke-[1.7] [&[data-status='active']]:text-foreground [&:hover]:text-foreground [&[data-status='active']_.nav-brand]:opacity-[1] [&:hover_.nav-brand]:opacity-[1] nav-settings [@media(width<=700px)]:hidden"
                 }
                 aria-label="Settings"
+                aria-keyshortcuts={settingsShortcut}
               >
                 <Settings />
               </Link>

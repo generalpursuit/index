@@ -7,6 +7,7 @@ import { client } from "@/utils/orpc";
 import { acceptedDesktopRevision, desktopInvoke, isDesktop, isMenuBar } from "./index";
 import { contentFeatures } from "@/data/content";
 import { isMessageFileQuery } from "@/features/messages/queries";
+import { settingsWaits } from "@/features/settings/shortcut";
 
 type RevisionEvent = { revision: number; source: string | null };
 /** The host shows the panel at once when it already holds content for the current account. */
@@ -84,7 +85,8 @@ export async function installDesktopSync(
         : pending.path;
       assertCurrentAccount(generation);
       if (expectedRevision !== (await desktopInvoke<number>("session_revision"))) return;
-      await navigate(path);
+      // From the app menu or the panel, Settings waits for an open dialog, as its shortcut does.
+      if (path !== "/settings" || !settingsWaits()) await navigate(path);
       assertCurrentAccount(generation);
       await desktopInvoke("desktop_take_navigation", { ack: pending.id, expectedRevision });
     } catch (error) {

@@ -11,7 +11,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { ArrowUpRight } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@index/ui/components/button";
-import { isComposing } from "@index/ui/lib/keys";
+import { hasCommand, isComposing } from "@index/ui/lib/keys";
 import { LinkList, scrollToTop } from "@/features/links/link-list";
 import { LinkMark } from "@/features/links/link-mark";
 import { QuickAdd } from "@/features/links/quick-add";
@@ -61,6 +61,7 @@ function MenuPanel() {
   useEffect(() => {
     if (!session.isPending && !checking) void presentMenuPanel(session.isError).catch(() => {});
   }, [session.isPending, session.isError, session.dataUpdatedAt, checking]);
+  const signedIn = !!user?.emailVerified;
   useEffect(() => {
     const keys = (event: KeyboardEvent) => {
       // Keys an input method composes with, such as quick add's, are its own.
@@ -69,6 +70,12 @@ function MenuPanel() {
       if (event.metaKey && event.key.toLowerCase() === "q") {
         event.preventDefault();
         quit();
+      }
+      // For the same reason, the panel opens Settings in the main window itself, as Index's
+      // menu would.
+      else if (signedIn && event.key === "," && hasCommand(event) && !event.repeat) {
+        event.preventDefault();
+        report(openIndex("/settings"));
       }
       // A menu that is animating closed has already handled its own Escape.
       else if (
@@ -80,7 +87,7 @@ function MenuPanel() {
     };
     document.addEventListener("keydown", keys);
     return () => document.removeEventListener("keydown", keys);
-  }, []);
+  }, [signedIn]);
   return (
     <main
       ref={panel}
