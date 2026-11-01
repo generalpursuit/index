@@ -165,17 +165,23 @@ test("only the menu panel's links scroll, by whole rows, loading more near their
   request,
 }) => {
   await request.post(apiURL + "/_test/reset");
-  const desktop = new DesktopHarness();
-  await desktop.attach(page, "main");
-  await login(page);
-  // More than a page of links this week.
+  // More than a page of links this week, saved before the app first reads the week. Saved
+  // afterwards with the app's own session, they reach no window: the panel could open on the
+  // shared cache, still fresh, without them.
+  const signedIn = await request.post(apiURL + "/api/auth/sign-in/email", {
+    data: { email: "alice@test.example", password: "test-password-123" },
+  });
+  const token = signedIn.headers()["set-auth-token"]!;
   for (let i = 1; i <= 36; i++) {
     const created = await request.post(apiURL + "/api/v1/links", {
-      headers: { Authorization: `Bearer ${desktop.token}` },
+      headers: { Authorization: `Bearer ${token}` },
       data: { url: `https://pages.test/long-week-${i}`, title: `Long week ${i}` },
     });
     expect(created.ok()).toBe(true);
   }
+  const desktop = new DesktopHarness();
+  await desktop.attach(page, "main");
+  await login(page);
   const panel = await context.newPage();
   await panel.setViewportSize({ width: 390, height: 560 });
   await desktop.attach(panel, "menu-bar");
