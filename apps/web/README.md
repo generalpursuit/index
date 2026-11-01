@@ -44,7 +44,7 @@ VITE_SERVER_URL=http://localhost:3002 bun run check-types
 E2E_PRODUCTION=1 bun run test:e2e --headed
 ```
 
-CI splits the browser suite into four shards, each with its own fixture API, and merges their reports into one.
+CI splits the browser suite into four shards, each with its own fixture API, and retries a failing test once. A test that passes only on retry is reported as flaky: the run's summary and warnings list it, and it should be fixed rather than left to the retry.
 
 `bun run check:tooling` from the root separately checks the Bun/Node tools in [scripts/desktop](scripts/desktop), [e2e/server.ts](e2e/server.ts), [e2e/fixtures.ts](e2e/fixtures.ts), and brand generation under strict TypeScript. CI runs this check; Bun execution alone does not check types.
 

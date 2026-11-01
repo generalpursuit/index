@@ -117,9 +117,13 @@ jobs:
           path: apps/web/all-blob-reports
           pattern: blob-report-*
           merge-multiple: true
-      - name: Merge the shards
+      - name: Merge the shards and list flaky tests
         working-directory: apps/web
-        run: bun run playwright merge-reports --reporter html all-blob-reports
+        env:
+          PLAYWRIGHT_JSON_OUTPUT_NAME: results.json
+        run: |
+          bun run playwright merge-reports --reporter html,json all-blob-reports
+          bun scripts/flaky-report.ts results.json
       - name: Upload the HTML report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:

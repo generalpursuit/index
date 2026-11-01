@@ -7,7 +7,9 @@ export default defineConfig({
   workers: 1,
   timeout: 45_000,
   expect: { timeout: 10_000 },
-  // Shards write blob reports that CI merges into one.
+  // CI retries a failing test once: one that then passes is reported as flaky, and the run's
+  // summary lists it to be fixed. Shards write blob reports that CI merges into one.
+  retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [["list"], ["blob"]] : "list",
   use: {
     baseURL: webURL,

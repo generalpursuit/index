@@ -67,3 +67,4 @@ dev-dist
 /playwright-report/
 /blob-report/
 /all-blob-reports/
+/results.json
