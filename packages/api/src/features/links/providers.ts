@@ -33,14 +33,17 @@ export function findOEmbed(link: string) {
 // Channels and embeds are not embeddable, so their pages are read as before.
 const youtube: OEmbedProvider = {
   request(url) {
-    const path = url.pathname;
-    const known = isHost(url, "youtube.com")
-      ? (path === "/watch" && url.searchParams.has("v")) ||
-        (path === "/playlist" && url.searchParams.has("list")) ||
+    // "/watch/?v=…" plays the video too, but oEmbed knows it only without the slash.
+    const link = new URL(url);
+    link.pathname = link.pathname.replace(/(.)\/+$/, "$1");
+    const path = link.pathname;
+    const known = isHost(link, "youtube.com")
+      ? (path === "/watch" && link.searchParams.has("v")) ||
+        (path === "/playlist" && link.searchParams.has("list")) ||
         /^\/(shorts|live)\/[\w-]+/.test(path)
-      : url.hostname === "youtu.be" && /^\/[\w-]+/.test(path);
+      : link.hostname === "youtu.be" && /^\/[\w-]+/.test(path);
     return known
-      ? endpoint("https://www.youtube.com/oembed", { url: url.href, format: "json" })
+      ? endpoint("https://www.youtube.com/oembed", { url: link.href, format: "json" })
       : null;
   },
   // Streams that are live right now answer without a title.
@@ -49,16 +52,22 @@ const youtube: OEmbedProvider = {
 
 const postLength = 200;
 
+/**
+ * An X post's path with its author and ID, also as "/i/web/status/…", which names no author.
+ * The ID ends at the path's end or a sub-page, so a mistyped one is not read as another post.
+ */
+export const xPostPath = /^\/(?:i\/web|(\w+))\/status\/(\d+)(?=\/|$)/;
+
 // A post's own title names only its author, so the post's text says what it is. Profiles and
 // other pages are read as before.
 const x: OEmbedProvider = {
   request(url) {
-    const post =
-      isHost(url, "x.com", "twitter.com") && /^\/(\w+)\/status\/(\d+)/.exec(url.pathname);
-    // Photo and video sub-pages are not embeddable, so the post itself is asked for.
+    const post = isHost(url, "x.com", "twitter.com") && xPostPath.exec(url.pathname);
+    // Photo and video sub-pages are not embeddable, so the post itself is asked for. X answers
+    // for "/i/status/…" when the link names no author.
     return post
       ? endpoint("https://publish.x.com/oembed", {
-          url: `https://x.com/${post[1]}/status/${post[2]}`,
+          url: `https://x.com/${post[1] ?? "i"}/status/${post[2]}`,
           omit_script: "1",
         })
       : null;

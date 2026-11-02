@@ -225,7 +225,8 @@ function cleanTitle(title: string | null, siteNames: (string | null)[]) {
   if (suffix && isSite(suffix[2]!)) clean = suffix[1]!;
   const prefix = clean.match(/^([^|·–—:]+?)\s+[|·–—:-]\s+(.*\S)$/);
   if (prefix && isSite(prefix[1]!)) clean = prefix[2]!;
-  return clean.slice(0, 500) || null;
+  // Within the limit without splitting a character such as an emoji.
+  return clean.slice(0, 500).replace(/[\uD800-\uDBFF]$/, "") || null;
 }
 
 const comparable = (name: string) => name.toLowerCase().replace(/[^a-z0-9]/g, "");

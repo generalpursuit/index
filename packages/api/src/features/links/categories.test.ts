@@ -15,6 +15,8 @@ describe("link categories", () => {
       ["https://example.com/articles/read", "article"],
       ["https://author.substack.com/p/read", "article"],
       ["https://x.com/jack/status/20", "article"],
+      ["https://x.com/i/web/status/20", "article"],
+      ["https://x.com/jack/status/20garbage", "uncategorized"],
       ["https://x.com/jack", "uncategorized"],
       ["https://youtube.com.attacker.example/watch", "uncategorized"],
       ["https://example.com", "uncategorized"],

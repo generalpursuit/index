@@ -259,6 +259,50 @@ describe("link metadata", () => {
     assert.equal(calls.at(-1), "https://x.com/jack");
   });
 
+  it("asks YouTube about a watch link with a trailing slash as it knows it", async () => {
+    const watch = "https://www.youtube.com/watch?v=tpIctyqH29Q";
+    const { fetchPage, calls } = web({
+      [youtubeOEmbed(watch)]: () => json({ title: "Crash Course Preview" }),
+    });
+    assert.equal(
+      (await readLinkMetadata("https://www.youtube.com/watch/?v=tpIctyqH29Q", fetchPage)).title,
+      "Crash Course Preview",
+    );
+    assert.deepEqual(calls, [youtubeOEmbed(watch)]);
+  });
+
+  it("finds X posts by their whole ID, also from links that name no author", async () => {
+    const { fetchPage, calls } = web({
+      [xOEmbed("https://x.com/i/status/20")]: () => json(xPost("just setting up my twttr")),
+      "https://x.com/jack/status/20garbage": () => page("Not found", { status: 404 }),
+    });
+    assert.deepEqual(await readLinkMetadata("https://x.com/i/web/status/20", fetchPage), {
+      title: "jack: just setting up my twttr",
+      category: "article",
+    });
+    // A mistyped ID is not read as the post it starts with.
+    assert.deepEqual(await readLinkMetadata("https://x.com/jack/status/20garbage", fetchPage), {
+      title: "x.com",
+      category: "uncategorized",
+    });
+    assert.deepEqual(calls, [
+      xOEmbed("https://x.com/i/status/20"),
+      "https://x.com/jack/status/20garbage",
+    ]);
+  });
+
+  it("keeps a title within its limit without splitting a character", async () => {
+    const author = `${"😀".repeat(49)}A`;
+    const { fetchPage } = web({
+      [xOEmbed("https://x.com/jack/status/23")]: () =>
+        json({ ...xPost("😀".repeat(201)), author_name: author }),
+    });
+    assert.equal(
+      (await readLinkMetadata("https://x.com/jack/status/23", fetchPage)).title,
+      `${author}: ${"😀".repeat(199)}`,
+    );
+  });
+
   it("reads deep heads but stops at a limit", async () => {
     const { fetchPage } = web({
       // Video sites put their tags behind about 800 KB of inline scripts.

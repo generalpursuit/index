@@ -69,7 +69,7 @@ The API context names its caller: the account's own session, or an agent acting 
 
 ## External data and photos
 
-[Metadata reads](../packages/api/src/features/links/metadata.ts) accept only public HTTP(S) destinations, check redirects, and bound time and bytes. Metadata failure must not fail a save. YouTube videos and X posts are titled from their sites' oEmbed answers, the [providers](../packages/api/src/features/links/providers.ts) module's only knowledge, under the same checks and one shared deadline; if that fails, the page is read as for any link.
+[Metadata reads](../packages/api/src/features/links/metadata.ts) accept only public HTTP(S) destinations, check redirects, and bound time and bytes. Metadata failure must not fail a save. YouTube videos and X posts are titled from their sites' oEmbed answers, the [providers](../packages/api/src/features/links/providers.ts) module's only knowledge, under the same checks and one shared deadline; if that fails, the page is read as for any link within the time left.
 
 [curatee imports](../packages/api/src/features/imports/curatee.ts) read a public curatee.co profile through the site's own public Supabase API, uncached and bounded in time. Links keep their title, note and category and are saved into Your links on their original UTC day. One statement claims and saves them, so an import commits or fails as a whole. Its receipts survive link deletion: importing again adds only new links and never restores a deleted one.
 

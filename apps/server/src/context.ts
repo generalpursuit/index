@@ -59,7 +59,11 @@ async function services(
 }
 
 // Cloudflare keeps fetched pages for an hour, so a link saved again soon is read only once.
+// Only successful answers: a passing failure or redirect must not decide titles for an hour.
 const fetchPage: ApiContext["fetchPage"] = (url, init) =>
-  fetch(url, { ...init, cf: { cacheEverything: true, cacheTtl: 3600 } });
+  fetch(url, {
+    ...init,
+    cf: { cacheEverything: true, cacheTtlByStatus: { "200-299": 3600, "300-599": -1 } },
+  });
 
 export type Context = Awaited<ReturnType<typeof createContext>>;
