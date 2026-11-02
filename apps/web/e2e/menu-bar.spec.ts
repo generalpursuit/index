@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { DesktopHarness } from "./desktop-harness";
+import { routeRPC } from "./rpc";
 import { apiURL } from "./urls";
 async function login(page: Page, identifier = "alice@test.example") {
   await page.goto("/login");
@@ -71,8 +72,9 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
   await reading.click();
   await expect(panel.getByRole("button", { name: "Save destination: Reading" })).toBeFocused();
   await add(panel, "https://pages.test/calm-software");
-  await expect(panel.getByText("Link added to Reading", { exact: true })).toBeVisible();
+  // The new row confirms the save, so no toast covers the small panel. Screen readers still hear it.
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toBeVisible();
+  await expect(panel.getByText("Added Calm Software", { exact: true })).toBeAttached();
   // The footer ends the panel with two full-width rows, like the end of a native menu.
   for (const name of ["Open Index", "Quit Index"]) {
     const item = panel.getByRole("button", { name, exact: true });
@@ -82,6 +84,15 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
       await panel.evaluate(() => document.documentElement.clientWidth - 20),
     ]);
   }
+  await expect(panel.locator("[data-sonner-toast]")).toHaveCount(0);
+  // A failure still shows a toast, above the footer.
+  await routeRPC(panel, "**/rpc/v1/links/get**", (route) => route.abort("failed"));
+  await panel.getByRole("button", { name: "Open Calm Software in browser", exact: true }).click();
+  await expect(
+    panel.getByText("Could not complete that. Try again.", { exact: true }),
+  ).toBeVisible();
+  await panel.unroute("**/rpc/v1/**");
+  expect(desktop.opened).not.toContain("https://pages.test/calm-software");
   await expect
     .poll(async () => {
       const toastBox = await panel.locator("[data-sonner-toast]").last().boundingBox();

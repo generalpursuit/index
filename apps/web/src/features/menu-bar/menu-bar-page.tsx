@@ -282,10 +282,12 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
           {weekRange(week)} · Your links
         </p>
       </div>
-      {/* Groups are created in the main app. */}
+      {/* Groups are created in the main app. The new row confirms a save; a toast would cover
+          much of the small panel. */}
       <QuickAdd
         compact
         canCreateGroup={false}
+        successToast={false}
         links={links}
         label="Add a link to this week"
         onSave={() => scrollToTop(scroller)}

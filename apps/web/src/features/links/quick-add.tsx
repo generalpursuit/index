@@ -29,6 +29,7 @@ export function QuickAdd({
   label,
   compact = false,
   canCreateGroup = true,
+  successToast = true,
   onSave,
   onViewExisting,
 }: {
@@ -40,6 +41,8 @@ export function QuickAdd({
   compact?: boolean;
   /** Offers New group… in the destination menu. */
   canCreateGroup?: boolean;
+  /** Confirms each save with a toast that names its destination and offers Undo. */
+  successToast?: boolean;
   /** Called as a save starts, before the server has read the page. */
   onSave?: () => void;
   onViewExisting?: (link: SavedLink) => Promise<void>;
@@ -53,7 +56,7 @@ export function QuickAdd({
   const [failure, setFailure] = useState<string | null>(null);
   const busy = useRef(false),
     active = useRef(true);
-  const successToast = useRef<string | number | undefined>(undefined);
+  const shownToast = useRef<string | number | undefined>(undefined);
   useEffect(() => {
     active.current = true;
     return () => {
@@ -77,7 +80,7 @@ export function QuickAdd({
   const save = async (url: string, again: SavedLink | null = null) => {
     if (busy.current || destination.blocked) return;
     busy.current = true;
-    if (successToast.current !== undefined) toast.dismiss(successToast.current);
+    if (shownToast.current !== undefined) toast.dismiss(shownToast.current);
     const generation = accountGeneration(),
       focused = document.activeElement === inputRef.current;
     setFailure(null);
@@ -100,8 +103,9 @@ export function QuickAdd({
       }
       const link = result.link;
       setAnnouncement("Added " + link.title);
+      if (!successToast) return;
       // Named, because the link may land outside the list being viewed.
-      successToast.current = toast.success("Link added to " + (target?.name ?? "Your links"), {
+      shownToast.current = toast.success("Link added to " + (target?.name ?? "Your links"), {
         action: {
           label: "Undo",
           onClick: () => {
