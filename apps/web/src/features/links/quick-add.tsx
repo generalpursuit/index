@@ -84,6 +84,8 @@ export function QuickAdd({
     const generation = accountGeneration(),
       focused = document.activeElement === inputRef.current;
     setFailure(null);
+    // Cleared first, so saving the same link again is announced again.
+    setAnnouncement("");
     const entry: Pending = { url, existing: new Set(links.map((link) => link.id)) };
     setText("");
     setHint(false);

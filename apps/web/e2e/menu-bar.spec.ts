@@ -34,7 +34,7 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
   // Opening refreshes the panel, so it offers no refresh of its own.
   await expect(panel.getByRole("button", { name: "Refresh links" })).toHaveCount(0);
   await expect(
-    panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
   ).toBeVisible();
   await expect(panel.getByRole("button", { name: /Open .*in browser/ })).toHaveCount(5);
   // The native panel hugs this week's content.
@@ -45,7 +45,7 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
   const fitted = panelHeight("desktop_panel_resize")!;
   expect(fitted).toBeLessThan(560);
   expect(panelHeight("desktop_panel_ready")).toBeLessThan(560);
-  await panel.getByRole("button", { name: "Open Are.na in browser", exact: true }).click();
+  await panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }).click();
   await expect.poll(() => desktop.opened).toContain("https://are.na/");
   await expect(panel).toHaveURL(/\/menu-bar$/);
   await panel.getByRole("button", { name: "Save destination: Your links" }).click();
@@ -71,6 +71,14 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
   await expect(menu.getByRole("separator")).toHaveCount(0);
   await reading.click();
   await expect(panel.getByRole("button", { name: "Save destination: Reading" })).toBeFocused();
+  // Records every toast, since a toast that came and went would pass a count of none.
+  await panel.evaluate(() => {
+    const record = window as any;
+    record.toasts = 0;
+    new MutationObserver(() => {
+      record.toasts += document.querySelectorAll("[data-sonner-toast]").length;
+    }).observe(document.body, { childList: true, subtree: true });
+  });
   await add(panel, "https://pages.test/calm-software");
   // The new row confirms the save, so no toast covers the small panel. Screen readers still hear it.
   await expect(panel.getByRole("button", { name: /Open Calm Software in browser/ })).toBeVisible();
@@ -84,10 +92,12 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
       await panel.evaluate(() => document.documentElement.clientWidth - 20),
     ]);
   }
-  await expect(panel.locator("[data-sonner-toast]")).toHaveCount(0);
+  expect(await panel.evaluate(() => (window as any).toasts)).toBe(0);
   // A failure still shows a toast, above the footer.
   await routeRPC(panel, "**/rpc/v1/links/get**", (route) => route.abort("failed"));
-  await panel.getByRole("button", { name: "Open Calm Software in browser", exact: true }).click();
+  await panel
+    .getByRole("button", { name: "Open Calm Software in browser, pages.test", exact: true })
+    .click();
   await expect(
     panel.getByText("Could not complete that. Try again.", { exact: true }),
   ).toBeVisible();
@@ -160,7 +170,7 @@ test("menu rows open the link in Index from the title and the website from the d
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   const title = panel.getByRole("button", { name: "Open Are.na in Index", exact: true }),
-    website = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
+    website = panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true });
   // A favorite shows its heart, but the panel offers no way to change it.
   await expect(title.locator(".link-mark[data-kept] svg")).toHaveCSS("opacity", "1");
   await expect(
@@ -406,7 +416,7 @@ test("an opening for the same account shows cached links at once and refreshes t
   const panel = await context.newPage();
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
-  const row = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
+  const row = panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true });
   await expect(row).toBeVisible();
   // Before any opening, the hidden panel tells the host its content is for this account.
   await expect
@@ -447,7 +457,7 @@ test("an opening for the same account shows cached links at once and refreshes t
   // The host has shown the panel; it refreshes without a checking state, keeping its rows.
   await desktop.emit("index:menu-open", { presented: true }, "menu-bar");
   await expect(
-    panel.getByRole("button", { name: "Open Saved elsewhere in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Saved elsewhere in browser, pages.test", exact: true }),
   ).toBeVisible();
   expect(await row.evaluate((el) => (el as any).kept)).toBe(true);
   expect(await panel.evaluate(() => (window as any).checked)).toBe(false);
@@ -465,7 +475,7 @@ test("an opening for the same account shows cached links at once and refreshes t
   expect(removed.ok()).toBe(true);
   await desktop.emit("index:desktop-data", { revision: desktop.revision, source: "main" });
   await expect(
-    panel.getByRole("button", { name: "Open Saved elsewhere in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Saved elsewhere in browser, pages.test", exact: true }),
   ).toHaveCount(0);
   await expect.poll(() => animated("Saved elsewhere", '"opacity":0')).toBe(true);
   await expect(panel.locator("[aria-hidden]", { hasText: "Saved elsewhere" })).toHaveCount(0);
@@ -479,7 +489,7 @@ test("an opening for the same account shows cached links at once and refreshes t
   });
   await desktop.emit("index:desktop-data", { revision: desktop.revision, source: "main" });
   await expect(
-    panel.getByRole("button", { name: "Open Saved calmly in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Saved calmly in browser, pages.test", exact: true }),
   ).toBeVisible();
   expect(await panel.evaluate(() => (window as any).animated.length)).toBe(0);
   // An opening the host could not show at once checks the session before presenting.
@@ -505,7 +515,7 @@ test("menu session clears drafts and links across sign-out and account switching
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await expect(
-    panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
   ).toBeVisible();
   await panel
     .getByRole("textbox", { name: "Add a link to this week" })
@@ -530,7 +540,7 @@ test("menu session clears drafts and links across sign-out and account switching
   await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
   await expect(panel.getByRole("textbox", { name: "Add a link to this week" })).toHaveValue("");
   await expect(
-    panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
   ).toHaveCount(0);
   // An out-of-order old event must not clear Bob's identity or refetch Alice.
   await desktop.emit("index:desktop-session", { revision: 1, source: "main" });
@@ -669,7 +679,7 @@ test("lost peer events cannot submit an old menu draft using a new account", asy
   );
   await expect(input).toHaveValue("");
   await expect(
-    panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
   ).toHaveCount(0);
   expect(writes).toHaveLength(0);
 });
@@ -687,7 +697,7 @@ test("held auth sign-out clears both windows before revocation and cannot erase 
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
   await expect(
-    panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
   ).toBeVisible();
   let release!: () => void;
   const held = new Promise<void>((resolve) => {
@@ -713,7 +723,7 @@ test("held auth sign-out clears both windows before revocation and cannot erase 
     release();
     await expect(panel.getByRole("heading", { level: 1 })).toContainText("Week");
     await expect(
-      panel.getByRole("button", { name: "Open Are.na in browser", exact: true }),
+      panel.getByRole("button", { name: "Open Are.na in browser, are.na", exact: true }),
     ).toHaveCount(0);
     expect(desktop.token).toBe(bobToken);
     await expect(page.getByRole("heading", { level: 1 })).toContainText("Week");
@@ -834,7 +844,7 @@ test("menu retry survives hide/focus with its receipt and never substitutes a de
   await expect(input).toBeEnabled();
   await input.press("Enter");
   await expect(
-    panel.getByRole("button", { name: "Open Calm Software in browser", exact: true }),
+    panel.getByRole("button", { name: "Open Calm Software in browser, pages.test", exact: true }),
   ).toHaveCount(1);
   await expect.poll(() => receipts.length).toBe(2);
   expect(receipts[0]).toBe(receipts[1]);

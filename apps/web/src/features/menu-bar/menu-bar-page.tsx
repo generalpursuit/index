@@ -345,7 +345,8 @@ function MenuLink({ link, userId }: { link: SavedLink; userId: string }) {
       <button
         className="inline-flex max-w-32 min-w-0 items-center gap-1 self-stretch rounded-[7px] pr-2 text-[11.5px] text-subtle-foreground hover:text-foreground focus-visible:outline-offset-[-2px]"
         onClick={() => report(openWebsite())}
-        aria-label={`Open ${link.title} in browser`}
+        // Includes the domain it shows, so voice control can name it by what it says.
+        aria-label={`Open ${link.title} in browser, ${domain(link.url)}`}
       >
         <span className="truncate">{domain(link.url)}</span>
         <ArrowUpRight className="size-3 shrink-0" />
