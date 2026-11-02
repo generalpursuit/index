@@ -1,4 +1,6 @@
 import { categorize, categorizePage, isCategorizedSchemaType } from "./categories";
+import { decodeEntities } from "./entities";
+import { findOEmbed, type OEmbedAnswer } from "./providers";
 import type { Link } from "./schemas";
 
 /** Performs one HTTP request; injected so tests and local fixtures never touch the network. */
@@ -27,8 +29,13 @@ export async function readLinkMetadata(url: string, fetchPage: FetchPage): Promi
     title: titleFromUrl(url),
     category: categorize(url),
   };
+  // One deadline covers every request, so a provider that stalls cannot double a save's wait.
+  const signal = AbortSignal.timeout(timeoutMs);
+  const request = (target: string) => fetchPublicPage(target, fetchPage, signal);
   try {
-    const response = await fetchPublicPage(url, fetchPage);
+    const title = await readOEmbedTitle(url, request);
+    if (title) return { ...fallback, title };
+    const response = await request(url);
     if (!response) return fallback;
     const contentType = response.headers.get("content-type") ?? "";
     if (!/html/i.test(contentType)) {
@@ -48,9 +55,26 @@ export async function readLinkMetadata(url: string, fetchPage: FetchPage): Promi
   }
 }
 
+/**
+ * Titles links of known providers from their oEmbed answer, which is small and meant for
+ * servers, unlike their pages. URL rules already categorize these links, so the page is skipped;
+ * any failure leaves the link to its page.
+ */
+async function readOEmbedTitle(url: string, request: (url: string) => Promise<Response | null>) {
+  const provider = findOEmbed(url);
+  if (!provider) return null;
+  try {
+    const response = await request(provider.endpoint);
+    if (!response) return null;
+    const answer: OEmbedAnswer = JSON.parse(await readStart(response)) ?? {};
+    return cleanTitle(provider.title(answer), []);
+  } catch {
+    return null;
+  }
+}
+
 /** Follows redirects by hand so every hop is checked before it is requested. */
-async function fetchPublicPage(url: string, fetchPage: FetchPage) {
-  const signal = AbortSignal.timeout(timeoutMs);
+async function fetchPublicPage(url: string, fetchPage: FetchPage, signal: AbortSignal) {
   let current = url;
   for (let hop = 0; hop <= maxRedirects; hop++) {
     if (!isPublicWebUrl(current)) return null;
@@ -228,23 +252,4 @@ export function titleFromUrl(value: string) {
     .trim();
   if (!words.includes(" ")) return url.hostname.replace(/^www\./, "");
   return words[0]!.toUpperCase() + words.slice(1);
-}
-
-function decodeEntities(text: string) {
-  const named: Record<string, string> = {
-    amp: "&",
-    lt: "<",
-    gt: ">",
-    quot: '"',
-    apos: "'",
-    nbsp: " ",
-  };
-  return text.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (entity, code: string) => {
-    if (code[0] === "#") {
-      const point =
-        code[1]?.toLowerCase() === "x" ? parseInt(code.slice(2), 16) : Number(code.slice(1));
-      return Number.isFinite(point) && point <= 0x10ffff ? String.fromCodePoint(point) : entity;
-    }
-    return named[code.toLowerCase()] ?? entity;
-  });
 }

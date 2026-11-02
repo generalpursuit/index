@@ -7,6 +7,18 @@ const html = (head: string, body = "") =>
 const page = (body: string, init: ResponseInit = {}) =>
   new Response(body, { headers: { "content-type": "text/html; charset=utf-8" }, ...init });
 const redirect = (location: string) => new Response(null, { status: 302, headers: { location } });
+const json = (body: unknown) =>
+  new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
+const youtubeOEmbed = (url: string) =>
+  `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+const xOEmbed = (url: string) =>
+  `https://publish.x.com/oembed?url=${encodeURIComponent(url)}&omit_script=1`;
+/** An X oEmbed answer as X writes it: the post's paragraph, then its author and date. */
+const xPost = (paragraph: string) => ({
+  author_name: "jack",
+  author_url: "https://x.com/jack",
+  html: `<blockquote class="twitter-tweet"><p lang="en" dir="ltr">${paragraph}</p>&mdash; jack (@jack) <a href="https://x.com/jack/status/20?ref_src=twsrc%5Etfw">March 21, 2006</a></blockquote>\n`,
+});
 
 /** Serves fixed responses by URL and records every request; anything else is offline. */
 function web(responses: Record<string, () => Response>) {
@@ -158,6 +170,93 @@ describe("link metadata", () => {
       (await readLinkMetadata("https://loop.example/", fetchPage)).title,
       "loop.example",
     );
+  });
+
+  it("titles YouTube videos from oEmbed without reading their page", async () => {
+    const watch = "https://www.youtube.com/watch?v=tpIctyqH29Q&t=30";
+    const short = "https://youtu.be/tpIctyqH29Q";
+    const { fetchPage, calls } = web({
+      [youtubeOEmbed(watch)]: () => json({ title: "Early Computing: Crash Course #1" }),
+      [youtubeOEmbed(short)]: () => json({ title: "Early  Computing\n" }),
+    });
+    assert.deepEqual(await readLinkMetadata(watch, fetchPage), {
+      title: "Early Computing: Crash Course #1",
+      category: "video",
+    });
+    assert.equal((await readLinkMetadata(short, fetchPage)).title, "Early Computing");
+    assert.deepEqual(calls, [youtubeOEmbed(watch), youtubeOEmbed(short)]);
+  });
+
+  it("reads the page as before when oEmbed fails or does not know the link", async () => {
+    const failing = "https://www.youtube.com/watch?v=gone";
+    const live = "https://www.youtube.com/live/stream";
+    const channel = "https://www.youtube.com/@crashcourse";
+    const { fetchPage, calls } = web({
+      [youtubeOEmbed(failing)]: () => page("Not Found", { status: 404 }),
+      [failing]: () => page(html(`<meta property="og:title" content="From the page">`)),
+      // A stream that is live answers without a title; its page is unreachable here.
+      [youtubeOEmbed(live)]: () => json({ type: "video" }),
+      [channel]: () => page(html(`<title>CrashCourse - YouTube</title>`)),
+    });
+    assert.equal((await readLinkMetadata(failing, fetchPage)).title, "From the page");
+    assert.deepEqual(await readLinkMetadata(live, fetchPage), {
+      title: "youtube.com",
+      category: "video",
+    });
+    assert.equal((await readLinkMetadata(channel, fetchPage)).title, "CrashCourse");
+    assert.deepEqual(calls, [youtubeOEmbed(failing), failing, youtubeOEmbed(live), live, channel]);
+  });
+
+  it("titles X posts with their author and text, without links or media", async () => {
+    const { fetchPage, calls } = web({
+      [xOEmbed("https://x.com/jack/status/20")]: () =>
+        json(
+          xPost(
+            `just setting up my <a href="https://x.com/hashtag/twttr?src=hash">#twttr</a> &amp; more<br><br>see <a href="https://t.co/abc">example.com/a-long-read…</a> <a href="https://t.co/xyz">pic.x.com/xyz</a>`,
+          ),
+        ),
+      [xOEmbed("https://x.com/jack/status/21")]: () =>
+        json(xPost(`<a href="https://t.co/xyz">pic.twitter.com/xyz</a>`)),
+    });
+    assert.deepEqual(await readLinkMetadata("https://x.com/jack/status/20", fetchPage), {
+      title: "jack: just setting up my #twttr & more see",
+      category: "article",
+    });
+    // Only media: named the way X names it.
+    assert.equal(
+      (await readLinkMetadata("https://x.com/jack/status/21", fetchPage)).title,
+      "jack (@jack) on X",
+    );
+    assert.deepEqual(calls, [
+      xOEmbed("https://x.com/jack/status/20"),
+      xOEmbed("https://x.com/jack/status/21"),
+    ]);
+  });
+
+  it("shortens long posts at a word and asks for twitter.com posts at x.com", async () => {
+    const long = `${"word ".repeat(60)}end`;
+    const { fetchPage, calls } = web({
+      [xOEmbed("https://x.com/jack/status/22")]: () => json(xPost(long)),
+      [xOEmbed("https://x.com/jack/status/20")]: () => json(xPost("just setting up my twttr")),
+      "https://x.com/jack": () =>
+        page(html(`<meta property="og:title" content="jack (@jack) / X">`)),
+    });
+    const { title } = await readLinkMetadata("https://x.com/jack/status/22", fetchPage);
+    assert.equal(title, `jack: ${"word ".repeat(39)}word…`);
+    for (const url of [
+      "https://twitter.com/jack/status/20",
+      "https://mobile.twitter.com/jack/status/20/photo/1?s=46",
+    ])
+      assert.equal(
+        (await readLinkMetadata(url, fetchPage)).title,
+        "jack: just setting up my twttr",
+      );
+    // Profiles are not posts, so their page is read as before.
+    assert.deepEqual(await readLinkMetadata("https://x.com/jack", fetchPage), {
+      title: "jack (@jack) / X",
+      category: "uncategorized",
+    });
+    assert.equal(calls.at(-1), "https://x.com/jack");
   });
 
   it("reads deep heads but stops at a limit", async () => {
