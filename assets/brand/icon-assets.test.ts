@@ -184,3 +184,26 @@ it("iOS and the Apple touch icon remain opaque squares for system masking", () =
       assert.equal(pixels.readUInt8(offset), 255);
   }
 });
+
+it("Icon Composer layers keep the brand mark's exact paths, scale and placement", () => {
+  const mark = read("assets/brand/app-icon/app-icon-square.svg").toString();
+  const placement = mark.match(/<g transform="([^"]+)">/)![1];
+  const [stem, dot] = mark.match(/ d="([^"]+)"/)![1]!.split(/(?<=Z)(?=M)/);
+  const config = JSON.parse(read("assets/brand/app-icon/app-icon.icon/icon.json").toString());
+  // Separate groups give the stem and the dot their own glass depth and highlights.
+  assert.deepEqual(
+    config.groups.map((group: { layers: { "image-name": string }[] }) =>
+      group.layers.map((layer) => layer["image-name"]),
+    ),
+    [["dot.svg"], ["stem.svg"]],
+  );
+  for (const [layer, path] of [
+    ["stem", stem],
+    ["dot", dot],
+  ]) {
+    const svg = read(`assets/brand/app-icon/app-icon.icon/Assets/${layer}.svg`).toString();
+    assert.match(svg, / viewBox="0 0 100 100" width="1024" height="1024"/);
+    assert.equal(svg.match(/<g transform="([^"]+)">/)![1], placement);
+    assert.equal(svg.match(/ d="([^"]+)"/)![1], path);
+  }
+});

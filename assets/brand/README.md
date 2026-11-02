@@ -19,9 +19,27 @@ preserving the exact paths, scale and placement.
 | `app-icon/app-icon-rounded.svg` | Inset Windows/Linux/web launcher icons and web ICO fallback             |
 | `app-icon/macos-mask.svg`       | Continuous outline for static macOS ICNS and runtime Dock images        |
 | `app-icon/favicon.svg`          | Explicit web SVG favicon                                                |
+| `app-icon/app-icon.icon`        | Icon Composer source for the light/dark-adaptive Apple app icons        |
 
 The other wordmarks, symbols, lockups, PNG sizes and rounded exports remain useful
 brand resources. They are retained even when no current application imports them.
+
+## Icon Composer icon
+
+`app-icon.icon` is an Icon Composer document: `icon.json` plus layer SVGs. Open it in
+Xcode's Icon Composer, or edit `icon.json` by hand. Each layer SVG is a full 1024px
+canvas holding one part of the mark at its brand position, so the stem and the dot sit
+in separate groups and receive their own Liquid Glass depth, specular highlight and
+shadow. Change only the treatment; the paths must stay those of `app-icon-square.svg`.
+
+| Appearance    | Look                                                                         |
+| ------------- | ---------------------------------------------------------------------------- |
+| Default       | Paper: white to light grey, opaque Ink mark fading to graphite               |
+| Dark          | Ink: gradient lighter at the top, white glass mark at 40% translucency       |
+| Clear, Tinted | White glass mark at 40% translucency; the system supplies the glass and tint |
+
+The palette stays black and white. Both groups have specular highlights and a neutral
+shadow at 50%. The operating system picks the appearance, not the app.
 
 ## Generate and check
 
