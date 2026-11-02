@@ -30,6 +30,7 @@ export function categorize(url: string): Link["category"] {
   else if (domain("notion.so", "notion.site", "pastebin.com")) category = "note";
   else if (
     domain("medium.com", "substack.com", "wikipedia.org", "arxiv.org") ||
+    (domain("x.com", "twitter.com") && /^\/\w+\/status\/\d+/.test(path)) ||
     /^\/(articles?|blog|posts?)\//.test(path)
   )
     category = "article";
