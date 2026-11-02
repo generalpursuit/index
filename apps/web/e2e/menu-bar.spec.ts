@@ -143,7 +143,7 @@ test("menu bar shares current-week data, destination choice, duplicate flow and 
   ).toBe(true);
 });
 
-test("menu rows show a favorite's heart but keep their one action, opening the link", async ({
+test("menu rows open the link in Index from the title and the website from the domain", async ({
   page,
   context,
   request,
@@ -159,16 +159,33 @@ test("menu rows show a favorite's heart but keep their one action, opening the l
   const panel = await context.newPage();
   await desktop.attach(panel, "menu-bar");
   await panel.goto("/menu-bar");
-  const kept = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
-  await expect(kept.locator(".link-mark[data-kept] svg")).toHaveCSS("opacity", "1");
+  const title = panel.getByRole("button", { name: "Open Are.na in Index", exact: true }),
+    website = panel.getByRole("button", { name: "Open Are.na in browser", exact: true });
+  // A favorite shows its heart, but the panel offers no way to change it.
+  await expect(title.locator(".link-mark[data-kept] svg")).toHaveCSS("opacity", "1");
   await expect(
     panel
-      .getByRole("button", { name: "Open In Rainbows in browser", exact: true })
+      .getByRole("button", { name: "Open In Rainbows in Index", exact: true })
       .locator(".link-mark[data-kept]"),
   ).toHaveCount(0);
   await expect(panel.getByRole("button", { name: /^(Favorite|Star) / })).toHaveCount(0);
-  await kept.locator(".link-mark").click();
-  await expect.poll(() => desktop.opened).toContain("https://are.na/");
+  // Hovering the title lights up the row like a menu item; hovering the domain brightens only it.
+  const row = title.locator("..");
+  await title.hover();
+  await expect(row).toHaveCSS("background-color", "rgba(0, 0, 0, 0.06)");
+  const quiet = await website.evaluate((element) => getComputedStyle(element).color);
+  await website.hover();
+  await expect(row).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  await expect(website).not.toHaveCSS("color", quiet);
+  await website.click();
+  await expect.poll(() => desktop.opened).toEqual(["https://are.na/"]);
+  await expect(page).not.toHaveURL(/\/l\//);
+  // The whole start of the row, its mark included, opens the link in Index.
+  await title.locator(".link-mark").click();
+  await expect(page).toHaveURL(/\/l\/[A-Za-z0-9_-]+$/);
+  await expect(page.getByRole("heading", { name: "Are.na", exact: true })).toBeVisible();
+  await expect(panel).toHaveURL(/\/menu-bar$/);
+  expect(desktop.opened).toEqual(["https://are.na/"]);
 });
 test("only the menu panel's links scroll, by whole rows, loading more near their end", async ({
   page,

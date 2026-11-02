@@ -313,15 +313,18 @@ function OwnWeek({ userId, hidden }: { userId: string; hidden: boolean }) {
         )}
         {/* A refresh after opening changes rows in place, without flicker. */}
         <CalmRows items={links} rowKey={(link) => link.id}>
-          {(link) => <MenuLink link={link} />}
+          {(link) => <MenuLink link={link} userId={userId} />}
         </CalmRows>
       </LinkList>
     </section>
   );
 }
-/** Opens the link in the browser; the panel is for glancing at and adding links. */
-function MenuLink({ link }: { link: SavedLink }) {
-  async function open() {
+/**
+ * As in the main app, the title opens the link in Index and the domain opens the website. The
+ * panel is for glancing at and adding links, so its rows offer nothing more.
+ */
+function MenuLink({ link, userId }: { link: SavedLink; userId: string }) {
+  async function openWebsite() {
     const generation = accountGeneration();
     // Access and URL may have changed since the row was loaded.
     const current = await client.links.get({ id: link.id });
@@ -329,17 +332,24 @@ function MenuLink({ link }: { link: SavedLink }) {
     await desktopInvoke("open_website", { url: current.url });
   }
   return (
-    <button
-      className="grid h-[var(--row)] w-full grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] pr-2 text-left hover:bg-(--panel-fill) focus-visible:outline-offset-[-2px]"
-      onClick={() => report(open())}
-      aria-label={`Open ${link.title} in browser`}
-    >
-      <LinkMark link={link} />
-      <span className="truncate">{link.title}</span>
-      <span className="inline-flex max-w-30 min-w-0 items-center gap-1 text-[11.5px] text-subtle-foreground">
+    // Hovering the title lights up the row like a native menu item; the domain only brightens.
+    <div className="grid h-[var(--row)] grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-x-3 rounded-[7px] [&:has(>button:first-child:hover)]:bg-(--panel-fill)">
+      <button
+        className="col-span-2 grid grid-cols-subgrid items-center self-stretch rounded-[7px] text-left focus-visible:outline-offset-[-2px]"
+        onClick={() => report(openIndex("/l/" + link.shortId, userId))}
+        aria-label={`Open ${link.title} in Index`}
+      >
+        <LinkMark link={link} />
+        <span className="truncate">{link.title}</span>
+      </button>
+      <button
+        className="inline-flex max-w-32 min-w-0 items-center gap-1 self-stretch rounded-[7px] pr-2 text-[11.5px] text-subtle-foreground hover:text-foreground focus-visible:outline-offset-[-2px]"
+        onClick={() => report(openWebsite())}
+        aria-label={`Open ${link.title} in browser`}
+      >
         <span className="truncate">{domain(link.url)}</span>
         <ArrowUpRight className="size-3 shrink-0" />
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
