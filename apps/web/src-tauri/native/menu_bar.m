@@ -20,6 +20,8 @@ static id reopenObserver;
 @end
 @implementation IndexMenuTarget
 - (void)toggle:(id)sender { index_menu_toggle(); }
+- (void)statusItem:(__unused NSStatusItem *)item didBeginExpandedInterfaceSession:(__unused id)session { index_menu_toggle(); }
+- (void)statusItemDidEndExpandedInterfaceSession:(__unused NSStatusItem *)item animated:(__unused BOOL)animated { index_menu_dismiss(); }
 @end
 static IndexMenuTarget *menuTarget;
 // The panel's surface behind its transparent WebView: Liquid Glass where macOS has it (26 and
@@ -169,6 +171,7 @@ void index_menu_unwatch(void) {
   [NSWorkspace.sharedWorkspace.notificationCenter removeObserver:otherApps];
   outsideClicks = otherMenus = otherApps = ownMenuBegan = ownMenuEnded = nil;
   ownMenus = 0;
+  if ([statusItem respondsToSelector:NSSelectorFromString(@"expandedInterfaceSession")]) [[statusItem valueForKey:@"expandedInterfaceSession"] cancel];
 }
 
 // A per-user lock prevents duplicate UI/pollers, including simultaneous launches.
@@ -201,6 +204,8 @@ int index_menu_init(const unsigned char *image, size_t imageLength) {
   [statusItem.button setAccessibilityLabel:[name stringByAppendingString:@" menu bar"]];
   menuTarget = [IndexMenuTarget new];
   statusItem.button.target = menuTarget; statusItem.button.action = @selector(toggle:);
+  Protocol *expanded = objc_getProtocol("NSStatusItemExpandedInterfaceDelegate");
+  if (expanded && class_addProtocol(IndexMenuTarget.class, expanded)) [statusItem setValue:menuTarget forKey:@"expandedInterfaceDelegate"];
   return 1;
 }
 void index_menu_present(void *pointer, double width, double height) {
@@ -208,11 +213,11 @@ void index_menu_present(void *pointer, double width, double height) {
   NSStatusBarButton *button = statusItem.button;
   NSScreen *screen = button.window.screen ?: NSScreen.mainScreen;
   NSRect usable = screen.visibleFrame;
-  NSRect anchor = [button.window convertRectToScreen:[button convertRect:button.bounds toView:nil]];
+  NSRect anchor = button.window.frame;
   NSRect frame = window.frame;
   frame.size.height = MIN(height, NSHeight(usable) - 12);
   frame.size.width = MIN(width, NSWidth(usable) - 12);
-  frame.origin.x = MAX(NSMinX(usable) + 6, MIN(NSMidX(anchor) - frame.size.width / 2, NSMaxX(usable) - frame.size.width - 6));
+  frame.origin.x = MAX(NSMinX(usable) + 6, MIN(NSMinX(anchor), NSMaxX(usable) - frame.size.width - 6));
   frame.origin.y = MAX(NSMinY(usable) + 6, MIN(NSMinY(anchor) - frame.size.height - 6, NSMaxY(usable) - frame.size.height - 6));
   [window setFrame:frame display:YES];
   // A transparent window's shadow follows its drawn shape, which changes with its size.
