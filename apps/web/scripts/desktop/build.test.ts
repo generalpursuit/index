@@ -55,19 +55,14 @@ describe("desktop build entrypoint", () => {
       assert.equal(result.status, 0, result.stderr);
       const captured = result.captured();
       assert.equal(captured.api, "http://localhost:3002");
-      assert.deepEqual(captured.args.slice(0, 5), [
-        "x",
-        "--no-install",
-        "tauri",
-        "build",
-        "--config",
-      ]);
-      assert.deepEqual(captured.args.slice(6), ["--bundles", "app"]);
+      assert.equal(captured.args[0], join(web, "node_modules/@tauri-apps/cli/tauri.js"));
+      assert.deepEqual(captured.args.slice(1, 3), ["build", "--config"]);
+      assert.deepEqual(captured.args.slice(4), ["--bundles", "app"]);
       const config = z
         .object({
           app: z.object({ security: z.object({ csp: z.record(z.string(), z.string()) }) }),
         })
-        .parse(JSON.parse(captured.args[5]!));
+        .parse(JSON.parse(captured.args[3]!));
       assert.equal(
         config.app.security.csp["connect-src"],
         "'self' ipc: http://ipc.localhost http://localhost:3002 ws://localhost:3002",

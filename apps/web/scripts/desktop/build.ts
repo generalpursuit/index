@@ -5,6 +5,7 @@ import { channels, isChannel, readBaseConfig, releaseConfig } from "./channels.t
 import { buildDmg, bundleDir, deferDmg, requireDmgbuild } from "./dmg.ts";
 import { stapleApp } from "./staple.ts";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const argsIn = process.argv.slice(2);
 const channelIndex = argsIn.indexOf("--channel");
@@ -93,10 +94,10 @@ const config = {
     },
   },
 };
+// Run the CLI in Bun. Through `bun x` it runs in Node and starts its tools with stdin closed,
+// and Xcode 26+'s actool then fails to compile icons/icon.icon ("Bad file descriptor").
 const args = [
-  "x",
-  "--no-install",
-  "tauri",
+  fileURLToPath(new URL("../../node_modules/@tauri-apps/cli/tauri.js", import.meta.url)),
   "build",
   "--config",
   JSON.stringify(config),
