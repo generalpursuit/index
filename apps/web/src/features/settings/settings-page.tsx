@@ -32,7 +32,6 @@ import { squarePhoto } from "@/lib/photo";
 import type { Profile } from "@/lib/types";
 import { useSignOut } from "./hooks/use-sign-out";
 import { GroupSettings } from "./groups";
-import { AppIconSettings } from "./app-icon";
 import { DockSettings } from "./dock";
 import { LaunchAtLoginSettings } from "./launch-at-login";
 import { CurateeImport } from "./curatee-import";
@@ -149,7 +148,6 @@ function SettingsBoxes({
         note={`Saved on ${thisDevice} only`}
       >
         <ThemeControl />
-        <AppIconSettings />
         <DockSettings />
         <LaunchAtLoginSettings />
       </SettingsGroup>

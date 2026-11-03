@@ -57,7 +57,22 @@ const run = (
 if (!existsSync(cli))
   throw new Error("Install the repository's locked dependencies before generating brand assets.");
 run(process.execPath, [cli, "--version"], { stdio: "pipe" });
+let ictool = "";
 if (targets.has("desktop")) {
+  // Only Icon Composer applies the layered icon's glass, shadows and macOS shape.
+  if (process.platform !== "darwin")
+    throw new Error(
+      "The desktop target requires macOS and Xcode 26 or later. Use --target web or --target ios on this platform.",
+    );
+  const developer = run("xcode-select", ["-p"], { stdio: "pipe" }).stdout.trim();
+  ictool = join(developer, "../Applications/Icon Composer.app/Contents/Executables/ictool");
+  try {
+    run(ictool, ["--version"], { stdio: "pipe" });
+  } catch {
+    throw new Error("Select Xcode 26 or later, which includes Icon Composer's ictool.");
+  }
+  // Check the frameworks too, before rendering or modifying even a web output.
+  run("xcrun", ["swift", join(brand, "icon-png.swift")], { stdio: "pipe" });
   run("python3", ["--version"], { stdio: "pipe" });
   const converter = process.env.RSVG_CONVERT || "rsvg-convert";
   let help;
@@ -79,15 +94,11 @@ if (targets.has("web") || targets.has("ios")) {
 if (targets.has("web") || targets.has("desktop")) required.add("app-icon/app-icon-rounded.svg");
 if (targets.has("web")) {
   required.add("app-icon/app-store-1024.png");
-  required.add("app-icon/app-icon-square.svg");
   required.add("app-icon/favicon.svg");
 }
-if (targets.has("ios")) required.add("app-icon/app-icon.icon/icon.json");
-if (targets.has("desktop")) {
-  required.add("symbol/symbol-black.svg");
-  required.add("app-icon/app-icon-square.svg");
-  required.add("app-icon/macos-mask.svg");
-}
+if (targets.has("desktop")) required.add("symbol/symbol-black.svg");
+// ictool and Xcode reject a document whose layers reference missing artwork.
+if (targets.has("ios") || targets.has("desktop")) required.add("app-icon/app-icon.icon/icon.json");
 for (const source of required) readFileSync(join(brand, source));
 
 const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
@@ -110,42 +121,21 @@ const render = (source: string, name: string, sizes: number[] = []) => {
   run(process.execPath, args);
   return output;
 };
-const paper = (file: string) => {
-  const path = join(scratch, `paper-${file}`);
-  // Swap only the supplied palette. Geometry, placement and source files stay unchanged.
-  writeFileSync(
-    path,
-    readFileSync(join(brand, "app-icon", file), "utf8").replace(/#0B0B0C|#FFFFFF/g, (color) =>
-      color === "#0B0B0C" ? "#FFFFFF" : "#0B0B0C",
-    ),
-  );
-  return path;
-};
-const iconCanvas = (
-  source: string,
-  name: string,
-  platform: "macos" | "windows" | "linux" | "web",
-) => {
+const iconCanvas = (source: string, name: string, platform: "windows" | "linux" | "web") => {
   const path = join(scratch, `${name}.svg`);
   // Optical bounds belong to the destination, not to the shared brand artwork.
   // Windows: square keyline on a 48px grid. Linux: 104px square on GNOME's 128px grid.
   const { canvas, inset } = {
-    macos: { canvas: 1024, inset: 100 },
     windows: { canvas: 48, inset: 3 },
     linux: { canvas: 128, inset: 12 },
     web: { canvas: 128, inset: 12 },
   }[platform];
   const size = canvas - 2 * inset;
   const artwork = readFileSync(source).toString("base64");
-  const mask =
-    platform === "macos"
-      ? readFileSync(join(brand, "app-icon/macos-mask.svg")).toString("base64")
-      : undefined;
   writeFileSync(
     path,
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${canvas} ${canvas}" width="${canvas}" height="${canvas}">
-      ${mask ? `<defs><mask id="tile" maskUnits="userSpaceOnUse" x="0" y="0" width="1024" height="1024"><image width="1024" height="1024" href="data:image/svg+xml;base64,${mask}"/></mask></defs>` : ""}
-      <image x="${inset}" y="${inset}" width="${size}" height="${size}" ${mask ? 'mask="url(#tile)"' : ""} href="data:image/svg+xml;base64,${artwork}"/>
+      <image x="${inset}" y="${inset}" width="${size}" height="${size}" href="data:image/svg+xml;base64,${artwork}"/>
     </svg>`,
   );
   return path;
@@ -180,32 +170,44 @@ try {
       "web-launchers",
       [192, 512],
     );
-    const inkPreviews = render(
-      join(brand, "app-icon/app-store-1024.png"),
-      "ink-previews",
-      [192, 256, 512],
-    );
-    const paperPreviews = render(paper("app-icon-square.svg"), "paper-previews", [256]);
-    stage(join(inkPreviews, "256x256.png"), `${web}/app-icon.png`, 256);
+    const opaque = render(join(brand, "app-icon/app-store-1024.png"), "opaque", [192, 256, 512]);
+    stage(join(opaque, "256x256.png"), `${web}/app-icon.png`, 256);
     for (const size of [192, 512]) {
       stage(join(launchers, `${size}x${size}.png`), `${web}/app-icon-${size}.png`, size);
-      stage(join(inkPreviews, `${size}x${size}.png`), `${web}/app-icon-maskable-${size}.png`, size);
+      stage(join(opaque, `${size}x${size}.png`), `${web}/app-icon-maskable-${size}.png`, size);
     }
-    for (const [style, folder] of [
-      ["ink", inkPreviews],
-      ["paper", paperPreviews],
-    ] as const)
-      stage(join(folder, "256x256.png"), `${web}/app-icons/${style}.png`, 256);
     stage(join(rounded, "icon.ico"), `${web}/favicon.ico`);
     stage(join(brand, "app-icon/favicon.svg"), `${web}/favicon.svg`);
     stage(join(brand, "wordmark/wordmark-white.svg"), "apps/web/src/assets/wordmark.svg");
     stage(join(brand, "symbol/symbol-white.svg"), "apps/web/src/assets/brand-symbol.svg");
   }
   if (targets.has("desktop")) {
-    const macos = render(
-      iconCanvas(join(brand, "app-icon/app-icon-square.svg"), "macos-ink", "macos"),
-      "macos-desktop",
+    // The static ICNS shows the Default (light) appearance on Icon Composer's 824px macOS tile,
+    // centered in 1024px. ictool takes points; scale 1 makes them pixels.
+    const exported = join(scratch, "macos-export.png"),
+      tile = join(scratch, "macos-tile.png");
+    run(
+      ictool,
+      [
+        join(brand, "app-icon/app-icon.icon"),
+        "--export-image",
+        "--output-file",
+        exported,
+        "--platform",
+        "macOS",
+        "--rendition",
+        "Default",
+        "--width",
+        "824",
+        "--height",
+        "824",
+        "--scale",
+        "1",
+      ],
+      { stdio: "pipe" },
     );
+    run("xcrun", ["swift", join(brand, "icon-png.swift"), exported, tile, "1024"]);
+    const macos = render(tile, "macos-desktop");
     const windows = render(
       iconCanvas(join(brand, "app-icon/app-icon-rounded.svg"), "windows-icon", "windows"),
       "windows-desktop",
@@ -229,15 +231,11 @@ try {
         size === 512 ? "icon.png" : size === 256 ? "128x128@2x.png" : `${size}x${size}.png`;
       stage(join(linux, `${size}x${size}.png`), `${desktop}/${name}`, size);
     }
+    // Tauri compiles the layered document into Assets.car with Xcode 26+; the ICNS is the
+    // fallback for macOS before 26 and for builds with an older Xcode.
     stage(icns, `${desktop}/icon.icns`);
-    stage(join(macos, "icon.png"), `${desktop}/macos/icon.png`, 512);
+    stageIcon(`${desktop}/icon.icon`);
     stage(join(windows, "icon.ico"), `${desktop}/icon.ico`);
-    const alternate = render(
-      iconCanvas(paper("app-icon-square.svg"), "macos-paper", "macos"),
-      "paper-desktop",
-      [512],
-    );
-    stage(join(alternate, "512x512.png"), `${desktop}/macos/icon-paper.png`, 512);
     const menu = join(scratch, "menu-bar.pdf");
     run("python3", [join(root, "apps/web/scripts/menu-bar-icon.py"), "--output", menu]);
     stage(menu, `${desktop}/menu-bar.pdf`);

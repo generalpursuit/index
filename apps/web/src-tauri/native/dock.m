@@ -1,7 +1,7 @@
 #import <AppKit/AppKit.h>
 #include <stdbool.h>
 
-// A device preference, like the app icon. Without its Dock icon Index is an accessory app: it
+// A device preference. Without its Dock icon Index is an accessory app: it
 // leaves the Dock and the app switcher, and keeps its menu bar item and windows.
 #ifdef INDEX_NATIVE_SMOKE
 static NSString *const hiddenKey = @"index.dock-hidden.native-smoke";

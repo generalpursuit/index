@@ -94,13 +94,17 @@ it("rejects missing prerequisites before changing any selected target", () => {
     RSVG_CONVERT: join(fixture, "missing-converter"),
   });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /requires librsvg/);
+  // Icon Composer renders the macOS icon, so other platforms stop before checking tools.
+  assert.match(
+    result.stderr,
+    process.platform === "darwin" ? /requires librsvg/ : /requires macOS and Xcode/,
+  );
   assert.deepEqual(outputSnapshot(), before);
 });
 
 it(
   "does not publish an earlier staged target when later conversion fails",
-  { skip: process.platform === "win32" },
+  { skip: process.platform !== "darwin" },
   () => {
     const converter = join(fixture, "failing-converter");
     writeFileSync(

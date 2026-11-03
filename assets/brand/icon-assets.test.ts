@@ -122,9 +122,7 @@ it("Linux packages include a consistent inset at every PNG size, including 512px
   }
 });
 
-it("Mac bundle frames and both runtime choices use the same padded canvas", () => {
-  for (const file of ["macos/icon.png", "macos/icon-paper.png"])
-    assert.equal(inset(read(desktop + file), 100 / 1024), 512);
+it("Mac bundle frames keep the macOS tile's padded canvas", () => {
   const icns = read(desktop + "icon.icns");
   let frames = 0;
   for (let offset = 8; offset < icns.length;) {
@@ -203,7 +201,9 @@ it("Icon Composer layers keep the brand mark's exact paths, scale and placement"
 });
 
 it("native apps ship the canonical Icon Composer document", () => {
-  for (const copy of ["apps/ios/Resources/AppIcon.icon"])
+  const config = JSON.parse(read("apps/web/src-tauri/tauri.conf.json").toString());
+  assert.ok(config.bundle.icon.includes("icons/icon.icon"));
+  for (const copy of ["apps/ios/Resources/AppIcon.icon", desktop + "icon.icon"])
     for (const file of ["icon.json", "Assets/dot.svg", "Assets/stem.svg"])
       assert.deepEqual(
         read(`${copy}/${file}`),

@@ -22,9 +22,6 @@ export class DesktopHarness {
   loginState = "off";
   loginSupported = true;
   loginError = false;
-  appIcon = "ink";
-  appIconSupported = true;
-  appIconError = false;
   dockVisible = true;
   dockSupported = true;
   dockError = false;
@@ -153,15 +150,6 @@ export class DesktopHarness {
             throw new Error("The required update isn’t available yet. Please try again later.");
           // A successful restart replaces the app and never answers.
           return new Promise(() => {});
-        }
-        if (command === "app_icon_status")
-          return { supported: this.appIconSupported, icon: this.appIcon };
-        if (command === "set_app_icon") {
-          if (this.appIconError) throw new Error("OS denied icon change");
-          if (!this.appIconSupported || !["ink", "paper"].includes(args.icon))
-            throw new Error("Unsupported icon");
-          this.appIcon = args.icon;
-          return { supported: true, icon: this.appIcon };
         }
         if (command === "dock_status")
           return { supported: this.dockSupported, visible: this.dockVisible };

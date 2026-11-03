@@ -5,7 +5,6 @@ mod menu_bar;
 mod downloads;
 mod session_revision;
 mod appearance;
-mod app_icon;
 mod dock;
 mod titlebar;
 mod haptics;
@@ -109,14 +108,11 @@ pub fn run() {
         session::session_write,
         open_website,
         appearance::set_appearance,
-        app_icon::app_icon_status,
-        app_icon::set_app_icon,
         dock::dock_status,
         dock::set_dock_visible,
         haptics::desktop_haptic,
         smoke::smoke_complete,
         smoke::smoke_resize,
-        smoke::smoke_icon_matches,
         smoke::smoke_reopen,
         smoke::smoke_progress
     ]);
@@ -149,8 +145,6 @@ pub fn run() {
         session::session_write,
         open_website,
         appearance::set_appearance,
-        app_icon::app_icon_status,
-        app_icon::set_app_icon,
         dock::dock_status,
         dock::set_dock_visible,
         haptics::desktop_haptic
@@ -166,7 +160,6 @@ pub fn run() {
             session::init(app.handle().clone());
             if !menu_bar::init(app.handle())? { app.handle().exit(0); return Ok(()); }
             updates::init(app.handle());
-            app_icon::restore();
             dock::restore();
             notifications::init();
             if cfg!(debug_assertions) {

@@ -32,17 +32,8 @@
   };
   try {
     await invoke("smoke_progress", { message: "JavaScript bridge ready" });
-    if (window.__SMOKE_PHASE__.startsWith("icons")) {
-      const restored = await invoke("app_icon_status");
-      assert(restored.supported, "macOS icon selection unavailable");
-      if (window.__SMOKE_PHASE__ === "icons-restore") {
-        assert(restored.icon === "paper", "App icon preference did not survive process restart");
-        assert(
-          await invoke("smoke_icon_matches", { paper: true }),
-          "Saved icon was not restored to AppKit at launch",
-        );
-        await invoke("set_app_icon", { icon: "ink" });
-        assert(await invoke("smoke_icon_matches", { paper: false }), "Default icon did not return");
+    if (window.__SMOKE_PHASE__.startsWith("dock")) {
+      if (window.__SMOKE_PHASE__ === "dock-restore") {
         assert(
           !(await invoke("dock_status")).visible,
           "Hidden Dock icon was not restored at launch",
@@ -59,27 +50,6 @@
           "Dock icon did not return",
         );
       } else {
-        await invoke("set_app_icon", { icon: "ink" });
-        assert(
-          await invoke("smoke_icon_matches", { paper: false }),
-          "Ink was not applied to AppKit",
-        );
-        let rejected = false;
-        try {
-          await invoke("set_app_icon", { icon: "unknown" });
-        } catch {
-          rejected = true;
-        }
-        assert(rejected, "Native bridge accepted an unsupported icon");
-        assert(
-          (await invoke("app_icon_status")).icon === "ink",
-          "Rejected icon changed the preference",
-        );
-        await invoke("set_app_icon", { icon: "paper" });
-        assert(
-          await invoke("smoke_icon_matches", { paper: true }),
-          "Paper was not applied to AppKit",
-        );
         assert(
           !(await invoke("set_dock_visible", { visible: false })).visible,
           "Dock icon was not hidden",

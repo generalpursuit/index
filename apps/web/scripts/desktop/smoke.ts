@@ -14,9 +14,9 @@ const env = {
   VITE_SERVER_URL: "http://localhost:3002",
 };
 const logs = mkdtempSync(join(tmpdir(), "index-native-smoke-"));
-const phases = process.argv.includes("--icons-only")
-  ? ["icons", "icons-restore"]
-  : ["login", "restore", "signed-out", "icons", "icons-restore"];
+const phases = process.argv.includes("--dock-only")
+  ? ["dock", "dock-restore"]
+  : ["login", "restore", "signed-out", "dock", "dock-restore"];
 const bundle = resolve("src-tauri/target/release/bundle/macos/Index.app");
 const run = (command: string, args: string[]) => {
   const result = spawnSync(command, args, { env, stdio: "inherit" });

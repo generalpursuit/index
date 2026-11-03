@@ -17,20 +17,6 @@ pub fn smoke_progress(message: String) {
     println!("Native smoke: {message}");
 }
 
-/// Verify AppKit's actual icon as well as the persisted preference. Main-thread command.
-#[tauri::command]
-pub fn smoke_icon_matches(paper: bool) -> bool {
-    unsafe extern "C" {
-        fn index_app_icon_matches(bytes: *const u8, length: usize) -> bool;
-    }
-    let bytes: &[u8] = if paper {
-        include_bytes!("../icons/macos/icon-paper.png")
-    } else {
-        include_bytes!("../icons/macos/icon.png")
-    };
-    unsafe { index_app_icon_matches(bytes.as_ptr(), bytes.len()) }
-}
-
 /// Opens Index again as Finder or Spotlight does: LaunchServices first makes the running app a
 /// regular one, with a Dock icon, then sends the reopen event. Main-thread command.
 #[tauri::command]
@@ -56,8 +42,8 @@ pub fn smoke_resize(webview: Webview, width: f64, height: f64) -> Result<(), Str
 pub fn plugin() -> TauriPlugin<tauri::Wry> {
     let phase = std::env::var("INDEX_NATIVE_SMOKE_PHASE").unwrap_or_default();
     assert!(
-        matches!(phase.as_str(), "login" | "restore" | "signed-out" | "icons" | "icons-restore"),
-        "Set INDEX_NATIVE_SMOKE_PHASE to login, restore, signed-out, icons, or icons-restore"
+        matches!(phase.as_str(), "login" | "restore" | "signed-out" | "dock" | "dock-restore"),
+        "Set INDEX_NATIVE_SMOKE_PHASE to login, restore, signed-out, dock, or dock-restore"
     );
     assert_eq!(
         env!("INDEX_API_SERVER"),

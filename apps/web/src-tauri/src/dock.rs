@@ -53,8 +53,6 @@ pub async fn set_dock_visible(visible: bool) -> Result<DockStatus, String> {
         if !unsafe { macos::index_dock_show(visible, true) } {
             return Err("Could not change the Dock setting. Please try again.".into());
         }
-        // A returning Dock tile can start from the bundle's icon; show the saved choice again.
-        if visible { crate::app_icon::restore(); }
         Ok(dock_status())
     }
     #[cfg(not(target_os = "macos"))]
