@@ -110,8 +110,7 @@ and sets `CFBundleIconName` when its `actool` is from Xcode 26 or later; with an
 older Xcode it logs that it skipped the car. The ICNS, rendered by `ictool` from the
 document's Default (Paper) appearance and shape, stays `CFBundleIconFile`: macOS
 14-15 and bundles without the car show it whatever the icon style. The release
-workflow currently selects Xcode 16.4, so released DMGs carry only the ICNS until it
-selects Xcode 26 or later.
+workflow selects Xcode 26, so released DMGs carry both.
 
 Windows spacing follows the square keyline in [Microsoft's icon grid](https://learn.microsoft.com/en-us/windows/apps/design/iconography/app-icon-design).
 Linux uses the square guide in the [GNOME template](https://gitlab.gnome.org/Teams/Design/HIG-app-icons/-/blob/master/template.svg);
