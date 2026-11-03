@@ -171,18 +171,12 @@ it("web launchers have separate padded and maskable icons with the entire symbol
   }
 });
 
-it("iOS and the Apple touch icon remain opaque squares for system masking", () => {
-  for (const file of [
-    "apps/ios/Resources/Assets.xcassets/AppIcon.appiconset/Icon.png",
-    "apps/ios/Resources/Assets.xcassets/AppIconPaper.appiconset/Icon.png",
-    "apps/web/public/app-icon.png",
-  ]) {
-    const { width, height, pixels } = png(read(file));
-    assert.equal(width, height);
-    assert.equal(width, file.includes("xcassets") ? 1024 : 256);
-    for (let offset = 3; offset < pixels.length; offset += 4)
-      assert.equal(pixels.readUInt8(offset), 255);
-  }
+it("the Apple touch icon remains an opaque square for system masking", () => {
+  const { width, height, pixels } = png(read("apps/web/public/app-icon.png"));
+  assert.equal(width, 256);
+  assert.equal(height, 256);
+  for (let offset = 3; offset < pixels.length; offset += 4)
+    assert.equal(pixels.readUInt8(offset), 255);
 });
 
 it("Icon Composer layers keep the brand mark's exact paths, scale and placement", () => {
@@ -206,4 +200,13 @@ it("Icon Composer layers keep the brand mark's exact paths, scale and placement"
     assert.equal(svg.match(/<g transform="([^"]+)">/)![1], placement);
     assert.equal(svg.match(/ d="([^"]+)"/)![1], path);
   }
+});
+
+it("native apps ship the canonical Icon Composer document", () => {
+  for (const copy of ["apps/ios/Resources/AppIcon.icon"])
+    for (const file of ["icon.json", "Assets/dot.svg", "Assets/stem.svg"])
+      assert.deepEqual(
+        read(`${copy}/${file}`),
+        read(`assets/brand/app-icon/app-icon.icon/${file}`),
+      );
 });

@@ -96,12 +96,6 @@ it("rejects missing prerequisites before changing any selected target", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /requires librsvg/);
   assert.deepEqual(outputSnapshot(), before);
-  if (process.platform !== "darwin") {
-    const native = run([]);
-    assert.notEqual(native.status, 0);
-    assert.match(native.stderr, /requires macOS and Xcode/);
-    assert.deepEqual(outputSnapshot(), before);
-  }
 });
 
 it(

@@ -5,15 +5,15 @@ Native SwiftUI implementation of the approved mobile design, using the same REST
 ## Branding and app icon
 
 The login wordmark, Home tab symbol, and app icon use the supplied Index artwork.
-Settings → App icon offers Ink (default) and Paper. iOS owns and persists the Home
-Screen icon choice, independently of the appearance preference and signed-in account.
-A failed change keeps the existing icon and shows an error.
+The app icon is the Icon Composer document `Resources/AppIcon.icon`, copied from the
+brand source. It has no alternates and no Settings choice: iOS picks its Default
+(Paper), Dark (Ink), Clear or Tinted appearance from the Home Screen icon style, and
+Xcode adds flattened images for iOS 17-25. A device that had chosen the former
+`AppIconPaper` alternate shows this icon after updating; iOS drops the missing
+alternate and reports `alternateIconName` as `nil`, so the app does not reset it.
 
 Original assets and the regeneration command live in [assets/brand](../../assets/brand/README.md).
-Both icon sets are included for iPhone and iPad through the asset catalog compiler;
-keep `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` in the generated project.
 The shared SwiftUI artwork is bundled with `IndexUI`, including the macOS preview.
-The preview does not offer an iOS-only Home Screen icon setting.
 
 ## Run
 

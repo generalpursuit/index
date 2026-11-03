@@ -14,12 +14,12 @@ preserving the exact paths, scale and placement.
 | `symbol/symbol-white.svg`       | Web Home symbol and shared SwiftUI template image                       |
 | `symbol/symbol-black.svg`       | Desktop menu-bar vector PDF                                             |
 | `wordmark/wordmark-white.svg`   | Web and shared SwiftUI wordmark                                         |
-| `app-icon/app-store-1024.png`   | Opaque iOS/touch icons, maskable web icons and Ink previews             |
-| `app-icon/app-icon-square.svg`  | macOS bundle/Dock icons; Paper iOS icon and previews after palette swap |
+| `app-icon/app-store-1024.png`   | Opaque Apple touch icon, maskable web icons and Ink preview             |
+| `app-icon/app-icon-square.svg`  | macOS bundle/Dock icons; Paper Dock icon and preview after palette swap |
 | `app-icon/app-icon-rounded.svg` | Inset Windows/Linux/web launcher icons and web ICO fallback             |
 | `app-icon/macos-mask.svg`       | Continuous outline for static macOS ICNS and runtime Dock images        |
 | `app-icon/favicon.svg`          | Explicit web SVG favicon                                                |
-| `app-icon/app-icon.icon`        | Icon Composer source for the light/dark-adaptive Apple app icons        |
+| `app-icon/app-icon.icon`        | Icon Composer source of the light/dark-adaptive iOS app icon            |
 
 The other wordmarks, symbols, lockups, PNG sizes and rounded exports remain useful
 brand resources. They are retained even when no current application imports them.
@@ -58,11 +58,11 @@ stale files, and never repairs them. Generation checks all selected prerequisite
 first, stages and validates every output, then copies them into the repository.
 Generated assets stay committed, so normal builds need no conversion tools.
 
-| Target    | Prerequisites                                                     | Generated destinations                                                                                                      |
-| --------- | ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| `web`     | Repository's locked Tauri CLI                                     | `apps/web/public`: SVG/ICO favicons, 192/256/512 PNGs and Ink/Paper previews; `apps/web/src/assets`: wordmark and symbol    |
-| `desktop` | Tauri CLI, Python 3, librsvg `rsvg-convert` with `pdf1.4` support | `apps/web/src-tauri/icons`: rounded bundle icons, Paper icon and vector `menu-bar.pdf`                                      |
-| `ios`     | Tauri CLI, macOS and Xcode with Swift/CoreGraphics/ImageIO        | `apps/ios/Resources/Assets.xcassets`: Ink/Paper app icons; `apps/ios/Sources/IndexUI/Resources`: previews and vector images |
+| Target    | Prerequisites                                                     | Generated destinations                                                                                                   |
+| --------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `web`     | Repository's locked Tauri CLI                                     | `apps/web/public`: SVG/ICO favicons, 192/256/512 PNGs and Ink/Paper previews; `apps/web/src/assets`: wordmark and symbol |
+| `desktop` | Tauri CLI, Python 3, librsvg `rsvg-convert` with `pdf1.4` support | `apps/web/src-tauri/icons`: rounded bundle icons, Paper icon and vector `menu-bar.pdf`                                   |
+| `ios`     | Repository's locked Tauri CLI                                     | `apps/ios/Resources`: `AppIcon.icon`; `apps/ios/Sources/IndexUI/Resources`: vector images                                |
 
 Install librsvg with your platform's package manager (for example, `brew install
 librsvg`). Put `rsvg-convert` on `PATH` or set `RSVG_CONVERT` to its executable.
@@ -74,7 +74,8 @@ normalized because Tauri otherwise emits the same encoded images in random order
 
 CI regenerates and checks web outputs. `bun test assets/brand` checks generated
 PNG pixels, every PNG frame inside ICO/ICNS, packaging paths, maskable safe zones,
-opaque iOS assets, stale/missing outputs and failure before publication. The desktop source check
+the opaque touch icon, the Icon Composer layer geometry and shipped copies,
+stale/missing outputs and failure before publication. The desktop source check
 uses the same nonmutating PDF conversion:
 `python3 apps/web/scripts/check-menu-bar-source.py`.
 Native regeneration and final appearance still need their platform tools; on a
@@ -86,14 +87,15 @@ Mac, run `bun assets/brand/sync.ts --check` and the iOS/native packaging checks.
 Padding is part of the exported pixels, so changing display resolution or
 relaunching the app does not change the icon's relative size.
 
-| Destination         | Canvas and visible bounds                                         | Consumer                                  |
-| ------------------- | ----------------------------------------------------------------- | ----------------------------------------- |
-| macOS               | 824px tile centered in 1024px, continuous corner outline          | `icon.icns` and `icons/macos/*.png`       |
-| Windows             | 42px tile centered in 48px                                        | All six frames of `icon.ico`; NSIS/Win32  |
-| Linux               | 104px tile centered in 128px                                      | Bundled 32/48/64/128/256/512 PNGs         |
-| Web `any`           | Same inset silhouette as Linux                                    | Launchers that display the exported shape |
-| Web `maskable`      | Opaque square, entire symbol inside the central 40%-radius circle | Launchers that supply their own mask      |
-| iOS and Apple touch | Opaque square, no baked-in corners or outer padding               | System-masked Home Screen icons           |
+| Destination    | Canvas and visible bounds                                         | Consumer                                  |
+| -------------- | ----------------------------------------------------------------- | ----------------------------------------- |
+| macOS          | 824px tile centered in 1024px, continuous corner outline          | `icon.icns` and `icons/macos/*.png`       |
+| Windows        | 42px tile centered in 48px                                        | All six frames of `icon.ico`; NSIS/Win32  |
+| Linux          | 104px tile centered in 128px                                      | Bundled 32/48/64/128/256/512 PNGs         |
+| Web `any`      | Same inset silhouette as Linux                                    | Launchers that display the exported shape |
+| Web `maskable` | Opaque square, entire symbol inside the central 40%-radius circle | Launchers that supply their own mask      |
+| iOS            | Icon Composer document; Xcode renders every appearance            | Home Screen, including iOS 17-25 fallback |
+| Apple touch    | Opaque square, no baked-in corners or outer padding               | System-masked web clips                   |
 
 The static macOS outline follows the 512x512@2x mask in Apple's
 [macOS Sequoia production template](https://devimages-cdn.apple.com/design/resources/download/macOS-Sequoia-Production-Templates-Sketch.dmg).
@@ -109,11 +111,9 @@ not ship MSIX/AppX tiles.
 The web manifest deliberately uses separate files for `any` and `maskable`.
 The [Web App Manifest safe-zone contract](https://www.w3.org/TR/appmanifest/#icon-masks)
 requires essential content to fit within the central circle. Favicons stay
-compact, without launcher padding. `opaque-icon.swift` removes the iOS alpha
-channel in staging. Shared SwiftUI previews use `Brand.xcassets`, while the Home
-symbol and wordmark use vector `Assets.xcassets`.
+compact, without launcher padding. The shared SwiftUI Home symbol and wordmark
+use vector `Assets.xcassets`.
 
-iOS Settings changes the actual Home Screen icon through the alternate-icon API.
 macOS saves the choice on the device and reapplies it to the Dock at launch.
 Finder and the downloaded bundle retain Ink. Other desktop platforms retain Ink
 and do not show an unsupported icon picker.

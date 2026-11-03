@@ -6,11 +6,13 @@ import {
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  readdirSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { fileURLToPath } from "node:url";
 import { orderedIcns } from "./icns.ts";
@@ -18,7 +20,7 @@ import { orderedIcns } from "./icns.ts";
 const brand = dirname(fileURLToPath(import.meta.url));
 const root = resolve(brand, "../..");
 const cli = join(root, "apps/web/node_modules/@tauri-apps/cli/tauri.js");
-const ios = "apps/ios/Resources/Assets.xcassets";
+const ios = "apps/ios/Resources";
 const ui = "apps/ios/Sources/IndexUI/Resources";
 const desktop = "apps/web/src-tauri/icons";
 const web = "apps/web/public";
@@ -55,15 +57,6 @@ const run = (
 if (!existsSync(cli))
   throw new Error("Install the repository's locked dependencies before generating brand assets.");
 run(process.execPath, [cli, "--version"], { stdio: "pipe" });
-if (targets.has("ios")) {
-  if (process.platform !== "darwin")
-    throw new Error(
-      "The ios target requires macOS and Xcode. Use --target web or --target desktop on this platform.",
-    );
-  run("xcrun", ["--find", "swift"], { stdio: "pipe" });
-  // Check the frameworks too, before rendering or modifying even a web output.
-  run("xcrun", ["swift", join(brand, "opaque-icon.swift")], { stdio: "pipe" });
-}
 if (targets.has("desktop")) {
   run("python3", ["--version"], { stdio: "pipe" });
   const converter = process.env.RSVG_CONVERT || "rsvg-convert";
@@ -80,16 +73,16 @@ if (targets.has("desktop")) {
 }
 const required = new Set<string>();
 if (targets.has("web") || targets.has("ios")) {
-  for (const source of [
-    "app-icon/app-store-1024.png",
-    "app-icon/app-icon-square.svg",
-    "wordmark/wordmark-white.svg",
-    "symbol/symbol-white.svg",
-  ])
-    required.add(source);
+  required.add("wordmark/wordmark-white.svg");
+  required.add("symbol/symbol-white.svg");
 }
 if (targets.has("web") || targets.has("desktop")) required.add("app-icon/app-icon-rounded.svg");
-if (targets.has("web")) required.add("app-icon/favicon.svg");
+if (targets.has("web")) {
+  required.add("app-icon/app-store-1024.png");
+  required.add("app-icon/app-icon-square.svg");
+  required.add("app-icon/favicon.svg");
+}
+if (targets.has("ios")) required.add("app-icon/app-icon.icon/icon.json");
 if (targets.has("desktop")) {
   required.add("symbol/symbol-black.svg");
   required.add("app-icon/app-icon-square.svg");
@@ -98,10 +91,18 @@ if (targets.has("desktop")) {
 for (const source of required) readFileSync(join(brand, source));
 
 const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
-type Output = { source: string; size?: number; opaque: boolean };
+type Output = { source: string; size?: number };
 const outputs = new Map<string, Output>();
-const stage = (source: string, destination: string, size?: number, opaque = false) =>
-  outputs.set(destination, { source, size, opaque });
+const stage = (source: string, destination: string, size?: number) =>
+  outputs.set(destination, { source, size });
+// An Icon Composer document is a bundle: icon.json plus the layer artwork it names.
+const stageIcon = (destination: string) => {
+  const bundle = join(brand, "app-icon/app-icon.icon");
+  for (const file of readdirSync(bundle, { recursive: true, encoding: "utf8" }).toSorted()) {
+    if (basename(file).startsWith(".") || statSync(join(bundle, file)).isDirectory()) continue;
+    stage(join(bundle, file), `${destination}/${file}`);
+  }
+};
 const render = (source: string, name: string, sizes: number[] = []) => {
   const output = join(scratch, name);
   const args = [cli, "icon", source, "--output", output];
@@ -149,45 +150,16 @@ const iconCanvas = (
   );
   return path;
 };
-const catalog = (
-  folder: string,
-  filename: string,
-  image: string,
-  size: number,
-  appIcon = false,
-) => {
-  stage(image, `${folder}/${filename}`, size, appIcon);
-  const metadata = join(scratch, `${outputs.size}-Contents.json`);
-  writeFileSync(
-    metadata,
-    JSON.stringify(
-      {
-        images: [
-          {
-            filename,
-            idiom: "universal",
-            ...(appIcon ? { platform: "ios", size: "1024x1024" } : {}),
-          },
-        ],
-        info: { author: "xcode", version: 1 },
-      },
-      null,
-      2,
-    ) + "\n",
-  );
-  stage(metadata, `${folder}/Contents.json`);
-};
-function validate(path: string, { source, size, opaque }: Output) {
+function validate(path: string, { source, size }: Output) {
   const data = readFileSync(source);
   if (size) {
     if (
       !data.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])) ||
       data.readUInt32BE(16) !== size ||
       data.readUInt32BE(20) !== size ||
-      !data.subarray(-12).equals(Buffer.from("0000000049454e44ae426082", "hex")) ||
-      (opaque && data[25] !== 2)
+      !data.subarray(-12).equals(Buffer.from("0000000049454e44ae426082", "hex"))
     )
-      throw new Error(`Invalid ${size}px${opaque ? " opaque RGB" : ""} PNG: ${path}`);
+      throw new Error(`Invalid ${size}px PNG: ${path}`);
   } else if (path.endsWith(".ico")) {
     if (data.readUInt32LE(0) !== 0x00010000 || data.readUInt16LE(4) === 0)
       throw new Error(`Invalid ICO: ${path}`);
@@ -198,21 +170,6 @@ function validate(path: string, { source, size, opaque }: Output) {
 }
 
 try {
-  // Paths are fixed before conditional rendering; consumers share the same target gates.
-  const inkPreviews = join(scratch, "ink-previews"),
-    paperPreviews = join(scratch, "paper-previews");
-  if (targets.has("web") || targets.has("ios")) {
-    render(
-      join(brand, "app-icon/app-store-1024.png"),
-      "ink-previews",
-      targets.has("web") ? [192, 256, 512] : [256],
-    );
-    render(
-      paper("app-icon-square.svg"),
-      "paper-previews",
-      targets.has("ios") ? [256, 1024] : [256],
-    );
-  }
   const rounded = join(scratch, "rounded");
   if (targets.has("web") || targets.has("desktop"))
     render(join(brand, "app-icon/app-icon-rounded.svg"), "rounded");
@@ -223,6 +180,12 @@ try {
       "web-launchers",
       [192, 512],
     );
+    const inkPreviews = render(
+      join(brand, "app-icon/app-store-1024.png"),
+      "ink-previews",
+      [192, 256, 512],
+    );
+    const paperPreviews = render(paper("app-icon-square.svg"), "paper-previews", [256]);
     stage(join(inkPreviews, "256x256.png"), `${web}/app-icon.png`, 256);
     for (const size of [192, 512]) {
       stage(join(launchers, `${size}x${size}.png`), `${web}/app-icon-${size}.png`, size);
@@ -280,25 +243,8 @@ try {
     stage(menu, `${desktop}/menu-bar.pdf`);
   }
   if (targets.has("ios")) {
-    const ink = join(scratch, "ink-opaque.png"),
-      alternate = join(scratch, "paper-opaque.png");
-    copyFileSync(join(brand, "app-icon/app-store-1024.png"), ink);
-    copyFileSync(join(paperPreviews, "1024x1024.png"), alternate);
-    run("xcrun", ["swift", join(brand, "opaque-icon.swift"), ink, alternate]);
-    catalog(`${ios}/AppIcon.appiconset`, "Icon.png", ink, 1024, true);
-    catalog(`${ios}/AppIconPaper.appiconset`, "Icon.png", alternate, 1024, true);
-    catalog(
-      `${ui}/Brand.xcassets/AppIconInk.imageset`,
-      "Image.png",
-      join(inkPreviews, "256x256.png"),
-      256,
-    );
-    catalog(
-      `${ui}/Brand.xcassets/AppIconPaper.imageset`,
-      "Image.png",
-      join(paperPreviews, "256x256.png"),
-      256,
-    );
+    // Xcode compiles the document into Assets.car, with flattened images for iOS before 26.
+    stageIcon(`${ios}/AppIcon.icon`);
     stage(
       join(brand, "wordmark/wordmark-white.svg"),
       `${ui}/Assets.xcassets/IndexWordmark.imageset/wordmark.svg`,

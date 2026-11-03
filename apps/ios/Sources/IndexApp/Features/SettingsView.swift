@@ -35,9 +35,6 @@ struct SettingsView: View {
         }
         SettingsGroup(title: "This \(thisDeviceName)", note: "Saved on this \(thisDeviceName) only") {
           AppearanceSettings()
-          #if os(iOS)
-            AppIconSettings()
-          #endif
         }
         SettingsGroup(title: "Groups", footer: "Lock a group to keep its links to yourself.") {
           GroupSettingsView()
