@@ -102,6 +102,33 @@ it("rejects missing prerequisites before changing any selected target", () => {
   assert.deepEqual(outputSnapshot(), before);
 });
 
+it("rejects an icon document with missing artwork or malformed JSON before publishing", () => {
+  const bundle = join(fixture, "assets/brand/app-icon/app-icon.icon");
+  const dot = join(bundle, "Assets/dot.svg"),
+    document = join(bundle, "icon.json");
+  const artwork = readFileSync(dot),
+    json = readFileSync(document);
+  const before = outputSnapshot();
+  try {
+    rmSync(dot);
+    for (const args of [
+      ["--target", "ios"],
+      ["--target", "ios", "--check"],
+    ]) {
+      const result = run(args);
+      assert.notEqual(result.status, 0);
+      assert.match(result.stderr, /names missing artwork: dot.svg/);
+    }
+    writeFileSync(dot, artwork);
+    writeFileSync(document, json.subarray(0, -2));
+    assert.notEqual(run(["--target", "ios"]).status, 0);
+    assert.deepEqual(outputSnapshot(), before);
+  } finally {
+    writeFileSync(dot, artwork);
+    writeFileSync(document, json);
+  }
+});
+
 it(
   "does not publish an earlier staged target when later conversion fails",
   { skip: process.platform !== "darwin" },

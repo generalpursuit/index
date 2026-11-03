@@ -97,9 +97,22 @@ if (targets.has("web")) {
   required.add("app-icon/favicon.svg");
 }
 if (targets.has("desktop")) required.add("symbol/symbol-black.svg");
-// ictool and Xcode reject a document whose layers reference missing artwork.
-if (targets.has("ios") || targets.has("desktop")) required.add("app-icon/app-icon.icon/icon.json");
 for (const source of required) readFileSync(join(brand, source));
+const bundle = join(brand, "app-icon/app-icon.icon");
+if (targets.has("ios") || targets.has("desktop")) {
+  // The iOS target only copies the document, and Xcode rejects one whose layers name missing
+  // artwork, so the layers are checked here rather than when the app is built.
+  const { groups } = JSON.parse(readFileSync(join(bundle, "icon.json"), "utf8")) as {
+    groups?: { layers?: { "image-name"?: string }[] }[];
+  };
+  const layers = groups?.flatMap((group) => group.layers ?? []) ?? [];
+  if (!layers.length) throw new Error("app-icon.icon has no layers.");
+  for (const layer of layers) {
+    const image = layer["image-name"];
+    if (!image || !existsSync(join(bundle, "Assets", image)))
+      throw new Error(`app-icon.icon names missing artwork: ${image ?? "(none)"}`);
+  }
+}
 
 const scratch = mkdtempSync(join(tmpdir(), "index-brand-"));
 type Output = { source: string; size?: number };
@@ -108,7 +121,6 @@ const stage = (source: string, destination: string, size?: number) =>
   outputs.set(destination, { source, size });
 // An Icon Composer document is a bundle: icon.json plus the layer artwork it names.
 const stageIcon = (destination: string) => {
-  const bundle = join(brand, "app-icon/app-icon.icon");
   for (const file of readdirSync(bundle, { recursive: true, encoding: "utf8" }).toSorted()) {
     if (basename(file).startsWith(".") || statSync(join(bundle, file)).isDirectory()) continue;
     stage(join(bundle, file), `${destination}/${file}`);
@@ -189,7 +201,7 @@ try {
     run(
       ictool,
       [
-        join(brand, "app-icon/app-icon.icon"),
+        bundle,
         "--export-image",
         "--output-file",
         exported,
