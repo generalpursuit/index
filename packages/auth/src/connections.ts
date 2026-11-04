@@ -15,7 +15,10 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
  */
 export type Permission = "read" | "write";
 
-/** OAuth scopes: the two permissions, and `offline_access` so clients can get refresh tokens. */
+/**
+ * OAuth scopes: the two permissions, and `offline_access` for refresh tokens, which every grant
+ * includes (see `shapeAuthorizationRequest`).
+ */
 export const connectionScopes = ["read", "write", "offline_access"];
 
 /** Prefixes make Index tokens recognizable to people and secret scanners. They aren't stored. */

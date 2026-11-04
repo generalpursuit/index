@@ -397,13 +397,13 @@ describe("MCP client authorization", () => {
   it("grants write with read, and rejects expired tokens and deleted accounts", async () => {
     const person = await account("writer");
     const clientId = await register({ client_name: "Writer agent" });
-    // A client that asks for write alone still receives read with it.
+    // A client that asks for write alone still receives read and offline_access with it.
     const { challenge } = await pkce();
     const page = await authorize(
       authorizeURL(clientId, challenge, { scope: "write" }),
       person.cookie,
     );
-    assert.equal(page.searchParams.get("scope"), "read write");
+    assert.equal(page.searchParams.get("scope"), "read write offline_access");
 
     const tokens = await connect(clientId, person.cookie, "read write offline_access");
     assert.equal(tokens.scope, "read write offline_access");
@@ -440,6 +440,53 @@ describe("MCP client authorization", () => {
         + (SELECT count(*) FROM oauth_consent) AS count`,
     );
     assert.equal(Number(rows[0]!.count), 0);
+  });
+
+  it("gives every grant refresh tokens, also to clients that ask only for the resource's scopes", async () => {
+    const person = await account("lasting");
+    const refresh = (clientId: string, refresh_token: string) =>
+      form("/api/auth/oauth2/token", {
+        grant_type: "refresh_token",
+        refresh_token,
+        client_id: clientId,
+        resource,
+      });
+    // MCP clients ask for the scopes the protected resource lists, which leave out
+    // offline_access, or for none at all.
+    for (const [requested, shaped] of [
+      ["read write", "read write offline_access"],
+      [undefined, "read offline_access"],
+    ] as const) {
+      const clientId = await register();
+      const { verifier, challenge } = await pkce();
+      const url = authorizeURL(clientId, challenge);
+      if (requested) url.searchParams.set("scope", requested);
+      else url.searchParams.delete("scope");
+      const page = await authorize(url, person.cookie);
+      assert.equal(page.searchParams.get("scope"), shaped);
+      // The consent page answers with the scopes it was given.
+      const approved = await consent(page, person.cookie, shaped);
+      assert.equal(approved.status, 200, await approved.clone().text());
+      const tokens = await exchange(clientId, approved, verifier);
+      assert.match(tokens.refresh_token, /^index_rt_/);
+      assert.equal((await refresh(clientId, tokens.refresh_token)).status, 200);
+    }
+
+    // An app approved without offline_access, as every app was before grants included it, is
+    // asked again on its next connection, and that one lasts.
+    const clientId = await register();
+    const old = await connect(clientId, person.cookie, "read write");
+    assert.equal(old.refresh_token, undefined);
+    const { verifier, challenge } = await pkce();
+    const page = await authorize(
+      authorizeURL(clientId, challenge, { scope: "read write" }),
+      person.cookie,
+    );
+    assert.equal(page.origin + page.pathname, `${web}/connect`);
+    const approved = await consent(page, person.cookie, page.searchParams.get("scope")!);
+    assert.equal(approved.status, 200, await approved.clone().text());
+    const tokens = await exchange(clientId, approved, verifier);
+    assert.equal((await refresh(clientId, tokens.refresh_token)).status, 200);
   });
 
   it("keeps one approval per account and app when approvals race, so re-approving narrows all", async () => {

@@ -70,11 +70,14 @@ export function mcpAuthorizationPlugins(
 }
 
 /**
- * Shapes an authorization request before Better Auth reads it: every grant includes read,
- * and a client that omits the resource indicator still receives a token bound to the MCP
- * resource. A restricted session (signed in, email unverified) always reaches the consent
- * page, which sends it through verification; it cannot approve until that succeeds. A DPoP
- * key thumbprint is ignored, as RFC 9449 lets a server without DPoP do (see `refuseDpop`).
+ * Shapes an authorization request before Better Auth reads it: every grant includes read and
+ * offline_access, and a client that omits the resource indicator still receives a token bound
+ * to the MCP resource. MCP clients ask for the scopes the protected resource lists, and
+ * offline_access belongs to the authorization server, so without it a connection would end
+ * when its first access token expires; it lasts until the user disconnects it instead. A
+ * restricted session (signed in, email unverified) always reaches the consent page, which
+ * sends it through verification; it cannot approve until that succeeds. A DPoP key
+ * thumbprint is ignored, as RFC 9449 lets a server without DPoP do (see `refuseDpop`).
  */
 export function shapeAuthorizationRequest(
   params: Record<string, unknown>,
@@ -82,7 +85,10 @@ export function shapeAuthorizationRequest(
   restricted: boolean,
 ) {
   const requested = typeof params.scope === "string" ? params.scope.split(" ") : [];
-  params.scope = ["read", ...requested.filter((scope) => scope && scope !== "read")].join(" ");
+  const others = requested.filter(
+    (scope) => scope && scope !== "read" && scope !== "offline_access",
+  );
+  params.scope = ["read", ...others, "offline_access"].join(" ");
   params.resource ??= mcpResource(apiURL);
   delete params.dpop_jkt;
   if (restricted) params.prompt = "consent";
