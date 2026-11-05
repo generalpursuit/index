@@ -98,7 +98,7 @@ jobs:
           name: browser-failures-${{ matrix.shard }}
           path: apps/web/test-results
           if-no-files-found: ignore
-          retention-days: 7
+          retention-days: 3
 
   browser-report:
     name: Browser test report
@@ -129,4 +129,4 @@ jobs:
         with:
           name: browser-report
           path: apps/web/playwright-report
-          retention-days: 14
+          retention-days: 3

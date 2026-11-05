@@ -231,7 +231,7 @@ jobs:
           name: desktop-${{ needs.version.outputs.stage }}-${{ matrix.platform }}
           path: desktop-artifacts/
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
       - name: Remove Apple credentials
         if: always() && runner.os == 'macOS'
         run: python3 apps/web/scripts/ci-apple-signing.py cleanup
