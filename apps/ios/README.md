@@ -141,6 +141,8 @@ INDEX_WEB_URL[config=Release] = https:/$()/index.example.com
 
 The generated project sets build number `1` for the app and its extensions. Each upload needs a higher one: Xcode's upload option "Manage Version and Build Number" (on by default) assigns it to every bundle, or pass `CURRENT_PROJECT_VERSION=N` to `xcodebuild archive`. `Local.xcconfig` cannot override it because target settings take precedence.
 
+`bun apps/ios/Scripts/testflight.ts --archive <path> --notes <text>` uploads an archive with an App Store Connect API key, then waits for processing, sets "What to Test", adds the build to the app's public external TestFlight group and submits it for Beta App Review. The key needs the Admin role, which cloud-managed distribution signing requires; set `APP_STORE_CONNECT_KEY_ID` and `APP_STORE_CONNECT_ISSUER_ID` and keep the `.p8` outside the repository, by default in `~/.appstoreconnect/private_keys`. Run it with `--help` for the other options.
+
 ## Readable links
 
 Profiles, collections, post sharing and inbound links use the shared [readable route contract](../../docs/readable-routes.md). Set `INDEX_WEB_URL` to the canonical web origin and optional comma-separated `INDEX_WEB_ALIASES` for aliases. Universal links also require the final associated-domain/AASA/signing setup. Run the route, account-lifetime and navigation tests with the documented Swift/Xcode checks on a Mac before distribution.

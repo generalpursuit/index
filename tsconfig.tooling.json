@@ -16,6 +16,7 @@
     "apps/web/e2e/server.ts",
     "apps/web/e2e/fixtures.ts",
     "apps/web/e2e/server.test.ts",
+    "apps/ios/Scripts/**/*.ts",
     "assets/brand/**/*.ts"
   ]
 }
