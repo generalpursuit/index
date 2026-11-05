@@ -22,6 +22,7 @@ const root = resolve(brand, "../..");
 const cli = join(root, "apps/web/node_modules/@tauri-apps/cli/tauri.js");
 const ios = "apps/ios/Resources";
 const ui = "apps/ios/Sources/IndexUI/Resources";
+const actionIcon = "apps/ios/ShareExtension/Action.xcassets/AppIcon.appiconset";
 const desktop = "apps/web/src-tauri/icons";
 const web = "apps/web/public";
 const { values } = parseArgs({
@@ -133,14 +134,20 @@ const render = (source: string, name: string, sizes: number[] = []) => {
   run(process.execPath, args);
   return output;
 };
-const iconCanvas = (source: string, name: string, platform: "windows" | "linux" | "web") => {
+const iconCanvas = (
+  source: string,
+  name: string,
+  platform: "windows" | "linux" | "web" | "ios-action",
+) => {
   const path = join(scratch, `${name}.svg`);
   // Optical bounds belong to the destination, not to the shared brand artwork.
   // Windows: square keyline on a 48px grid. Linux: 104px square on GNOME's 128px grid.
+  // iOS share sheet actions: the solid symbol stands a little shorter than the outlined system glyphs beside it.
   const { canvas, inset } = {
     windows: { canvas: 48, inset: 3 },
     linux: { canvas: 128, inset: 12 },
     web: { canvas: 128, inset: 12 },
+    "ios-action": { canvas: 128, inset: 22 },
   }[platform];
   const size = canvas - 2 * inset;
   const artwork = readFileSync(source).toString("base64");
@@ -263,6 +270,13 @@ try {
       join(brand, "symbol/symbol-white.svg"),
       `${ui}/Assets.xcassets/NavFeed.imageset/icon.svg`,
     );
+    // The share sheet draws an Action extension's icon from its alpha channel alone.
+    const action = render(
+      iconCanvas(join(brand, "symbol/symbol-white.svg"), "ios-action", "ios-action"),
+      "ios-action",
+      [1024],
+    );
+    stage(join(action, "1024x1024.png"), `${actionIcon}/icon.png`, 1024);
   }
   for (const [path, output] of outputs) validate(path, output);
   if (values.check) {

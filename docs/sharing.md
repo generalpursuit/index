@@ -24,7 +24,7 @@ Appearance uses a separate non-account Keychain item carrying only System/Light/
 
 ## Native packaging and checks
 
-The [iOS project](../apps/ios/README.md) owns `IndexShare` and `IndexShareMac`; the iOS host embeds its extension. Configure the same API scope and shared Keychain group for host and extension. Preserve the host's APS entitlement; the extension itself needs no push entitlement.
+The [iOS project](../apps/ios/README.md) owns `IndexShare`, `IndexAction` and `IndexShareMac`; the iOS host embeds the first two. `IndexAction` is an Action extension, "Save to Index", that opens the same panel from the share sheet's action list, so people can reach it without scrolling the app row. Its App ID `com.generalpursuit.index.action` needs the shared Keychain group like the Share extension. Configure the same API scope and shared Keychain group for host and extensions. Preserve the host's APS entitlement; the extensions need no push entitlement.
 
 On macOS, `bun run desktop:build` from `apps/web` builds and embeds the real extension and requires its signing/profile inputs. Missing inputs fail the build. [Release prerequisites](desktop-releases.md#artifacts-and-prerequisites) and [local host-only builds](../apps/web/README.md#desktop) are distinct. The latter, `desktop:dev` and `native-smoke` do not validate sharing.
 

@@ -8,7 +8,7 @@ if ! xcodebuild -version; then
 fi
 xcrun swift --version
 
-# The Index scheme builds and embeds IndexShare. No physical device or signing is needed.
+# The Index scheme builds and embeds IndexShare and IndexAction. No physical device or signing is needed.
 xcodebuild -project Index.xcodeproj -scheme Index -configuration Debug \
   -destination 'generic/platform=iOS' -derivedDataPath DerivedData/Checks \
   CODE_SIGNING_ALLOWED=NO build

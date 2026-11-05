@@ -34,9 +34,17 @@ for mode in ['Debug', 'Release']:
     configs[mode] = add(mode + '.xcconfig', f'{{ isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Config/{mode}.xcconfig; sourceTree = SOURCE_ROOT; }}')
     add('project-' + mode, '{ isa = XCBuildConfiguration; buildSettings = ' + settings({'SDKROOT': 'iphoneos', 'IPHONEOS_DEPLOYMENT_TARGET': '17.0', 'SWIFT_VERSION': '6.0', 'CLANG_ENABLE_MODULES': 'YES', 'SWIFT_OPTIMIZATION_LEVEL': '-Onone' if mode == 'Debug' else '-O', 'ONLY_ACTIVE_ARCH': 'YES' if mode == 'Debug' else 'NO', 'SWIFT_ACTIVE_COMPILATION_CONDITIONS': 'DEBUG' if mode == 'Debug' else '', 'DEBUG_INFORMATION_FORMAT': 'dwarf' if mode == 'Debug' else 'dwarf-with-dsym'}) + f'; name = {mode}; }}')
     add('app-' + mode, '{ isa = XCBuildConfiguration; baseConfigurationReference = ' + configs[mode] + '; buildSettings = ' + settings({'PRODUCT_NAME': 'Index', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.generalpursuit.index', 'INFOPLIST_FILE': 'Config/Info.plist', 'GENERATE_INFOPLIST_FILE': 'NO', 'CODE_SIGN_STYLE': 'Automatic', 'CODE_SIGN_ENTITLEMENTS': 'Config/Index.entitlements', 'TARGETED_DEVICE_FAMILY': '1,2', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'SUPPORTS_MACCATALYST': 'NO', 'ASSETCATALOG_COMPILER_APPICON_NAME': 'AppIcon', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks', 'MARKETING_VERSION': version, 'CURRENT_PROJECT_VERSION': '1'}) + f'; name = {mode}; }}')
-for target, platform in [('share-ios', 'iOS'), ('share-mac', 'macOS')]:
+# The same panel twice on iOS: the share sheet lists the Share extension among apps and the Action
+# extension among its actions.
+extensions = [
+    ('share-ios', 'IndexShare', 'iOS', 'com.generalpursuit.index.share', 'ShareExtension/iOS-Info.plist'),
+    ('action-ios', 'IndexAction', 'iOS', 'com.generalpursuit.index.action', 'ShareExtension/iOS-Action-Info.plist'),
+    ('share-mac', 'IndexShareMac', 'macOS', 'com.generalpursuit.index.share-mac', 'ShareExtension/macOS-Info.plist'),
+]
+for target, name, platform, bundle, plist in extensions:
     for mode in ['Debug', 'Release']:
-        values = {'PRODUCT_NAME': 'IndexShare' if platform == 'iOS' else 'IndexShareMac', 'PRODUCT_BUNDLE_IDENTIFIER': 'com.generalpursuit.index.share' if platform == 'iOS' else 'com.generalpursuit.index.share-mac', 'INFOPLIST_FILE': f'ShareExtension/{platform}-Info.plist', 'CODE_SIGN_ENTITLEMENTS': f'ShareExtension/{platform}.entitlements', 'GENERATE_INFOPLIST_FILE': 'NO', 'CODE_SIGN_STYLE': 'Automatic', 'APPLICATION_EXTENSION_API_ONLY': 'YES', 'SKIP_INSTALL': 'YES', 'SWIFT_VERSION': '6.0', 'MARKETING_VERSION': version, 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks' if platform == 'iOS' else '$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks'}
+        values = {'PRODUCT_NAME': name, 'PRODUCT_BUNDLE_IDENTIFIER': bundle, 'INFOPLIST_FILE': plist, 'CODE_SIGN_ENTITLEMENTS': f'ShareExtension/{platform}.entitlements', 'GENERATE_INFOPLIST_FILE': 'NO', 'CODE_SIGN_STYLE': 'Automatic', 'APPLICATION_EXTENSION_API_ONLY': 'YES', 'SKIP_INSTALL': 'YES', 'SWIFT_VERSION': '6.0', 'MARKETING_VERSION': version, 'CURRENT_PROJECT_VERSION': '1', 'LD_RUNPATH_SEARCH_PATHS': '$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks' if platform == 'iOS' else '$(inherited) @executable_path/../Frameworks @executable_path/../../../../Frameworks'}
+        if target == 'action-ios': values['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
         if platform == 'iOS': values.update({'SDKROOT': 'iphoneos', 'TARGETED_DEVICE_FAMILY': '1,2', 'SUPPORTED_PLATFORMS': 'iphoneos iphonesimulator', 'IPHONEOS_DEPLOYMENT_TARGET': '17.0'})
         else:
             # Command-line provisioning overrides would also reach Swift package resource bundles.
@@ -45,7 +53,7 @@ for target, platform in [('share-ios', 'iOS'), ('share-mac', 'macOS')]:
             if mode == 'Release':
                 values.update({'CODE_SIGN_INJECT_BASE_ENTITLEMENTS': 'NO', 'OTHER_CODE_SIGN_FLAGS': '$(inherited) --timestamp'})
         add(target+'-'+mode, '{ isa = XCBuildConfiguration; baseConfigurationReference = '+configs[mode]+'; buildSettings = '+settings(values)+f'; name = {mode}; }}')
-for kind in ['project', 'app', 'share-ios', 'share-mac']:
+for kind in ['project', 'app'] + [target for target, *_ in extensions]:
     add(kind + '-config-list', '{ isa = XCConfigurationList; buildConfigurations = (' + ','.join(ref(kind+'-'+m) for m in ['Debug','Release']) + ',); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; }')
 add('local-package', '{ isa = XCLocalSwiftPackageReference; relativePath = .; }')
 add('core-product', '{ isa = XCSwiftPackageProductDependency; productName = IndexCore; }')
@@ -65,7 +73,11 @@ add('resources', '{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; 
 add('validate', '{ isa = PBXShellScriptBuildPhase; alwaysOutOfDate = 1; name = "Validate release endpoints"; buildActionMask = 2147483647; files = (); inputPaths = (); outputPaths = (); runOnlyForDeploymentPostprocessing = 0; shellPath = /bin/sh; shellScript = ' + quote('if [ "$CONFIGURATION" = "Release" ]; then\ncase "$INDEX_API_URL" in https://*) ;; *) echo "error: Set INDEX_API_URL to your HTTPS API in Config/Local.xcconfig"; exit 1;; esac\ncase "$INDEX_WEB_URL" in https://*) ;; *) echo "error: Set INDEX_WEB_URL to your HTTPS web app"; exit 1;; esac\nfi\n') + '; }')
 # Real extension products, each with its own source/framework/configuration phases.
 share_source = add('share-source', '{ isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareExtension/ShareViewController.swift; sourceTree = SOURCE_ROOT; }')
-for target, name in [('share-ios', 'IndexShare'), ('share-mac', 'IndexShareMac')]:
+# iOS draws an Action extension's icon from the alpha channel of its own app icon set.
+action_assets = add('action-assets', '{ isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ShareExtension/Action.xcassets; sourceTree = SOURCE_ROOT; }')
+add('action-assets-build', '{ isa = PBXBuildFile; fileRef = '+action_assets+'; }')
+add('action-ios-resources', '{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ('+ref('action-assets-build')+',); runOnlyForDeploymentPostprocessing = 0; }')
+for target, name, *_ in extensions:
     add(target+'-source-build', '{ isa = PBXBuildFile; fileRef = '+share_source+'; }')
     add(target+'-sources', '{ isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ('+ref(target+'-source-build')+',); runOnlyForDeploymentPostprocessing = 0; }')
     products = []
@@ -76,16 +88,19 @@ for target, name in [('share-ios', 'IndexShare'), ('share-mac', 'IndexShareMac')
         builds.append(add(target+'-'+product_name+'-build', '{ isa = PBXBuildFile; productRef = '+product_ref+'; }'))
     add(target+'-frameworks', '{ isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ('+','.join(builds)+',); runOnlyForDeploymentPostprocessing = 0; }')
     add(target+'-product', '{ isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = '+name+'.appex; sourceTree = BUILT_PRODUCTS_DIR; }')
-    add(target, '{ isa = PBXNativeTarget; buildConfigurationList = '+ref(target+'-config-list')+'; buildPhases = ('+ref(target+'-sources')+','+ref(target+'-frameworks')+',); buildRules = (); dependencies = (); name = '+name+'; packageProductDependencies = ('+','.join(products)+',); productName = '+name+'; productReference = '+ref(target+'-product')+'; productType = "com.apple.product-type.app-extension"; }')
-add('share-proxy', '{ isa = PBXContainerItemProxy; containerPortal = '+ref('project')+'; proxyType = 1; remoteGlobalIDString = '+ref('share-ios')+'; remoteInfo = IndexShare; }')
-add('share-dependency', '{ isa = PBXTargetDependency; target = '+ref('share-ios')+'; targetProxy = '+ref('share-proxy')+'; }')
-add('share-embed-build', '{ isa = PBXBuildFile; fileRef = '+ref('share-ios-product')+'; settings = { ATTRIBUTES = (RemoveHeadersOnCopy,); }; }')
-add('share-embed', '{ isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ('+ref('share-embed-build')+',); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; }')
+    phases = [target+'-sources', target+'-frameworks'] + (['action-ios-resources'] if target == 'action-ios' else [])
+    add(target, '{ isa = PBXNativeTarget; buildConfigurationList = '+ref(target+'-config-list')+'; buildPhases = ('+','.join(ref(phase) for phase in phases)+',); buildRules = (); dependencies = (); name = '+name+'; packageProductDependencies = ('+','.join(products)+',); productName = '+name+'; productReference = '+ref(target+'-product')+'; productType = "com.apple.product-type.app-extension"; }')
+# The iOS app embeds both of its extensions.
+for kind, target, name in [('share', 'share-ios', 'IndexShare'), ('action', 'action-ios', 'IndexAction')]:
+    add(kind+'-proxy', '{ isa = PBXContainerItemProxy; containerPortal = '+ref('project')+'; proxyType = 1; remoteGlobalIDString = '+ref(target)+'; remoteInfo = '+name+'; }')
+    add(kind+'-dependency', '{ isa = PBXTargetDependency; target = '+ref(target)+'; targetProxy = '+ref(kind+'-proxy')+'; }')
+    add(kind+'-embed-build', '{ isa = PBXBuildFile; fileRef = '+ref(target+'-product')+'; settings = { ATTRIBUTES = (RemoveHeadersOnCopy,); }; }')
+add('share-embed', '{ isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ('+ref('share-embed-build')+','+ref('action-embed-build')+',); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; }')
 product = add('product', '{ isa = PBXFileReference; explicitFileType = wrapper.application; path = Index.app; sourceTree = BUILT_PRODUCTS_DIR; }')
-add('products', '{ isa = PBXGroup; children = (' + product + ',' + ref('share-ios-product') + ',' + ref('share-mac-product') + ',); name = Products; sourceTree = "<group>"; }')
-add('main-group', '{ isa = PBXGroup; children = (' + ','.join(source_refs + list(configs.values()) + [icon, privacy, share_source, ref('products')]) + ',); sourceTree = "<group>"; }')
-add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ref('share-dependency') + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',' + ref('features-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
-add('project', '{ isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = ' + ref('project-config-list') + '; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = ' + ref('main-group') + '; packageReferences = (' + ref('local-package') + ',); productRefGroup = ' + ref('products') + '; projectDirPath = ""; projectRoot = ""; targets = (' + ref('app') + ',' + ref('share-ios') + ',' + ref('share-mac') + ',); }')
+add('products', '{ isa = PBXGroup; children = (' + ','.join([product] + [ref(target + '-product') for target, *_ in extensions]) + ',); name = Products; sourceTree = "<group>"; }')
+add('main-group', '{ isa = PBXGroup; children = (' + ','.join(source_refs + list(configs.values()) + [icon, privacy, share_source, action_assets, ref('products')]) + ',); sourceTree = "<group>"; }')
+add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ref('share-dependency') + ',' + ref('action-dependency') + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',' + ref('features-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
+add('project', '{ isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = ' + ref('project-config-list') + '; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = ' + ref('main-group') + '; packageReferences = (' + ref('local-package') + ',); productRefGroup = ' + ref('products') + '; projectDirPath = ""; projectRoot = ""; targets = (' + ','.join([ref('app')] + [ref(target) for target, *_ in extensions]) + ',); }')
 content = '// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(f'{key} = {value};' for key,value in objects.items()) + '\n}; rootObject = ' + ref('project') + '; }\n'
 (project / 'project.pbxproj').write_text(content)
 (project / 'xcshareddata/xcschemes/Index.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
@@ -96,6 +111,6 @@ content = '// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56
 <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"/><AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>''')
 
-for target, name in [('share-ios', 'IndexShare'), ('share-mac', 'IndexShareMac')]:
+for target, name, *_ in extensions:
     (project / f'xcshareddata/xcschemes/{name}.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <Scheme LastUpgradeVersion="1600" version="1.3"><BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{ref(target)}" BuildableName="{name}.appex" BlueprintName="{name}" ReferencedContainer="container:Index.xcodeproj"/></BuildActionEntry></BuildActionEntries></BuildAction><AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/></Scheme>''')

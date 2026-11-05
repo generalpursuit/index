@@ -20,15 +20,16 @@ class SharingSources(unittest.TestCase):
             for file in generated.rglob('*'):
                 if file.is_file():
                     self.assertEqual(file.read_bytes(), (project.parent / file.relative_to(generated)).read_bytes(), str(file.relative_to(generated)))
-        self.assertEqual(before.count('productType = "com.apple.product-type.app-extension"'), 2)
-        for required in ['ShareExtension/ShareViewController.swift', 'Embed App Extensions', 'PBXTargetDependency', 'productName = IndexSharing', 'productName = IndexUI', 'APPLICATION_EXTENSION_API_ONLY = "YES"']:
+        self.assertEqual(before.count('productType = "com.apple.product-type.app-extension"'), 3)
+        for required in ['ShareExtension/ShareViewController.swift', 'Embed App Extensions', 'PBXTargetDependency', 'productName = IndexSharing', 'productName = IndexUI', 'APPLICATION_EXTENSION_API_ONLY = "YES"', 'path = IndexAction.appex', 'path = ShareExtension/Action.xcassets']:
             self.assertIn(required, before)
 
     def test_activation_and_matching_entitlements(self):
-        for platform in ['iOS', 'macOS']:
-            info = plistlib.loads((root / f'ShareExtension/{platform}-Info.plist').read_bytes())
+        # The iOS Action extension lists the same panel among the share sheet's actions.
+        for name, platform, point in [('iOS', 'iOS', 'com.apple.share-services'), ('iOS-Action', 'iOS', 'com.apple.ui-services'), ('macOS', 'macOS', 'com.apple.share-services')]:
+            info = plistlib.loads((root / f'ShareExtension/{name}-Info.plist').read_bytes())
             ext = info['NSExtension']
-            self.assertEqual(ext['NSExtensionPointIdentifier'], 'com.apple.share-services')
+            self.assertEqual(ext['NSExtensionPointIdentifier'], point)
             self.assertEqual(ext['NSExtensionPrincipalClass'], 'ShareViewController')
             rule = ext['NSExtensionAttributes']['NSExtensionActivationRule']
             self.assertIsInstance(rule, dict)

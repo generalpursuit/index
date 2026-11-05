@@ -11,7 +11,7 @@ Paper, a light treatment of the same mark (see [Icon Composer icon](#icon-compos
 
 | Source                          | Use                                                                     |
 | ------------------------------- | ----------------------------------------------------------------------- |
-| `symbol/symbol-white.svg`       | Web Home symbol and shared SwiftUI template image                       |
+| `symbol/symbol-white.svg`       | Web Home symbol, shared SwiftUI template image and iOS action glyph     |
 | `symbol/symbol-black.svg`       | Desktop menu-bar vector PDF                                             |
 | `wordmark/wordmark-white.svg`   | Web and shared SwiftUI wordmark                                         |
 | `app-icon/app-icon.icon`        | Icon Composer source: iOS app icon, macOS bundle icon and static ICNS   |
@@ -65,11 +65,11 @@ stale files, and never repairs them. Generation checks all selected prerequisite
 first, stages and validates every output, then copies them into the repository.
 Generated assets stay committed, so normal builds need no conversion tools.
 
-| Target    | Prerequisites                                                                  | Generated destinations                                                                               |
-| --------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------- |
-| `web`     | Repository's locked Tauri CLI                                                  | `apps/web/public`: SVG/ICO favicons and 192/256/512 PNGs; `apps/web/src/assets`: wordmark and symbol |
-| `desktop` | Tauri CLI, macOS, Xcode 26+ (Icon Composer, Swift), Python 3, librsvg `pdf1.4` | `apps/web/src-tauri/icons`: `icon.icon`, ICNS, rounded bundle icons and vector `menu-bar.pdf`        |
-| `ios`     | Repository's locked Tauri CLI                                                  | `apps/ios/Resources`: `AppIcon.icon`; `apps/ios/Sources/IndexUI/Resources`: vector images            |
+| Target    | Prerequisites                                                                  | Generated destinations                                                                                                                 |
+| --------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `web`     | Repository's locked Tauri CLI                                                  | `apps/web/public`: SVG/ICO favicons and 192/256/512 PNGs; `apps/web/src/assets`: wordmark and symbol                                   |
+| `desktop` | Tauri CLI, macOS, Xcode 26+ (Icon Composer, Swift), Python 3, librsvg `pdf1.4` | `apps/web/src-tauri/icons`: `icon.icon`, ICNS, rounded bundle icons and vector `menu-bar.pdf`                                          |
+| `ios`     | Repository's locked Tauri CLI                                                  | `apps/ios/Resources`: `AppIcon.icon`; `apps/ios/Sources/IndexUI/Resources`: vector images; `apps/ios/ShareExtension`: action glyph PNG |
 
 Install librsvg with your platform's package manager (for example, `brew install
 librsvg`). Put `rsvg-convert` on `PATH` or set `RSVG_CONVERT` to its executable.

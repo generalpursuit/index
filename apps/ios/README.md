@@ -98,7 +98,7 @@ sh apps/ios/Scripts/check-local.sh
 
 This requires full Xcode selected under Xcode > Settings > Locations > Command Line Tools,
 an installed iOS Simulator runtime, and an available iPhone simulator. It compiles
-the Debug app and embedded Share extension for both a generic iOS device and a
+the Debug app and embedded Share and Action extensions for both a generic iOS device and a
 concrete iPhone simulator with signing disabled, then runs the Swift package tests
 on macOS (also compiling `IndexPreview`). No Apple account, connected device,
 booted simulator, or backend is needed. The script fails if either build or the
@@ -137,9 +137,9 @@ INDEX_API_URL[config=Release] = https:/$()/api.example.com
 INDEX_WEB_URL[config=Release] = https:/$()/index.example.com
 ```
 
-`Resources/PrivacyInfo.xcprivacy` is the app's privacy manifest. It declares UserDefaults (`CA92.1`) for device-local theme and notification state, and file timestamps (`C617.1`) for pruning response files inside the app container, following [Apple's required-reason API declarations](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api). Declare any additional required-reason API use there. The Share extension uses memory only and does not access these files or UserDefaults, so it has no manifest; add one if that changes. `Config/Info.plist` declares that the app uses only exempt encryption (HTTPS and Keychain).
+`Resources/PrivacyInfo.xcprivacy` is the app's privacy manifest. It declares UserDefaults (`CA92.1`) for device-local theme and notification state, and file timestamps (`C617.1`) for pruning response files inside the app container, following [Apple's required-reason API declarations](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api). Declare any additional required-reason API use there. The Share and Action extensions use memory only and do not access these files or UserDefaults, so they have no manifest; add one if that changes. `Config/Info.plist` declares that the app uses only exempt encryption (HTTPS and Keychain).
 
-The generated project sets build number `1` for the app and Share extension. Each upload needs a higher one: Xcode's upload option "Manage Version and Build Number" (on by default) assigns it to every bundle, or pass `CURRENT_PROJECT_VERSION=N` to `xcodebuild archive`. `Local.xcconfig` cannot override it because target settings take precedence.
+The generated project sets build number `1` for the app and its extensions. Each upload needs a higher one: Xcode's upload option "Manage Version and Build Number" (on by default) assigns it to every bundle, or pass `CURRENT_PROJECT_VERSION=N` to `xcodebuild archive`. `Local.xcconfig` cannot override it because target settings take precedence.
 
 ## Readable links
 
@@ -149,6 +149,6 @@ Profiles, collections, post sharing and inbound links use the shared [readable r
 
 Settings manages personal link collections using the same compact lock control as the group editor. New groups default unlocked; Starred is always private. Profile creation selects the returned group automatically. See the [group visibility rules](../../docs/api.md#visibility-and-groups).
 
-## Share extension
+## Share and Action extensions
 
-`IndexShare` is a real embedded iPhone/iPad Share extension; `IndexShareMac` supplies the Tauri macOS bundle. The shared panel lives in `IndexSharing`: it chooses a destination or creates a group with the app's `GroupCreationForm`. Both require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).
+`IndexShare` is a real embedded iPhone/iPad Share extension, listed among apps in the share sheet; `IndexAction` shows the same panel as "Save to Index" in its action list. `IndexShareMac` supplies the Tauri macOS bundle. The shared panel lives in `IndexSharing`: it chooses a destination or creates a group with the app's `GroupCreationForm`. The Action extension's icon is a template glyph from `assets/brand`, generated with the iOS brand target; iOS draws only its alpha channel. All require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).

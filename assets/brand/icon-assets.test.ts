@@ -210,3 +210,23 @@ it("native apps ship the canonical Icon Composer document", () => {
         read(`assets/brand/app-icon/app-icon.icon/${file}`),
       );
 });
+
+it("the iOS share sheet action glyph is the transparent symbol at its share sheet inset", () => {
+  const { width, height, pixels } = png(
+    read("apps/ios/ShareExtension/Action.xcassets/AppIcon.appiconset/icon.png"),
+  );
+  assert.equal(width, 1024);
+  assert.equal(height, 1024);
+  // iOS draws the glyph from alpha alone. The tall symbol fills the inset vertically.
+  let top = height,
+    bottom = 0;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++)
+      if (pixels.readUInt8((y * width + x) * 4 + 3) >= 128) {
+        top = Math.min(top, y);
+        bottom = Math.max(bottom, y + 1);
+      }
+  for (const margin of [top, height - bottom])
+    assert.ok(Math.abs(margin - height * (22 / 128)) <= 1, `action glyph has ${margin}px margin`);
+  assert.equal(pixels.readUInt8(3), 0);
+});
