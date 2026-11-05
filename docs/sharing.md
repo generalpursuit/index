@@ -2,7 +2,7 @@
 
 Web/Tauri quick-add and the iOS/macOS Share extensions save one HTTP(S) URL into the current UTC week. Destinations are Your links (`groupId: null`) or an owned custom group; Starred, Favorites and conversations are not destinations.
 
-Web quick-add starts at the profile group being viewed, otherwise at Your links. In the main app its confirmation names the destination, which may lie outside the list on screen, and offers Undo; the macOS menu-bar panel shows none, as the new row in its list confirms the save. A selected group follows its current name/visibility. Only a complete successful list can establish deletion; a missing destination blocks saving until explicitly replaced, never silently falling back to Your links. Group creation selects the returned group immediately. The Share extensions and the macOS menu-bar panel do not offer it; groups are created in the main app. The server rechecks ownership and eligibility on every save and replay.
+Web quick-add starts at the profile group being viewed, otherwise at Your links. In the main app its confirmation names the destination, which may lie outside the list on screen, and offers Undo; the macOS menu-bar panel shows none, as the new row in its list confirms the save. A selected group follows its current name/visibility. Only a complete successful list can establish deletion; a missing destination blocks saving until explicitly replaced, never silently falling back to Your links. Group creation selects the returned group immediately. The Share extensions offer it below their destinations, with the app's form and the same account check as a save; the macOS menu-bar panel does not. The server rechecks ownership and eligibility on every save and replay.
 
 ## Duplicate saves and retries
 

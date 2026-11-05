@@ -1,9 +1,10 @@
 import SwiftUI
 import IndexCore
 
-/// Creates a group for GroupEditorView. The returned server group selects directly.
+/// Creates a group for GroupEditorView and the Share extensions. The caller performs the write,
+/// so each host applies its own session checks; the returned server group selects directly.
 public struct GroupCreationForm: View {
-  let api: APIClient
+  let create: (GroupDraft) async throws -> LinkGroup
   let onCancel: () -> Void
   let showsCloseButton: Bool
   let onCreated: (LinkGroup) -> Void
@@ -13,9 +14,9 @@ public struct GroupCreationForm: View {
   @State private var error: String?
   @State private var operation: Task<Void, Never>?
   @FocusState private var focused: Bool
-  public init(api: APIClient, showsCloseButton: Bool = true, onCancel: @escaping () -> Void, onCreated: @escaping (LinkGroup) -> Void,
-              onAuthError: @escaping (Error) -> Void = { _ in }) {
-    self.api = api; self.showsCloseButton = showsCloseButton; self.onCancel = onCancel; self.onCreated = onCreated
+  public init(showsCloseButton: Bool = true, create: @escaping (GroupDraft) async throws -> LinkGroup, onCancel: @escaping () -> Void,
+              onCreated: @escaping (LinkGroup) -> Void, onAuthError: @escaping (Error) -> Void = { _ in }) {
+    self.showsCloseButton = showsCloseButton; self.create = create; self.onCancel = onCancel; self.onCreated = onCreated
     self.onAuthError = onAuthError
   }
   public var body: some View {
@@ -58,7 +59,7 @@ public struct GroupCreationForm: View {
     operation = Task { @MainActor in
       defer { pending = false }
       do {
-        let group: LinkGroup = try await api.request("/groups", method: "POST", body: draft.body)
+        let group = try await create(draft)
         try Task.checkCancellation()
         onCreated(group)
       } catch is CancellationError {} catch {

@@ -3,12 +3,13 @@ import IndexCore
 import IndexUI
 
 /// Real platform extension UI. Destinations stay inside Index, never OS suggested recipients.
-/// Groups are created in the app; the panel only chooses one, using the app's Settings-style rows.
+/// The panel chooses a group in the app's Settings-style rows, or creates one with the app's form.
 public struct SharePanel: View {
   @Bindable var model: ShareModel
   let finish: () -> Void
   let cancel: () -> Void
   @State private var search = ""
+  @State private var creatingGroup = false
   /// Below this many groups the whole list fits without searching.
   private static let searchThreshold = 8
   public init(model: ShareModel, finish: @escaping () -> Void, cancel: @escaping () -> Void) {
@@ -29,22 +30,32 @@ public struct SharePanel: View {
 
   public var body: some View {
     let stage = stage
-    ScrollView {
-      VStack(alignment: .leading, spacing: 24) {
-        heading(stage)
-        content(stage)
-      }.padding(20)
-    }
-    .safeAreaInset(edge: .bottom, spacing: 0) {
-      VStack(alignment: .leading, spacing: 12) {
-        if let error = model.error {
-          Text(error).font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.destructive).textSelection(.enabled)
+    // The container outlives both views, so switching to the form keeps the model running.
+    ZStack {
+      // In place rather than in a sheet, which would stack over the extension's own presentation.
+      if creatingGroup, case .choosing = stage {
+        GroupCreationForm(create: model.createGroup, onCancel: { creatingGroup = false }) { group in
+          model.select(group); search = ""; creatingGroup = false
         }
-        actions(stage)
-      }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.surface)
+      } else {
+        ScrollView {
+          VStack(alignment: .leading, spacing: 24) {
+            heading(stage)
+            content(stage)
+          }.padding(20)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+          VStack(alignment: .leading, spacing: 12) {
+            if let error = model.error {
+              Text(error).font(IndexTypography.sans(13)).foregroundStyle(IndexPalette.destructive).textSelection(.enabled)
+            }
+            actions(stage)
+          }.padding(.horizontal, 20).padding(.vertical, 12).background(IndexPalette.surface)
+        }
+        .scrollIndicators(.hidden)
+      }
     }
     .frame(minWidth: 280, idealWidth: 380)
-    .scrollIndicators(.hidden)
     .font(IndexTypography.sans()).foregroundStyle(IndexPalette.foreground)
     .background(IndexPalette.surface).tint(IndexPalette.foreground)
     .task { await model.connect() }.onDisappear { model.cancel() }
@@ -160,22 +171,27 @@ public struct SharePanel: View {
       if !showsYourLinks && groups.isEmpty {
         Text("No matching groups").foregroundStyle(IndexPalette.subtleForeground).font(IndexTypography.sans(14)).settingsRow()
       }
+      row("Create group", icon: "plus") { creatingGroup = true }
     }
   }
 
   private func matches(_ name: String) -> Bool { search.isEmpty || name.localizedCaseInsensitiveContains(search) }
 
   private func destination(_ name: String, locked: Bool, selected: Bool, action: @escaping () -> Void) -> some View {
+    row(name, icon: locked ? "lock" : "globe", selected: selected, action: action)
+      .accessibilityLabel(name + (locked ? ", Locked" : ", Unlocked"))
+      .accessibilityAddTraits(selected ? .isSelected : [])
+  }
+
+  private func row(_ title: String, icon: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
     Button(action: action) {
       HStack(spacing: 12) {
-        Image(systemName: locked ? "lock" : "globe").font(.system(size: 14))
-          .foregroundStyle(IndexPalette.subtleForeground).frame(width: 20)
-        Text(name).font(IndexTypography.sans(14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+        Image(systemName: icon).font(.system(size: 14))
+          .foregroundStyle(IndexPalette.subtleForeground).frame(width: 20).accessibilityHidden(true)
+        Text(title).font(IndexTypography.sans(14)).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
         if selected { Image(systemName: "checkmark").font(.system(size: 14, weight: .medium)) }
       }.settingsRow().contentShape(Rectangle())
-    }.buttonStyle(.plain)
-      .accessibilityLabel(name + (locked ? ", Locked" : ", Unlocked"))
-      .accessibilityAddTraits(selected ? .isSelected : []).disabled(model.busy)
+    }.buttonStyle(.plain).disabled(model.busy)
   }
 
   private func linkRow(_ link: SavedLink) -> some View {

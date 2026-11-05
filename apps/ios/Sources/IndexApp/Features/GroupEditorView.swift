@@ -27,7 +27,8 @@ struct GroupEditorView: View {
   var body: some View {
     let generation = app.session.generation
     if draft.original == nil, let api = app.api {
-      GroupCreationForm(api: api, showsCloseButton: showsCloseButton, onCancel: { dismiss() }, onCreated: { group in
+      GroupCreationForm(showsCloseButton: showsCloseButton, create: { try await api.request("/groups", method: "POST", body: $0.body) },
+                        onCancel: { dismiss() }, onCreated: { group in
         guard generation == app.session.generation else { return }
         app.store?.created(group); onCreated?(group); dismiss()
       }, onAuthError: { if generation == app.session.generation { app.handle($0) } })

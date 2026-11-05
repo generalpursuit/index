@@ -52,6 +52,23 @@ public final class ShareModel {
     } catch is CancellationError {} catch { handle(error) }
   }
   public func select(_ group: LinkGroup?) { destinationUnavailable = false; selected = group; draft.groupID = group?.id }
+  /// Creates a group for the account shown and lists it as a destination. The caller selects it.
+  public func createGroup(_ group: GroupDraft) async throws -> LinkGroup {
+    guard let api, let account = profile?.id else { throw APIError.unauthenticated }
+    do {
+      try await verify(api, account: account)
+      let created: LinkGroup = try await api.request("/groups", method: "POST", body: group.body)
+      guard active, account == profile?.id else { throw CancellationError() }
+      // The server lists the newest group first.
+      groups.insert(created, at: 0)
+      return created
+    } catch {
+      // A signed-out or unverified session restricts the panel; other errors stay in the form.
+      if case APIError.unauthenticated = error { handle(error) }
+      if case APIError.emailNotVerified = error { handle(error) }
+      throw error
+    }
+  }
   public func save(again: Bool = false) {
     guard !busy, !extracting, !destinationUnavailable, let api, let account = profile?.id else { return }
     busy = true; error = nil
