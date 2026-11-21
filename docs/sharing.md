@@ -1,6 +1,6 @@
 # Share into Index
 
-Web/Tauri quick-add and the iOS/macOS Share extensions save one HTTP(S) URL into the current UTC week. Destinations are Your links (`groupId: null`) or an owned custom group; Starred, Favorites and conversations are not destinations.
+Web/Tauri quick-add, the iOS Safari extension and the iOS/macOS Share extensions save one HTTP(S) URL into the current UTC week. Destinations are Your links (`groupId: null`) or an owned custom group; Starred, Favorites and conversations are not destinations.
 
 Web quick-add starts at the profile group being viewed, otherwise at Your links. In the main app its confirmation names the destination, which may lie outside the list on screen, and offers Undo; the macOS menu-bar panel shows none, as the new row in its list confirms the save. A selected group follows its current name/visibility. Only a complete successful list can establish deletion; a missing destination blocks saving until explicitly replaced, never silently falling back to Your links. Group creation selects the returned group immediately. The Share extensions offer it below their destinations, with the app's form and the same account check as a save; the macOS menu-bar panel does not. The server rechecks ownership and eligibility on every save and replay.
 
@@ -24,7 +24,7 @@ Appearance uses a separate non-account Keychain item carrying only System/Light/
 
 ## Native packaging and checks
 
-The [iOS project](../apps/ios/README.md) owns `IndexShare`, `IndexAction` and `IndexShareMac`; the iOS host embeds the first two. `IndexAction` is an Action extension, "Save to Index", that opens the same panel from the share sheet's action list, so people can reach it without scrolling the app row. Its App ID `com.generalpursuit.index.action` needs the shared Keychain group like the Share extension. Configure the same API scope and shared Keychain group for host and extensions. Preserve the host's APS entitlement; the extensions need no push entitlement.
+The [iOS project](../apps/ios/README.md) embeds `IndexShare`, `IndexAction` and `IndexSafari` in the iOS host and provides `IndexShareMac` for macOS. The Safari page-menu popup uses native messaging to list destinations and save the active tab. Its App ID is `com.generalpursuit.index.safari`. `IndexAction` is an Action extension, "Save to Index", that opens the same panel from the share sheet's action list, so people can reach it without scrolling the app row. Its App ID `com.generalpursuit.index.action` needs the shared Keychain group like the Share extension. Configure the same API scope and shared Keychain group for host and extensions. Preserve the host's APS entitlement; the extensions need no push entitlement.
 
 On macOS, `bun run desktop:build` from `apps/web` builds and embeds the real extension and requires its signing/profile inputs. Missing inputs fail the build. [Release prerequisites](desktop-releases.md#artifacts-and-prerequisites) and [local host-only builds](../apps/web/README.md#desktop) are distinct. The latter, `desktop:dev` and `native-smoke` do not validate sharing.
 

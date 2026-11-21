@@ -8,7 +8,7 @@ if ! xcodebuild -version; then
 fi
 xcrun swift --version
 
-# The Index scheme builds and embeds IndexShare and IndexAction. No physical device or signing is needed.
+# The Index scheme builds and embeds the Share, Action, and Safari extensions. No physical device or signing is needed.
 xcodebuild -project Index.xcodeproj -scheme Index -configuration Debug \
   -destination 'generic/platform=iOS' -derivedDataPath DerivedData/Checks \
   CODE_SIGNING_ALLOWED=NO build
@@ -28,6 +28,12 @@ sys.exit("An available iPhone simulator is required. Install an iOS Simulator ru
 xcodebuild -project Index.xcodeproj -scheme Index -configuration Debug \
   -destination "platform=iOS Simulator,id=$simulator_id" -derivedDataPath DerivedData/Checks \
   CODE_SIGNING_ALLOWED=NO build
+
+# Safari discovers these resources at the root of the installed extension bundle.
+safari="DerivedData/Checks/Build/Products/Debug-iphonesimulator/Index.app/PlugIns/IndexSafari.appex"
+for resource in IndexSafari manifest.json popup.html popup.js popup.css icon.png app-icon-rounded-180.png; do
+  test -s "$safari/$resource" || { echo "Missing Safari extension resource: $resource" >&2; exit 1; }
+done
 
 # Compiles the macOS preview and runs the Swift package's unit tests.
 xcrun swift test "$@"

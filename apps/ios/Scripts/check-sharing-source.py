@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Linux-capable packaging/security contract checks; NOT Swift/Rust compilation."""
 from pathlib import Path
+import json
 import plistlib
 import subprocess
 import sys
@@ -20,9 +21,19 @@ class SharingSources(unittest.TestCase):
             for file in generated.rglob('*'):
                 if file.is_file():
                     self.assertEqual(file.read_bytes(), (project.parent / file.relative_to(generated)).read_bytes(), str(file.relative_to(generated)))
-        self.assertEqual(before.count('productType = "com.apple.product-type.app-extension"'), 3)
-        for required in ['ShareExtension/ShareViewController.swift', 'Embed App Extensions', 'PBXTargetDependency', 'productName = IndexSharing', 'productName = IndexUI', 'APPLICATION_EXTENSION_API_ONLY = "YES"', 'path = IndexAction.appex', 'path = ShareExtension/Action.xcassets']:
+        self.assertEqual(before.count('productType = "com.apple.product-type.app-extension"'), 4)
+        for required in ['ShareExtension/ShareViewController.swift', 'Embed App Extensions', 'PBXTargetDependency', 'productName = IndexSharing', 'productName = IndexUI', 'APPLICATION_EXTENSION_API_ONLY = "YES"', 'path = IndexAction.appex', 'path = IndexSafari.appex', 'path = ShareExtension/Action.xcassets']:
             self.assertIn(required, before)
+
+    def test_safari_action(self):
+        safari = root / 'SafariExtension'
+        info = plistlib.loads((safari / 'Info.plist').read_bytes())
+        self.assertEqual(info['NSExtension']['NSExtensionPointIdentifier'], 'com.apple.Safari.web-extension')
+        self.assertEqual(info['IndexKeychainGroup'], '$(INDEX_KEYCHAIN_GROUP)')
+        manifest = json.loads((safari / 'manifest.json').read_text())
+        self.assertEqual(set(manifest['permissions']), {'activeTab', 'nativeMessaging'})
+        self.assertFalse(manifest.get('host_permissions') or manifest.get('content_scripts'))
+        self.assertTrue((safari / manifest['action']['default_popup']).is_file())
 
     def test_activation_and_matching_entitlements(self):
         # The iOS Action extension lists the same panel among the share sheet's actions.
@@ -52,7 +63,7 @@ class SharingSources(unittest.TestCase):
         self.assertIn('ReadOnlyCredentials', model)
         self.assertIn('session.user.id == account', model)
         self.assertIn('session.user.emailVerified', model)
-        for folder in ['Sources/IndexSharing', 'ShareExtension']:
+        for folder in ['Sources/IndexSharing', 'ShareExtension', 'SafariExtension']:
             for source in (root / folder).rglob('*.swift'):
                 self.assertNotIn('UserDefaults', source.read_text())
                 self.assertNotIn('UIApplication.shared', source.read_text())

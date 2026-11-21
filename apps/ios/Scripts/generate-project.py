@@ -39,6 +39,7 @@ for mode in ['Debug', 'Release']:
 extensions = [
     ('share-ios', 'IndexShare', 'iOS', 'com.generalpursuit.index.share', 'ShareExtension/iOS-Info.plist'),
     ('action-ios', 'IndexAction', 'iOS', 'com.generalpursuit.index.action', 'ShareExtension/iOS-Action-Info.plist'),
+    ('safari-ios', 'IndexSafari', 'iOS', 'com.generalpursuit.index.safari', 'SafariExtension/Info.plist'),
     ('share-mac', 'IndexShareMac', 'macOS', 'com.generalpursuit.index.share-mac', 'ShareExtension/macOS-Info.plist'),
 ]
 for target, name, platform, bundle, plist in extensions:
@@ -77,29 +78,45 @@ share_source = add('share-source', '{ isa = PBXFileReference; lastKnownFileType 
 action_assets = add('action-assets', '{ isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = ShareExtension/Action.xcassets; sourceTree = SOURCE_ROOT; }')
 add('action-assets-build', '{ isa = PBXBuildFile; fileRef = '+action_assets+'; }')
 add('action-ios-resources', '{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = ('+ref('action-assets-build')+',); runOnlyForDeploymentPostprocessing = 0; }')
+safari_source = add('safari-source', '{ isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SafariExtension/SafariWebExtensionHandler.swift; sourceTree = SOURCE_ROOT; }')
+safari_resources = []
+safari_builds = []
+for path, kind in [('SafariExtension/manifest.json', 'text.json'), ('SafariExtension/popup.html', 'text.html'),
+                   ('SafariExtension/popup.js', 'sourcecode.javascript'), ('SafariExtension/popup.css', 'text.css'),
+                   ('../../assets/brand/app-icon/app-icon-rounded-180.png', 'image.png'),
+                   ('ShareExtension/Action.xcassets/AppIcon.appiconset/icon.png', 'image.png')]:
+    file = add(path, f'{{ isa = PBXFileReference; lastKnownFileType = {kind}; path = {quote(path)}; sourceTree = SOURCE_ROOT; }}')
+    safari_resources.append(file)
+    safari_builds.append(add('build:' + path, f'{{ isa = PBXBuildFile; fileRef = {file}; }}'))
+add('safari-ios-resources', '{ isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (' + ','.join(safari_builds) + ',); runOnlyForDeploymentPostprocessing = 0; }')
 for target, name, *_ in extensions:
-    add(target+'-source-build', '{ isa = PBXBuildFile; fileRef = '+share_source+'; }')
+    source = safari_source if target == 'safari-ios' else share_source
+    add(target+'-source-build', '{ isa = PBXBuildFile; fileRef = '+source+'; }')
     add(target+'-sources', '{ isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = ('+ref(target+'-source-build')+',); runOnlyForDeploymentPostprocessing = 0; }')
     products = []
     builds = []
-    for product_name in ['IndexCore', 'IndexSharing', 'IndexUI']:
+    for product_name in (['IndexCore'] if target == 'safari-ios' else ['IndexCore', 'IndexSharing', 'IndexUI']):
         product_ref = add(target+'-'+product_name, '{ isa = XCSwiftPackageProductDependency; productName = '+product_name+'; }')
         products.append(product_ref)
         builds.append(add(target+'-'+product_name+'-build', '{ isa = PBXBuildFile; productRef = '+product_ref+'; }'))
     add(target+'-frameworks', '{ isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = ('+','.join(builds)+',); runOnlyForDeploymentPostprocessing = 0; }')
     add(target+'-product', '{ isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; path = '+name+'.appex; sourceTree = BUILT_PRODUCTS_DIR; }')
-    phases = [target+'-sources', target+'-frameworks'] + (['action-ios-resources'] if target == 'action-ios' else [])
+    phases = [target+'-sources', target+'-frameworks'] + ([target+'-resources'] if target in ('action-ios', 'safari-ios') else [])
     add(target, '{ isa = PBXNativeTarget; buildConfigurationList = '+ref(target+'-config-list')+'; buildPhases = ('+','.join(ref(phase) for phase in phases)+',); buildRules = (); dependencies = (); name = '+name+'; packageProductDependencies = ('+','.join(products)+',); productName = '+name+'; productReference = '+ref(target+'-product')+'; productType = "com.apple.product-type.app-extension"; }')
-# The iOS app embeds both of its extensions.
-for kind, target, name in [('share', 'share-ios', 'IndexShare'), ('action', 'action-ios', 'IndexAction')]:
+# Embed every iOS extension in the host app.
+embed_builds = []
+embed_dependencies = []
+for target, name, platform, *_ in extensions:
+    if platform != 'iOS': continue
+    kind = target.removesuffix('-ios')
     add(kind+'-proxy', '{ isa = PBXContainerItemProxy; containerPortal = '+ref('project')+'; proxyType = 1; remoteGlobalIDString = '+ref(target)+'; remoteInfo = '+name+'; }')
-    add(kind+'-dependency', '{ isa = PBXTargetDependency; target = '+ref(target)+'; targetProxy = '+ref(kind+'-proxy')+'; }')
-    add(kind+'-embed-build', '{ isa = PBXBuildFile; fileRef = '+ref(target+'-product')+'; settings = { ATTRIBUTES = (RemoveHeadersOnCopy,); }; }')
-add('share-embed', '{ isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ('+ref('share-embed-build')+','+ref('action-embed-build')+',); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; }')
+    embed_dependencies.append(add(kind+'-dependency', '{ isa = PBXTargetDependency; target = '+ref(target)+'; targetProxy = '+ref(kind+'-proxy')+'; }'))
+    embed_builds.append(add(kind+'-embed-build', '{ isa = PBXBuildFile; fileRef = '+ref(target+'-product')+'; settings = { ATTRIBUTES = (RemoveHeadersOnCopy,); }; }'))
+add('share-embed', '{ isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = ('+','.join(embed_builds)+',); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; }')
 product = add('product', '{ isa = PBXFileReference; explicitFileType = wrapper.application; path = Index.app; sourceTree = BUILT_PRODUCTS_DIR; }')
 add('products', '{ isa = PBXGroup; children = (' + ','.join([product] + [ref(target + '-product') for target, *_ in extensions]) + ',); name = Products; sourceTree = "<group>"; }')
-add('main-group', '{ isa = PBXGroup; children = (' + ','.join(source_refs + list(configs.values()) + [icon, privacy, share_source, action_assets, ref('products')]) + ',); sourceTree = "<group>"; }')
-add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ref('share-dependency') + ',' + ref('action-dependency') + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',' + ref('features-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
+add('main-group', '{ isa = PBXGroup; children = (' + ','.join(source_refs + list(configs.values()) + [icon, privacy, share_source, action_assets, safari_source, ref('products')] + safari_resources) + ',); sourceTree = "<group>"; }')
+add('app', '{ isa = PBXNativeTarget; buildConfigurationList = ' + ref('app-config-list') + '; buildPhases = (' + ','.join(ref(x) for x in ['validate','sources','frameworks','resources','share-embed']) + ',); buildRules = (); dependencies = (' + ','.join(embed_dependencies) + ',); name = Index; packageProductDependencies = (' + ref('core-product') + ',' + ref('ui-product') + ',' + ref('features-product') + ',); productName = Index; productReference = ' + product + '; productType = "com.apple.product-type.application"; }')
 add('project', '{ isa = PBXProject; attributes = { LastUpgradeCheck = 1600; }; buildConfigurationList = ' + ref('project-config-list') + '; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en,Base,); mainGroup = ' + ref('main-group') + '; packageReferences = (' + ref('local-package') + ',); productRefGroup = ' + ref('products') + '; projectDirPath = ""; projectRoot = ""; targets = (' + ','.join([ref('app')] + [ref(target) for target, *_ in extensions]) + ',); }')
 content = '// !$*UTF8*$!\n{ archiveVersion = 1; classes = {}; objectVersion = 56; objects = {\n' + '\n'.join(f'{key} = {value};' for key,value in objects.items()) + '\n}; rootObject = ' + ref('project') + '; }\n'
 (project / 'project.pbxproj').write_text(content)

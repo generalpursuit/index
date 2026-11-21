@@ -34,14 +34,7 @@ public final class ShareModel {
       guard let session = try await client.restore() else { throw APIError.unauthenticated }
       guard session.user.emailVerified else { throw APIError.emailNotVerified }
       let current: Profile = try await client.request("/me/profile")
-      var all: [LinkGroup] = [], cursor: String?
-      repeat {
-        var query = ["ownerId": current.id, "limit": "100"]
-        if let cursor { query["cursor"] = cursor }
-        let page: Page<LinkGroup> = try await client.request("/groups", query: query)
-        all += page.items.filter { $0.kind == "custom" && $0.ownerId == current.id }
-        cursor = page.nextCursor
-      } while cursor != nil
+      let all = try await client.shareDestinations(ownerID: current.id)
       try Task.checkCancellation()
       guard active else { return }
       if profile?.id != current.id { selected = nil; draft.groupID = nil; result = nil; existing = nil }

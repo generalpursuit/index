@@ -263,7 +263,11 @@ public struct CodeRequestResult: Codable, Sendable {
   public let success: Bool
   public let retryAfter: Int
 }
-public struct AuthSession: Codable, Sendable { public let user: AuthUser }
+public struct AuthSession: Codable, Sendable {
+  public struct Session: Codable, Sendable { public let id: String }
+  public let user: AuthUser
+  public let session: Session?
+}
 
 public enum Week {
   public static var calendar: Calendar {

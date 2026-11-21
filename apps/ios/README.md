@@ -98,7 +98,7 @@ sh apps/ios/Scripts/check-local.sh
 
 This requires full Xcode selected under Xcode > Settings > Locations > Command Line Tools,
 an installed iOS Simulator runtime, and an available iPhone simulator. It compiles
-the Debug app and embedded Share and Action extensions for both a generic iOS device and a
+the Debug app and embedded Share, Action, and Safari extensions for both a generic iOS device and a
 concrete iPhone simulator with signing disabled, then runs the Swift package tests
 on macOS (also compiling `IndexPreview`). No Apple account, connected device,
 booted simulator, or backend is needed. The script fails if either build or the
@@ -137,7 +137,7 @@ INDEX_API_URL[config=Release] = https:/$()/api.example.com
 INDEX_WEB_URL[config=Release] = https:/$()/index.example.com
 ```
 
-`Resources/PrivacyInfo.xcprivacy` is the app's privacy manifest. It declares UserDefaults (`CA92.1`) for device-local theme and notification state, and file timestamps (`C617.1`) for pruning response files inside the app container, following [Apple's required-reason API declarations](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api). Declare any additional required-reason API use there. The Share and Action extensions use memory only and do not access these files or UserDefaults, so they have no manifest; add one if that changes. `Config/Info.plist` declares that the app uses only exempt encryption (HTTPS and Keychain).
+`Resources/PrivacyInfo.xcprivacy` is the app's privacy manifest. It declares UserDefaults (`CA92.1`) for device-local theme and notification state, and file timestamps (`C617.1`) for pruning response files inside the app container, following [Apple's required-reason API declarations](https://developer.apple.com/documentation/bundleresources/describing-use-of-required-reason-api). Declare any additional required-reason API use there. The Share, Action, and Safari extensions use memory only and do not access these files or UserDefaults, so they have no manifest; add one if that changes. `Config/Info.plist` declares that the app uses only exempt encryption (HTTPS and Keychain).
 
 The generated project sets build number `1` for the app and its extensions. Each upload needs a higher one: Xcode's upload option "Manage Version and Build Number" (on by default) assigns it to every bundle, or pass `CURRENT_PROJECT_VERSION=N` to `xcodebuild archive`. `Local.xcconfig` cannot override it because target settings take precedence.
 
@@ -154,3 +154,9 @@ Settings manages personal link collections using the same compact lock control a
 ## Share and Action extensions
 
 `IndexShare` is a real embedded iPhone/iPad Share extension, listed among apps in the share sheet; `IndexAction` shows the same panel as "Save to Index" in its action list. `IndexShareMac` supplies the Tauri macOS bundle. The shared panel lives in `IndexSharing`: it chooses a destination or creates a group with the app's `GroupCreationForm`. The Action extension's icon is a template glyph from `assets/brand`, generated with the iOS brand target; iOS draws only its alpha channel. All require explicit shared Keychain signing and a one-time sign-in when upgrading from legacy storage. See [sharing implementation, configuration and exact Mac checks](../../docs/sharing.md).
+
+## Safari extension
+
+The iOS app embeds `IndexSafari`. Sign in to Index, then enable **Index** in Safari’s page menu under **Manage Extensions**. On a web page, tap **Index**, choose **Your links** or an owned group, and tap **Save**. An existing link offers **Save again**. The popup reads the active tab URL when opened. Its native handler uses the host’s shared Keychain and verifies the session for each operation.
+
+Sign the `com.generalpursuit.index.safari` App ID with the same Keychain group as the host. On a signed iPhone or iPad, check menu discovery, website permission, a private group save, an already-saved link, and a sign-out or account change between choosing and saving.

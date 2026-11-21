@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Save to Index</title>
+    <link rel="stylesheet" href="popup.css">
+    <script src="popup.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <h1>Save to Index</h1>
+      <p id="address" dir="auto"></p>
+      <div id="picker" hidden>
+        <label for="destination">Save to</label>
+        <select id="destination"></select>
+      </div>
+      <p id="status" role="status" aria-live="polite">Loading destinations…</p>
+      <button id="action" type="button" hidden>Save</button>
+    </main>
+  </body>
+</html>

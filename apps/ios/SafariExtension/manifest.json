@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Index",
+  "description": "Save the current page to your links or a group in Index.",
+  "version": "1.0",
+  "permissions": ["activeTab", "nativeMessaging"],
+  "icons": { "180": "app-icon-rounded-180.png" },
+  "action": {
+    "default_title": "Index",
+    "default_icon": "icon.png",
+    "default_popup": "popup.html"
+  }
+}
